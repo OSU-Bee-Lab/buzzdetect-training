@@ -1,14 +1,20 @@
 import os
 
+# All paths are absolute, anchored to the project root (this file's directory).
+# This allows stage scripts to be invoked from any working directory.
+ROOT = os.path.dirname(os.path.abspath(__file__))
 
-DIR_EMBEDDERS = 'embedders'
-DIR_MODELS = 'models'
-DIR_TRANSLATIONS = 'translations'
+def _p(*parts):
+    return os.path.join(ROOT, *parts)
 
-TRAIN_DIR_AUDIO = 'audio'
+DIR_EMBEDDERS = _p('embedders')
+DIR_MODELS = _p('models')
+DIR_TRANSLATIONS = _p('translations')
+
+TRAIN_DIR_AUDIO = _p('audio')
 
 # sets
-SET_DIR = '02_set/sets'
+SET_DIR = _p('02_set', 'sets')
 SET_SUBDIR_AUDIO = 'audio'
 SET_SUBDIR_EMBEDDINGS = 'embeddings'
 SET_SUBDIR_RAW = 'raw'
@@ -36,9 +42,9 @@ FNAME_PLOT_METRICS = 'plot_metrics.png'
 FNAME_PLOT_METRICS_ZOOMED = 'plot_metrics_zoomed.png'
 
 PRECISION_ZOOM_MIN = 0.8
-TEST_DIR = '04_test'
-TEST_DIR_AUDIO = os.path.join(TEST_DIR, 'audio')
-TEST_DIR_EMBEDDINGS = os.path.join(TEST_DIR, 'embeddings')
+TEST_DIR = _p('04_test')
+TEST_DIR_AUDIO = _p('04_test', 'audio')
+TEST_DIR_EMBEDDINGS = _p('04_test', 'embeddings')
 
 # embedding memory management
 CHUNK_FRAMES = 300

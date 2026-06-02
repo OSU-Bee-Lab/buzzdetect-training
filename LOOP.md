@@ -13,7 +13,8 @@ The current production standard is 28% sensitivity at 95% precision. Any improve
 First, check out what previous agents have done in the log file.
 Run eval.py with no model as an argument to see the best performing loops.
 What did those loops do that made them so successful?
-What hasn't been treid yet?
+What hasn't been tried yet?
+To understand a model's configuration (embedder, set, translation), read `models/<modelname>/config_model.json`.
 
 
 ### 1. Create a worktree
@@ -21,12 +22,37 @@ What hasn't been treid yet?
 Each experiment lives on its own branch in an isolated worktree:
 
 ```bash
+ROOT=$(git rev-parse --show-toplevel)
 EXP=<short-slug>   # e.g. birdnet-embedder, deeper-head, augment-pitch
 git worktree add .local/worktrees/$EXP -b exp/$EXP
-cd .local/worktrees/$EXP
+
+# Symlink embedder dirs (weights/binaries) and shared source files
+for d in $ROOT/embedders/*/; do
+    name=$(basename "$d")
+    ln -s "$d" ".local/worktrees/$EXP/embedders/$name"
+done
+ln -sf "$ROOT/embedders/embedding.py" ".local/worktrees/$EXP/embedders/embedding.py"
+
+# Symlink gitignored data dirs (embeddings, test audio) — read-only shared data
+for setname in lite standard; do
+    ln -s "$ROOT/02_set/sets/$setname/embeddings" \
+          ".local/worktrees/$EXP/02_set/sets/$setname/embeddings"
+done
+ln -s "$ROOT/04_test/audio"      ".local/worktrees/$EXP/04_test/audio"
+ln -s "$ROOT/04_test/embeddings" ".local/worktrees/$EXP/04_test/embeddings"
 ```
 
 All code changes go in the worktree. Do not touch the main worktree's tracked files during an experiment.
+
+**Embedder binaries**: the symlinks above point to the main worktree's embedder dirs (weights, `.pb` files). If you want to modify an existing embedder or download a new one, replace the symlink with a real copy first:
+
+```bash
+cp -rL embedders/yamnet embedders/yamnet_copy
+rm embedders/yamnet
+mv embedders/yamnet_copy embedders/yamnet
+```
+
+For a brand-new embedder, just create the dir directly — no symlink to remove.
 
 ### 2. Propose a hypothesis
 
@@ -53,20 +79,26 @@ If you download an external model or artifact (embedder weights, pretrained back
 
 ### 4. Run the pipeline
 
-From inside the worktree:
+Run only the stages you need. All commands should be run from inside the worktree, with the worktree root as the working directory. Use `conda run -n buzzdetect-train python <script>` for each stage.
 
+**Stage 2 — extract embeddings** (only needed if you changed the embedder or extraction logic):
 ```bash
-conda run -n buzzdetect-train python main.py \
-  --model <modelname> \
-  --set <setname> \
-  --embedder <embeddername> \
-  --translation general \
-  --epochs 300
+conda run -n buzzdetect-train python 02_set/main.py \
+  --set <setname> --embedder <embeddername>
 ```
+
+**Stage 3 — train** (almost always needed):
+```bash
+conda run -n buzzdetect-train python 03_train/main.py \
+  --model <modelname> --set <setname> --embedder <embeddername> \
+  --translation general --epochs 300
+```
+
+**Stage 4 — test/eval** runs automatically at the end of training. To re-run on an existing model, use `eval.py`.
 
 Use a descriptive `--model` name that won't collide with existing models (e.g. `exp_birdnet_v1`). Use `--set lite` for a fast smoke test before committing to a full run on `standard`.
 
-The pipeline runs stages 2–4 end-to-end. Output goes to `models/<modelname>/` in the worktree (gitignored; only code is tracked).
+Model output goes to `models/<modelname>/` in the worktree (gitignored; only code is tracked).
 
 ### 5. Record results
 
@@ -143,7 +175,7 @@ git worktree add .local/worktrees/<slug> exp/<slug>
 
 The branch preserves all committed code. External artifacts (embedder binaries, downloaded weights) must be re-fetched per the reproduction steps in `experiments/<slug>/notes.md`.
 
-
 ## Prohibited
 You may not touch eval.py.
 You may not touch 04_test/ or any of its contents.
+You may not touch 01_annotate/ or any of its contents
