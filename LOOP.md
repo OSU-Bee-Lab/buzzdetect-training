@@ -11,10 +11,26 @@ The current production standard is 28% sensitivity at 95% precision. Any improve
 ## Experiment lifecycle
 ### 0. Think
 First, check out what previous agents have done in the log file.
-Run eval.py with no model as an argument to see the best performing loops.
-What did those loops do that made them so successful?
-What hasn't been tried yet?
-To understand a model's configuration (embedder, set, translation), read `models/<modelname>/config_model.json`.
+
+```bash
+cat experiments/log.jsonl   # may not exist on first run — that's fine, proceed
+```
+
+Run eval.py with no model as an argument to see the best performing models:
+
+```bash
+conda run -n buzzdetect-train python eval.py
+```
+
+What did the best models do? What hasn't been tried yet? To understand a model's configuration (embedder, set, translation), read `models/<modelname>/config_model.json`.
+
+Before proposing a hypothesis, verify which embeddings are actually populated:
+
+```bash
+find 02_set/sets -name '*.pickle' | sed 's|/[^/]*$||' | sort -u
+```
+
+Only propose hypotheses that use embeddings listed by that command, or that require running stage 2 (extraction) first.
 
 
 ### 1. Create a worktree
@@ -146,14 +162,13 @@ git commit -m "exp/<slug>: <what was tried and brief outcome>"
 ```
 
 ### 7. Any friction?
-If you hit any frustrations that imply that the LOOP structure should be updated, log them in log.jsonl.
-For example, timeouts because the 
+If you hit any frustrations that imply that the LOOP structure should be updated, append them to `PROBLEMS.md` in the main worktree. Keep entries concise: what happened, what the impact was, what a fix might look like.
 
 Then stop. Do not merge into main. Do not delete the worktree or branch. The human will review the log and decide what to merge.
 
 ## Reading prior experiments
 
-Before proposing a hypothesis, read `.local/experiments/log.jsonl` to see what has already been tried. Avoid re-running experiments with the same hypothesis unless you have a specific reason to believe the prior run was flawed.
+Before proposing a hypothesis, read `experiments/log.jsonl` to see what has already been tried. Avoid re-running experiments with the same hypothesis unless you have a specific reason to believe the prior run was flawed.
 
 ## What counts as a useful negative result
 
