@@ -3,6 +3,7 @@
 !.gitignore
 
 # Unignore these shared embedders (code only, not binaries)
+!embedding.py
 !yamnet
 !yamnet_k2
 
