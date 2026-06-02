@@ -144,10 +144,17 @@ Metric: precision at 80% sensitivity (or sensitivity at 90% precision)
 
 Copy these notes to the model folder.
 
-**B. Log entry** — append one JSON line to `experiments/log.jsonl` in the **main** worktree (not the experiment worktree):
+**B. Copy model to main tree** — model artifacts are not git-tracked, but must be copied to the main worktree so `eval.py` and future inference can find them:
+
+```bash
+MAIN=$(git worktree list | awk 'NR==1{print $1}')
+cp -r models/<modelname> "$MAIN/models/"
+```
+
+**C. Log entry** — append one JSON line to `experiments/log.jsonl` in the **main** worktree (not the experiment worktree):
 
 ```json
-{"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "hypothesis": "<one sentence>", "metrics": {"precision_at_80pct_sensitivity": 0.0, "sensitivity_at_90pct_precision": 0.0}, "baseline": {"model": "<name>", "precision_at_80pct_sensitivity": 0.0}, "conclusion": "<one sentence>", "reproduction": "<URL or 'no external artifacts'>", "merge_recommendation": "merge|cherry-pick|abandon"}
+{"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "hypothesis": "<one sentence>", "metrics": {"precision_at_80pct_sensitivity": 0.0, "sensitivity_at_90pct_precision": 0.0}, "baseline": {"model": "<name>", "precision_at_80pct_sensitivity": 0.0}, "conclusion": "<one sentence>", "reproduction": "<URL or 'no external artifacts'>"}
 ```
 
 Create `experiments/` if it doesn't exist. Create `log.jsonl` if it doesn't exist. Commit the updated log to main after writing it.
@@ -164,7 +171,7 @@ git commit -m "exp/<slug>: <what was tried and brief outcome>"
 ### 7. Any friction?
 If you hit any frustrations that imply that the LOOP structure should be updated, append them to `PROBLEMS.md` in the main worktree. Keep entries concise: what happened, what the impact was, what a fix might look like.
 
-Then stop. Do not merge into main. Do not delete the worktree or branch. The human will review the log and decide what to merge.
+Then stop. Do not merge code changes into main — the experiment branch is preserved as a reference for future agents. Do not delete the worktree or branch.
 
 ## Reading prior experiments
 
