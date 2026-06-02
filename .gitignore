@@ -1,0 +1,42 @@
+# mac
+.DS_Store
+
+# r
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+.quarto/
+
+# python
+__pycache__
+environment/
+.venv/
+.idea/
+condaenv.l8rr463d.requirements.txt
+
+# annotation data (audio, raw annotations, extracted data, local scratch)
+01_annotate/.deprecated/
+01_annotate/**/audio*/
+01_annotate/**/annotations/
+01_annotate/**/data/
+01_annotate/**/local/
+01_annotate/**/seenote/
+
+# model artifacts
+*.keras
+*.pickle
+*.pb
+*.h5
+variables/
+models/*/tests/
+
+# data artifacts (audio, embeddings)
+data/
+audio/
+embeddings/
+
+# local execution scratch dirs
+.local*/
+02_set/sets/.archive

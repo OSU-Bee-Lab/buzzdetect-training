@@ -1,0 +1,6 @@
+# Annotation strategy
+Long events were labeled visually; e.g., for a mech_hum_traffic that lasted for a minute or an ins_trill that lasted the entire duration of the audio. Where other events appeared in the spectrogram, I listened to the audio rather than labeling visually. Where ins_trill was blowing out the audio, I labeled around events apparent in the spectrogram, but did not label the events in the spectrogram. E.g., it was sometimes possible to see the sound of a car engine, and to slightly hear it with aggressive filtering. However, I did not label the car engine, nor did I label ins_trill over top of the car engine. As such, these overlapping events where mech_auto_car isn't really audible won't be used for training data. Where there were many small events, e.g. ambient_scraping, I mostly labeled the trill parts without the underlying sounds to expedite labeling.
+
+/Chia - Bee Audio 2022 Original/8-24-2022_Marysville recorders 9 and 12 had ins_trill, but audio music underneath. I didn't annotate either file.
+
+A lot of the Karlan audio had tree frogs that were a bother to annotate, and these files usually only had a small number of detections compared to Wilmington anyways, so I stop bothering annotating. Bleh!

@@ -1,0 +1,12 @@
+# Ignore everything in the root by default
+/*
+!.gitignore
+
+# Unignore these shared models (code/config only, not binaries)
+!model_general_v3/
+
+# Within unignored directories, ignore binary artifacts and test results
+*/output*
+*/tests/results*
+model_general_v3/*.pb
+model_general_v3/variables/

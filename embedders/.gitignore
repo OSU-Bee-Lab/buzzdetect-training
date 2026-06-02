@@ -1,0 +1,15 @@
+# Ignore everything in the root by default
+/*
+!.gitignore
+
+# Unignore these shared embedders (code only, not binaries)
+!yamnet
+!yamnet_k2
+
+# Ignore binary model files within unignored embedders
+yamnet/*.pb
+yamnet/*.h5
+yamnet/variables/
+yamnet/weights_keras2/
+yamnet_k2/**/*.pb
+yamnet_k2/**/variables/

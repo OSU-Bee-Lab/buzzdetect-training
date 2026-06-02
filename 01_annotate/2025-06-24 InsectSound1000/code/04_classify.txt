@@ -1,0 +1,17 @@
+Step One
+Use the Classifier application to classify buzzes into coarse groups:
+1. "Buzz, complete" for when buzzing sound fills the entire audio file
+2. "Buzz, partial" for when buzzing is present, but not for the whole duration of the audio
+3. "Buzz, with noise" for when buzzing is present, but is overlapped with noise
+4. "Buzz, strange" for when buzzing is present, but something about the test environment seems to be influencing it such that it doesn't represent natural sound, e.g. the insect is rasping its wings against the wall of the enclosure.
+5. "Silence" for when no notable sound is present
+6. "Noise" for when a non-buzz sound is present
+
+Step Two
+Run 05_combine.R. This will merge annotations for full files in "05_full.csv" and highlight partial annotations in "05_partial.csv"
+
+Step Three
+Identify idents in 05_partial.csv. Manually annotate these files in Audacity. [TODO...this seems annoying, to track down these files. Maybe they should be copied to a working directory?
+
+Step Six
+[TODO: run some final combination to make annotations_combined.csv]

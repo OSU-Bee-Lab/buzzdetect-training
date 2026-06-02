@@ -1,0 +1,13 @@
+name: buzzdetect-train
+channels:
+  - defaults
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+    - tensorflow>=2.16
+    - librosa
+    - soundfile
+    - numpy<2
+    - pandas
+    - matplotlib
