@@ -1,11 +1,12 @@
 """
 Evaluate and compare model performance.
 
-Usage: python eval.py <current_model>
+Usage:
+  python eval.py               — top 5 models by sensitivity at 95% precision
+  python eval.py <model>       — top 5 models, always including the given model
 
 Reads models/<modelname>/tests/metrics.csv for each model found.
 Reports sensitivity at 95% precision (averaged over the 94.5–95.5% band).
-The specified current model appears first and is marked as baseline.
 """
 
 import os
@@ -50,12 +51,17 @@ def find_models():
     return models
 
 
+TOP_N = 5
+
+
 def main():
-    if len(sys.argv) != 2:
-        print(f'Usage: python {sys.argv[0]} <current_model>')
+    print("WARNING: interpolated results may be unreliable — occurs when few data points fall near 95% precision")
+
+    if len(sys.argv) > 2:
+        print(f'Usage: python {sys.argv[0]} [model]')
         sys.exit(1)
 
-    current = sys.argv[1]
+    current = sys.argv[1] if len(sys.argv) == 2 else None
 
     models = find_models()
     if not models:
@@ -67,33 +73,28 @@ def main():
         s, method = sensitivity_at_95(path)
         rows.append({'model': name, 'sensitivity': s, 'method': method})
 
-    df = pd.DataFrame(rows)
+    df = pd.DataFrame(rows).sort_values('sensitivity', ascending=False)
 
-    if current not in df['model'].values:
+    if current is not None and current not in df['model'].values:
         print(f"Warning: '{current}' not found among evaluated models.")
-        current_found = False
-    else:
-        current_found = True
+        current = None
+
+    top = df.head(TOP_N)
+    if current is not None and current not in top['model'].values:
+        cur_row = df[df['model'] == current]
+        top = pd.concat([top, cur_row], ignore_index=True)
 
     def fmt(val):
         if val is None or (isinstance(val, float) and np.isnan(val)):
             return 'N/A'
         return f'{val:.4f}'
 
-    # Build display rows: current first, then others sorted by sensitivity desc
-    if current_found:
-        cur_row = df[df['model'] == current].iloc[0]
-        others = df[df['model'] != current].sort_values('sensitivity', ascending=False)
-        ordered = pd.concat([cur_row.to_frame().T, others], ignore_index=True)
-    else:
-        ordered = df.sort_values('sensitivity', ascending=False)
-
-    col_w = max(len(m) for m in ordered['model']) + 2
+    col_w = max(len(m) for m in top['model']) + 2
     header = f"{'Model':<{col_w}}  Sensitivity @ 95% Precision"
     print(header)
     print('-' * len(header))
 
-    for _, row in ordered.iterrows():
+    for _, row in top.iterrows():
         tags = []
         if row['model'] == current:
             tags.append('current')
