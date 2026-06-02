@@ -1,27 +1,31 @@
 # Loop Friction Log
 
-## 2026-06-02 — find command output is too large to use directly
+## 2026-06-02 — find command output too large ✓ fixed
 
-**What happened:** LOOP.md instructs agents to run `find 02_set/sets -name '*.pickle' | sed 's|/[^/]*$||' | sort -u` to identify available embeddings. This command produces ~300KB of output (one line per snip-level directory). The output is truncated in the context window, making it impossible to read or search as directed.
+**What happened:** LOOP.md instructed agents to run `find 02_set/sets -name '*.pickle' | sed 's|/[^/]*$||' | sort -u` to identify available embeddings. This produces ~300KB of output (one line per snip-level directory), truncated in context.
 
-**Impact:** Agent used a modified `find -maxdepth 4 -type d` to find embedding directories instead, which showed `yamnet_combined/raw/` and `yamnet_doublerate/raw/` as existing directories — but these were empty (no pickles). This led to a failed training attempt on yamnet_combined.
+**Impact:** Agent used a modified `find -maxdepth 4 -type d` instead, which surfaced empty embedding dirs as valid options.
 
-**Fix suggestion:** Replace the diagnostic command with one that summarizes at the set/embedder level, e.g.:
-```bash
-find 02_set/sets -name '*.pickle' | sed 's|.*/embeddings/\([^/]*\)/raw/.*|\1|' | sort -u
-```
-Or simply: `find 02_set/sets -path '*/embeddings/*/raw' -type d | while read d; do count=$(find "$d" -name '*.pickle' | wc -l); echo "$count $d"; done | sort -rn`
-
-This would immediately surface that yamnet_combined and yamnet_doublerate have 0 pickles.
+**Fix:** Replaced with a count-per-embedder command in LOOP.md that immediately shows which embedders have zero pickles.
 
 ---
 
-## 2026-06-02 — Empty embedding directories are misleading
+## 2026-06-02 — Empty embedding directories ✓ fixed
 
-**What happened:** `yamnet_combined/raw/` and `yamnet_doublerate/raw/` exist as directory trees but contain no `.pickle` files. There is no flag, marker file, or README indicating they are unpopulated stubs.
+**What happened:** `yamnet_combined/raw/` and `yamnet_doublerate/raw/` existed as directory trees with no `.pickle` files. No marker distinguished them from populated embedders.
 
-**Impact:** An agent using `find -type d` to enumerate available embedders will include these, attempt training, and fail with `ValueError: no samples found`.
+**Impact:** Agent attempted training on `yamnet_combined`, failed with `ValueError: no samples found`.
 
-**Fix suggestion:** Either remove the empty directories, or add a `.empty` marker file with a note explaining why (e.g., "requires external drive to extract").
+**Fix:** Removed the empty directories.
+
+---
+
+## 2026-06-02 — `models/models.py` missing from experiment worktrees ✓ fixed
+
+**What happened:** `models/.gitignore` had `/*` which gitignored `models/models.py` (a code file, not an artifact). Worktrees don't get the file, so `04_test/inference.py` fails with `ModuleNotFoundError: No module named 'models.models'` when the test is run from a worktree.
+
+**Impact:** Stage 4 (test) fails in the experiment worktree.
+
+**Fix:** Added `!models.py` to `models/.gitignore` and tracked the file. Also clarified in LOOP.md that stage 4 must be run from the main worktree (where `models/models.py` always exists), and moved the "copy model to main" step to before stage 4.
 
 ---

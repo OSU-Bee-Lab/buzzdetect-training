@@ -27,10 +27,10 @@ What did the best models do? What hasn't been tried yet? To understand a model's
 Before proposing a hypothesis, verify which embeddings are actually populated:
 
 ```bash
-find 02_set/sets -name '*.pickle' | sed 's|/[^/]*$||' | sort -u
+find 02_set/sets -path '*/embeddings/*/raw' -type d | while read d; do n=$(find "$d" -name '*.pickle' | wc -l | tr -d ' '); printf "%6d  %s\n" "$n" "$d"; done | sort -rn
 ```
 
-Only propose hypotheses that use embeddings listed by that command, or that require running stage 2 (extraction) first.
+This prints a count of pickle files per set/embedder. Only propose hypotheses using embedders with a non-zero count, or that require running stage 2 (extraction) first.
 
 
 ### 1. Create a worktree
@@ -77,7 +77,7 @@ If you download an external model or artifact (embedder weights, pretrained back
 
 ### 4. Run the pipeline
 
-Run only the stages you need. All commands should be run from inside the worktree, with the worktree root as the working directory. Use `conda run -n buzzdetect-train python <script>` for each stage.
+Run stages 2–3 from inside the worktree. Stage 4 (test) must be run from the **main worktree** after copying the model there. Use `conda run -n buzzdetect-train python <script>` for each stage.
 
 **Stage 2 — extract embeddings** (only needed if you changed the embedder or extraction logic):
 ```bash
@@ -92,8 +92,19 @@ conda run -n buzzdetect-train python 03_train/main.py \
   --translation general --epochs 300
 ```
 
-**Stage 4 — test/eval** must be run manually after training:
+Use a descriptive `--model` name that won't collide with existing models (e.g. `exp_birdnet_v1`). Use `--set lite` for a fast smoke test before committing to a full run on `standard`.
+
+Model output goes to `models/<modelname>/` in the worktree (gitignored; only code is tracked).
+
+**After training — copy model to main tree** before running stage 4:
 ```bash
+MAIN=$(git worktree list | awk 'NR==1{print $1}')
+cp -r models/<modelname> "$MAIN/models/"
+```
+
+**Stage 4 — test/eval** must be run from the **main worktree**:
+```bash
+cd "$MAIN"
 conda run -n buzzdetect-train python -c "
 import sys
 sys.path.insert(0, '$(pwd)/04_test')
@@ -105,10 +116,6 @@ mod.test_model('<modelname>')
 "
 ```
 Note: `04_test/main.py` cannot be invoked as `python 04_test/main.py` because `main` collides with the root `main.py` on sys.path. Use the spec loader snippet above.
-
-Use a descriptive `--model` name that won't collide with existing models (e.g. `exp_birdnet_v1`). Use `--set lite` for a fast smoke test before committing to a full run on `standard`.
-
-Model output goes to `models/<modelname>/` in the worktree (gitignored; only code is tracked).
 
 ### 5. Record results
 
@@ -144,14 +151,7 @@ Metric: precision at 80% sensitivity (or sensitivity at 90% precision)
 
 Copy these notes to the model folder.
 
-**B. Copy model to main tree** — model artifacts are not git-tracked, but must be copied to the main worktree so `eval.py` and future inference can find them:
-
-```bash
-MAIN=$(git worktree list | awk 'NR==1{print $1}')
-cp -r models/<modelname> "$MAIN/models/"
-```
-
-**C. Log entry** — append one JSON line to `experiments/log.jsonl` in the **main** worktree (not the experiment worktree):
+**B. Log entry** — append one JSON line to `experiments/log.jsonl` in the **main** worktree (not the experiment worktree):
 
 ```json
 {"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "hypothesis": "<one sentence>", "metrics": {"precision_at_80pct_sensitivity": 0.0, "sensitivity_at_90pct_precision": 0.0}, "baseline": {"model": "<name>", "precision_at_80pct_sensitivity": 0.0}, "conclusion": "<one sentence>", "reproduction": "<URL or 'no external artifacts'>"}

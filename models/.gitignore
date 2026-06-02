@@ -1,6 +1,7 @@
 # Ignore everything in the root by default
 /*
 !.gitignore
+!models.py
 
 # Unignore these shared models (code/config only, not binaries)
 !model_general_v3/
