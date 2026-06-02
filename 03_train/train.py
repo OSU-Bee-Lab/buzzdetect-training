@@ -1,9 +1,9 @@
 import json
 import os
 import pickle
-import random
 import shutil
 
+import numpy as np
 import pandas as pd
 import tensorflow as tf
 
@@ -68,13 +68,11 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
             embeddings.extend(s.embeddings)
             targets.extend([s.target_array] * s.frames)
 
-        # full shuffle training samples by index
-        idx = list(range(len(embeddings)))
-        random.shuffle(idx)
-        embeddings = [embeddings[i] for i in idx]
-        targets = [targets[i] for i in idx]
+        idx = np.random.permutation(len(embeddings))
+        embeddings_np = np.array(embeddings, dtype=np.float32)[idx]
+        targets_np = np.array(targets, dtype=np.float32)[idx]
 
-        dataset_tf = tf.data.Dataset.from_tensor_slices((embeddings, targets))
+        dataset_tf = tf.data.Dataset.from_tensor_slices((embeddings_np, targets_np))
         dataset_tf = dataset_tf.cache().shuffle(size_shuffle).batch(size_batch).prefetch(tf.data.AUTOTUNE)
 
         return dataset_tf
