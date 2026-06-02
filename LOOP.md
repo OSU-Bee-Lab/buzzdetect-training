@@ -26,9 +26,11 @@ ROOT=$(git rev-parse --show-toplevel)
 EXP=<short-slug>   # e.g. birdnet-embedder, deeper-head, augment-pitch
 git worktree add .local/worktrees/$EXP -b exp/$EXP
 
-# Symlink embedder dirs (weights/binaries) and shared source files
+# Replace git-checked-out embedder dirs with symlinks to main worktree
+# (so binary weights and gitignored files are available)
 for d in $ROOT/embedders/*/; do
     name=$(basename "$d")
+    rm -rf ".local/worktrees/$EXP/embedders/$name"
     ln -s "$d" ".local/worktrees/$EXP/embedders/$name"
 done
 ln -sf "$ROOT/embedders/embedding.py" ".local/worktrees/$EXP/embedders/embedding.py"
@@ -94,7 +96,19 @@ conda run -n buzzdetect-train python 03_train/main.py \
   --translation general --epochs 300
 ```
 
-**Stage 4 — test/eval** runs automatically at the end of training. To re-run on an existing model, use `eval.py`.
+**Stage 4 — test/eval** must be run manually after training:
+```bash
+conda run -n buzzdetect-train python -c "
+import sys
+sys.path.insert(0, '$(pwd)/04_test')
+sys.path.insert(0, '$(pwd)')
+import importlib.util
+spec = importlib.util.spec_from_file_location('test_main', '04_test/main.py')
+mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+mod.test_model('<modelname>')
+"
+```
+Note: `04_test/main.py` cannot be invoked as `python 04_test/main.py` because `main` collides with the root `main.py` on sys.path. Use the spec loader snippet above.
 
 Use a descriptive `--model` name that won't collide with existing models (e.g. `exp_birdnet_v1`). Use `--set lite` for a fast smoke test before committing to a full run on `standard`.
 
