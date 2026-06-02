@@ -19,42 +19,22 @@ To understand a model's configuration (embedder, set, translation), read `models
 
 ### 1. Create a worktree
 
-Each experiment lives on its own branch in an isolated worktree:
-
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
-EXP=<short-slug>   # e.g. birdnet-embedder, deeper-head, augment-pitch
-git worktree add .local/worktrees/$EXP -b exp/$EXP
-
-# Replace git-checked-out embedder dirs with symlinks to main worktree
-# (so binary weights and gitignored files are available)
-for d in $ROOT/embedders/*/; do
-    name=$(basename "$d")
-    rm -rf ".local/worktrees/$EXP/embedders/$name"
-    ln -s "$d" ".local/worktrees/$EXP/embedders/$name"
-done
-ln -sf "$ROOT/embedders/embedding.py" ".local/worktrees/$EXP/embedders/embedding.py"
-
-# Symlink gitignored data dirs (embeddings, test audio) — read-only shared data
-for setname in lite standard; do
-    ln -s "$ROOT/02_set/sets/$setname/embeddings" \
-          ".local/worktrees/$EXP/02_set/sets/$setname/embeddings"
-done
-ln -s "$ROOT/04_test/audio"      ".local/worktrees/$EXP/04_test/audio"
-ln -s "$ROOT/04_test/embeddings" ".local/worktrees/$EXP/04_test/embeddings"
+bash setup_worktree.sh <short-slug>   # e.g. birdnet-embedder, deeper-head, augment-pitch
 ```
+
+This creates `.local/worktrees/<slug>` on branch `exp/<slug>` and symlinks all shared binary/data dirs (embedder weights, set embeddings, test audio). It prints a sanity check at the end — confirm it passes before proceeding.
 
 All code changes go in the worktree. Do not touch the main worktree's tracked files during an experiment.
 
-**Embedder binaries**: the symlinks above point to the main worktree's embedder dirs (weights, `.pb` files). If you want to modify an existing embedder or download a new one, replace the symlink with a real copy first:
+**Modifying an existing embedder**: the embedder dirs are symlinks to the main worktree. To modify one, replace the symlink with a real copy first:
 
 ```bash
-cp -rL embedders/yamnet embedders/yamnet_copy
-rm embedders/yamnet
-mv embedders/yamnet_copy embedders/yamnet
+cd .local/worktrees/<slug>
+cp -rL embedders/yamnet embedders/yamnet_copy && rm embedders/yamnet && mv embedders/yamnet_copy embedders/yamnet
 ```
 
-For a brand-new embedder, just create the dir directly — no symlink to remove.
+For a brand-new embedder, create the dir directly — no symlink to remove.
 
 ### 2. Propose a hypothesis
 
