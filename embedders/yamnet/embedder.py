@@ -1,5 +1,7 @@
 import os
 
+import numpy as np
+
 from embedders.embedding import BaseEmbedder
 
 
@@ -22,7 +24,9 @@ class EmbedderYamnet(BaseEmbedder):
         model = tf.keras.models.load_model(model_path, compile=False)
         model.layers[1].params.patch_hop_seconds = self.framehop_s
         self.model = model
-
+        # Force TF thread pool init before librosa/Accelerate claims threads; without
+        # this the first embed() call after librosa.resample deadlocks on macOS.
+        self.embed(np.zeros(int(self.framelength_s * self.samplerate), dtype=np.float32))
 
     def embed(self, audio):
         """

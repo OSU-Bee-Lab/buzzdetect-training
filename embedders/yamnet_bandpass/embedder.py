@@ -27,6 +27,9 @@ class EmbedderYamnetBandpass(BaseEmbedder):
         model.layers[1].params.patch_hop_seconds = self.framehop_s
         self.model = model
         self._filter_kernel = self._build_filter_kernel()
+        # Force TF thread pool init before librosa/Accelerate claims threads; without
+        # this the first embed() call after librosa.resample deadlocks on macOS.
+        self.embed(np.zeros(int(self.framelength_s * self.samplerate), dtype=np.float32))
 
     def _build_filter_kernel(self):
         """Hamming-windowed sinc bandpass FIR, returned as a tf constant."""

@@ -1,5 +1,7 @@
 import os
 
+import numpy as np
+
 from embedders.embedding import BaseEmbedder
 
 class YamnetK2(BaseEmbedder):
@@ -22,7 +24,9 @@ class YamnetK2(BaseEmbedder):
             # TODO: hop on command; totally worth it with how much faster k2 is
 
         self.model = TFSMLayer(dir_model, call_endpoint='serving_default')
-
+        # Force TF thread pool init before librosa/Accelerate claims threads; without
+        # this the first embed() call after librosa.resample deadlocks on macOS.
+        self.embed(np.zeros(int(self.framelength_s * self.samplerate), dtype=np.float32))
 
     def embed(self, audiosamples):
         """
