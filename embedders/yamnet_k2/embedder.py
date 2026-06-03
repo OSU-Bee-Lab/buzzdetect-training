@@ -1,6 +1,6 @@
 import os
 
-from code.embedding.BaseEmbedder import BaseEmbedder
+from embedders.embedding import BaseEmbedder
 
 class YamnetK2(BaseEmbedder):
     # Class attributes - no config file needed!
