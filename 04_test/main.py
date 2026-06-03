@@ -1,4 +1,9 @@
+import argparse
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import pandas as pd
 
@@ -48,4 +53,8 @@ def test_model(modelname):
 
 
 if __name__ == '__main__':
-    test_model('test')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model', required=True)
+    args = parser.parse_args()
+
+    test_model(args.model)

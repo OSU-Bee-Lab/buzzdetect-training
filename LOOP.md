@@ -105,17 +105,8 @@ cp -r models/<modelname> "$MAIN/models/"
 **Stage 4 — test/eval** must be run from the **main worktree**:
 ```bash
 cd "$MAIN"
-conda run -n buzzdetect-train python -c "
-import sys
-sys.path.insert(0, '$(pwd)/04_test')
-sys.path.insert(0, '$(pwd)')
-import importlib.util
-spec = importlib.util.spec_from_file_location('test_main', '04_test/main.py')
-mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
-mod.test_model('<modelname>')
-"
+conda run -n buzzdetect-train python 04_test/main.py --model <modelname>
 ```
-Note: `04_test/main.py` cannot be invoked as `python 04_test/main.py` because `main` collides with the root `main.py` on sys.path. Use the spec loader snippet above.
 
 ### 5. Record results
 
