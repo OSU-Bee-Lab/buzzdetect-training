@@ -20,7 +20,5 @@ if __name__ == '__main__':
     extract_set(
         setname=args.setname,
         embeddername=args.embedder,
-        overlap_event_prop=0.2,
-        framehop_prop=0.5,
         n_workers=args.workers,
     )

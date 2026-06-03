@@ -51,8 +51,6 @@ def main(modelname, setname, embeddername, name_translation, epochs_max, clear):
     stage2.extract_set(
         setname=setname,
         embeddername=embeddername,
-        overlap_event_prop=0.2,
-        framehop_prop=0.5,
         n_workers=4,
     )
 

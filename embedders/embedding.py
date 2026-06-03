@@ -25,12 +25,10 @@ class BaseEmbedder(ABC):
         self.framehop_s = self.framelength_s * framehop_prop
         self.model = None
 
-    def audio_cache_key(self, framehop_prop: float, overlap_event_prop: float) -> str:
+    def audio_cache_key(self) -> str:
         return (
             f"sr{self.samplerate}"
             f"_fl{self.framelength_s:g}"
-            f"_fh{framehop_prop:g}"
-            f"_eo{overlap_event_prop:g}"
         )
 
     @abstractmethod

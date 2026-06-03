@@ -140,17 +140,21 @@ def get_ident_audio_path(ident):
 @dataclass
 class ConfigExtract:
     setname: str
-    embeddername: str
     overlap_event_prop: float
     framehop_prop: float
+    embeddername: str = None  # runtime-only, not persisted to config_extract.json
+
+    STORED_FIELDS = ('setname', 'overlap_event_prop', 'framehop_prop')
 
     def __post_init__(self):
         self.dir_set = cfg.dir_set(self.setname)
-        self.dir_out_embeddings = cfg.dir_embeddings_raw(self.setname, self.embeddername)
+
+    def dir_out_embeddings(self, embeddername):
+        return cfg.dir_embeddings_raw(self.setname, embeddername)
 
 
 class AssignIdent:
-    def __init__(self, ident: str, fold: str, config_extract: ConfigExtract, dir_audio_base: str):
+    def __init__(self, ident: str, fold: str, config_extract: ConfigExtract, dir_audio_base: str, dir_embeddings_base: str):
         self.ident = ident
         self.fold = fold
         self.config_extract = config_extract
@@ -160,20 +164,20 @@ class AssignIdent:
         self.dir_out_audio = os.path.join(dir_audio_base, fold, ident)
         self.audio_exists =  bool(os.path.exists(self.dir_out_audio) and os.listdir(self.dir_out_audio))
 
-        self.dir_out_embeddings = os.path.join(self.config_extract.dir_out_embeddings, fold, ident)
+        self.dir_out_embeddings = os.path.join(dir_embeddings_base, fold, ident)
         self.embeddings_exist =  bool(os.path.exists(self.dir_out_embeddings) and os.listdir(self.dir_out_embeddings))
 
         self.handle, self.handle_msg = self._init_handle()
 
 
     def _init_handle(self):
-        if not self.path_audio:
-            return 'no_audio', 'audio file not found'
-        if not self.audio_exists:
-            return 'both', 'audio not extracted'
-        if not self.embeddings_exist:
+        if self.audio_exists and self.embeddings_exist:
+            return 'skip', 'audio and embeddings already extracted'
+        if self.audio_exists and not self.embeddings_exist:
             return 'embeddings', 'audio already extracted'
-        return 'skip', 'audio and embeddings already extracted'
+        if not self.audio_exists and self.path_audio:
+            return 'both', 'audio not extracted'
+        return 'no_audio', 'audio file not found'
 
 class WorkerExtract:
     def __init__(self, config_extract: ConfigExtract, annotations: pd.DataFrame, folds: pd.DataFrame, q_extract: multiprocessing.Queue, name='worker_extract'):
@@ -187,11 +191,9 @@ class WorkerExtract:
             self.embedder.framelength_s * self.config_extract.overlap_event_prop
         )
 
-        audio_key = self.embedder.audio_cache_key(
-            self.config_extract.framehop_prop,
-            self.config_extract.overlap_event_prop
-        )
+        audio_key = self.embedder.audio_cache_key()
         self.dir_audio_cache_base = os.path.join(cfg.dir_audio(self.config_extract.setname), audio_key)
+        self.dir_embeddings_base = self.config_extract.dir_out_embeddings(self.config_extract.embeddername)
 
         self.folds = folds
         self.annotations = annotations
@@ -309,7 +311,7 @@ class WorkerExtract:
         else:
             fold = fold[0]
 
-        a_ident = AssignIdent(ident=ident, fold=fold, config_extract=self.config_extract, dir_audio_base=self.dir_audio_cache_base)
+        a_ident = AssignIdent(ident=ident, fold=fold, config_extract=self.config_extract, dir_audio_base=self.dir_audio_cache_base, dir_embeddings_base=self.dir_embeddings_base)
         if a_ident.handle == 'both':
             self.extract_ident_both(a_ident)
         elif a_ident.handle == 'embeddings':
@@ -337,22 +339,35 @@ def run_worker(config_extract: ConfigExtract, annotations: pd.DataFrame, folds: 
     worker.run()
 
 
-def extract_set(setname, embeddername, overlap_event_prop, framehop_prop, n_workers):
+def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=None, n_workers=4):
     dir_set = cfg.dir_set(setname)
     path_config = os.path.join(dir_set, 'config_extract.json')
 
     if os.path.exists(path_config):
         with open(path_config, 'r') as f:
             saved = json.load(f)
+        # Reject if caller passes set-level params that conflict with what's saved
+        conflicts = {}
+        if overlap_event_prop is not None and overlap_event_prop != saved.get('overlap_event_prop'):
+            conflicts['overlap_event_prop'] = (saved['overlap_event_prop'], overlap_event_prop)
+        if framehop_prop is not None and framehop_prop != saved.get('framehop_prop'):
+            conflicts['framehop_prop'] = (saved['framehop_prop'], framehop_prop)
+        if conflicts:
+            msgs = [f"  {k}: saved={v[0]}, got={v[1]}" for k, v in conflicts.items()]
+            raise ValueError(f"Set '{setname}' already extracted with different parameters:\n" + "\n".join(msgs))
         config_extract = ConfigExtract(**saved)
         print(f'loaded config_extract from {path_config}')
     else:
-        config_extract = ConfigExtract(setname=setname, embeddername=embeddername, overlap_event_prop=overlap_event_prop, framehop_prop=framehop_prop)
+        if overlap_event_prop is None or framehop_prop is None:
+            raise ValueError(f"No config_extract.json found for set '{setname}'; overlap_event_prop and framehop_prop must be provided")
+        config_extract = ConfigExtract(setname=setname, overlap_event_prop=overlap_event_prop, framehop_prop=framehop_prop)
         os.makedirs(dir_set, exist_ok=True)
-        core_fields = {k: getattr(config_extract, k) for k in ConfigExtract.__dataclass_fields__}
+        stored = {k: getattr(config_extract, k) for k in ConfigExtract.STORED_FIELDS}
         with open(path_config, 'w') as f:
-            json.dump(core_fields, f, indent=2)
+            json.dump(stored, f, indent=2)
         print(f'saved config_extract to {path_config}')
+
+    config_extract.embeddername = embeddername
 
     folds = pd.read_csv(os.path.join(dir_set, 'folds.csv'))
     annotations = pd.read_csv(os.path.join(dir_set, 'annotations.csv'))
@@ -360,8 +375,9 @@ def extract_set(setname, embeddername, overlap_event_prop, framehop_prop, n_work
 
     # Pre-filter: determine which idents actually need work before spawning workers
     embedder_tmp = load_embedder(embeddername, framehop_prop=1, initialize=False)
-    audio_key = embedder_tmp.audio_cache_key(framehop_prop, overlap_event_prop)
+    audio_key = embedder_tmp.audio_cache_key()
     dir_audio_cache_base = os.path.join(cfg.dir_audio(setname), audio_key)
+    dir_embeddings_base = config_extract.dir_out_embeddings(embeddername)
 
     idents_todo = []
     for ident in idents:
@@ -369,7 +385,7 @@ def extract_set(setname, embeddername, overlap_event_prop, framehop_prop, n_work
         if len(fold_rows) != 1:
             continue
         fold = fold_rows[0]
-        a_ident = AssignIdent(ident=ident, fold=fold, config_extract=config_extract, dir_audio_base=dir_audio_cache_base)
+        a_ident = AssignIdent(ident=ident, fold=fold, config_extract=config_extract, dir_audio_base=dir_audio_cache_base, dir_embeddings_base=dir_embeddings_base)
         if a_ident.handle not in ('skip', 'no_audio'):
             idents_todo.append(ident)
 
