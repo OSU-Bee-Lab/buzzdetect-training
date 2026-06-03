@@ -1,3 +1,11 @@
+# TensorFlow must be imported before pandas/pyarrow. pandas eagerly imports
+# pyarrow, and pyarrow + TF each bundle their own statically-linked abseil; the
+# shared lib that loads first wins abseil's weak synchronization symbols
+# process-wide. If libarrow wins, TF's in-graph FFT (ducc0) threadpool ends up
+# waiting on libarrow's incompatible semaphore impl and deadlocks. Keep this
+# import first, ahead of pandas.
+import tensorflow  # noqa: F401  -- imported for load-order side effect only
+
 import argparse
 import os
 import sys

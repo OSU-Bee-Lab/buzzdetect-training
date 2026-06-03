@@ -1,6 +1,15 @@
 """
 Run the full training pipeline (stages 2–4) for a model.
 """
+# TensorFlow must be imported before pandas/pyarrow. pandas eagerly imports
+# pyarrow, and pyarrow + TF each bundle their own statically-linked abseil; the
+# shared lib that loads first wins abseil's weak synchronization symbols
+# process-wide. If libarrow wins, TF's in-graph FFT (ducc0) threadpool ends up
+# waiting on libarrow's incompatible semaphore impl and deadlocks — YAMNet
+# extraction freezes mid-run. Keep this import first, ahead of the stage
+# modules (which pull in pandas).
+import tensorflow  # noqa: F401  -- imported for load-order side effect only
+
 import argparse
 import importlib.util
 import multiprocessing
@@ -22,7 +31,7 @@ def load_stage(path, module_name):
     spec.loader.exec_module(mod)
     return mod
 
-def main(modelname, setname, embeddername, name_translation, epochs_max, clear, aug_dirnames=None):
+def main(modelname, setname, embeddername, name_translation, epochs_max, clear, aug_dirnames=None, verbose=False):
     model_dir = os.path.join(config.DIR_MODELS, modelname)
 
     if clear and os.path.exists(model_dir):
@@ -36,6 +45,7 @@ def main(modelname, setname, embeddername, name_translation, epochs_max, clear, 
         setname=setname,
         embeddername=embeddername,
         n_workers=4,
+        verbose=verbose,
     )
 
     print('\n=== 03 train ===')
@@ -65,6 +75,7 @@ if __name__ == '__main__':
                         help='Skip clearing existing model dir')
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME',
                         help='Augmented embedding dirs to include in training (must be built via 02_set/augment.py first)')
+    parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 
     main(
@@ -75,4 +86,5 @@ if __name__ == '__main__':
         epochs_max=args.epochs,
         clear=args.clear,
         aug_dirnames=args.aug_dirnames,
+        verbose=args.verbose,
     )
