@@ -34,6 +34,9 @@ class BaseModel(ABC):
         """Generate results for audio data"""
         pass
 
+    def predict_embeddings(self, embeddings):
+        return self.model(embeddings)
+
 
 def load_model(modelname: str, framehop_prop: float, initialize: bool):
     """
