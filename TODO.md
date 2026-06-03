@@ -22,7 +22,8 @@ been cleared for a fresh run.
 
 ## Known edge case to watch
 
-`frame_audio` raises if a snip is shorter than `framelength_s`. This can
-happen if an annotation is at the edge of a very short file and the 30s buffer
-gets clamped. Pre-existing failure mode, not introduced here, but worth
-catching in logs if it surfaces.
+`frame_audio` raises `ValueError` if a snip ends up shorter than
+`framelength_s` (e.g. annotation at the edge of a file shorter than ~1s).
+The exception is unhandled — it would silently kill a worker process, dropping
+that ident. Pre-existing condition (old `expand_chunk` had the same guard);
+extremely unlikely with real field recordings.
