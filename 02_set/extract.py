@@ -91,32 +91,6 @@ def events_in_frame(range_frame, annotations, event_overlap_s):
     return events
 
 
-def expand_chunk(chunk, framelength_s, event_overlap_s, file_duration):
-    """ Chunks need to be expanded so that framing starts and ends with the frame overlapping by event_overlap_s"""
-    if file_duration < framelength_s:
-        raise ValueError('input audio is shorter than one frame')
-
-    start = max(
-        # nudge start a bit forward, otherwise events might not quite overlap
-        chunk[0] - ((framelength_s - event_overlap_s) * 0.99),
-        0  # if start < 0, round up to 0
-    )
-
-    end = min(
-        chunk[1] + (framelength_s - event_overlap_s),
-        file_duration  # if end > file length, round down to file length
-    )
-
-    # if the annotation is right at the start of the file and less than a frame,
-    # it can't be expanded from the center, so expand right. Vice verca for end of file.
-    if (end - start) < framelength_s:
-        if end == file_duration:
-            start = end - (framelength_s * 0.99)
-        elif start == 0:
-            end = start + framelength_s
-    return start, end
-
-
 def collapse_labels(labellist):
     separator = '+'
     collapse = separator.join(labellist)
@@ -137,6 +111,92 @@ def get_ident_audio_path(ident):
     return path_audio
 
 
+# ---------------------------------------------------------------------------
+# Snip extraction (layer 1: HDD → per-annotation-cluster WAV files)
+# ---------------------------------------------------------------------------
+
+def _snip_filename(start: float, end: float) -> str:
+    return f"snip_{start:.3f}_{end:.3f}.wav"
+
+
+def _parse_snip_start(path: str) -> float:
+    name = os.path.basename(path).replace('.wav', '')
+    parts = name.split('_')  # ['snip', '<start>', '<end>']
+    return float(parts[1])
+
+
+def _extract_snips_ident(ident: str, annotations_sub: pd.DataFrame, path_audio: str, dir_out: str):
+    """Write one WAV per annotation cluster (+ 30 s buffer) for a single ident."""
+    with sf.SoundFile(path_audio) as track:
+        duration = track.frames / track.samplerate
+        sr = track.samplerate
+        chunks_raw = melt_coverage(annotations_sub)
+        os.makedirs(dir_out, exist_ok=True)
+
+        for chunk in chunks_raw:
+            start = max(0.0, chunk[0] - cfg.SNIP_BUFFER_S)
+            end = min(duration, chunk[1] + cfg.SNIP_BUFFER_S)
+
+            start_sample = round(sr * start)
+            n_samples = round(sr * (end - start))
+            track.seek(start_sample)
+            audio_data = track.read(n_samples)
+
+            if track.channels > 1:
+                audio_data = np.mean(audio_data, axis=1)
+
+            sf.write(os.path.join(dir_out, _snip_filename(start, end)), audio_data, sr)
+
+
+def extract_snips(setname: str, verbose=False):
+    """Extract raw audio snips for all idents in a set.
+
+    Run this before extract_set. Safe to re-run; already-extracted idents are
+    skipped. Snips are stored as:
+        02_set/sets/<setname>/audio/snips/<ident>/snip_<start>_<end>.wav
+
+    Each snip covers one annotation cluster padded by SNIP_BUFFER_S on each
+    side. Overlapping clusters are NOT merged — separate snip files are written
+    for each, intentionally. Snips are at the source file's native sample rate
+    (no per-embedder resampling at this stage).
+    """
+    dir_set = cfg.dir_set(setname)
+    annotations = pd.read_csv(os.path.join(dir_set, 'annotations.csv'))
+    dir_snips_base = cfg.dir_snips(setname)
+
+    idents = annotations['ident'].unique()
+    n_extracted = 0
+    n_skipped = 0
+    n_missing = 0
+
+    for ident in idents:
+        dir_out = os.path.join(dir_snips_base, ident)
+
+        if os.path.exists(dir_out) and os.listdir(dir_out):
+            if verbose:
+                print(f'extract_snips: {ident} already done')
+            n_skipped += 1
+            continue
+
+        path_audio = get_ident_audio_path(ident)
+        if not path_audio:
+            warnings.warn(f'extract_snips: no audio file for {ident}; skipping')
+            n_missing += 1
+            continue
+
+        if verbose:
+            print(f'extract_snips: {ident}')
+        annotations_sub = annotations[annotations['ident'] == ident]
+        _extract_snips_ident(ident, annotations_sub, path_audio, dir_out)
+        n_extracted += 1
+
+    print(f'extract_snips: {n_extracted} extracted, {n_skipped} skipped, {n_missing} missing audio')
+
+
+# ---------------------------------------------------------------------------
+# Per-embedder extraction (layers 2–3: snips → framed audio cache → embeddings)
+# ---------------------------------------------------------------------------
+
 @dataclass
 class ConfigExtract:
     setname: str
@@ -154,35 +214,39 @@ class ConfigExtract:
 
 
 class AssignIdent:
-    def __init__(self, ident: str, fold: str, config_extract: ConfigExtract, dir_audio_base: str, dir_embeddings_base: str):
+    def __init__(self, ident: str, fold: str, config_extract: ConfigExtract,
+                 dir_audio_base: str, dir_embeddings_base: str, dir_snips_base: str):
         self.ident = ident
         self.fold = fold
         self.config_extract = config_extract
 
-        self.path_audio = get_ident_audio_path(ident)
-
         self.dir_out_audio = os.path.join(dir_audio_base, fold, ident)
-        self.audio_exists =  bool(os.path.exists(self.dir_out_audio) and os.listdir(self.dir_out_audio))
+        self.audio_exists = bool(os.path.exists(self.dir_out_audio) and os.listdir(self.dir_out_audio))
 
         self.dir_out_embeddings = os.path.join(dir_embeddings_base, fold, ident)
-        self.embeddings_exist =  bool(os.path.exists(self.dir_out_embeddings) and os.listdir(self.dir_out_embeddings))
+        self.embeddings_exist = bool(os.path.exists(self.dir_out_embeddings) and os.listdir(self.dir_out_embeddings))
+
+        self.dir_snips_ident = os.path.join(dir_snips_base, ident)
+        self.snips_exist = bool(os.path.exists(self.dir_snips_ident) and os.listdir(self.dir_snips_ident))
 
         self.handle, self.handle_msg = self._init_handle()
-
 
     def _init_handle(self):
         if self.audio_exists and self.embeddings_exist:
             return 'skip', 'audio and embeddings already extracted'
         if self.audio_exists and not self.embeddings_exist:
             return 'embeddings', 'audio already extracted'
-        if not self.audio_exists and self.path_audio:
-            return 'both', 'audio not extracted'
-        return 'no_audio', 'audio file not found'
+        if not self.audio_exists and self.snips_exist:
+            return 'both', 'snips available, audio not extracted'
+        return 'no_snips', 'snips not found; run extract_snips first'
+
 
 class WorkerExtract:
-    def __init__(self, config_extract: ConfigExtract, annotations: pd.DataFrame, folds: pd.DataFrame, q_extract: multiprocessing.Queue, name='worker_extract'):
+    def __init__(self, config_extract: ConfigExtract, annotations: pd.DataFrame, folds: pd.DataFrame,
+                 q_extract: multiprocessing.Queue, name='worker_extract', verbose=False):
         self.config_extract = config_extract
         self.name = name
+        self.verbose = verbose
 
         # embedder has framehop of 1 because we're framing manually
         self.embedder: BaseEmbedder = load_embedder(self.config_extract.embeddername, framehop_prop=1, initialize=False)
@@ -194,6 +258,7 @@ class WorkerExtract:
         audio_key = self.embedder.audio_cache_key()
         self.dir_audio_cache_base = os.path.join(cfg.dir_audio(self.config_extract.setname), audio_key)
         self.dir_embeddings_base = self.config_extract.dir_out_embeddings(self.config_extract.embeddername)
+        self.dir_snips_base = cfg.dir_snips(self.config_extract.setname)
 
         self.folds = folds
         self.annotations = annotations
@@ -201,19 +266,6 @@ class WorkerExtract:
 
         self.framelength_samples = int(self.embedder.framelength_s * self.embedder.samplerate)
         self.chunklength_samples = cfg.CHUNK_FRAMES * self.framelength_samples
-
-    def read_range(self, track: sf.SoundFile, audiorange: tuple[float, float]):
-        start_sample = round(track.samplerate * audiorange[0])
-        samples_to_read = round(track.samplerate * (audiorange[1] - audiorange[0]))
-        track.seek(start_sample)
-        audio_data = track.read(samples_to_read, dtype=self.embedder.dtype_in)
-
-        if track.channels > 1:
-            audio_data = np.mean(audio_data, axis=1)
-
-        audio_data = librosa.resample(y=audio_data, orig_sr=track.samplerate, target_sr=self.embedder.samplerate)
-
-        return audio_data
 
     def extract_ident_embeddings(self, a_ident: AssignIdent):
         paths_audio = glob.glob(os.path.join(a_ident.dir_out_audio, '*.pickle'))
@@ -240,46 +292,43 @@ class WorkerExtract:
     def extract_ident_both(self, a_ident: AssignIdent):
         annotations_sub = self.annotations[self.annotations['ident'] == a_ident.ident].copy()
 
-        track = sf.SoundFile(a_ident.path_audio)
-        audio_duration = track.frames / track.samplerate
-        chunks_raw = melt_coverage(annotations_sub)
-        chunks = [expand_chunk(chunk, self.embedder.framelength_s, self.overlap_event_s, audio_duration) for chunk in chunks_raw]
+        snip_paths = sorted(glob.glob(os.path.join(a_ident.dir_snips_ident, 'snip_*.wav')))
+        if not snip_paths:
+            raise FileNotFoundError(
+                f'no snips for {a_ident.ident} in {a_ident.dir_snips_ident}; run extract_snips first'
+            )
 
         frames_by_label = {}
 
-        def process_chunk(chunk: tuple[float, float]):
-            print(f'extractor {self.name}: ident {a_ident.ident}, chunk {chunk}')
+        for snip_path in snip_paths:
+            snip_start = _parse_snip_start(snip_path)
+            if self.verbose:
+                print(f'extractor {self.name}: {a_ident.ident} snip {snip_start:.3f}s')
 
-            audio_data = self.read_range(track, chunk)
+            snip_audio, snip_sr = sf.read(snip_path, dtype=self.embedder.dtype_in)
+            audio_data = librosa.resample(y=snip_audio, orig_sr=snip_sr, target_sr=self.embedder.samplerate)
 
-            frames = frame_audio(audio_data=audio_data, framelength_s=self.embedder.framelength_s,
-                                 samplerate=self.embedder.samplerate, framehop_s=self.config_extract.framehop_prop*self.embedder.framehop_s)
+            frames = frame_audio(
+                audio_data=audio_data,
+                framelength_s=self.embedder.framelength_s,
+                samplerate=self.embedder.samplerate,
+                framehop_s=self.config_extract.framehop_prop * self.embedder.framehop_s,
+            )
 
-            frametimes = chunk[0] + (np.arange(0, len(frames)) * self.config_extract.framehop_prop * self.embedder.framelength_s)
-            frametimes = [(s, s + self.embedder.framelength_s) for s in frametimes]
+            frame_starts = snip_start + np.arange(len(frames)) * self.config_extract.framehop_prop * self.embedder.framelength_s
+            frametimes = [(s, s + self.embedder.framelength_s) for s in frame_starts]
 
             for frame, frame_range in zip(frames, frametimes):
                 events_frame = events_in_frame(
                     range_frame=frame_range,
                     annotations=annotations_sub,
-                    event_overlap_s=self.overlap_event_s
+                    event_overlap_s=self.overlap_event_s,
                 )
-
                 labels_collapse = collapse_labels(events_frame)
-                if labels_collapse == '':
-                    annotations_sub.to_csv('no_events_annotations.csv', index=False)
-                    msg = (f'extractor {self.name}: no events found in frame {frame_range} for ident {a_ident.ident}'
-                           f'Frame times: {frame_range}, events {events_frame}')
+                if not labels_collapse:
+                    continue  # buffer region — no events
 
-                    raise ValueError(msg)
-
-                if labels_collapse not in frames_by_label:
-                    frames_by_label[labels_collapse] = [frame]
-                else:
-                    frames_by_label[labels_collapse].append(frame)
-
-        for chunk in chunks:
-            process_chunk(chunk)
+                frames_by_label.setdefault(labels_collapse, []).append(frame)
 
         os.makedirs(a_ident.dir_out_audio, exist_ok=True)
         os.makedirs(a_ident.dir_out_embeddings, exist_ok=True)
@@ -287,6 +336,7 @@ class WorkerExtract:
         for labels_collapse, samples in frames_by_label.items():
             path_out_samples = os.path.join(a_ident.dir_out_audio, labels_collapse + '.pickle')
             path_out_embedding = os.path.join(a_ident.dir_out_embeddings, labels_collapse + '.pickle')
+
             with open(path_out_samples, 'wb') as file:
                 for s in samples:
                     pickle.dump(s, file)
@@ -311,17 +361,24 @@ class WorkerExtract:
         else:
             fold = fold[0]
 
-        a_ident = AssignIdent(ident=ident, fold=fold, config_extract=self.config_extract, dir_audio_base=self.dir_audio_cache_base, dir_embeddings_base=self.dir_embeddings_base)
+        a_ident = AssignIdent(
+            ident=ident, fold=fold, config_extract=self.config_extract,
+            dir_audio_base=self.dir_audio_cache_base,
+            dir_embeddings_base=self.dir_embeddings_base,
+            dir_snips_base=self.dir_snips_base,
+        )
         if a_ident.handle == 'both':
             self.extract_ident_both(a_ident)
         elif a_ident.handle == 'embeddings':
-            print(f'extractor {self.name}: extracting embeddings for {ident}')
+            if self.verbose:
+                print(f'extractor {self.name}: extracting embeddings for {ident}')
             self.extract_ident_embeddings(a_ident)
-        elif a_ident.handle == 'no_audio':
+        elif a_ident.handle == 'no_snips':
             warnings.warn(f'extractor {self.name}: skipping {ident}; {a_ident.handle_msg}')
             return
         elif a_ident.handle == 'skip':
-            print(f'extractor {self.name}: skipping {ident}; {a_ident.handle_msg}')
+            if self.verbose:
+                print(f'extractor {self.name}: skipping {ident}; {a_ident.handle_msg}')
         else:
             raise ValueError(f'extractor {self.name}: unknown handle {a_ident.handle} for ident {ident}')
 
@@ -331,15 +388,17 @@ class WorkerExtract:
         while ident != 'TERMINATE':
             self.extract_ident(ident)
             ident = self.q_extract.get()
-        print(f'extractor {self.name}: terminating')
+        if self.verbose:
+            print(f'extractor {self.name}: terminating')
 
 
-def run_worker(config_extract: ConfigExtract, annotations: pd.DataFrame, folds: pd.DataFrame, q_extract: multiprocessing.Queue, name):
-    worker = WorkerExtract(config_extract, annotations, folds, q_extract, name)
+def run_worker(config_extract: ConfigExtract, annotations: pd.DataFrame, folds: pd.DataFrame,
+               q_extract: multiprocessing.Queue, name, verbose=False):
+    worker = WorkerExtract(config_extract, annotations, folds, q_extract, name, verbose=verbose)
     worker.run()
 
 
-def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=None, n_workers=4):
+def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=None, n_workers=4, verbose=False):
     dir_set = cfg.dir_set(setname)
     path_config = os.path.join(dir_set, 'config_extract.json')
 
@@ -378,6 +437,7 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
     audio_key = embedder_tmp.audio_cache_key()
     dir_audio_cache_base = os.path.join(cfg.dir_audio(setname), audio_key)
     dir_embeddings_base = config_extract.dir_out_embeddings(embeddername)
+    dir_snips_base = cfg.dir_snips(setname)
 
     idents_todo = []
     for ident in idents:
@@ -385,12 +445,17 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
         if len(fold_rows) != 1:
             continue
         fold = fold_rows[0]
-        a_ident = AssignIdent(ident=ident, fold=fold, config_extract=config_extract, dir_audio_base=dir_audio_cache_base, dir_embeddings_base=dir_embeddings_base)
-        if a_ident.handle not in ('skip', 'no_audio'):
+        a_ident = AssignIdent(
+            ident=ident, fold=fold, config_extract=config_extract,
+            dir_audio_base=dir_audio_cache_base,
+            dir_embeddings_base=dir_embeddings_base,
+            dir_snips_base=dir_snips_base,
+        )
+        if a_ident.handle not in ('skip', 'no_snips'):
             idents_todo.append(ident)
 
     n_skip = len(idents) - len(idents_todo)
-    print(f'  {len(idents_todo)} idents to process, {n_skip} already done or missing audio')
+    print(f'  {len(idents_todo)} idents to process, {n_skip} already done or missing snips')
 
     if not idents_todo:
         print('all idents already extracted; skipping workers')
@@ -403,7 +468,7 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
     workers = []
     for w in range(n_workers):
         q_extract.put('TERMINATE')
-        workers.append(multiprocessing.Process(target=run_worker, args=(config_extract, annotations, folds, q_extract, w)))
+        workers.append(multiprocessing.Process(target=run_worker, args=(config_extract, annotations, folds, q_extract, w, verbose)))
 
     for w in workers:
         w.start()

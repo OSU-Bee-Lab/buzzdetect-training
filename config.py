@@ -52,5 +52,11 @@ TEST_DIR_EMBEDDINGS = _p('04_test', 'embeddings')
 # embedding memory management
 CHUNK_FRAMES = 300
 
+# snip extraction
+SNIP_BUFFER_S = 30.0
+
+def dir_snips(setname):
+    return os.path.join(SET_DIR, setname, SET_SUBDIR_AUDIO, 'snips')
+
 
 
