@@ -127,15 +127,20 @@ def _parse_snip_start(path: str) -> float:
 
 def _extract_snips_ident(ident: str, annotations_sub: pd.DataFrame, path_audio: str, dir_out: str):
     """Write one WAV per annotation cluster (+ 30 s buffer) for a single ident."""
+    os.makedirs(dir_out, exist_ok=True)
+
     with sf.SoundFile(path_audio) as track:
         duration = track.frames / track.samplerate
         sr = track.samplerate
         chunks_raw = melt_coverage(annotations_sub)
-        os.makedirs(dir_out, exist_ok=True)
 
         for chunk in chunks_raw:
             start = max(0.0, chunk[0] - cfg.SNIP_BUFFER_S)
             end = min(duration, chunk[1] + cfg.SNIP_BUFFER_S)
+            path_out = os.path.join(dir_out, _snip_filename(start, end))
+
+            if os.path.exists(path_out):
+                continue
 
             start_sample = round(sr * start)
             n_samples = round(sr * (end - start))
@@ -145,7 +150,7 @@ def _extract_snips_ident(ident: str, annotations_sub: pd.DataFrame, path_audio: 
             if track.channels > 1:
                 audio_data = np.mean(audio_data, axis=1)
 
-            sf.write(os.path.join(dir_out, _snip_filename(start, end)), audio_data, sr)
+            sf.write(path_out, audio_data, sr)
 
 
 def extract_snips(setname: str, verbose=False):
@@ -165,19 +170,9 @@ def extract_snips(setname: str, verbose=False):
     dir_snips_base = cfg.dir_snips(setname)
 
     idents = annotations['ident'].unique()
-    n_extracted = 0
-    n_skipped = 0
     n_missing = 0
 
     for ident in idents:
-        dir_out = os.path.join(dir_snips_base, ident)
-
-        if os.path.exists(dir_out) and os.listdir(dir_out):
-            if verbose:
-                print(f'extract_snips: {ident} already done')
-            n_skipped += 1
-            continue
-
         path_audio = get_ident_audio_path(ident)
         if not path_audio:
             warnings.warn(f'extract_snips: no audio file for {ident}; skipping')
@@ -187,10 +182,11 @@ def extract_snips(setname: str, verbose=False):
         if verbose:
             print(f'extract_snips: {ident}')
         annotations_sub = annotations[annotations['ident'] == ident]
+        dir_out = os.path.join(dir_snips_base, ident)
         _extract_snips_ident(ident, annotations_sub, path_audio, dir_out)
-        n_extracted += 1
 
-    print(f'extract_snips: {n_extracted} extracted, {n_skipped} skipped, {n_missing} missing audio')
+    if n_missing:
+        print(f'extract_snips: done ({n_missing} idents missing audio)')
 
 
 # ---------------------------------------------------------------------------
