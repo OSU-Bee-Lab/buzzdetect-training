@@ -73,6 +73,7 @@ def _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrit
         return
 
     skipped = 0
+    processed = 0
     for path_in in paths_in:
         rel = os.path.relpath(path_in, dir_audio_fold)
         path_audio_out = os.path.join(dir_audio_aug, rel)
@@ -91,10 +92,9 @@ def _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrit
             _save_audio(frames_aug, path_audio_out)
 
         _embed_and_save(frames_aug, path_embed_out, embedder)
-        print(f'AUGMENT: {rel}')
+        processed += 1
 
-    if skipped:
-        print(f'AUGMENT: skipped {skipped} already-done files')
+    print(f'AUGMENT: {spec} — {processed} files processed, {skipped} cached')
 
 
 def _combine_frames(frames_source, frames_augment, prop, limit):
@@ -116,7 +116,7 @@ def _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite
     dir_audio_fold = os.path.join(cfg.dir_audio(setname), audio_key, fold)
 
     path_embed_out = os.path.join(
-        cfg.dir_embeddings_augment(setname, embeddername, 'augment_combine'),
+        cfg.dir_embeddings_augment(setname, embeddername, spec_dirname(spec)),
         fold,
         f'{spec.class_source}+{spec.class_augment}.pickle'
     )
@@ -137,11 +137,9 @@ def _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite
     frames_aug = collect_frames(spec.class_augment)
 
     if not frames_source:
-        print(f'AUGMENT: no source frames for {spec.class_source}')
-        return
+        raise ValueError(f'no source frames for {spec.class_source} in {dir_audio_fold}')
     if not frames_aug:
-        print(f'AUGMENT: no augment frames for {spec.class_augment}')
-        return
+        raise ValueError(f'no augment frames for {spec.class_augment} in {dir_audio_fold}')
 
     print(f'AUGMENT: combining {spec.class_source}+{spec.class_augment}')
     frames_combined = _combine_frames(frames_source, frames_aug, spec.prop, spec.limit)

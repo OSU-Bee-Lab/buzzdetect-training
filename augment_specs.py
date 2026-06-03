@@ -26,5 +26,5 @@ def spec_dirname(spec):
     elif isinstance(spec, VolumeSpec):
         return f'augment_volume_{spec.prop}'
     elif isinstance(spec, CombineSpec):
-        return 'augment_combine'
+        return f'augment_combine_{spec.class_source}+{spec.class_augment}'
     raise ValueError(f'unknown spec type {type(spec)}')

@@ -105,7 +105,6 @@ def load_augmented(setname, embeddername, aug_dirnames, translation):
     for aug_dirname in aug_dirnames:
         dir_embed = os.path.join(cfg.dir_embeddings_augment(setname, embeddername, aug_dirname), 'train')
         if not os.path.isdir(dir_embed):
-            print(f'DATASET: augmented embeddings not found: {aug_dirname}')
-            continue
+            raise FileNotFoundError(f'augmented embeddings not found: {aug_dirname} (expected {dir_embed})')
         data += build_fold_dataset(dir_embed, translation)
     return data
