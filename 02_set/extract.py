@@ -482,3 +482,12 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
 
     print(f'all extractions complete ({time.time()-t0:.1f}s)\n:)\n:D\n:O')
     return True
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description='Extract raw audio snips for a set (no embedder required).')
+    parser.add_argument('--set', required=True, dest='setname')
+    parser.add_argument('--verbose', action='store_true')
+    args = parser.parse_args()
+    extract_snips(args.setname, verbose=args.verbose)
