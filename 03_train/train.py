@@ -43,11 +43,10 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
     #     name_volume = clean_name(name_volume, prefix='augment_volume_', extension='.csv')
     #     data_train += load_augment_volume(setname=setname, translation=translation, name_volume=name_volume)
 
-    labels_buzz = translation['from'][translation['to']=='ins_buzz'].to_list()
     data_val: list[Sample] = build_fold_dataset(
         cfg.dir_embeddings_fold(setname, embeddername, 'validate'),
         translation,
-        labels_keep_raw=labels_buzz,  # TODO: previously, validating only on buzzes improved performance. Does it still?
+        labels_keep_raw=None,  # all-class validation (combined-embedder exp)
         exclusive=False
     )
 
@@ -97,7 +96,7 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.001*2)  # 0.001 is default
 
-    model.compile(loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
+    model.compile(loss=tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.3),
                   optimizer=optimizer,
                   metrics=['accuracy'])
 
