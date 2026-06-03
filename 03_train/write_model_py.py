@@ -18,7 +18,7 @@ class {class_name}(BaseModel):
         import keras
         self.embedder.initialize()
         dir_model = os.path.abspath(os.path.join(cfg.DIR_MODELS, self.modelname))
-        self.model = keras.saving.load_model(os.path.join(dir_model, 'model.keras'))
+        self.model = keras.saving.load_model(os.path.join(dir_model, 'model.keras'), compile=False)
 
     def predict(self, audiosamples):
         embeddings = self.embedder.embed(audiosamples)
