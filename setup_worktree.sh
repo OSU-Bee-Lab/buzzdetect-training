@@ -68,3 +68,12 @@ fi
 echo ""
 echo "Worktree ready: $WT"
 echo "Branch: exp/$EXP"
+
+# Warn about uncommitted changes to tracked files — these don't appear in the new worktree
+dirty="$(git -C "$ROOT" diff --name-only; git -C "$ROOT" diff --cached --name-only)"
+if [ -n "$dirty" ]; then
+    echo ""
+    echo "WARNING: uncommitted changes to tracked files will NOT appear in the worktree:"
+    echo "$dirty" | sort -u | sed 's/^/  /'
+    echo "Commit or stash before running experiments if these changes matter."
+fi

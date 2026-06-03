@@ -39,7 +39,7 @@ This prints a count of pickle files per set/embedder. Only propose hypotheses us
 bash setup_worktree.sh <short-slug>   # e.g. birdnet-embedder, deeper-head, augment-pitch
 ```
 
-This creates `.local/worktrees/<slug>` on branch `exp/<slug>` and symlinks all shared binary/data dirs (embedder weights, set embeddings, test audio). It prints a sanity check at the end — confirm it passes before proceeding.
+This creates `.local/worktrees/<slug>` on branch `exp/<slug>` and symlinks all shared binary/data dirs (embedder weights, set embeddings, test audio). It prints a sanity check at the end — confirm it passes before proceeding. If it prints a WARNING about uncommitted tracked-file changes, those changes will not be present in the worktree; commit or stash them first if they matter for the experiment.
 
 All code changes go in the worktree. Do not touch the main worktree's tracked files during an experiment.
 
