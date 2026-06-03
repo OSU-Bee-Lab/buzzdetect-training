@@ -10,9 +10,9 @@ from extract import extract_set
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--set', default='lite', dest='setname')
-    parser.add_argument('--embedder', default='yamnet')
-    parser.add_argument('--workers', type=int, default=4)
+    parser.add_argument('--set', required=True, dest='setname')
+    parser.add_argument('--embedder', required=True)
+    parser.add_argument('--workers', type=int, required=True)
     args = parser.parse_args()
 
     multiprocessing.set_start_method('fork', force=True)

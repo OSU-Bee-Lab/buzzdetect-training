@@ -9,11 +9,11 @@ from train import train_model
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', default='test')
-    parser.add_argument('--set', default='lite', dest='setname')
-    parser.add_argument('--embedder', default='yamnet')
-    parser.add_argument('--translation', default='general')
-    parser.add_argument('--epochs', type=int, default=300)
+    parser.add_argument('--model', required=True)
+    parser.add_argument('--set', required=True, dest='setname')
+    parser.add_argument('--embedder', required=True)
+    parser.add_argument('--translation', required=True)
+    parser.add_argument('--epochs', type=int, required=True)
     args = parser.parse_args()
 
     train_model(
