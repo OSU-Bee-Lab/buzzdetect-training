@@ -9,14 +9,14 @@ import tensorflow as tf
 
 import config as cfg
 
-from dataset import build_fold_dataset
+from dataset import build_fold_dataset, load_augmented
 from train_utils import build_weights, build_classes, can_write_model, Sample
 from embedders.embedding import load_embedder, BaseEmbedder
 from plot_history import plot_history
 from write_model_py import write_model_py
 
 
-def train_model(modelname, embeddername, setname, name_translation, epochs_max=300):
+def train_model(modelname, embeddername, setname, name_translation, epochs_max=300, aug_dirnames=None):
     dir_model = os.path.join(cfg.DIR_MODELS, modelname)
     if not can_write_model(modelname):
         print('a model folder with this name already exists; delete or rename the existing model folder and re-run')
@@ -35,14 +35,8 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
         exclusive=False
     )
 
-    # disabling augmentation for now
-    # if name_noise is not None:
-    #     name_noise = clean_name(name_noise, prefix='augment_noise_', extension='.csv')
-    #     data_train += load_augment_noise(setname=setname, translation=translation, name_noise=name_noise)
-    #
-    # if name_volume is not None:
-    #     name_volume = clean_name(name_volume, prefix='augment_volume_', extension='.csv')
-    #     data_train += load_augment_volume(setname=setname, translation=translation, name_volume=name_volume)
+    if aug_dirnames:
+        data_train += load_augmented(setname, embeddername, aug_dirnames, translation)
 
     labels_buzz = translation['from'][translation['to']=='ins_buzz'].to_list()
     data_val: list[Sample] = build_fold_dataset(

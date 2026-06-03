@@ -14,6 +14,7 @@ if __name__ == '__main__':
     parser.add_argument('--embedder', required=True)
     parser.add_argument('--translation', required=True)
     parser.add_argument('--epochs', type=int, required=True)
+    parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     args = parser.parse_args()
 
     train_model(
@@ -22,4 +23,5 @@ if __name__ == '__main__':
         setname=args.setname,
         name_translation=args.translation,
         epochs_max=args.epochs,
+        aug_dirnames=args.aug_dirnames,
     )
