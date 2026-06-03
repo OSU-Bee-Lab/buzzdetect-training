@@ -2,7 +2,12 @@ import glob
 import os
 import pickle
 import re
+import sys
 from itertools import product, cycle
+
+# Make the project root and this directory importable regardless of cwd
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import numpy as np
 
@@ -159,18 +164,28 @@ def augment_set(setname, embeddername, specs, fold='train', overwrite=False):
     print('AUGMENT: complete')
 
 
+DEFAULT_SPECS = [
+    NoiseSpec(prop=0.05),
+    NoiseSpec(prop=0.075),
+    NoiseSpec(prop=0.2),
+    VolumeSpec(prop=2.5),
+    VolumeSpec(prop=0.75),
+]
+
 if __name__ == '__main__':
-    import os, sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--set', required=True, dest='setname')
+    parser.add_argument('--embedder', required=True)
+    parser.add_argument('--fold', default='train')
+    parser.add_argument('--overwrite', action='store_true')
+    args = parser.parse_args()
 
     augment_set(
-        setname='standard',
-        embeddername='yamnet',
-        specs=[
-            NoiseSpec(prop=0.05),
-            NoiseSpec(prop=0.075),
-            NoiseSpec(prop=0.2),
-            VolumeSpec(prop=2.5),
-            VolumeSpec(prop=0.75),
-        ]
+        setname=args.setname,
+        embeddername=args.embedder,
+        specs=DEFAULT_SPECS,
+        fold=args.fold,
+        overwrite=args.overwrite,
     )

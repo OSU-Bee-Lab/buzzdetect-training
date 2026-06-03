@@ -26,15 +26,17 @@ for d in "$ROOT/embedders/"/*/; do
 done
 ln -sf "$ROOT/embedders/embedding.py" "$WT/embedders/embedding.py"
 
-# Set embeddings: symlink gitignored embeddings dir for every set that exists
-echo "Symlinking set embeddings..."
+# Set embeddings and audio: symlink gitignored data dirs for every set that exists
+echo "Symlinking set data (embeddings + audio)..."
 for set_dir in "$ROOT/02_set/sets/"/*/; do
     setname="$(basename "$set_dir")"
-    src="$ROOT/02_set/sets/$setname/embeddings"
-    dst="$WT/02_set/sets/$setname/embeddings"
-    if [ -d "$src" ] && [ ! -e "$dst" ]; then
-        ln -s "$src" "$dst"
-    fi
+    for subdir in embeddings audio; do
+        src="$ROOT/02_set/sets/$setname/$subdir"
+        dst="$WT/02_set/sets/$setname/$subdir"
+        if [ -d "$src" ] && [ ! -e "$dst" ]; then
+            ln -s "$src" "$dst"
+        fi
+    done
 done
 
 # Test audio and embeddings
