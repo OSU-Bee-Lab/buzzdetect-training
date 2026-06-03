@@ -2,6 +2,7 @@ import glob
 import json
 import os
 import pickle
+import time
 import warnings
 
 from dataclasses import dataclass
@@ -171,6 +172,7 @@ def extract_snips(setname: str, verbose=False):
 
     idents = annotations['ident'].unique()
     n_missing = 0
+    t0 = time.time()
 
     for ident in idents:
         path_audio = get_ident_audio_path(ident)
@@ -180,13 +182,13 @@ def extract_snips(setname: str, verbose=False):
             continue
 
         if verbose:
-            print(f'extract_snips: {ident}')
+            print(f'extract_snips: {ident} ({time.time()-t0:.1f}s)')
         annotations_sub = annotations[annotations['ident'] == ident]
         dir_out = os.path.join(dir_snips_base, ident)
         _extract_snips_ident(ident, annotations_sub, path_audio, dir_out)
 
     if n_missing:
-        print(f'extract_snips: done ({n_missing} idents missing audio)')
+        print(f'extract_snips: done ({n_missing} idents missing audio) ({time.time()-t0:.1f}s)')
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +301,7 @@ class WorkerExtract:
         for snip_path in snip_paths:
             snip_start = _parse_snip_start(snip_path)
             if self.verbose:
-                print(f'extractor {self.name}: {a_ident.ident} snip {snip_start:.3f}s')
+                print(f'extractor {self.name}: {a_ident.ident} snip {snip_start:.3f}s ({time.time()-self.t0:.1f}s)')
 
             snip_audio, snip_sr = sf.read(snip_path, dtype=self.embedder.dtype_in)
             audio_data = librosa.resample(y=snip_audio, orig_sr=snip_sr, target_sr=self.embedder.samplerate)
@@ -367,25 +369,26 @@ class WorkerExtract:
             self.extract_ident_both(a_ident)
         elif a_ident.handle == 'embeddings':
             if self.verbose:
-                print(f'extractor {self.name}: extracting embeddings for {ident}')
+                print(f'extractor {self.name}: extracting embeddings for {ident} ({time.time()-self.t0:.1f}s)')
             self.extract_ident_embeddings(a_ident)
         elif a_ident.handle == 'no_snips':
             warnings.warn(f'extractor {self.name}: skipping {ident}; {a_ident.handle_msg}')
             return
         elif a_ident.handle == 'skip':
             if self.verbose:
-                print(f'extractor {self.name}: skipping {ident}; {a_ident.handle_msg}')
+                print(f'extractor {self.name}: skipping {ident}; {a_ident.handle_msg} ({time.time()-self.t0:.1f}s)')
         else:
             raise ValueError(f'extractor {self.name}: unknown handle {a_ident.handle} for ident {ident}')
 
     def run(self):
+        self.t0 = time.time()
         self.embedder.initialize()
         ident = self.q_extract.get()
         while ident != 'TERMINATE':
             self.extract_ident(ident)
             ident = self.q_extract.get()
         if self.verbose:
-            print(f'extractor {self.name}: terminating')
+            print(f'extractor {self.name}: terminating ({time.time()-self.t0:.1f}s)')
 
 
 def run_worker(config_extract: ConfigExtract, annotations: pd.DataFrame, folds: pd.DataFrame,
@@ -395,6 +398,7 @@ def run_worker(config_extract: ConfigExtract, annotations: pd.DataFrame, folds: 
 
 
 def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=None, n_workers=4, verbose=False):
+    t0 = time.time()
     dir_set = cfg.dir_set(setname)
     path_config = os.path.join(dir_set, 'config_extract.json')
 
@@ -411,7 +415,7 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
             msgs = [f"  {k}: saved={v[0]}, got={v[1]}" for k, v in conflicts.items()]
             raise ValueError(f"Set '{setname}' already extracted with different parameters:\n" + "\n".join(msgs))
         config_extract = ConfigExtract(**saved)
-        print(f'loaded config_extract from {path_config}')
+        print(f'loaded config_extract from {path_config} ({time.time()-t0:.1f}s)')
     else:
         if overlap_event_prop is None or framehop_prop is None:
             raise ValueError(f"No config_extract.json found for set '{setname}'; overlap_event_prop and framehop_prop must be provided")
@@ -420,7 +424,7 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
         stored = {k: getattr(config_extract, k) for k in ConfigExtract.STORED_FIELDS}
         with open(path_config, 'w') as f:
             json.dump(stored, f, indent=2)
-        print(f'saved config_extract to {path_config}')
+        print(f'saved config_extract to {path_config} ({time.time()-t0:.1f}s)')
 
     config_extract.embeddername = embeddername
 
@@ -430,7 +434,7 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
 
     dir_snips_base = cfg.dir_snips(setname)
     if not os.path.exists(dir_snips_base):
-        print('snips dir not found; running extract_snips first')
+        print(f'snips dir not found; running extract_snips first ({time.time()-t0:.1f}s)')
         extract_snips(setname)
 
     # Pre-filter: determine which idents actually need work before spawning workers
@@ -455,10 +459,10 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
             idents_todo.append(ident)
 
     n_skip = len(idents) - len(idents_todo)
-    print(f'  {len(idents_todo)} idents to process, {n_skip} already done or missing snips')
+    print(f'  {len(idents_todo)} idents to process, {n_skip} already done or missing snips ({time.time()-t0:.1f}s)')
 
     if not idents_todo:
-        print('all idents already extracted; skipping workers')
+        print(f'all idents already extracted; skipping workers ({time.time()-t0:.1f}s)')
         return True
 
     q_extract = multiprocessing.Queue()
@@ -476,5 +480,5 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
     for w in workers:
         w.join()
 
-    print(f'all extractions complete\n:)\n:D\n:O')
+    print(f'all extractions complete ({time.time()-t0:.1f}s)\n:)\n:D\n:O')
     return True

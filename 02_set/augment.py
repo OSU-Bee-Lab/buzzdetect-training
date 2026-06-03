@@ -3,6 +3,7 @@ import os
 import pickle
 import re
 import sys
+import time
 from itertools import product, cycle
 
 # Make the project root and this directory importable regardless of cwd
@@ -54,7 +55,8 @@ def _embed_and_save(frames, path_embed_out, embedder):
                 pickle.dump(e, f)
 
 
-def _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrite):
+def _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=False):
+    t0 = time.time()
     audio_key = embedder.audio_cache_key()
     dir_audio_fold = os.path.join(cfg.dir_audio(setname), audio_key, fold)
 
@@ -69,7 +71,7 @@ def _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrit
     paths_in = [p for p in paths_in if _path_matches_labels(p, spec.labels)]
 
     if not paths_in:
-        print(f'AUGMENT: no matching audio files for {spec}')
+        print(f'AUGMENT: no matching audio files for {spec} ({time.time()-t0:.1f}s)')
         return
 
     skipped = 0
@@ -81,6 +83,8 @@ def _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrit
 
         if not overwrite and os.path.exists(path_embed_out):
             skipped += 1
+            if verbose:
+                print(f'AUGMENT: skipping {rel} (cached) ({time.time()-t0:.1f}s)')
             continue
 
         if os.path.exists(path_audio_out):
@@ -94,7 +98,7 @@ def _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrit
         _embed_and_save(frames_aug, path_embed_out, embedder)
         processed += 1
 
-    print(f'AUGMENT: {spec} — {processed} files processed, {skipped} cached')
+    print(f'AUGMENT: {spec} — {processed} files processed, {skipped} cached ({time.time()-t0:.1f}s)')
 
 
 def _combine_frames(frames_source, frames_augment, prop, limit):
@@ -111,7 +115,8 @@ def _combine_frames(frames_source, frames_augment, prop, limit):
     return [mix(s, next(cycler)) for s in frames_source for _ in range(limit)]
 
 
-def _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite):
+def _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=False):
+    t0 = time.time()
     audio_key = embedder.audio_cache_key()
     dir_audio_fold = os.path.join(cfg.dir_audio(setname), audio_key, fold)
 
@@ -122,7 +127,8 @@ def _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite
     )
 
     if not overwrite and os.path.exists(path_embed_out):
-        print(f'AUGMENT: skipping {spec.class_source}+{spec.class_augment}, already done')
+        if verbose:
+            print(f'AUGMENT: skipping {spec.class_source}+{spec.class_augment}, already done ({time.time()-t0:.1f}s)')
         return
 
     def collect_frames(label):
@@ -141,25 +147,26 @@ def _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite
     if not frames_aug:
         raise ValueError(f'no augment frames for {spec.class_augment} in {dir_audio_fold}')
 
-    print(f'AUGMENT: combining {spec.class_source}+{spec.class_augment}')
+    print(f'AUGMENT: combining {spec.class_source}+{spec.class_augment} ({time.time()-t0:.1f}s)')
     frames_combined = _combine_frames(frames_source, frames_aug, spec.prop, spec.limit)
     _embed_and_save(frames_combined, path_embed_out, embedder)
-    print(f'AUGMENT: {spec.class_source}+{spec.class_augment}: {len(frames_combined)} frames combined')
+    print(f'AUGMENT: {spec.class_source}+{spec.class_augment}: {len(frames_combined)} frames combined ({time.time()-t0:.1f}s)')
 
 
-def augment_set(setname, embeddername, specs, fold='train', overwrite=False):
+def augment_set(setname, embeddername, specs, fold='train', overwrite=False, verbose=False):
+    t0 = time.time()
     embedder = load_embedder(embeddername, framehop_prop=1, initialize=True)
 
     for spec in specs:
-        print(f'AUGMENT: {spec}')
+        print(f'AUGMENT: {spec} ({time.time()-t0:.1f}s)')
         if isinstance(spec, (NoiseSpec, VolumeSpec)):
-            _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrite)
+            _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=verbose)
         elif isinstance(spec, CombineSpec):
-            _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite)
+            _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=verbose)
         else:
             raise ValueError(f'unknown spec type {type(spec)}')
 
-    print('AUGMENT: complete')
+    print(f'AUGMENT: complete ({time.time()-t0:.1f}s)')
 
 
 DEFAULT_SPECS = [
@@ -178,6 +185,7 @@ if __name__ == '__main__':
     parser.add_argument('--embedder', required=True)
     parser.add_argument('--fold', default='train')
     parser.add_argument('--overwrite', action='store_true')
+    parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 
     augment_set(
@@ -186,4 +194,5 @@ if __name__ == '__main__':
         specs=DEFAULT_SPECS,
         fold=args.fold,
         overwrite=args.overwrite,
+        verbose=args.verbose,
     )
