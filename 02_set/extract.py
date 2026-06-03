@@ -428,12 +428,16 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
     annotations = pd.read_csv(os.path.join(dir_set, 'annotations.csv'))
     idents = annotations['ident'].unique()
 
+    dir_snips_base = cfg.dir_snips(setname)
+    if not os.path.exists(dir_snips_base):
+        print('snips dir not found; running extract_snips first')
+        extract_snips(setname)
+
     # Pre-filter: determine which idents actually need work before spawning workers
     embedder_tmp = load_embedder(embeddername, framehop_prop=1, initialize=False)
     audio_key = embedder_tmp.audio_cache_key()
     dir_audio_cache_base = os.path.join(cfg.dir_audio(setname), audio_key)
     dir_embeddings_base = config_extract.dir_out_embeddings(embeddername)
-    dir_snips_base = cfg.dir_snips(setname)
 
     idents_todo = []
     for ident in idents:

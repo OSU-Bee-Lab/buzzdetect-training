@@ -10,6 +10,13 @@
 !perch
 !panns_cnn14
 !aves
+!ast
+!birdnet
+!laion_clap
+!msclap
+!yamnet_bandpass
+!yamnet_combined
+!yamnet_doublerate
 
 # Ignore binary model files within unignored embedders
 panns_cnn14/*.pth
@@ -23,3 +30,15 @@ perch/perch_v2_cpu/
 perch/perch_v2_gpu/
 aves/*.pt
 nighthawk/saved_model_with_preprocessing/
+ast/model/
+birdnet/*.tflite
+laion_clap/clap-htsat-fused/
+msclap/*.pth
+yamnet_combined/*.pb
+yamnet_combined/*.keras
+yamnet_combined/variables/
+yamnet_combined/weights_keras2/
+yamnet_doublerate/*.pb
+yamnet_doublerate/*.keras
+yamnet_doublerate/variables/
+yamnet_doublerate/weights_keras2/

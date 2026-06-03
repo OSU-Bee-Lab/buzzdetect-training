@@ -4,38 +4,44 @@ import numpy as np
 
 from embedders.embedding import BaseEmbedder
 
-_BATCH_SIZE = 16
+_BATCH_SIZE = 8
 
 
-class EmbedderPannsCnn14(BaseEmbedder):
-    embeddername = "panns_cnn14"
-    framelength_s = 2.0
-    digits_time = 1
-    samplerate = 32000
-    n_embeddings = 2048
+class EmbedderAst(BaseEmbedder):
+    embeddername = "ast"
+    framelength_s = 10.24   # 1024 frames × 10 ms hop
+    digits_time = 2
+    samplerate = 16000
+    n_embeddings = 768
     dtype_in = 'float32'
 
     def initialize(self):
         import torch
-        from embedders.panns_cnn14.cnn14 import Cnn14
-        curdir = os.path.dirname(os.path.realpath(__file__))
-        checkpoint_path = os.path.join(curdir, 'CNN14_mAP=0.431.pth')
+        from transformers import AutoFeatureExtractor, ASTModel
 
+        curdir = os.path.dirname(os.path.realpath(__file__))
+        model_dir = os.path.join(curdir, 'model')
+
+        self.extractor = AutoFeatureExtractor.from_pretrained(model_dir)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        model = Cnn14()
-        checkpoint = torch.load(checkpoint_path, map_location=self.device)
-        model.load_state_dict(checkpoint['model'])
+        model = ASTModel.from_pretrained(model_dir)
         model.eval()
         model.to(self.device)
         self.model = model
+        self._torch = torch
 
-    def _embed_batch(self, frames):
-        """frames: list of (framelength_samples,) float32 arrays → (n, 2048) numpy"""
-        import torch
-        x = torch.tensor(np.stack(frames), dtype=torch.float32, device=self.device)
-        with torch.no_grad():
-            emb = self.model(x)
-        return emb.cpu().numpy()
+    def _embed_batch(self, chunks):
+        """chunks: list of 1-D float32 arrays (each up to framelength_samples long)"""
+        inputs = self.extractor(
+            chunks,
+            sampling_rate=self.samplerate,
+            return_tensors='pt',
+            padding='max_length',
+        )
+        input_values = inputs['input_values'].to(self.device)
+        with self._torch.no_grad():
+            out = self.model(input_values=input_values)
+        return out.pooler_output.cpu().numpy()
 
     def embed(self, audio):
         framelength_samples = int(self.framelength_s * self.samplerate)

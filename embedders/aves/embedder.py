@@ -2,8 +2,6 @@ import json
 import os
 
 import numpy as np
-import torch
-import torchaudio
 
 from embedders.embedding import BaseEmbedder
 
@@ -17,6 +15,9 @@ class EmbedderAves(BaseEmbedder):
     dtype_in = 'float32'
 
     def initialize(self):
+        import torch
+        import torchaudio
+
         curdir = os.path.dirname(os.path.realpath(__file__))
         config_path = os.path.join(curdir, 'model_config.json')
         model_path = os.path.join(curdir, 'aves-base-bio.pt')
@@ -36,6 +37,8 @@ class EmbedderAves(BaseEmbedder):
         n_frames = max(0, (len(audio) - framelength_samples) // hop_samples + 1)
         if n_frames == 0:
             return np.empty((0, self.n_embeddings), dtype=np.float32)
+
+        import torch
 
         results = []
         with torch.no_grad():
