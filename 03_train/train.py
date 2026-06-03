@@ -15,6 +15,26 @@ from plot_history import plot_history
 from write_model_py import write_model_py
 
 
+class FocalLoss(tf.keras.losses.Loss):
+    """Focal loss for multi-label classification.
+
+    Down-weights easy-to-classify examples by (1 - p_t)^gamma so gradients
+    concentrate on hard cases near the decision boundary.
+    """
+    def __init__(self, gamma=2.0, alpha=0.25, **kwargs):
+        super().__init__(**kwargs)
+        self.gamma = gamma
+        self.alpha = alpha
+
+    def call(self, y_true, y_pred):
+        y_true = tf.cast(y_true, tf.float32)
+        p = tf.sigmoid(y_pred)
+        bce = tf.nn.sigmoid_cross_entropy_with_logits(labels=y_true, logits=y_pred)
+        p_t = y_true * p + (1.0 - y_true) * (1.0 - p)
+        alpha_t = y_true * self.alpha + (1.0 - y_true) * (1.0 - self.alpha)
+        return tf.reduce_mean(alpha_t * tf.pow(1.0 - p_t, self.gamma) * bce)
+
+
 def train_model(modelname, embeddername, setname, name_translation, epochs_max=300):
     dir_model = os.path.join(cfg.DIR_MODELS, modelname)
     if not can_write_model(modelname):
@@ -43,11 +63,10 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
     #     name_volume = clean_name(name_volume, prefix='augment_volume_', extension='.csv')
     #     data_train += load_augment_volume(setname=setname, translation=translation, name_volume=name_volume)
 
-    labels_buzz = translation['from'][translation['to']=='ins_buzz'].to_list()
     data_val: list[Sample] = build_fold_dataset(
         cfg.dir_embeddings_fold(setname, embeddername, 'validate'),
         translation,
-        labels_keep_raw=labels_buzz,  # TODO: previously, validating only on buzzes improved performance. Does it still?
+        labels_keep_raw=None,  # all-class validation: better early-stopping calibration (combined-embedder exp)
         exclusive=False
     )
 
@@ -97,7 +116,7 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.001*2)  # 0.001 is default
 
-    model.compile(loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
+    model.compile(loss=FocalLoss(gamma=2.0, alpha=0.25),
                   optimizer=optimizer,
                   metrics=['accuracy'])
 
