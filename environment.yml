@@ -11,3 +11,8 @@ dependencies:
     - numpy<2
     - pandas
     - matplotlib
+    - perch-hoplite
+    - torch
+    - torchaudio
+    - torchlibrosa
+    - transformers

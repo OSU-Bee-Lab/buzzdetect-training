@@ -6,11 +6,20 @@
 !embedding.py
 !yamnet
 !yamnet_k2
+!nighthawk
+!perch
+!panns_cnn14
+!aves
 
 # Ignore binary model files within unignored embedders
+panns_cnn14/*.pth
 yamnet/*.pb
 yamnet/*.h5
 yamnet/variables/
 yamnet/weights_keras2/
 yamnet_k2/**/*.pb
 yamnet_k2/**/variables/
+perch/perch_v2_cpu/
+perch/perch_v2_gpu/
+aves/*.pt
+nighthawk/saved_model_with_preprocessing/
