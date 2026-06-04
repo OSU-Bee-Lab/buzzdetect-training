@@ -92,6 +92,29 @@ def events_in_frame(range_frame, annotations, event_overlap_s):
     return events
 
 
+def expand_chunk(chunk, framelength_s, event_overlap_s, file_duration):
+    """Expand an annotation window so framing starts/ends with frames overlapping by event_overlap_s."""
+    if file_duration < framelength_s:
+        raise ValueError('input audio is shorter than one frame')
+
+    start = max(
+        chunk[0] - ((framelength_s - event_overlap_s) * 0.99),
+        0
+    )
+    end = min(
+        chunk[1] + (framelength_s - event_overlap_s),
+        file_duration
+    )
+
+    if (end - start) < framelength_s:
+        if end == file_duration:
+            start = end - (framelength_s * 0.99)
+        elif start == 0:
+            end = start + framelength_s
+
+    return start, end
+
+
 def collapse_labels(labellist):
     separator = '+'
     collapse = separator.join(labellist)
@@ -117,13 +140,13 @@ def get_ident_audio_path(ident):
 # ---------------------------------------------------------------------------
 
 def _snip_filename(start: float, end: float) -> str:
-    return f"snip_{start:.3f}_{end:.3f}.wav"
+    return f"snip_{start:.3f}_{end:.3f}.flac"
 
 
-def _parse_snip_start(path: str) -> float:
-    name = os.path.basename(path).replace('.wav', '')
+def _parse_snip_bounds(path: str) -> tuple[float, float]:
+    name = os.path.basename(path).rsplit('.', 1)[0]
     parts = name.split('_')  # ['snip', '<start>', '<end>']
-    return float(parts[1])
+    return float(parts[1]), float(parts[2])
 
 
 def _extract_snips_ident(ident: str, annotations_sub: pd.DataFrame, path_audio: str, dir_out: str):
@@ -159,7 +182,7 @@ def extract_snips(setname: str, verbose=False):
 
     Run this before extract_set. Safe to re-run; already-extracted idents are
     skipped. Snips are stored as:
-        02_set/sets/<setname>/audio/snips/<ident>/snip_<start>_<end>.wav
+        02_set/sets/<setname>/audio/snips/<ident>/snip_<start>_<end>.flac
 
     Each snip covers one annotation cluster padded by SNIP_BUFFER_S on each
     side. Overlapping clusters are NOT merged — separate snip files are written
@@ -265,6 +288,15 @@ class WorkerExtract:
         self.framelength_samples = int(self.embedder.framelength_s * self.embedder.samplerate)
         self.chunklength_samples = cfg.CHUNK_FRAMES * self.framelength_samples
 
+    def read_range(self, track: sf.SoundFile, audiorange: tuple[float, float]):
+        start_sample = round(track.samplerate * audiorange[0])
+        samples_to_read = round(track.samplerate * (audiorange[1] - audiorange[0]))
+        track.seek(start_sample)
+        audio_data = track.read(samples_to_read, dtype=self.embedder.dtype_in)
+        if track.channels > 1:
+            audio_data = np.mean(audio_data, axis=1)
+        return librosa.resample(y=audio_data, orig_sr=track.samplerate, target_sr=self.embedder.samplerate)
+
     def extract_ident_embeddings(self, a_ident: AssignIdent):
         paths_audio = glob.glob(os.path.join(a_ident.dir_out_audio, '*.pickle'))
 
@@ -290,7 +322,7 @@ class WorkerExtract:
     def extract_ident_both(self, a_ident: AssignIdent):
         annotations_sub = self.annotations[self.annotations['ident'] == a_ident.ident].copy()
 
-        snip_paths = sorted(glob.glob(os.path.join(a_ident.dir_snips_ident, 'snip_*.wav')))
+        snip_paths = sorted(glob.glob(os.path.join(a_ident.dir_snips_ident, 'snip_*.flac')))
         if not snip_paths:
             raise FileNotFoundError(
                 f'no snips for {a_ident.ident} in {a_ident.dir_snips_ident}; run extract_snips first'
@@ -299,34 +331,56 @@ class WorkerExtract:
         frames_by_label = {}
 
         for snip_path in snip_paths:
-            snip_start = _parse_snip_start(snip_path)
-            if self.verbose:
-                print(f'extractor {self.name}: {a_ident.ident} snip {snip_start:.3f}s ({time.time()-self.t0:.1f}s)')
+            snip_start, _ = _parse_snip_bounds(snip_path)
 
-            snip_audio, snip_sr = sf.read(snip_path, dtype=self.embedder.dtype_in)
-            audio_data = librosa.resample(y=snip_audio, orig_sr=snip_sr, target_sr=self.embedder.samplerate)
+            with sf.SoundFile(snip_path) as track:
+                snip_duration = track.frames / track.samplerate
 
-            frames = frame_audio(
-                audio_data=audio_data,
-                framelength_s=self.embedder.framelength_s,
-                samplerate=self.embedder.samplerate,
-                framehop_s=self.config_extract.framehop_prop * self.embedder.framehop_s,
-            )
+                # Annotations for this snip, converted to snip-relative coords
+                ann_rel = annotations_sub[
+                    (annotations_sub['end'] > snip_start) &
+                    (annotations_sub['start'] < snip_start + snip_duration)
+                ].copy()
+                ann_rel['start'] = ann_rel['start'] - snip_start
+                ann_rel['end'] = ann_rel['end'] - snip_start
 
-            frame_starts = snip_start + np.arange(len(frames)) * self.config_extract.framehop_prop * self.embedder.framelength_s
-            frametimes = [(s, s + self.embedder.framelength_s) for s in frame_starts]
+                chunks_raw = melt_coverage(ann_rel)
+                chunks = [
+                    expand_chunk(chunk, self.embedder.framelength_s, self.overlap_event_s, snip_duration)
+                    for chunk in chunks_raw
+                ]
 
-            for frame, frame_range in zip(frames, frametimes):
-                events_frame = events_in_frame(
-                    range_frame=frame_range,
-                    annotations=annotations_sub,
-                    event_overlap_s=self.overlap_event_s,
-                )
-                labels_collapse = collapse_labels(events_frame)
-                if not labels_collapse:
-                    continue  # buffer region — no events
+                for chunk in chunks:
+                    if self.verbose:
+                        print(f'extractor {self.name}: {a_ident.ident} snip {snip_start:.3f}s chunk {chunk} ({time.time()-self.t0:.1f}s)')
 
-                frames_by_label.setdefault(labels_collapse, []).append(frame)
+                    audio_data = self.read_range(track, chunk)
+
+                    frames = frame_audio(
+                        audio_data=audio_data,
+                        framelength_s=self.embedder.framelength_s,
+                        samplerate=self.embedder.samplerate,
+                        framehop_s=self.config_extract.framehop_prop * self.embedder.framehop_s,
+                    )
+
+                    # Frame times in source coords for events_in_frame
+                    chunk_source_start = snip_start + chunk[0]
+                    frame_starts = chunk_source_start + np.arange(len(frames)) * self.config_extract.framehop_prop * self.embedder.framelength_s
+                    frametimes = [(s, s + self.embedder.framelength_s) for s in frame_starts]
+
+                    for frame, frame_range in zip(frames, frametimes):
+                        events_frame = events_in_frame(
+                            range_frame=frame_range,
+                            annotations=annotations_sub,
+                            event_overlap_s=self.overlap_event_s,
+                        )
+                        labels_collapse = collapse_labels(events_frame)
+                        if not labels_collapse:
+                            raise ValueError(
+                                f'extractor {self.name}: no events in frame {frame_range} '
+                                f'for ident {a_ident.ident} — expand_chunk logic is broken'
+                            )
+                        frames_by_label.setdefault(labels_collapse, []).append(frame)
 
         os.makedirs(a_ident.dir_out_audio, exist_ok=True)
         os.makedirs(a_ident.dir_out_embeddings, exist_ok=True)
@@ -380,6 +434,8 @@ class WorkerExtract:
                     print(f'extractor {self.name}: skipping {ident}; {a_ident.handle_msg} ({time.time()-self.t0:.1f}s)')
             else:
                 raise ValueError(f'extractor {self.name}: unknown handle {a_ident.handle} for ident {ident}')
+        except ValueError:
+            raise  # integrity violations must not be swallowed
         except Exception as e:
             warnings.warn(f'extractor {self.name}: error on {ident}: {e}')
 
