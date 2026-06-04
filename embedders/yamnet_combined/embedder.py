@@ -8,7 +8,7 @@ from embedders.embedding import BaseEmbedder
 
 class EmbedderYamnetCombined(BaseEmbedder):
     # Class attributes - no config file needed!
-    embeddername = "yamnet"
+    embeddername = "yamnet_combined"
     framelength_s = 0.96  # seconds
     digits_time = 2
     samplerate = 16000  # Hz

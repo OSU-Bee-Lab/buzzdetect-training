@@ -7,7 +7,7 @@ from embedders.embedding import BaseEmbedder
 """Feature computation for YAMNet."""
 
 class EmbedderYamnet(BaseEmbedder):
-    embeddername = "yamnet"
+    embeddername = "yamnet_doublerate"
     framelength_s = 0.48  # seconds
     digits_time = 2
     samplerate = 32000  # Hz
