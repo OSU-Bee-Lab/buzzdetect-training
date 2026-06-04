@@ -82,7 +82,7 @@ Run stages 2–3 from inside the worktree. Stage 4 (test) must be run from the *
 **Stage 2 — extract embeddings** (only needed if you changed the embedder or extraction logic):
 ```bash
 conda run -n buzzdetect-train python 02_set/main.py \
-  --set <setname> --embedder <embeddername>
+  --set <setname> --embedder <embeddername> --workers <N>
 ```
 
 **Stage 3 — train** (almost always needed):
