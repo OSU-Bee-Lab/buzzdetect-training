@@ -55,6 +55,28 @@ If contamination is confirmed, filter those clips from the negative class and re
 
 ---
 
+## aves-intermediate-layer
+
+**Hypothesis:** AVES embeddings from the last transformer layer are too bird-classification-specific to discriminate insect buzz. An intermediate layer (e.g. layer 6–9 of 12) carries more general acoustic features that may separate buzz from non-buzz more reliably.
+
+**Background:** We trained `aves_lite` and found it performs at random-guess level on test data (precision ≈ base rate of 18%, decreasing with threshold — i.e. inverted). Investigation showed the pipeline is correct (same 242 buzz frames as YAMNet, same audio source). The problem is embedding discrimination: AVES embeddings have roughly half the mean absolute dimension-wise difference between buzz and non-buzz (0.13 vs 0.23 for YAMNet). YAMNet's non-buzz embeddings are sparse and non-negative (ReLU-activated), making the classes easy to linearly separate. AVES embeddings are symmetric around zero for both classes, so the buzz signal is weak.
+
+The likely cause: AVES is a self-supervised wav2vec2 model fine-tuned on bird vocalizations. Its last transformer layer encodes bird-specific representations. Wav2vec2 transfer learning literature consistently shows that middle layers (~6–9 of 12) carry more general phonetic/acoustic features better suited to novel downstream tasks.
+
+**What to do:**
+1. In `embedders/aves/embedder.py`, change `layer_outputs[-1]` to `layer_outputs[N]` for N in {5, 7, 9, 11} (0-indexed, so layer 6, 8, 10, 12 of the 12-layer base model).
+2. Re-extract aves embeddings for the lite set with each layer choice (or just try one — layer 8 is a reasonable first pick based on the literature).
+3. Train a new model (e.g. `aves_lite_L8`) with the new embeddings.
+4. Compare test metrics to `aves_lite` (last layer). Any precision > 18% at moderate recall would confirm the hypothesis.
+
+**Implementation note:** `extract_features()` returns a list of 12 tensors, each shape `(1, T', 768)`. The index is 0-based, so `layer_outputs[11]` is the last layer (what we currently use) and `layer_outputs[7]` is layer 8. No other code changes needed — `n_embeddings=768` stays the same across all layers.
+
+**Why it might help:** The last layer of wav2vec2 is the most task-specialized. For bird sounds, it likely encodes species/call-type features. Insect buzz has very different spectrotemporal structure, and the bird-specific features may be anti-correlated with buzz in out-of-domain (test) recordings — which is exactly what we observed (inverted predictions on test, model learned spurious training-set-specific pattern).
+
+**Caveats:** Requires re-extracting embeddings for each layer tried (slow). Start with one layer (8 or 9) before sweeping. If no improvement across layers, the issue may be that AVES is simply not the right embedder for insect sounds regardless of layer choice — in which case consider a general-purpose audio embedder (PANNs CNN14, LAION-CLAP, AST).
+
+---
+
 ## differential-lr
 
 **Hypothesis:** Training the full embedder end-to-end with a very small backbone LR and normal head LR will outperform both the frozen baseline and aggressive fine-tuning.

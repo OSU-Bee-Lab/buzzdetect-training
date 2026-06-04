@@ -66,8 +66,8 @@ def main(modelname, setname, embeddername, name_translation, epochs_max, clear, 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--model', required=True)
-    parser.add_argument('--set', required=True, dest='setname')
+    parser.add_argument('--model', required=True, help='Model name')
+    parser.add_argument('--set', dest='setname', required=True)
     parser.add_argument('--embedder', required=True)
     parser.add_argument('--translation', required=True)
     parser.add_argument('--epochs', type=int, required=True)

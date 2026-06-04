@@ -14,7 +14,6 @@ class BaseModel(ABC):
     modelname: str = None
     embeddername: str = None
     digits_results: int = None  # how many digits should result files be rounded to?
-    dtype_in: str = None
 
     def __init__(self, framehop_prop):
         """Initialize model

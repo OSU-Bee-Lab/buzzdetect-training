@@ -38,11 +38,10 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
     if aug_dirnames:
         data_train += load_augmented(setname, embeddername, aug_dirnames, translation)
 
-    labels_buzz = translation['from'][translation['to']=='ins_buzz'].to_list()
     data_val: list[Sample] = build_fold_dataset(
         cfg.dir_embeddings_fold(setname, embeddername, 'validate'),
         translation,
-        labels_keep_raw=labels_buzz,  # TODO: previously, validating only on buzzes improved performance. Does it still?
+        labels_keep_raw=None,
         exclusive=False
     )
 

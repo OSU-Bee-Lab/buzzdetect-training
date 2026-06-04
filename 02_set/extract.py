@@ -365,20 +365,23 @@ class WorkerExtract:
             dir_embeddings_base=self.dir_embeddings_base,
             dir_snips_base=self.dir_snips_base,
         )
-        if a_ident.handle == 'both':
-            self.extract_ident_both(a_ident)
-        elif a_ident.handle == 'embeddings':
-            if self.verbose:
-                print(f'extractor {self.name}: extracting embeddings for {ident} ({time.time()-self.t0:.1f}s)')
-            self.extract_ident_embeddings(a_ident)
-        elif a_ident.handle == 'no_snips':
-            warnings.warn(f'extractor {self.name}: skipping {ident}; {a_ident.handle_msg}')
-            return
-        elif a_ident.handle == 'skip':
-            if self.verbose:
-                print(f'extractor {self.name}: skipping {ident}; {a_ident.handle_msg} ({time.time()-self.t0:.1f}s)')
-        else:
-            raise ValueError(f'extractor {self.name}: unknown handle {a_ident.handle} for ident {ident}')
+        try:
+            if a_ident.handle == 'both':
+                self.extract_ident_both(a_ident)
+            elif a_ident.handle == 'embeddings':
+                if self.verbose:
+                    print(f'extractor {self.name}: extracting embeddings for {ident} ({time.time()-self.t0:.1f}s)')
+                self.extract_ident_embeddings(a_ident)
+            elif a_ident.handle == 'no_snips':
+                warnings.warn(f'extractor {self.name}: skipping {ident}; {a_ident.handle_msg}')
+                return
+            elif a_ident.handle == 'skip':
+                if self.verbose:
+                    print(f'extractor {self.name}: skipping {ident}; {a_ident.handle_msg} ({time.time()-self.t0:.1f}s)')
+            else:
+                raise ValueError(f'extractor {self.name}: unknown handle {a_ident.handle} for ident {ident}')
+        except Exception as e:
+            warnings.warn(f'extractor {self.name}: error on {ident}: {e}')
 
     def run(self):
         self.t0 = time.time()

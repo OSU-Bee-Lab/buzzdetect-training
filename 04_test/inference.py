@@ -32,7 +32,7 @@ def run_inference(modelname):
     def read_audio(path_audio, ident):
         print(f'  embedding {path_audio}')
         track = sf.SoundFile(path_audio)
-        samples = track.read(dtype=model.dtype_in)
+        samples = track.read(dtype=model.embedder.dtype_in)
         samples = librosa.resample(samples, orig_sr=track.samplerate, target_sr=model.embedder.samplerate)
 
         embeddings = model.embedder.embed(samples)
