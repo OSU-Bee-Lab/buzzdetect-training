@@ -23,6 +23,9 @@ if __name__ == '__main__':
     parser.add_argument('--translation', required=True)
     parser.add_argument('--epochs', type=int, required=True)
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
+    parser.add_argument('--dropout', type=float, default=0.2, dest='dropout_rate')
+    parser.add_argument('--label-smoothing', type=float, default=0.2)
+    parser.add_argument('--learning-rate', type=float, default=0.002)
     args = parser.parse_args()
 
     train_model(
@@ -32,4 +35,7 @@ if __name__ == '__main__':
         name_translation=args.translation,
         epochs_max=args.epochs,
         aug_dirnames=args.aug_dirnames,
+        dropout_rate=args.dropout_rate,
+        label_smoothing=args.label_smoothing,
+        learning_rate=args.learning_rate,
     )

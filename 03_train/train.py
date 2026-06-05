@@ -16,7 +16,8 @@ from plot_history import plot_history
 from write_model_py import write_model_py
 
 
-def train_model(modelname, embeddername, setname, name_translation, epochs_max=300, aug_dirnames=None):
+def train_model(modelname, embeddername, setname, name_translation, epochs_max=300, aug_dirnames=None,
+                dropout_rate=0.2, label_smoothing=0.2, learning_rate=0.002):
     dir_model = os.path.join(cfg.DIR_MODELS, modelname)
     if not can_write_model(modelname):
         print('a model folder with this name already exists; delete or rename the existing model folder and re-run')
@@ -82,7 +83,7 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
 
     model = tf.keras.Sequential(name=modelname)
     model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
-    model.add(tf.keras.layers.Dropout(0.2))
+    model.add(tf.keras.layers.Dropout(dropout_rate))
     model.add(tf.keras.layers.Dense(len(classes)))
 
     callback = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
@@ -90,9 +91,9 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
                                                 min_delta=0.01,
                                                 restore_best_weights=True)
 
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001*2)  # 0.001 is default
+    optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
 
-    model.compile(loss=tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.2),
+    model.compile(loss=tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=label_smoothing),
                   optimizer=optimizer,
                   metrics=['accuracy'])
 
@@ -123,7 +124,10 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
         'classes': classes,
         'size_shuffle': size_shuffle,
         'size_batch': size_batch,
-        'digits_results': 8  # set high, tune later
+        'digits_results': 8,  # set high, tune later
+        'dropout_rate': dropout_rate,
+        'label_smoothing': label_smoothing,
+        'learning_rate': learning_rate,
     }
 
     with open(os.path.join(dir_model, 'config_model.json'), 'x') as f:
