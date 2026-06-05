@@ -13,7 +13,7 @@ Production standard: 28% (`model_general_v3`).
 
 ### 0. Orient
 ```bash
-cat summary.md
+cat log.jsonl
 conda run -n buzzdetect-train python compare_metrics.py
 ```
 
@@ -77,7 +77,10 @@ Create `notes.md` in the worktree root. Write the hypothesis section *before* to
 ## Conclusion
 ```
 
-Update `summary.md` in **main** to reflect the new best result and any new dead ends, then commit it.
+Append one line to `log.jsonl` in **main** and commit it:
+```json
+{"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "main_commit": "<git rev-parse --short HEAD>", "hypothesis": "...", "metrics": {"sensitivity_at_95pct_precision": 0.0}, "baseline": {"model": "<name>", "sensitivity_at_95pct_precision": 0.0}, "conclusion": "..."}
+```
 
 ### 5. Commit worktree
 ```bash
@@ -88,11 +91,11 @@ Then stop. Do not merge into main. Do not delete the worktree or branch.
 
 ## Reading prior experiments
 
-Check `summary.md` for a quick orientation, then read `notes.md` on the relevant `exp/<slug>` branch for details. To check if the codebase has changed meaningfully since a prior run, find its commit from the notes and run:
+Check `log.jsonl` before proposing a hypothesis. To check if the codebase has changed meaningfully since a prior run:
 ```bash
 git log --oneline <commit>..HEAD -- 03_train/ 02_set/sets/ translations/
 ```
-Pre-2026-06-05 experiments lack a recorded commit — treat their metric values as directional only.
+Entries with `null` commit predate tracking — treat their metric values as directional only. Read `notes.md` on the relevant `exp/<slug>` branch for details on any entry.
 
 ## Restoring a worktree
 ```bash
