@@ -77,10 +77,7 @@ Create `notes.md` in the worktree root. Write the hypothesis section *before* to
 ## Conclusion
 ```
 
-Append a row to `summary.md` in **main** and commit it:
-```
-| <slug> | <YYYY-MM-DD> | <git rev-parse --short HEAD> | <sens@95prec> | <one-sentence conclusion> |
-```
+Update `summary.md` in **main** to reflect the new best result and any new dead ends, then commit it.
 
 ### 5. Commit worktree
 ```bash
@@ -91,11 +88,11 @@ Then stop. Do not merge into main. Do not delete the worktree or branch.
 
 ## Reading prior experiments
 
-Check `summary.md` before proposing a hypothesis. The `Commit` column is populated for runs after 2026-06-05; earlier entries lack it. To check if training or data has changed since a prior run:
+Check `summary.md` for a quick orientation, then read `notes.md` on the relevant `exp/<slug>` branch for details. To check if the codebase has changed meaningfully since a prior run, find its commit from the notes and run:
 ```bash
 git log --oneline <commit>..HEAD -- 03_train/ 02_set/sets/ translations/
 ```
-If it has, treat old metric values as directional only.
+Pre-2026-06-05 experiments lack a recorded commit — treat their metric values as directional only.
 
 ## Restoring a worktree
 ```bash
