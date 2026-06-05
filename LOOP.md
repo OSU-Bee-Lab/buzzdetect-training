@@ -13,7 +13,7 @@ Production standard: 28% (`model_general_v3`).
 
 ### 0. Orient
 ```bash
-cat experiments/log.jsonl   # may not exist yet
+cat summary.md
 conda run -n buzzdetect-train python compare_metrics.py
 ```
 
@@ -64,7 +64,7 @@ cp "$MAIN/models/<baseline>/tests/metrics.csv" models/<baseline>/tests/
 
 ### 4. Record results
 
-Create `experiments/<slug>/notes.md` in the worktree. Write the hypothesis section *before* touching code; fill in the rest after. Commit it.
+Create `notes.md` in the worktree root. Write the hypothesis section *before* touching code; fill in the rest after. Commit it.
 
 ```
 # <slug>
@@ -77,12 +77,10 @@ Create `experiments/<slug>/notes.md` in the worktree. Write the hypothesis secti
 ## Conclusion
 ```
 
-Append one line to `experiments/log.jsonl` in **main**:
-```json
-{"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "main_commit": "<git rev-parse --short HEAD>", "hypothesis": "...", "metrics": {"sensitivity_at_95pct_precision": 0.0}, "baseline": {"model": "<name>", "sensitivity_at_95pct_precision": 0.0}, "conclusion": "..."}
+Append a row to `summary.md` in **main** and commit it:
 ```
-
-Commit the updated log to main.
+| <slug> | <YYYY-MM-DD> | <git rev-parse --short HEAD> | <sens@95prec> | <one-sentence conclusion> |
+```
 
 ### 5. Commit worktree
 ```bash
@@ -93,11 +91,11 @@ Then stop. Do not merge into main. Do not delete the worktree or branch.
 
 ## Reading prior experiments
 
-Check `log.jsonl` before proposing a hypothesis. Each entry has a `main_commit` (entries before 2026-06-05 lack it). To check if training or data has changed since a prior run:
+Check `summary.md` before proposing a hypothesis. The `Commit` column is populated for runs after 2026-06-05; earlier entries lack it. To check if training or data has changed since a prior run:
 ```bash
-git log --oneline <main_commit>..HEAD -- 03_train/ 02_set/sets/ translations/
+git log --oneline <commit>..HEAD -- 03_train/ 02_set/sets/ translations/
 ```
-If it has, treat old metric values as directional only, not precise targets.
+If it has, treat old metric values as directional only.
 
 ## Restoring a worktree
 ```bash
