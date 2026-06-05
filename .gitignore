@@ -40,3 +40,6 @@ embeddings/
 # local execution scratch dirs
 .local*/
 02_set/sets/.archive
+
+# claude code local settings
+.claude/

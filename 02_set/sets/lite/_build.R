@@ -8,7 +8,7 @@ sources <- list.dirs(
   recursive = F,
   full.names=F
 ) %>% 
-  {.[!(.%in% c('.deprecated', '.archive', '2025-06-24 InsectSound1000', '2026-05-26 Automatic Annotations'))]}
+  {.[.!='.deprecated']}
 
 
 # Annotations ----
@@ -28,17 +28,21 @@ read_annotations <- function(source_set){
 
 annotations <- lapply(sources, read_annotations) %>% 
   bind_rows() %>% 
-  group_by(ident) %>% 
+  group_by(source) %>% 
   mutate(
     duration = end-start,
     item = row_number()
   ) %>% 
   filter(
-    (duration < 100),
-    (item <= 20)
-  ) 
+    (duration < 100) | (stringr::str_detect(label, 'buzz')),
+    (item <= 20) | (stringr::str_detect(label, 'buzz'))
+  )  %>% 
+  slice_min(n=500, order_by=start)
+
+
 
 annotations$label %>% unique() %>% sort()
+
 
 write.csv(
   annotations,

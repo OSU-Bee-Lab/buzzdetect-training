@@ -33,3 +33,53 @@ Stages 2–4 are run together via root `main.py`. Per-module `main.py` files in 
 ## Environment
 
 Python deps in `environment.yml` (conda); run Python with `conda run -n buzzdetect-train`. R project: `buzzdetect-training.Rproj`.
+
+## Tools
+
+### summarize_metrics.py
+
+Prints sensitivity at 90%, 95%, and 99% precision for one or more models in a table. Use this whenever investigating or comparing model performance — prefer it over reading raw metrics.csv files.
+
+```
+conda run -n buzzdetect-train python summarize_metrics.py <model> [<model> ...]
+```
+
+Example:
+
+```
+conda run -n buzzdetect-train python summarize_metrics.py yamnet_medium yamnet_bandpass_medium
+```
+
+```
+                       sens@90prec sens@95prec sens@99prec
+model
+yamnet_medium                28.0%       25.5%       18.1%
+yamnet_bandpass_medium       13.6%       11.4%        9.1%
+```
+
+Run without arguments to see available models.
+
+### compare_metrics.py
+
+Scans all models with a `metrics.csv` and ranks them by sensitivity at 95% precision. Use this to find the best-performing models and to see where a model of interest stands relative to them.
+
+```
+conda run -n buzzdetect-train python compare_metrics.py [<model>]
+```
+
+Without an argument, shows the top 5 models. With a model name, guarantees that model appears in the table even if it falls outside the top 5.
+
+Example:
+
+```
+conda run -n buzzdetect-train python compare_metrics.py yamnet_lite
+```
+
+```
+Model                     Sensitivity @ 95% Precision
+-----------------------------------------------------
+yamnet_medium             0.2544
+yamnet_bandpass_medium    0.1156
+yamnet_bandpass_lite      0.0753
+yamnet_lite               N/A  [current]
+```

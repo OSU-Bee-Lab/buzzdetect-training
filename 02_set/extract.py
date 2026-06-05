@@ -344,6 +344,17 @@ class WorkerExtract:
                 ann_rel['start'] = ann_rel['start'] - snip_start
                 ann_rel['end'] = ann_rel['end'] - snip_start
 
+                if snip_duration < self.embedder.framelength_s:
+                    # Snip is shorter than one frame — skip. Zero-padding to framelength would
+                    # corrupt training embeddings (the model would see silence rather than missing
+                    # audio), so we discard short clips rather than pad them.
+                    warnings.warn(
+                        f'extractor {self.name}: snip {snip_start:.3f}s too short for '
+                        f'{self.embedder.embeddername} ({snip_duration:.3f}s < '
+                        f'{self.embedder.framelength_s}s); skipping'
+                    )
+                    continue
+
                 chunks_raw = melt_coverage(ann_rel)
                 chunks = [
                     expand_chunk(chunk, self.embedder.framelength_s, self.overlap_event_s, snip_duration)
@@ -355,6 +366,13 @@ class WorkerExtract:
                         print(f'extractor {self.name}: {a_ident.ident} snip {snip_start:.3f}s chunk {chunk} ({time.time()-self.t0:.1f}s)')
 
                     audio_data = self.read_range(track, chunk)
+
+                    if len(audio_data) < int(self.embedder.framelength_s * self.embedder.samplerate):
+                        warnings.warn(
+                            f'extractor {self.name}: sub-frame audio in {a_ident.ident} '
+                            f'snip {snip_start:.3f}s chunk {chunk}; skipping'
+                        )
+                        continue
 
                     frames = frame_audio(
                         audio_data=audio_data,
@@ -376,10 +394,24 @@ class WorkerExtract:
                         )
                         labels_collapse = collapse_labels(events_frame)
                         if not labels_collapse:
-                            raise ValueError(
-                                f'extractor {self.name}: no events in frame {frame_range} '
-                                f'for ident {a_ident.ident} — expand_chunk logic is broken'
+                            any_overlap = any(
+                                max(0, min(frame_range[1], end) - max(frame_range[0], start)) > 0
+                                for start, end in zip(annotations_sub['start'], annotations_sub['end'])
                             )
+                            if any_overlap:
+                                # Boundary frame: annotation touches but falls short of event_overlap_s
+                                # threshold due to sample-level rounding in expand_chunk. Safe to skip.
+                                warnings.warn(
+                                    f'extractor {self.name}: frame {frame_range} has sub-threshold '
+                                    f'annotation overlap for ident {a_ident.ident}; '
+                                    f'boundary rounding — skipping'
+                                )
+                            else:
+                                raise ValueError(
+                                    f'extractor {self.name}: frame {frame_range} has NO annotation '
+                                    f'overlap for ident {a_ident.ident} — extraction integrity violation'
+                                )
+                            continue
                         frames_by_label.setdefault(labels_collapse, []).append(frame)
 
         os.makedirs(a_ident.dir_out_audio, exist_ok=True)
@@ -452,8 +484,14 @@ class WorkerExtract:
 
 def run_worker(config_extract: ConfigExtract, annotations: pd.DataFrame, folds: pd.DataFrame,
                q_extract: multiprocessing.Queue, name, verbose=False):
-    worker = WorkerExtract(config_extract, annotations, folds, q_extract, name, verbose=verbose)
-    worker.run()
+    try:
+        worker = WorkerExtract(config_extract, annotations, folds, q_extract, name, verbose=verbose)
+        worker.run()
+    except Exception as e:
+        import traceback
+        print(f'WORKER {name} FATAL: {type(e).__name__}: {e}', flush=True)
+        traceback.print_exc()
+        raise
 
 
 def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=None, n_workers=4, verbose=False):
@@ -524,6 +562,18 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
         print(f'all idents already extracted; skipping workers ({time.time()-t0:.1f}s)')
         return True
 
+    if n_workers <= 0:
+        # In-process extraction: avoids multiprocessing fork, required for embedders
+        # that use TF SavedModel (fork corrupts GCD thread pools on macOS).
+        worker = WorkerExtract(config_extract, annotations, folds,
+                               multiprocessing.Queue(), 'main', verbose=verbose)
+        worker.t0 = time.time()
+        worker.embedder.initialize()
+        for ident in idents_todo:
+            worker.extract_ident(ident)
+        print(f'all extractions complete ({time.time()-t0:.1f}s)\n:)\n:D\n:O')
+        return True
+
     q_extract = multiprocessing.Queue()
     for i in idents_todo:
         q_extract.put(i)
@@ -538,6 +588,13 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
 
     for w in workers:
         w.join()
+
+    failed = [w for w in workers if w.exitcode != 0]
+    if failed:
+        raise RuntimeError(
+            f'{len(failed)}/{len(workers)} extraction worker(s) crashed '
+            f'(exit codes: {[w.exitcode for w in failed]})'
+        )
 
     print(f'all extractions complete ({time.time()-t0:.1f}s)\n:)\n:D\n:O')
     return True

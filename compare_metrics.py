@@ -1,9 +1,9 @@
 """
-Evaluate and compare model performance.
+Compare model performance across all evaluated models.
 
 Usage:
-  python eval.py               — top 5 models by sensitivity at 95% precision
-  python eval.py <model>       — top 5 models, always including the given model
+  python compare_metrics.py               — top 5 models by sensitivity at 95% precision
+  python compare_metrics.py <model>       — top 5 models, always including the given model
 
 Reads models/<modelname>/tests/metrics.csv for each model found.
 Reports sensitivity at 95% precision (averaged over the 94.5–95.5% band).

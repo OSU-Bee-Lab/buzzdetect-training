@@ -6,23 +6,6 @@ Before picking one up, check `experiments/log.jsonl` to confirm it hasn't alread
 
 ---
 
-## negative-audit
-
-**Hypothesis:** Unlabeled buzz events are leaking into the negative training class, degrading the decision boundary.
-
-**What to do:** This is a data audit, not a model change. Before running any training:
-1. Load the negative-class snips for the current set (audio files tagged as non-buzz)
-2. Run the best current model on them and flag any that score above ~0.5
-3. Listen to a sample of the high-scoring negatives — are any of them actual buzz?
-
-If contamination is confirmed, filter those clips from the negative class and retrain the best current config to see the isolated effect. Record the contamination rate in notes.
-
-**Why it might help:** A "No Free Lunch" benchmark study (arxiv:2508.10230) found that in detection tasks, models systematically fail to separate target sounds from backgrounds when training negatives contain unlabeled instances of the target. This is independent of embedder choice.
-
-**Caveats:** Requires listening time. If contamination is low (<5%), impact is probably small.
-
----
-
 ## top-layer-unfreeze
 
 **Hypothesis:** Fine-tuning the last few layers of the embedder backbone on this task will yield more discriminative embeddings than the frozen baseline, without the overfitting risk of full fine-tuning.
@@ -86,3 +69,28 @@ The likely cause: AVES is a self-supervised wav2vec2 model fine-tuned on bird vo
 **Why it might help:** When data is sufficient, full backbone adaptation outperforms partial. This experiment establishes whether the dataset is large enough for this approach.
 
 **Caveats:** High risk of overfitting with small datasets. Only worth trying after `top-layer-unfreeze` shows positive signal. If `top-layer-unfreeze` fails, skip this one.
+
+
+---
+
+## White noise
+Add a little white noise to the training set; not augmenting with overlapping noise, just some 
+samples that are pure runif. Easy to produce and could help refine the learned dimensions.
+
+
+---
+
+## Weighting
+
+Adjust the weighting function of imbalanced classes; in real-world audio, frames contain buzzes ~18% of the time. Does that mean they should be downweighted? They're also the only class we're interested in predicting correctly. Does that mean they should be upweighted?
+
+---
+
+## Translations
+
+translation_general is a good starting point, but we could be more or less specific. Check the 02_set/sets/medium/summary_per_class.csv for all labels in the set; check out /Users/luke/Documents/bioacoustics/SeeNote/docs/dictionary.qmd to see what these labels repreesent.
+
+
+---
+
+## Hyperparameter search

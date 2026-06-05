@@ -5,7 +5,7 @@ This document guides research agents through the experiment loop for improving b
 ## Goal
 
 Improve model performance on the precision/sensitivity tradeoff for buzz detection.
-The primary metric is the sensitivity at 95% precision; this is the value reported by eval.py and this is what we're seeking to improve.
+The primary metric is the sensitivity at 95% precision; this is the value reported by compare_metrics.py and this is what we're seeking to improve.
 The current production standard is 28% sensitivity at 95% precision. Any improvement to this is valuable.
 
 ## Experiment lifecycle
@@ -16,10 +16,10 @@ First, check out what previous agents have done in the log file.
 cat experiments/log.jsonl   # may not exist on first run — that's fine, proceed
 ```
 
-Run eval.py with no model as an argument to see the best performing models:
+Run compare_metrics.py with no argument to see the best performing models:
 
 ```bash
-conda run -n buzzdetect-train python eval.py
+conda run -n buzzdetect-train python compare_metrics.py
 ```
 
 What did the best models do? What hasn't been tried yet? To understand a model's configuration (embedder, set, translation), read `models/<modelname>/config_model.json`.
@@ -183,6 +183,6 @@ git worktree add .local/worktrees/<slug> exp/<slug>
 The branch preserves all committed code. External artifacts (embedder binaries, downloaded weights) must be re-fetched per the reproduction steps in `experiments/<slug>/notes.md`.
 
 ## Prohibited
-You may not touch eval.py.
+You may not touch compare_metrics.py or summarize_metrics.py.
 You may not touch 04_test/ or any of its contents.
 You may not touch 01_annotate/ or any of its contents

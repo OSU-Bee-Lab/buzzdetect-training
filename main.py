@@ -31,7 +31,7 @@ def load_stage(path, module_name):
     spec.loader.exec_module(mod)
     return mod
 
-def main(modelname, setname, embeddername, name_translation, epochs_max, clear, aug_dirnames=None, verbose=False):
+def main(modelname, setname, embeddername, name_translation, epochs_max, clear, aug_dirnames=None, verbose=False, n_workers=2):
     model_dir = os.path.join(config.DIR_MODELS, modelname)
 
     if clear and os.path.exists(model_dir):
@@ -44,7 +44,7 @@ def main(modelname, setname, embeddername, name_translation, epochs_max, clear, 
     stage2.extract_set(
         setname=setname,
         embeddername=embeddername,
-        n_workers=4,
+        n_workers=n_workers,
         verbose=verbose,
     )
 
