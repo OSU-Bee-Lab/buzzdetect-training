@@ -77,7 +77,7 @@ Create `notes.md` in the worktree root. Write the hypothesis section *before* to
 ## Conclusion
 ```
 
-Append one line to `log.jsonl` in **main** and commit it:
+Append one line to `log.jsonl` in **main** and commit it. Be very brief; the log only serves as a summary to guide agents to dig deeper.
 ```json
 {"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "main_commit": "<git rev-parse --short HEAD>", "hypothesis": "...", "metrics": {"sensitivity_at_95pct_precision": 0.0}, "baseline": {"model": "<name>", "sensitivity_at_95pct_precision": 0.0}, "conclusion": "..."}
 ```
