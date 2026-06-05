@@ -14,3 +14,4 @@
 | label-smooth-03 | 2026-06-02 | — | 0.1415 | eps=0.3 catastrophic collapse |
 | binary-translation | 2026-06-02 | — | 0.2844 | Binary translation hurts; multi-class supervision helps |
 | dropout-probe | 2026-06-02 | — | 0.3175 | Dropout(0.2) + label_smooth=0.2 best known at time |
+| hyperparam-sweep | 2026-06-05 | 7cfa287 | 0.2950 | High variance obscures dropout/ls signal; lr=0.001 reliably worse; avoid it |
