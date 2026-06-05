@@ -58,7 +58,7 @@ def _embed_and_save(frames, path_embed_out, embedder):
 def _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=False):
     t0 = time.time()
     audio_key = embedder.audio_cache_key()
-    dir_audio_fold = os.path.join(cfg.dir_audio(setname), audio_key, fold)
+    dir_audio_fold = os.path.join(cfg.dir_audio(setname), audio_key, 'raw', fold)
 
     if not os.path.isdir(dir_audio_fold):
         raise FileNotFoundError(f'no audio found at {dir_audio_fold}')
@@ -118,7 +118,7 @@ def _combine_frames(frames_source, frames_augment, prop, limit):
 def _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=False):
     t0 = time.time()
     audio_key = embedder.audio_cache_key()
-    dir_audio_fold = os.path.join(cfg.dir_audio(setname), audio_key, fold)
+    dir_audio_fold = os.path.join(cfg.dir_audio(setname), audio_key, 'raw', fold)
 
     path_embed_out = os.path.join(
         cfg.dir_embeddings_augment(setname, embeddername, spec_dirname(spec)),
@@ -186,12 +186,24 @@ if __name__ == '__main__':
     parser.add_argument('--fold', default='train')
     parser.add_argument('--overwrite', action='store_true')
     parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--noise', nargs='+', type=float, metavar='PROP',
+                        help='noise augmentation prop values (default set used if neither --noise nor --volume given)')
+    parser.add_argument('--volume', nargs='+', type=float, metavar='PROP',
+                        help='volume augmentation prop values')
     args = parser.parse_args()
+
+    if args.noise is not None or args.volume is not None:
+        specs = (
+            [NoiseSpec(prop=p) for p in (args.noise or [])] +
+            [VolumeSpec(prop=p) for p in (args.volume or [])]
+        )
+    else:
+        specs = DEFAULT_SPECS
 
     augment_set(
         setname=args.setname,
         embeddername=args.embedder,
-        specs=DEFAULT_SPECS,
+        specs=specs,
         fold=args.fold,
         overwrite=args.overwrite,
         verbose=args.verbose,

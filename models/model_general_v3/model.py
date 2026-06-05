@@ -1,11 +1,11 @@
 import os
 
-import code.config as cfg
-from code.models.BaseModel import BaseModel
+import config as cfg
+from models.models import BaseModel
 
 class ModelGeneralV3(BaseModel):
     modelname = "model_general_v3"
-    embeddername = 'yamnet_k2'
+    embeddername = 'yamnet'
     digits_results = 2
 
     def initialize(self):
@@ -14,6 +14,9 @@ class ModelGeneralV3(BaseModel):
         from keras.layers import TFSMLayer
         dir_model = os.path.abspath(os.path.join(cfg.DIR_MODELS, self.modelname))
         self.model = TFSMLayer(dir_model, call_endpoint='serving_default')  # self.model defined in ABC
+
+    def predict_embeddings(self, embeddings):
+        return self.model(embeddings)['dense']
 
     def predict(self, audiosamples):
         """

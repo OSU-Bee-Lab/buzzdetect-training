@@ -123,7 +123,8 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
         'classes': classes,
         'size_shuffle': size_shuffle,
         'size_batch': size_batch,
-        'digits_results': 8  # set high, tune later
+        'digits_results': 8,  # set high, tune later
+        'aug_dirnames': aug_dirnames or []
     }
 
     with open(os.path.join(dir_model, 'config_model.json'), 'x') as f:

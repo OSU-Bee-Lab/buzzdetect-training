@@ -4,11 +4,13 @@ Compare model performance across all evaluated models.
 Usage:
   python compare_metrics.py               — top 5 models by sensitivity at 95% precision
   python compare_metrics.py <model>       — top 5 models, always including the given model
+  python compare_metrics.py --top N       — show top N models
 
 Reads models/<modelname>/tests/metrics.csv for each model found.
 Reports sensitivity at 95% precision (averaged over the 94.5–95.5% band).
 """
 
+import argparse
 import os
 import sys
 
@@ -51,17 +53,16 @@ def find_models():
     return models
 
 
-TOP_N = 5
-
-
 def main():
+    parser = argparse.ArgumentParser(description='Compare model sensitivity at 95% precision.')
+    parser.add_argument('model', nargs='?', help='Model to highlight (shown even if outside top N)')
+    parser.add_argument('--top', type=int, default=5, metavar='N', help='Number of top models to show (default: 5)')
+    args = parser.parse_args()
+
+    current = args.model
+    top_n = args.top
+
     print("WARNING: interpolated results may be unreliable — occurs when few data points fall near 95% precision")
-
-    if len(sys.argv) > 2:
-        print(f'Usage: python {sys.argv[0]} [model]')
-        sys.exit(1)
-
-    current = sys.argv[1] if len(sys.argv) == 2 else None
 
     models = find_models()
     if not models:
@@ -79,7 +80,7 @@ def main():
         print(f"Warning: '{current}' not found among evaluated models.")
         current = None
 
-    top = df.head(TOP_N)
+    top = df.head(top_n)
     if current is not None and current not in top['model'].values:
         cur_row = df[df['model'] == current]
         top = pd.concat([top, cur_row], ignore_index=True)

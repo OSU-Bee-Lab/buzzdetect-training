@@ -2,6 +2,7 @@ import os
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+import numpy as np
 
 import config as cfg
 
@@ -80,6 +81,14 @@ def plot_tradeoff_zoomed(metrics, modelname):
     ax.xaxis.set_major_formatter(_pct)
     ax.yaxis.set_major_formatter(_pct)
     ax.grid(axis='y', alpha=0.4)
+
+    prec_vals = metrics_zoomed['precision'].values
+    if prec_vals.min() <= 0.95 <= prec_vals.max():
+        prec_sorted = metrics_zoomed.sort_values('precision')
+        s95 = np.interp(0.95, prec_sorted['precision'].values, prec_sorted['sensitivity'].values)
+        ax.axvline(x=0.95, color='gray', linestyle='--', linewidth=1, alpha=0.7)
+        ax.axhline(y=s95, color='gray', linestyle='--', linewidth=1, alpha=0.7)
+        ax.text(0.951, s95, f's95={s95:.1%}', fontsize=8, va='bottom', color='gray')
 
     fig.suptitle(f'{modelname} (precision > {cfg.PRECISION_ZOOM_MIN:.0%})', fontsize=11)
     plt.tight_layout()

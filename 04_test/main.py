@@ -39,25 +39,10 @@ def test_model(modelname):
         metrics.to_csv(path_metrics, index=False)
         print(f'  saved {path_metrics}')
 
-    if os.path.exists(path_tradeoff):
-        print(f'  tradeoff plot exists, skipping')
-    else:
-        plot_tradeoff(metrics, modelname)
-
-    if os.path.exists(path_tradeoff_zoomed):
-        print(f'  tradeoff zoomed plot exists, skipping')
-    else:
-        plot_tradeoff_zoomed(metrics, modelname)
-
-    if os.path.exists(path_metrics_plot):
-        print(f'  metrics plot exists, skipping')
-    else:
-        plot_metrics(metrics, modelname)
-
-    if os.path.exists(path_metrics_zoomed):
-        print(f'  metrics zoomed plot exists, skipping')
-    else:
-        plot_metrics_zoomed(metrics, modelname)
+    plot_tradeoff(metrics, modelname)
+    plot_tradeoff_zoomed(metrics, modelname)
+    plot_metrics(metrics, modelname)
+    plot_metrics_zoomed(metrics, modelname)
 
 
 if __name__ == '__main__':

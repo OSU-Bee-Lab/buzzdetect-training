@@ -277,7 +277,7 @@ class WorkerExtract:
         )
 
         audio_key = self.embedder.audio_cache_key()
-        self.dir_audio_cache_base = os.path.join(cfg.dir_audio(self.config_extract.setname), audio_key)
+        self.dir_audio_cache_base = os.path.join(cfg.dir_audio(self.config_extract.setname), audio_key, 'raw')
         self.dir_embeddings_base = self.config_extract.dir_out_embeddings(self.config_extract.embeddername)
         self.dir_snips_base = cfg.dir_snips(self.config_extract.setname)
 
@@ -537,7 +537,7 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
     # Pre-filter: determine which idents actually need work before spawning workers
     embedder_tmp = load_embedder(embeddername, framehop_prop=1, initialize=False)
     audio_key = embedder_tmp.audio_cache_key()
-    dir_audio_cache_base = os.path.join(cfg.dir_audio(setname), audio_key)
+    dir_audio_cache_base = os.path.join(cfg.dir_audio(setname), audio_key, 'raw')
     dir_embeddings_base = config_extract.dir_out_embeddings(embeddername)
 
     idents_todo = []
