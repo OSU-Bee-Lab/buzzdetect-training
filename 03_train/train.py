@@ -82,12 +82,11 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
 
     model = tf.keras.Sequential(name=modelname)
     model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
-    model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.Dense(len(classes)))
 
     callback = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
                                                 patience=30,
-                                                min_delta=0.01,
+                                                min_delta=0.002,
                                                 restore_best_weights=True)
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.001*2)  # 0.001 is default
