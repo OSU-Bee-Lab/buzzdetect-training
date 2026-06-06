@@ -16,8 +16,4 @@ Expected: the linear probe can now distinguish genuine buzz (where all 3 slots s
 - CIs barely overlap (upper 0.224 vs lower 0.216); temporal_context is likely worse.
 
 ## Conclusion
-Negative result. Mean drops 2pp; variance is low (std=0.012) so this is consistent.
-
-Root cause hypothesis: the extraction pipeline groups audio frames by label before embedding, so every training window is homogeneous — [buzz, buzz, buzz] or [bg, bg, bg]. At inference time, buzz frames have real adjacent audio (often background), producing heterogeneous windows [bg, buzz, bg]. The model learns that "all-buzz context" means high confidence and struggles when only the center frame is buzz.
-
-To realize the temporal context benefit, extraction must embed contiguous audio and label by center-frame annotation — preserving real neighboring context in training data. That's a larger extraction-pipeline change worth a separate experiment.
+Negative result. Mean drops 2pp; variance is low (std=0.012) so this is consistent. Root cause unclear — likely the 3x wider input space (3072-d) with the same amount of buzz training data makes the linear probe harder to fit, and/or the 2.88s window dilutes the buzz signal per frame.
