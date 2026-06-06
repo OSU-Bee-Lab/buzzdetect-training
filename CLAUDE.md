@@ -40,3 +40,13 @@ Sensitivity at 90%, 95%, 99% precision. Prefer over reading raw metrics.csv.
 conda run -n buzzdetect-train python compare_metrics.py [<model>] [--top N]
 ```
 Ranks all models by sensitivity at 95% precision. Top 5 by default; a named model always appears.
+
+```bash
+conda run -n buzzdetect-train python evaluate_set.py <set_base> [<set_base> ...]
+```
+Summarizes a multi-run experiment set: mean, median, std, 95% CI (t-distribution). Auto-detects run count. `--detail` prints individual run values.
+
+```bash
+conda run -n buzzdetect-train python compare_sets.py [<set_base> ...] [--top N]
+```
+Ranks experiment sets by mean sensitivity at 95% precision. Shows CI and flags CI overlap with the top set. Auto-discovers all sets in models/ if no names given.

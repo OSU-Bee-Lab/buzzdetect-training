@@ -8,14 +8,22 @@ Production standard: 28% (`model_general_v3`).
 - Embedder: YAMNet only. Others have proven wasteful.
 - Set: `medium` only.
 - Augmentation: has hurt training so far — avoid without strong reason.
+- Err against hyperparameter tuning, unless you have a strong reason for doing so. We're looking for structural gains; hyperparameters can be tuned in one large sweep after a good structure is identified.
+
 
 ## Experiment lifecycle
 
-### 0. Orient
+### 0. Orient and hypothesize
 ```bash
 cat log.jsonl
 conda run -n buzzdetect-train python compare_metrics.py
 ```
+
+Propose a hypothesis for a change or set of changes that could improve model performance.
+
+Check `log.jsonl` and IDEAS.md before proposing a hypothesis.
+
+Entries in log.jsonl with `null` commit predate tracking — treat their metric values as directional only. Read `notes.md` on the relevant `exp/<slug>` branch for details on any entry.
 
 ### 1. Create worktree
 ```bash
@@ -59,13 +67,19 @@ for i in 1 2 3 4 5; do
 done
 ```
 
-Report the **median** sens@95prec across the 5 runs as the canonical metric. Include the full set of values and the range in notes.md.
+After training and testing, report results:
+```bash
+conda run -n buzzdetect-train python evaluate_set.py <modelname>
+```
 
-To run `compare_metrics.py` against baseline models, copy their metrics into the worktree first:
+To compare against a baseline set, copy its per-run metrics into the worktree first, then run `evaluate_set.py` or `compare_sets.py`:
 ```bash
 MAIN=$(git worktree list | awk 'NR==1{print $1}')
-mkdir -p models/<baseline>/tests
-cp "$MAIN/models/<baseline>/tests/metrics.csv" models/<baseline>/tests/
+for v in 1 2 3 4 5; do
+  mkdir -p models/<baseline>_v$v/tests
+  cp "$MAIN/models/<baseline>_v$v/tests/metrics.csv" models/<baseline>_v$v/tests/
+done
+conda run -n buzzdetect-train python compare_sets.py
 ```
 
 ### 4. Record results
@@ -77,15 +91,15 @@ Create `notes.md` in the worktree root. Write the hypothesis section *before* to
 ## Hypothesis
 ## Changes
 ## Results
-- Baseline (<model>): <sens@95prec>
-- This experiment (<modelname> v1–v5): <val>, <val>, <val>, <val>, <val>  median=<median>  range=[<min>, <max>]
-<interpretation>
+- Baseline (<set>): <val>, ..., <val>  mean=<mean>  median=<median>  95% CI=[<lo>, <hi>]
+- This experiment (<modelname> v1–v5): <val>, ..., <val>  mean=<mean>  median=<median>  95% CI=[<lo>, <hi>]
+<interpretation: do CIs overlap? by how much?>
 ## Conclusion
 ```
 
-Append one line to `log.jsonl` in **main** and commit it. Be very brief; the log only serves as a summary to guide agents to dig deeper. Use the median as `sensitivity_at_95pct_precision`.
+Append one line to `log.jsonl` in **main** and commit it. Be very brief; the log only serves as a summary to guide agents to dig deeper. Use the mean as `sensitivity_at_95pct_precision` and include `ci_95`.
 ```json
-{"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "main_commit": "<git rev-parse --short HEAD>", "hypothesis": "...", "metrics": {"sensitivity_at_95pct_precision": 0.0, "n_runs": 5, "range": [0.0, 0.0]}, "baseline": {"model": "<name>", "sensitivity_at_95pct_precision": 0.0}, "conclusion": "..."}
+{"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "main_commit": "<git rev-parse --short HEAD>", "hypothesis": "...", "metrics": {"sensitivity_at_95pct_precision": 0.0, "n_runs": 5, "range": [0.0, 0.0], "ci_95": [0.0, 0.0]}, "baseline": {"model": "<name>", "sensitivity_at_95pct_precision": 0.0, "ci_95": [0.0, 0.0]}, "conclusion": "..."}
 ```
 
 ### 5. Commit worktree
@@ -95,13 +109,6 @@ git add -A && git commit -m "exp/<slug>: <what was tried and outcome>"
 
 Then stop. Do not merge into main. Do not delete the worktree or branch.
 
-## Reading prior experiments
-
-Check `log.jsonl` before proposing a hypothesis. To check if the codebase has changed meaningfully since a prior run:
-```bash
-git log --oneline <commit>..HEAD -- 03_train/ 02_set/sets/ translations/
-```
-Entries with `null` commit predate tracking — treat their metric values as directional only. Read `notes.md` on the relevant `exp/<slug>` branch for details on any entry.
 
 ## Restoring a worktree
 ```bash
