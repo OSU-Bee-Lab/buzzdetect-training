@@ -82,6 +82,7 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
 
     model = tf.keras.Sequential(name=modelname)
     model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
+    model.add(tf.keras.layers.BatchNormalization())
     model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.Dense(len(classes)))
 
