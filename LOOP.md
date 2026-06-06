@@ -21,7 +21,7 @@ conda run -n buzzdetect-train python compare_metrics.py
 
 Propose a hypothesis for a change or set of changes that could improve model performance.
 
-Check `log.jsonl` and IDEAS.md before proposing a hypothesis.
+Check `log.jsonl` and IDEAS.md before proposing a hypothesis. If you use an IDEA, remove it after testing.
 
 Entries in log.jsonl with `null` commit predate tracking — treat their metric values as directional only. Read `notes.md` on the relevant `exp/<slug>` branch for details on any entry.
 
@@ -67,17 +67,17 @@ for i in 1 2 3 4 5; do
 done
 ```
 
-After training and testing, report results:
+After training and testing, report results (run from the worktree — `evaluate_set.py` anchors to its own `models/` directory):
 ```bash
 conda run -n buzzdetect-train python evaluate_set.py <modelname>
 ```
 
-To compare against a baseline set, copy its per-run metrics into the worktree first, then run `evaluate_set.py` or `compare_sets.py`:
+To compare against a baseline set, copy its per-run metrics into the worktree first, then run `compare_sets.py`. The baseline models are in their own experiment worktree, not in main:
 ```bash
-MAIN=$(git worktree list | awk 'NR==1{print $1}')
+BASELINE=$(git worktree list | grep "exp/<baseline-slug>" | awk '{print $1}')
 for v in 1 2 3 4 5; do
   mkdir -p models/<baseline>_v$v/tests
-  cp "$MAIN/models/<baseline>_v$v/tests/metrics.csv" models/<baseline>_v$v/tests/
+  cp "$BASELINE/models/<baseline>_v$v/tests/metrics.csv" models/<baseline>_v$v/tests/
 done
 conda run -n buzzdetect-train python compare_sets.py
 ```

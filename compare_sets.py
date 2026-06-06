@@ -46,7 +46,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('sets', nargs='*', metavar='set_base')
     parser.add_argument('--top', type=int, default=10, metavar='N')
-    parser.add_argument('--n', type=int, default=5, help='Max runs per set (default: 5)')
+    parser.add_argument('--n', type=int, default=None, help='Max runs per set (default: auto-detect)')
     parser.add_argument('--precision', type=float, default=0.95)
     parser.add_argument('--min-runs', type=int, default=2, dest='min_runs',
                         help='Min valid runs to include a set (default: 2)')
@@ -60,7 +60,7 @@ def main():
     rows = []
     any_interp = False
     for base in bases:
-        values, interp = load_set(base)
+        values, interp = load_set(base, n=args.n)
         if len(values) < args.min_runs:
             continue
         if interp:

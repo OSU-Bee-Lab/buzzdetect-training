@@ -74,23 +74,7 @@ The likely cause: AVES is a self-supervised wav2vec2 model fine-tuned on bird vo
 ---
 
 ## White noise
-Add a little white noise to the training set; not augmenting with overlapping noise, just some 
-samples that are pure runif. Easy to produce and could help refine the learned dimensions.
+Add a little white noise samples to the training set; not augmenting with overlapping noise, just some  samples that are purely random samples. Easy to produce and could help refine the learned dimensions.
 
 
 ---
-
-## Weighting
-
-Adjust the weighting function of imbalanced classes; in real-world audio, frames contain buzzes ~18% of the time. Does that mean they should be downweighted? They're also the only class we're interested in predicting correctly. Does that mean they should be upweighted?
-
----
-
-## Translations
-
-translation_general is a good starting point, but we could be more or less specific. Check the 02_set/sets/medium/summary_per_class.csv for all labels in the set; check out /Users/luke/Documents/bioacoustics/SeeNote/docs/dictionary.qmd to see what these labels repreesent.
-
-
----
-
-## Hyperparameter search
