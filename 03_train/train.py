@@ -49,6 +49,9 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
     classes = build_classes(translation)
     weights = build_weights(data_train, classes)
     weight_dict = {target: weight for target, weight in enumerate(weights['weight'])}  # for training
+    buzz_targets = weights[weights['class'] == 'ins_buzz']['target']
+    if len(buzz_targets) > 0:
+        weight_dict[buzz_targets.values[0]] *= 2.0
 
     # Turning datasets into tensorflow datasets
     #
