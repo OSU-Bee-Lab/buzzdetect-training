@@ -86,8 +86,8 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
     model.add(tf.keras.layers.Dense(len(classes)))
 
     callback = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
-                                                patience=30,
-                                                min_delta=0.01,
+                                                patience=50,
+                                                min_delta=0.002,
                                                 restore_best_weights=True)
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.001*2)  # 0.001 is default

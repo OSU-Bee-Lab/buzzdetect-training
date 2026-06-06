@@ -47,13 +47,19 @@ All stages run from the worktree.
 # Stage 2 — only if embedder or extraction changed
 conda run -n buzzdetect-train python 02_set/main.py --set medium --embedder yamnet --workers <N>
 
-# Stage 3
-conda run -n buzzdetect-train python 03_train/main.py \
-  --model <modelname> --set medium --embedder yamnet --translation general --epochs 300
+# Stage 3 — train 5 independent runs (v1–v5); epochs arg is optional, defaults to 400
+for i in 1 2 3 4 5; do
+  conda run -n buzzdetect-train python 03_train/main.py \
+    --model <modelname>_v$i --set medium --embedder yamnet --translation general
+done
 
-# Stage 4
-conda run -n buzzdetect-train python 04_test/main.py --model <modelname>
+# Stage 4 — test all 5
+for i in 1 2 3 4 5; do
+  conda run -n buzzdetect-train python 04_test/main.py --model <modelname>_v$i
+done
 ```
+
+Report the **median** sens@95prec across the 5 runs as the canonical metric. Include the full set of values and the range in notes.md.
 
 To run `compare_metrics.py` against baseline models, copy their metrics into the worktree first:
 ```bash
@@ -72,14 +78,14 @@ Create `notes.md` in the worktree root. Write the hypothesis section *before* to
 ## Changes
 ## Results
 - Baseline (<model>): <sens@95prec>
-- This run (<model>): <sens@95prec>
+- This experiment (<modelname> v1–v5): <val>, <val>, <val>, <val>, <val>  median=<median>  range=[<min>, <max>]
 <interpretation>
 ## Conclusion
 ```
 
-Append one line to `log.jsonl` in **main** and commit it. Be very brief; the log only serves as a summary to guide agents to dig deeper.
+Append one line to `log.jsonl` in **main** and commit it. Be very brief; the log only serves as a summary to guide agents to dig deeper. Use the median as `sensitivity_at_95pct_precision`.
 ```json
-{"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "main_commit": "<git rev-parse --short HEAD>", "hypothesis": "...", "metrics": {"sensitivity_at_95pct_precision": 0.0}, "baseline": {"model": "<name>", "sensitivity_at_95pct_precision": 0.0}, "conclusion": "..."}
+{"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "main_commit": "<git rev-parse --short HEAD>", "hypothesis": "...", "metrics": {"sensitivity_at_95pct_precision": 0.0, "n_runs": 5, "range": [0.0, 0.0]}, "baseline": {"model": "<name>", "sensitivity_at_95pct_precision": 0.0}, "conclusion": "..."}
 ```
 
 ### 5. Commit worktree

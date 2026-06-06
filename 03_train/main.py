@@ -21,7 +21,7 @@ if __name__ == '__main__':
     parser.add_argument('--set', required=True, dest='setname')
     parser.add_argument('--embedder', required=True)
     parser.add_argument('--translation', required=True)
-    parser.add_argument('--epochs', type=int, required=True)
+    parser.add_argument('--epochs', type=int, default=400)
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     args = parser.parse_args()
 
