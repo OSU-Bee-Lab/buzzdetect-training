@@ -16,16 +16,18 @@ from plot_history import plot_history
 from write_model_py import write_model_py
 
 
-def train_model(modelname, embeddername, setname, name_translation, epochs_max=300, aug_dirnames=None):
+def train_model(modelname, embeddername, setname, name_translation, epochs_max=300, aug_dirnames=None, verbose=False):
     dir_model = os.path.join(cfg.DIR_MODELS, modelname)
     if not can_write_model(modelname):
         print('a model folder with this name already exists; delete or rename the existing model folder and re-run')
         return False
-    print(f"training model {modelname} with embedder {embeddername} from set {setname}")
+    if verbose:
+        print(f"training model {modelname} with embedder {embeddername} from set {setname}")
     os.makedirs(dir_model, exist_ok=True)
 
     # ---- load data ----
-    print('TRAINING: loading data')
+    if verbose:
+        print('TRAINING: loading data')
     translation = pd.read_csv(os.path.join(cfg.DIR_TRANSLATIONS, name_translation + '.csv'))
 
     data_train: list[Sample] = build_fold_dataset(
@@ -72,7 +74,8 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
         return dataset_tf
 
     # These steps take a while, but I think that's unavoidable due to dataset size
-    print('TRAINING: translating data to tensors')
+    if verbose:
+        print('TRAINING: translating data to tensors')
     data_train_tf = data_to_tfset(data_train)
     data_val_tf = data_to_tfset(data_val)
 
@@ -100,7 +103,8 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
                         epochs=epochs_max,
                         validation_data=data_val_tf,
                         callbacks=callback,
-                        class_weight=weight_dict)
+                        class_weight=weight_dict,
+                        verbose=1 if verbose else 0)
 
     model.save(os.path.join(dir_model, 'model.keras'), include_optimizer=True)
 

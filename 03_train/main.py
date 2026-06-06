@@ -23,6 +23,7 @@ if __name__ == '__main__':
     parser.add_argument('--translation', required=True)
     parser.add_argument('--epochs', type=int, default=400)
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
+    parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 
     train_model(
@@ -32,4 +33,5 @@ if __name__ == '__main__':
         name_translation=args.translation,
         epochs_max=args.epochs,
         aug_dirnames=args.aug_dirnames,
+        verbose=args.verbose,
     )

@@ -57,6 +57,7 @@ def main(modelname, setname, embeddername, name_translation, epochs_max, clear, 
         name_translation=name_translation,
         epochs_max=epochs_max,
         aug_dirnames=aug_dirnames,
+        verbose=verbose,
     )
 
     print('\n=== 04 test ===')

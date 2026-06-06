@@ -107,7 +107,7 @@ Append one line to `log.jsonl` in **main** and commit it. Be very brief; the log
 git add -A && git commit -m "exp/<slug>: <what was tried and outcome>"
 ```
 
-Then stop. Do not merge into main. Do not delete the worktree or branch.
+Then stop. Do not merge into main. Do not delete the worktree or branch. Do not proceed to another experiment. You're done! Thank you!
 
 
 ## Restoring a worktree
