@@ -78,3 +78,33 @@ Add a little white noise samples to the training set; not augmenting with overla
 
 
 ---
+
+## supplementary-frequency-features
+
+**Hypothesis:** Concatenating hand-crafted frequency features to the YAMNet embedding gives the linear probe a direct channel for buzz-specific acoustic properties that YAMNet's general embeddings don't emphasize.
+
+**What to do:**
+1. In `02_set/extract.py` (or a new extraction path), compute per-snip features from the raw audio alongside the YAMNet embedding: dominant frequency (peak of power spectrum), spectral centroid, zero-crossing rate, and autocorrelation energy in the 100–600 Hz band.
+2. Concatenate these (e.g. 4–8 scalars) to the 1024-d YAMNet embedding to form a 1028–1032-d input vector.
+3. Re-extract embeddings for the medium set under a new embedder name (e.g. `yamnet_freq`) and train as usual.
+
+**Why it might help:** Insect buzz has characteristic wing-beat frequencies (bees: ~200–400 Hz) that produce periodic spectral signatures. YAMNet is trained on AudioSet with 521 classes; buzz is a minor category and the embedding doesn't need to highlight these frequency features to minimize AudioSet loss. A few targeted scalars give the classifier a direct handle that pure YAMNet probing lacks. This is the lowest-cost change that actually adds new information.
+
+**Caveats:** Features must be computed at the same frame resolution as YAMNet embeddings (0.96s windows). Normalization of the new dimensions matters — scale them to ~unit variance before concatenation so they don't get drowned out by the 1024-d YAMNet component.
+
+---
+
+## mlp-head-repro
+
+**Hypothesis:** The MLP head (Dense 128 → Dense N_classes) underperformed in deeper-std, but that experiment predated stable training methodology (null commit, no multi-run averaging, wrong set). With current defaults (low-delta, 5 runs, label smoothing 0.2), MLP may perform comparably or better than the linear probe.
+
+**What to do:**
+1. Add `Dense(128, relu)` between Dropout and output in `train.py`, matching deeper-std architecture.
+2. Run the standard 5-run pipeline on the medium set.
+3. Compare to the low-delta baseline (0.224, CI [0.207, 0.242]).
+
+**Why it might help:** The buzz manifold in YAMNet space may be non-convex or entangled with mechanical hums in ways a linear probe can't untangle. A single hidden layer is the minimum nonlinearity to test this. With proper methodology we haven't actually confirmed the linear ceiling.
+
+**Caveats:** More parameters = more overfitting risk with 236 buzz training examples. Watch whether validation loss diverges from training loss. If so, try smaller hidden size (64) or increase dropout.
+
+---
