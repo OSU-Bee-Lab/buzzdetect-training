@@ -4,6 +4,11 @@
 Improve sensitivity at 95% precision for `ins_buzz` detection — the value reported by `compare_metrics.py`.
 Production standard: 28% (`model_general_v3`).
 
+## Baseline architecture
+The architecture of the current production model is a plain linear probe on frozen YAMNet embeddings: no dropout, no label smoothing, no L2. This is the `no-reg-baseline` experiment (branch `exp/no-reg-baseline`), which scores 0.193 [0.181, 0.205].
+
+When testing a new structural change, build on `no-reg-baseline` so the effect is measured in isolation. The current best config (`with-dropout`, dropout=0.2 + LS=0.2, 0.229 [0.216, 0.241]) can also serve as a comparison point, but layering a new change on top of it risks interaction effects that obscure whether the change itself is beneficial.
+
 ## Constraints
 - Embedder: YAMNet only. Others have proven wasteful.
 - Set: `medium` only.
