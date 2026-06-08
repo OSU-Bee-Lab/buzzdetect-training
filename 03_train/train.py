@@ -40,12 +40,23 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
     if aug_dirnames:
         data_train += load_augmented(setname, embeddername, aug_dirnames, translation)
 
-    data_val: list[Sample] = build_fold_dataset(
+    # Pull all buzz samples from validate into train; early stopping uses non-buzz val classes
+    buzz_raw_labels = [r for r in translation['from'] if 'ins_buzz' in r]
+    data_buzz_from_val: list[Sample] = build_fold_dataset(
+        cfg.dir_embeddings_fold(setname, embeddername, 'validate'),
+        translation,
+        labels_keep_raw=buzz_raw_labels,
+        exclusive=False
+    )
+    data_train += data_buzz_from_val
+
+    data_val_all: list[Sample] = build_fold_dataset(
         cfg.dir_embeddings_fold(setname, embeddername, 'validate'),
         translation,
         labels_keep_raw=None,
         exclusive=False
     )
+    data_val = [s for s in data_val_all if not any('ins_buzz' in l for l in s.labels_raw)]
 
     # ---- weighting ----
     classes = build_classes(translation)
