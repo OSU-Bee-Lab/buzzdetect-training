@@ -71,10 +71,5 @@ The likely cause: AVES is a self-supervised wav2vec2 model fine-tuned on bird vo
 **Caveats:** High risk of overfitting with small datasets. Only worth trying after `top-layer-unfreeze` shows positive signal. If `top-layer-unfreeze` fails, skip this one.
 
 
----
-
-## White noise
-Add a little white noise samples to the training set; not augmenting with overlapping noise, just some  samples that are purely random samples. Easy to produce and could help refine the learned dimensions.
-
 
 
