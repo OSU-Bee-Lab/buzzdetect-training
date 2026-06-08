@@ -59,16 +59,12 @@ cd $WT
 # Stage 2 — only if embedder or extraction changed
 conda run -n buzzdetect-train python 02_set/main.py --set medium --embedder yamnet --workers <N>
 
-# Stage 3 — train 5 independent runs (v1–v5); epochs arg is optional, defaults to 400
-for i in 1 2 3 4 5; do
-  conda run -n buzzdetect-train python 03_train/main.py \
-    --model <modelname>_v$i --set medium --embedder yamnet --translation general
-done
+# Stage 3 — train N runs (default 5); loads data once, trains v1–vN sequentially
+conda run -n buzzdetect-train python 03_train/main.py \
+  --name <modelname> --set medium --embedder yamnet --translation general
 
-# Stage 4 — test all 5
-for i in 1 2 3 4 5; do
-  conda run -n buzzdetect-train python 04_test/main.py --model <modelname>_v$i
-done
+# Stage 4 — test N runs; embeds test audio once, runs all classifiers
+conda run -n buzzdetect-train python 04_test/main.py --name <modelname>
 ```
 
 After training and testing, report results (`evaluate_set.py` anchors to its own `models/`; must run from the worktree via `$WT`):

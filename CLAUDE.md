@@ -29,7 +29,20 @@ Stage scripts in `02_set/`, `03_train/`, `04_test/` can also be run independentl
 
 `conda run -n buzzdetect-train python <script>`
 
-## Tools
+## Train / test
+
+Both scripts are N-run aware: they load data/embeddings once and loop over all runs.
+
+```bash
+# Train: produces <name>_v1 … <name>_vN (default N=5)
+conda run -n buzzdetect-train python 03_train/main.py \
+  --name <name> --set <set> --embedder <emb> --translation <t> [--runs N] [--epochs E]
+
+# Test: embeds test audio once, runs all N classifiers
+conda run -n buzzdetect-train python 04_test/main.py --name <name> [--runs N]
+```
+
+## Evaluation tools
 
 ```bash
 conda run -n buzzdetect-train python summarize_metrics.py <model> [<model> ...]

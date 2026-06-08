@@ -13,11 +13,12 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from train import train_model
+from train import train_set
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', required=True)
+    parser.add_argument('--name', required=True)
+    parser.add_argument('--runs', type=int, default=5)
     parser.add_argument('--set', required=True, dest='setname')
     parser.add_argument('--embedder', required=True)
     parser.add_argument('--translation', required=True)
@@ -26,8 +27,9 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 
-    train_model(
-        modelname=args.model,
+    train_set(
+        name=args.name,
+        runs=args.runs,
         embeddername=args.embedder,
         setname=args.setname,
         name_translation=args.translation,

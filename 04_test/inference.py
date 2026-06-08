@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 import pickle
 import re
@@ -9,70 +10,90 @@ import pandas as pd
 import soundfile as sf
 
 import config as cfg
-from models.models import load_model, BaseModel
+from embedders.embedding import load_embedder
 
 
-def run_inference(modelname):
-    print(f'Testing model {modelname}')
-    dir_model = os.path.join(cfg.DIR_MODELS, modelname)
-    dir_test = os.path.join(dir_model, cfg.SUBDIR_TESTS, 'results')
+def _path_to_ident(path_audio):
+    ident = os.path.splitext(path_audio)[0]
+    ident = re.sub(re.escape(cfg.TEST_DIR_AUDIO), '', ident)
+    ident = re.sub('^/', '', ident)
+    return ident
 
-    model: BaseModel = load_model(modelname, framehop_prop=1, initialize=False)
-    framelength_s = model.embedder.framelength_s
 
-    if os.path.exists(dir_test):
-        print(f'Test directory {dir_test} already exists, skipping')
-        return framelength_s
+def ensure_test_embeddings(embeddername):
+    """Embed all test audio for an embedder (skips files already cached).
 
-    buzz_index = model.config['classes'].index('ins_buzz')
-    model.initialize()
+    Returns ({ident: path_cache}, framelength_s).
+    """
+    embedder = load_embedder(embeddername, framehop_prop=1, initialize=True)
+    framelength_s = embedder.framelength_s
 
     paths_audio = glob.glob(os.path.join(cfg.TEST_DIR_AUDIO, '**', '*.mp3'), recursive=True)
+    idents = {}
 
-    def read_audio(path_audio, ident):
-        print(f'  embedding {path_audio}')
-        track = sf.SoundFile(path_audio)
-        samples = track.read(dtype=model.embedder.dtype_in)
-        samples = librosa.resample(samples, orig_sr=track.samplerate, target_sr=model.embedder.samplerate)
+    for i, path_audio in enumerate(paths_audio):
+        ident = _path_to_ident(path_audio)
+        path_cache = os.path.join(cfg.TEST_DIR_EMBEDDINGS, embeddername, ident + '.pickle')
+        idents[ident] = path_cache
 
-        embeddings = model.embedder.embed(samples)
-        path_cache = os.path.join(cfg.TEST_DIR_EMBEDDINGS, model.embeddername, ident + '.pickle')
+        if os.path.exists(path_cache):
+            continue
+
+        print(f'  [{i+1}/{len(paths_audio)}] embedding {os.path.basename(path_audio)}')
+        with sf.SoundFile(path_audio) as track:
+            samples = track.read(dtype=embedder.dtype_in)
+            samples = librosa.resample(samples, orig_sr=track.samplerate, target_sr=embedder.samplerate)
+
+        embeddings = embedder.embed(samples)
         os.makedirs(os.path.dirname(path_cache), exist_ok=True)
-        with open(path_cache, 'wb') as file:
-            pickle.dump(embeddings, file)
+        with open(path_cache, 'wb') as f:
+            pickle.dump(embeddings, f)
 
-        return embeddings
+    return idents, framelength_s
 
-    def analyze_embeddings(embeddings):
-        results = model.predict_embeddings(embeddings)[:,buzz_index].numpy()
 
-        df = pd.DataFrame()
-        df['start'] = np.arange(0, len(results), 1) * model.embedder.framelength_s
-        df['start'] = np.round(df['start'], 4)
-        df['activation_ins_buzz'] = np.round(results, model.digits_results)
+def run_inference_for_model(modelname, embeddings_by_ident, framelength_s):
+    """Run classifier predictions for one model against pre-loaded embedding paths.
 
-        return df
+    Skips if results directory already exists.
+    """
+    import keras
 
-    def analyze(path_audio):
-        ident = os.path.splitext(path_audio)[0]
-        ident = re.sub(cfg.TEST_DIR_AUDIO, '', ident)
-        ident = re.sub('^/', '', ident)
+    dir_model = os.path.join(cfg.DIR_MODELS, modelname)
+    dir_results = os.path.join(dir_model, cfg.SUBDIR_TESTS, 'results')
 
-        path_embeddings = os.path.join(cfg.TEST_DIR_EMBEDDINGS, model.embeddername, ident + '.pickle')
-        if os.path.exists(path_embeddings):
-            embeddings = pickle.load(open(path_embeddings, 'rb'))
-        else:
-            embeddings = read_audio(path_audio, ident)
-        df = analyze_embeddings(embeddings)
+    if os.path.exists(dir_results):
+        print(f'  [{modelname}] results exist, skipping')
+        return
 
-        path_out = os.path.join(dir_test, ident + '_buzzdetect.csv')
+    with open(os.path.join(dir_model, 'config_model.json')) as f:
+        config = json.load(f)
+    buzz_index = config['classes'].index('ins_buzz')
+    digits = config.get('digits_results', 8)
+
+    print(f'  [{modelname}] running inference...')
+    classifier = keras.saving.load_model(os.path.join(dir_model, 'model.keras'), compile=False)
+
+    for ident, path_cache in embeddings_by_ident.items():
+        embeddings = pickle.load(open(path_cache, 'rb'))
+        results = classifier(embeddings)[:, buzz_index].numpy()
+
+        df = pd.DataFrame({
+            'start': np.round(np.arange(len(results)) * framelength_s, 4),
+            'activation_ins_buzz': np.round(results, digits),
+        })
+
+        path_out = os.path.join(dir_results, ident + '_buzzdetect.csv')
         os.makedirs(os.path.dirname(path_out), exist_ok=True)
-
         df.to_csv(path_out, index=False)
 
-    for i, path in enumerate(paths_audio):
-        print(f'[{i+1}/{len(paths_audio)}] {os.path.basename(path)}')
-        analyze(path)
 
-    print(f'Test complete for model {modelname}')
+# Legacy single-model entry point (used by older worktrees / standalone calls).
+def run_inference(modelname):
+    with open(os.path.join(cfg.DIR_MODELS, modelname, 'config_model.json')) as f:
+        config = json.load(f)
+    embeddername = config['embeddername']
+
+    embeddings_by_ident, framelength_s = ensure_test_embeddings(embeddername)
+    run_inference_for_model(modelname, embeddings_by_ident, framelength_s)
     return framelength_s
