@@ -94,17 +94,3 @@ Add a little white noise samples to the training set; not augmenting with overla
 
 ---
 
-## mlp-head-repro
-
-**Hypothesis:** The MLP head (Dense 128 → Dense N_classes) underperformed in deeper-std, but that experiment predated stable training methodology (null commit, no multi-run averaging, wrong set). With current defaults (low-delta, 5 runs, label smoothing 0.2), MLP may perform comparably or better than the linear probe.
-
-**What to do:**
-1. Add `Dense(128, relu)` between Dropout and output in `train.py`, matching deeper-std architecture.
-2. Run the standard 5-run pipeline on the medium set.
-3. Compare to the low-delta baseline (0.224, CI [0.207, 0.242]).
-
-**Why it might help:** The buzz manifold in YAMNet space may be non-convex or entangled with mechanical hums in ways a linear probe can't untangle. A single hidden layer is the minimum nonlinearity to test this. With proper methodology we haven't actually confirmed the linear ceiling.
-
-**Caveats:** More parameters = more overfitting risk with 236 buzz training examples. Watch whether validation loss diverges from training loss. If so, try smaller hidden size (64) or increase dropout.
-
----
