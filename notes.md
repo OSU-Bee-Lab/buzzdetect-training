@@ -15,4 +15,4 @@ The MLP head (Dense 128 → Dense N_classes) underperformed in deeper-std, but t
 CIs do not overlap (0.196–0.206 vs 0.216–0.241). MLP head is clearly worse.
 
 ## Conclusion
-Negative: adding Dense(128, relu) drops mean by 2.8pp with no CI overlap. The buzz manifold in YAMNet space is linearly separable — nonlinearity hurts, not helps. Linear probe is confirmed as the correct architecture. More parameters overfit the limited buzz training data. Dead end for architecture complexity in this direction.
+Negative: adding Dense(128, relu) drops mean by 2.8pp with no CI overlap. Loss curves show train and val descending together with no divergence — the model is not overfitting. The hidden layer simply doesn't find generalizable nonlinear structure in YAMNet embeddings. The linear probe is the better inductive bias: buzz is already linearly accessible in this space, and extra capacity doesn't add transferable signal. Dead end for architecture complexity in this direction.
