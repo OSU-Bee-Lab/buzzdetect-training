@@ -71,14 +71,13 @@ def _train_one(modelname, embeddername, setname, name_translation,
     embedder = load_embedder(embeddername, framehop_prop=1, initialize=False)
     model = tf.keras.Sequential(name=modelname)
     model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
-    model.add(tf.keras.layers.Dropout(0.2))
-    model.add(tf.keras.layers.Dense(len(classes)))
+    model.add(tf.keras.layers.Dense(len(classes), kernel_regularizer=tf.keras.regularizers.l2(1e-4)))
 
     callback = tf.keras.callbacks.EarlyStopping(
         monitor='val_loss', patience=50, min_delta=0.002, restore_best_weights=True,
     )
     model.compile(
-        loss=tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.2),
+        loss=tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.0),
         optimizer=tf.keras.optimizers.Adam(learning_rate=0.002),
         metrics=['accuracy'],
     )
