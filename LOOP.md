@@ -49,7 +49,11 @@ All code changes go in the worktree. Do not touch main's tracked files.
 
 ### 3. Run the pipeline
 
-All stages run from the worktree.
+All stages run from the worktree. `cd` there first using the path printed by `setup_worktree.sh`:
+```bash
+WT=/Users/luke/Documents/bioacoustics/buzzdetect-training/.local/worktrees/<slug>
+cd $WT
+```
 
 ```bash
 # Stage 2 — only if embedder or extraction changed
@@ -67,19 +71,19 @@ for i in 1 2 3 4 5; do
 done
 ```
 
-After training and testing, report results (run from the worktree — `evaluate_set.py` anchors to its own `models/` directory):
+After training and testing, report results (`evaluate_set.py` anchors to its own `models/`; must run from the worktree via `$WT`):
 ```bash
-conda run -n buzzdetect-train python evaluate_set.py <modelname>
+conda run -n buzzdetect-train python $WT/evaluate_set.py <modelname>
 ```
 
 To compare against a baseline set, copy its per-run metrics into the worktree first, then run `compare_sets.py`. The baseline models are in their own experiment worktree, not in main:
 ```bash
 BASELINE=$(git worktree list | grep "exp/<baseline-slug>" | awk '{print $1}')
 for v in 1 2 3 4 5; do
-  mkdir -p models/<baseline>_v$v/tests
-  cp "$BASELINE/models/<baseline>_v$v/tests/metrics.csv" models/<baseline>_v$v/tests/
+  mkdir -p $WT/models/<baseline>_v$v/tests
+  cp "$BASELINE/models/<baseline>_v$v/tests/metrics.csv" $WT/models/<baseline>_v$v/tests/
 done
-conda run -n buzzdetect-train python compare_sets.py
+conda run -n buzzdetect-train python $WT/compare_sets.py
 ```
 
 ### 4. Record results

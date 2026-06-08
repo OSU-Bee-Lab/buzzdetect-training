@@ -21,8 +21,7 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
     if not can_write_model(modelname):
         print('a model folder with this name already exists; delete or rename the existing model folder and re-run')
         return False
-    if verbose:
-        print(f"training model {modelname} with embedder {embeddername} from set {setname}")
+    print(f"[{modelname}] training...")
     os.makedirs(dir_model, exist_ok=True)
 
     # ---- load data ----
@@ -105,6 +104,10 @@ def train_model(modelname, embeddername, setname, name_translation, epochs_max=3
                         callbacks=callback,
                         class_weight=weight_dict,
                         verbose=1 if verbose else 0)
+
+    n_epochs = len(history.history['val_loss'])
+    best_val_loss = min(history.history['val_loss'])
+    print(f"[{modelname}] done — {n_epochs} epochs, best epoch {callback.best_epoch + 1}, val_loss {best_val_loss:.4f}")
 
     model.save(os.path.join(dir_model, 'model.keras'), include_optimizer=True)
 
