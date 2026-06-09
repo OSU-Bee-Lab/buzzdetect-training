@@ -39,6 +39,7 @@ def dir_embeddings_augment(setname, embeddername, aug_dirname):
 # test
 SUBDIR_TESTS = 'tests'
 FNAME_METRICS = 'metrics.csv'
+FNAME_SX = 'sx.csv'
 FNAME_PLOT_TRADEOFF = 'plot_tradeoff.png'
 FNAME_PLOT_TRADEOFF_ZOOMED = 'plot_tradeoff_zoomed.png'
 FNAME_PLOT_METRICS = 'plot_metrics.png'
