@@ -443,7 +443,7 @@ class WorkerExtract:
             warnings.warn(f'extractor {self.name}: ident {ident} has no fold; skipping')
             return
         else:
-            fold = fold[0]
+            fold = str(fold[0])
 
         a_ident = AssignIdent(
             ident=ident, fold=fold, config_extract=self.config_extract,
@@ -545,7 +545,7 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
         fold_rows = folds[folds['ident'] == ident]['fold'].unique()
         if len(fold_rows) != 1:
             continue
-        fold = fold_rows[0]
+        fold = str(fold_rows[0])
         a_ident = AssignIdent(
             ident=ident, fold=fold, config_extract=config_extract,
             dir_audio_base=dir_audio_cache_base,

@@ -3,12 +3,15 @@ library(stringr)
 
 dir_sources <- '../../../01_annotate'
 
-sources <- list.dirs(
-  dir_sources,
-  recursive = F,
-  full.names=F
-) %>% 
-  {.[!(.%in% c('.deprecated', '.archive', '2025-06-24 InsectSound1000', '2026-05-26 Automatic Annotations'))]}
+warning('training from Even Sample only')
+sources <- 'Even Sample'
+
+# sources <- list.dirs(
+#   dir_sources,
+#   recursive = F,
+#   full.names=F
+# ) %>% 
+#   {.[!(.%in% c('.deprecated', '.archive', '2025-06-24 InsectSound1000'))]}
 
 
 # Annotations ----
@@ -28,15 +31,11 @@ read_annotations <- function(source_set){
 
 annotations <- lapply(sources, read_annotations) %>% 
   bind_rows() %>% 
-  group_by(ident) %>% 
+  group_by(source, ident) %>% 
   mutate(
     duration = end-start,
     item = row_number()
-  ) %>% 
-  filter(
-    (duration < 100),
-    (item <= 20)
-  ) 
+  )
 
 annotations$label %>% unique() %>% sort()
 
@@ -120,7 +119,12 @@ summary_per_class <- annotations %>%
   summarize(
     volume = sum(duration)
   ) %>% 
-  tidyr::pivot_wider(id_cols = label, names_from = fold, values_from=volume)
+  tidyr::pivot_wider(
+    id_cols = label,
+    names_from = fold,
+    values_from=volume,
+    values_fill = 0
+  )
 
 write.csv(
   summary_per_class,
