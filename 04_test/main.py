@@ -18,11 +18,11 @@ import pandas as pd
 
 import config as cfg
 from inference import ensure_test_embeddings, run_inference_for_model
-from metrics import compute_model_metrics
+from metrics import compute_model_metrics, metrics_at_precision
 from plots import plot_tradeoff, plot_tradeoff_zoomed, plot_metrics, plot_metrics_zoomed
 
 
-def test_set(name, runs):
+def test_set(name, runs, overwrite=False):
     # Determine embeddername from first model's config.
     first_model = f'{name}_v1'
     with open(os.path.join(cfg.DIR_MODELS, first_model, 'config_model.json')) as f:
@@ -42,6 +42,10 @@ def test_set(name, runs):
             metrics.to_csv(path_metrics, index=False)
 
         metrics = pd.read_csv(path_metrics)
+
+        path_prec = os.path.join(cfg.DIR_MODELS, modelname, cfg.SUBDIR_TESTS, cfg.FNAME_SX)
+        if not os.path.exists(path_prec) or overwrite:
+            metrics_at_precision(metrics).to_csv(path_prec, index=False)
         plot_tradeoff(metrics, modelname)
         plot_tradeoff_zoomed(metrics, modelname)
         plot_metrics(metrics, modelname)

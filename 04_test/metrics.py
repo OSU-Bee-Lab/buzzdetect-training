@@ -94,6 +94,46 @@ def metrics_by_group(results_join, groups=None):
     ]
 
 
+PRECISION_TARGETS = (0.90, 0.95, 0.99)
+
+
+def metrics_at_precision(metrics_df, precisions=PRECISION_TARGETS):
+    """Threshold, sensitivity, and FPR at each target precision via linear interpolation.
+
+    Returns a DataFrame with columns: precision, threshold, sensitivity, fpr.
+    Rows where the model never reaches the target precision have NaN values.
+    """
+    rows = []
+    for prec_target in precisions:
+        delta = metrics_df['precision'] - prec_target
+        under = metrics_df[delta <= 0]
+        over = metrics_df[delta >= 0]
+
+        if under.empty or over.empty:
+            rows.append({'precision': prec_target, 'threshold': np.nan,
+                         'sensitivity': np.nan, 'fpr': np.nan})
+            continue
+
+        u = under.loc[under['precision'].sub(prec_target).abs().idxmin()]
+        o = over.loc[over['precision'].sub(prec_target).abs().idxmin()]
+
+        if u['threshold'] == o['threshold']:
+            rows.append({'precision': prec_target, 'threshold': u['threshold'],
+                         'sensitivity': u['sensitivity'], 'fpr': u['fpr']})
+            continue
+
+        prec_range = o['precision'] - u['precision']
+        d = (prec_target - u['precision']) / prec_range
+        rows.append({
+            'precision': prec_target,
+            'threshold': u['threshold'] + (o['threshold'] - u['threshold']) * d,
+            'sensitivity': u['sensitivity'] + (o['sensitivity'] - u['sensitivity']) * d,
+            'fpr': u['fpr'] + (o['fpr'] - u['fpr']) * d,
+        })
+
+    return pd.DataFrame(rows).round(3)
+
+
 def compute_model_metrics(modelname, annotations, framelength=FRAMELENGTH):
     dir_results = os.path.join(cfg.DIR_MODELS, modelname, cfg.SUBDIR_TESTS, 'results')
     results_join = join_results(dir_results, annotations, framelength)

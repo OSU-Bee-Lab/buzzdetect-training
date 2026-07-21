@@ -24,6 +24,8 @@ cat log.jsonl
 conda run -n buzzdetect-train python compare_metrics.py
 ```
 
+Each tested model also has a `tests/sx.csv` with interpolated threshold, sensitivity, and FPR at 90%, 95%, and 99% precision — a quick lookup without scanning the full `metrics.csv`.
+
 Propose a hypothesis for a change or set of changes that could improve model performance.
 
 Check `log.jsonl` and IDEAS.md before proposing a hypothesis. If you use an IDEA, remove it after testing.
