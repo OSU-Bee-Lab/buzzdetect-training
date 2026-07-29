@@ -29,37 +29,39 @@ Stage scripts in `02_set/`, `03_train/`, `04_test/` can also be run independentl
 
 `conda run -n buzzdetect-train python <script>`
 
-## Train / test
+## Train (leave-one-fold-out CV)
 
-Both scripts are N-run aware: they load data/embeddings once and loop over all runs.
+`03_train` discovers every fold under the set's embeddings (`02_set/sets/<set>/embeddings/<embedder>/raw/<fold>/`,
+folds assigned upstream in `01_annotate/`, one fold per deployment) and rotates
+each one out: train on the rest, evaluate on the held-out fold. Held-out-fold
+model binaries are not kept — only training/evaluation artifacts. The shipped
+model trains on every fold pooled and is the only one saved with a binary.
 
 ```bash
-# Train: produces <name>_v1 … <name>_vN (default N=5)
 conda run -n buzzdetect-train python 03_train/main.py \
-  --name <name> --set <set> --embedder <emb> --translation <t> [--runs N] [--epochs E]
-
-# Test: embeds test audio once, runs all N classifiers
-conda run -n buzzdetect-train python 04_test/main.py --name <name> [--runs N]
+  --name <name> --set <set> --embedder <emb> --translation <t> \
+  [--epochs E] [--val-prop P] [--seed S]
 ```
 
-## Evaluation tools
+One model per fold — no repeat runs nested in the CV. (The old `_v1…_vN`
+repeated-run pattern was for a different purpose, hypothesis-testing noise
+floors per `LOOP.md`, not for CV; it doesn't apply here.)
+
+Output under `models/<name>/`:
+- `model.keras` etc. — the shipped model, trained on all folds pooled
+- `folds_summary.csv` — one row per fold: epochs, best val loss/accuracy, held-out loss/accuracy
+- `folds/<fold>/` — archive for that held-out fold: `config_model.json`, `history.pickle`, `loss_curves.svg`, `weights.csv`, `translation.csv`, `holdout_metrics.csv` (per-class sensitivity/FPR/precision on the held-out fold). No `model.keras`.
+
+## Evaluation tools (stale — predate the CV rework)
+
+`04_test` and the scripts below assume a fixed model + a separate hand-curated
+test corpus (`models/<model>/tests/metrics.csv`), which CV-trained models
+don't produce. Read `folds_summary.csv` / `folds/<fold>/holdout_metrics.csv`
+directly until these are reworked to aggregate across folds.
 
 ```bash
 conda run -n buzzdetect-train python summarize_metrics.py <model> [<model> ...]
-```
-Sensitivity at 90%, 95%, 99% precision. Prefer over reading raw metrics.csv.
-
-```bash
 conda run -n buzzdetect-train python compare_metrics.py [<model>] [--top N]
-```
-Ranks all models by sensitivity at 95% precision. Top 5 by default; a named model always appears.
-
-```bash
 conda run -n buzzdetect-train python evaluate_set.py <set_base> [<set_base> ...]
-```
-Summarizes a multi-run experiment set: mean, median, std, 95% CI (t-distribution). Auto-detects run count. `--detail` prints individual run values.
-
-```bash
 conda run -n buzzdetect-train python compare_sets.py [<set_base> ...] [--top N]
 ```
-Ranks experiment sets by mean sensitivity at 95% precision. Shows CI and flags CI overlap with the top set. Auto-discovers all sets in models/ if no names given.
