@@ -62,9 +62,16 @@ seconds of buzz, where `val_loss` is mostly a measure of ambient reconstruction
 and the stopping epoch is noise.
 
 Instead the early-stop monitor is carved from within the training pool
-(stratified by fold). That keeps the procedure identical across every rotation
-and for the shipped model, and it removes a source of fold-to-fold variance
-that has nothing to do with the thing being measured.
+(`--val-prop`, default 10%). That keeps the procedure identical across every
+rotation and for the shipped model, and it removes a source of fold-to-fold
+variance that has nothing to do with the thing being measured.
+
+The split is at **snip level, not frame level**, stratified by fold and by buzz
+presence. Frames within a snip are adjacent ~1s windows of the same audio and
+are near-duplicates, so splitting inside a snip would put copies of the same
+sound on both sides and make `val_loss` useless as a stopping signal.
+Stratifying by buzz presence matters because buzz snips are scarce in most
+folds — left to chance, a fold's entire buzz content can land on one side.
 
 ## What gets trained
 
@@ -73,17 +80,19 @@ plus all `train` folds, early-stop on the internal split, score the held-out
 fold. Fold models are not kept as binaries — only their training and evaluation
 artifacts.
 
-The shipped model trains on everything except `holdout`/`exclude`, with the
-epoch count fixed at the median best epoch across the rotations rather than
-live early stopping. It's the only model saved with a binary.
+The shipped model trains on everything except `holdout`/`exclude`, early-stopping
+on its own internal split exactly as the fold models do. It's the only model
+saved with a binary. `holdout` folds never train, so it can be scored on them
+directly.
 
 ## Reading the results
 
-**Report both pooled and per-deployment.** Pool the held-out predictions from
-every fold into one ROC, pick the threshold once, and read sensitivity there —
-that's frame-weighted by construction, which matches how the shipped model is
-actually biased. Then also report the unweighted mean across deployments. The
-gap between the two numbers *is* the answer to "should I weight for volume?":
+**Report both pooled and per-deployment.** A training run prints both and writes
+the pooled ROC to `folds_pooled_metrics.csv` / `folds_pooled_sx.csv`: every
+fold's held-out predictions pooled, threshold picked once. That's frame-weighted
+by construction, which matches how the shipped model is actually biased. The
+unweighted mean across deployments comes from `folds_summary.csv`. The gap
+between the two numbers *is* the answer to "should I weight for volume?":
 if they agree, fold identity doesn't matter; if they diverge, one high-volume
 deployment is carrying the result and the headline needs that caveat attached.
 
@@ -111,13 +120,16 @@ base rate, FPR doesn't.
 
 ## Status
 
-Implemented: fold discovery and rotation, per-fold held-out scoring,
-`folds_summary.csv`, fixed-epoch shipped model.
+Implemented: roles read from `folds.csv` and checked against what's extracted,
+rotation over `rotate` folds, internal snip-level validation split
+(`--val-prop`, `--seed`), per-fold held-out scoring, pooled ROC plus unweighted
+mean, `holdout` folds scored with the shipped model, partial reruns that
+reassemble the summary from disk.
 
-Pending: the `role` column itself — `03_train` currently discovers folds by
-globbing the embeddings directory and treats all of them as `rotate`, and uses
-the next fold in rotation as its validation fold rather than an internal split.
-`04_test` and the `summarize_metrics`/`compare_metrics` scripts still assume a
-fixed model plus a hand-curated test corpus and haven't been reworked to
-aggregate across folds; read `folds_summary.csv` and
-`folds/<fold>/holdout_metrics.csv` directly until they are.
+If `folds.csv` has no `role` column, every fold is treated as `rotate` and a
+warning is emitted.
+
+Pending: `04_test` and the `summarize_metrics`/`compare_metrics` scripts still
+assume a fixed model plus a hand-curated test corpus and haven't been reworked
+to aggregate across folds; read `folds_summary.csv`, `folds_pooled_sx.csv`, or
+`folds/<fold>/sx.csv` directly until they are.

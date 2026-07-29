@@ -27,5 +27,8 @@ class {class_name}(BaseModel):
     def predict_embeddings(self, embeddings):
         return self.model(embeddings)
 '''
-    with open(os.path.join(dir_model, 'model.py'), 'x') as f:
+    # 'w', not 'x': can_write() already guards against clobbering a finished
+    # model, and this is the last artifact written — failing here would throw
+    # away a completed training run over a leftover file.
+    with open(os.path.join(dir_model, 'model.py'), 'w') as f:
         f.write(model_py)

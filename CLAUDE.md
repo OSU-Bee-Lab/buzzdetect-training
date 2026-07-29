@@ -31,11 +31,21 @@ Stage scripts in `02_set/`, `03_train/`, `04_test/` can also be run independentl
 
 ## Train (leave-one-fold-out CV)
 
-`03_train` discovers every fold under the set's embeddings (`02_set/sets/<set>/embeddings/<embedder>/raw/<fold>/`,
-folds assigned upstream in `01_annotate/`, one fold per deployment) and rotates
-each one out: train on the rest, evaluate on the held-out fold. Held-out-fold
-model binaries are not kept — only training/evaluation artifacts. The shipped
-model trains on every fold pooled and is the only one saved with a binary.
+A fold is one deployment (one recorder, one site, one period), assigned upstream
+in `01_annotate/`. `README.md` has the design rationale; the mechanics:
+
+`03_train` reads `02_set/sets/<set>/folds.csv` for each fold's **role** — `train`
+(always trains, never scored), `rotate` (the leave-one-fold-out set), `holdout`
+(only ever scored), `exclude` (neither) — and cross-checks it against the folds
+actually extracted under `embeddings/<embedder>/raw/`. Roles are training-time
+policy only; `02_set` embeds every fold regardless, so flipping a role never
+costs a re-extraction.
+
+Each `rotate` fold takes a turn held out: train on the other `rotate` folds plus
+all `train` folds, early-stop on a split carved from inside that pool, score the
+held-out fold. Fold model binaries are not kept. The shipped model trains on
+`rotate` + `train` pooled with the same internal-split early stopping, and is
+the only one saved with a binary.
 
 ```bash
 conda run -n buzzdetect-train python 03_train/main.py \
@@ -43,21 +53,32 @@ conda run -n buzzdetect-train python 03_train/main.py \
   [--epochs E] [--val-prop P] [--seed S]
 ```
 
+`--val-prop` (default 0.1) is the fraction of the training pool held back for
+early stopping — split at snip level and stratified by fold and buzz presence,
+never a whole fold. `--seed` seeds that split.
+
 One model per fold — no repeat runs nested in the CV. (The old `_v1…_vN`
 repeated-run pattern was for a different purpose, hypothesis-testing noise
 floors per `LOOP.md`, not for CV; it doesn't apply here.)
 
 Output under `models/<name>/`:
-- `model.keras` etc. — the shipped model, trained on all folds pooled
-- `folds_summary.csv` — one row per fold: epochs, best val loss/accuracy, held-out loss/accuracy
-- `folds/<fold>/` — archive for that held-out fold: `config_model.json`, `history.pickle`, `loss_curves.svg`, `weights.csv`, `translation.csv`, `holdout_metrics.csv` (per-class sensitivity/FPR/precision on the held-out fold). No `model.keras`.
+- `model.keras` etc. — the shipped model
+- `folds_summary.csv` — one row per rotating fold: epochs, best val loss/accuracy, frame counts, sensitivity at each target FPR on the held-out fold
+- `folds_pooled_metrics.csv` / `folds_pooled_sx.csv` — every fold's held-out predictions pooled into one ROC (frame-weighted). Compare against the unweighted mean across folds that the run prints; a gap means one high-volume fold is carrying the result.
+- `folds/<fold>/` — archive for that held-out fold: `metrics.csv`, `sx.csv`, `predictions.csv`, `summary.json`, `config_model.json`, `history.pickle`, `loss_curves.svg`, `weights.csv`, `translation.csv`. No `model.keras`.
+- `holdout/<fold>/` — the shipped model scored on each `holdout` fold, same files as above.
+
+Reruns skip any model whose directory already holds a `config_model.json`, and
+the CV summary is reassembled from disk, so a partial rerun keeps the folds it
+skipped.
 
 ## Evaluation tools (stale — predate the CV rework)
 
 `04_test` and the scripts below assume a fixed model + a separate hand-curated
 test corpus (`models/<model>/tests/metrics.csv`), which CV-trained models
-don't produce. Read `folds_summary.csv` / `folds/<fold>/holdout_metrics.csv`
-directly until these are reworked to aggregate across folds.
+don't produce. Read `folds_summary.csv`, `folds_pooled_sx.csv`, or
+`folds/<fold>/sx.csv` directly until these are reworked to aggregate across
+folds.
 
 ```bash
 conda run -n buzzdetect-train python summarize_metrics.py <model> [<model> ...]

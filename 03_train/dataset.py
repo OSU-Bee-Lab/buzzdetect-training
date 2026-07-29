@@ -1,6 +1,10 @@
 import glob
 import os
 import pickle
+import warnings
+
+import numpy as np
+import pandas as pd
 
 import config as cfg
 from train_utils import build_classes, labels_from_path, Sample
@@ -108,10 +112,125 @@ def load_augmented(setname, embeddername, aug_dirnames, translation, train_folds
     return data
 
 
-def discover_folds(setname, embeddername):
+ROLE_TRAIN = 'train'
+ROLE_ROTATE = 'rotate'
+ROLE_HOLDOUT = 'holdout'
+ROLE_EXCLUDE = 'exclude'
+ROLES = (ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT, ROLE_EXCLUDE)
+
+
+def read_fold_roles(setname, embeddername):
+    """Map fold id -> role from the set's folds.csv, checked against what's extracted.
+
+    Roles (see README): 'train' always trains and is never scored, 'rotate' is
+    the leave-one-fold-out set, 'holdout' is only ever scored, 'exclude' does
+    neither. Excluded folds are dropped here rather than upstream — 02_set
+    embeds every fold regardless of role, so flipping a role never costs a
+    re-extraction.
+
+    folds.csv carries one row per ident, so rows sharing a fold must agree on
+    its role.
+    """
+    path_folds = os.path.join(cfg.dir_set(setname), 'folds.csv')
+    folds_df = pd.read_csv(path_folds, dtype=str)
+
+    if 'role' not in folds_df.columns:
+        warnings.warn(
+            f'{path_folds} has no role column; treating every fold as '
+            f'{ROLE_ROTATE!r}. Add a role column to control which folds train '
+            f'and which are scored.'
+        )
+        folds_df['role'] = ROLE_ROTATE
+
+    folds_df['role'] = folds_df['role'].fillna('').str.strip()
+
+    unknown_roles = sorted(set(folds_df['role']) - set(ROLES))
+    if unknown_roles:
+        raise ValueError(
+            f'{path_folds}: unrecognized role(s) {unknown_roles}; '
+            f'expected one of {list(ROLES)}'
+        )
+
+    n_roles = folds_df.groupby('fold')['role'].nunique()
+    conflicted = sorted(n_roles[n_roles > 1].index)
+    if conflicted:
+        raise ValueError(
+            f'{path_folds}: fold(s) {conflicted} have rows with disagreeing '
+            f'roles; role is a property of the fold, not the ident'
+        )
+
+    roles_all = folds_df.drop_duplicates('fold').set_index('fold')['role'].to_dict()
+    roles = {f: r for f, r in sorted(roles_all.items()) if r != ROLE_EXCLUDE}
+
     dir_raw = cfg.dir_embeddings_raw(setname, embeddername)
-    folds = sorted(
+    extracted = {
         d for d in os.listdir(dir_raw)
         if os.path.isdir(os.path.join(dir_raw, d))
-    )
-    return folds
+    }
+
+    missing = sorted(set(roles) - extracted)
+    if missing:
+        raise FileNotFoundError(
+            f'no embeddings for fold(s) {missing} under {dir_raw}; '
+            f'extraction is incomplete for set {setname!r} / embedder {embeddername!r}'
+        )
+
+    unlisted = sorted(extracted - set(roles_all))
+    if unlisted:
+        warnings.warn(
+            f'{dir_raw} holds embeddings for fold(s) {unlisted} that are absent '
+            f'from {path_folds}; ignoring them. Likely leftovers from an '
+            f'earlier build of this set.'
+        )
+
+    return roles
+
+
+def folds_by_role(roles, role):
+    return [f for f, r in roles.items() if r == role]
+
+
+def split_internal_val(samples_by_fold, val_prop, seed, classes, class_stratify='ins_buzz'):
+    """Carve the early-stopping split out of the training pool.
+
+    Splits at the snip level, not the frame level. Frames within a snip are
+    adjacent ~1s windows of the same audio and are near-duplicates, so a
+    frame-level split would put copies of the same sound on both sides and
+    make val_loss useless as a stopping signal.
+
+    Stratified by fold and by presence of class_stratify, so every deployment
+    and the scarce buzz snips are both represented. val_prop is measured in
+    frames with snips as the indivisible unit, so a stratum small enough that
+    its smallest snip would overshoot contributes nothing — the pooled split
+    still lands near val_prop. Every stratum keeps at least one snip in
+    training.
+
+    Returns (data_train, data_val).
+    """
+    rng = np.random.default_rng(seed)
+    idx_class = classes.index(class_stratify) if class_stratify in classes else None
+
+    data_train, data_val = [], []
+    for fold in sorted(samples_by_fold):
+        strata = {}
+        for s in samples_by_fold[fold]:
+            key = bool(s.target_array[idx_class]) if idx_class is not None else True
+            strata.setdefault(key, []).append(s)
+
+        for key in sorted(strata, reverse=True):
+            group = strata[key]
+            order = rng.permutation(len(group))
+            frames_target = val_prop * sum(s.frames for s in group)
+            frames_val = 0
+            for rank, i in enumerate(order):
+                s = group[i]
+                last = rank == len(order) - 1
+                # round to nearest: take the snip only if it lands closer to
+                # frames_target than stopping short of it does
+                if not last and frames_val + s.frames / 2 <= frames_target:
+                    data_val.append(s)
+                    frames_val += s.frames
+                else:
+                    data_train.append(s)
+
+    return data_train, data_val
