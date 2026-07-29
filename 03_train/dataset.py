@@ -1,7 +1,6 @@
 import glob
 import os
 import pickle
-import warnings
 
 import config as cfg
 from train_utils import build_classes, labels_from_path, Sample
@@ -51,10 +50,6 @@ def labels_to_targets(labels_translate, classes):
 
 
 def build_fold_dataset(dir_samples, translation, labels_keep_raw=None, exclusive=False):
-    # check if the folder name isn't in train, test, or validate
-    if os.path.basename(dir_samples) not in ['train', 'test', 'validate']:
-        warnings.warn(f'build_fold_dataset: {dir_samples} is not an expected directory name for a fold; should end in train, test, or validate.')
-
     translation_dict = build_translation_dict(translation)
     classes = build_classes(translation)
 
@@ -94,17 +89,29 @@ def build_fold_dataset(dir_samples, translation, labels_keep_raw=None, exclusive
     return samples_out
 
 
-def load_augmented(setname, embeddername, aug_dirnames, translation):
+def load_augmented(setname, embeddername, aug_dirnames, translation, train_folds):
     """Load augmented embeddings for training.
 
     aug_dirnames: list of augmentation subdirectory names under embeddings/<embeddername>/,
     e.g. ['augment_noise_0.05', 'augment_volume_2.5', 'augment_combine'].
     Produced by 02_set/augment.py.
+    train_folds: fold IDs to load augmented embeddings for (the training pool
+    of the current CV iteration).
     """
     data = []
     for aug_dirname in aug_dirnames:
-        dir_embed = os.path.join(cfg.dir_embeddings_augment(setname, embeddername, aug_dirname), 'train')
-        if not os.path.isdir(dir_embed):
-            raise FileNotFoundError(f'augmented embeddings not found: {aug_dirname} (expected {dir_embed})')
-        data += build_fold_dataset(dir_embed, translation)
+        for fold in train_folds:
+            dir_embed = os.path.join(cfg.dir_embeddings_augment(setname, embeddername, aug_dirname), fold)
+            if not os.path.isdir(dir_embed):
+                raise FileNotFoundError(f'augmented embeddings not found: {aug_dirname} fold {fold} (expected {dir_embed})')
+            data += build_fold_dataset(dir_embed, translation)
     return data
+
+
+def discover_folds(setname, embeddername):
+    dir_raw = cfg.dir_embeddings_raw(setname, embeddername)
+    folds = sorted(
+        d for d in os.listdir(dir_raw)
+        if os.path.isdir(os.path.join(dir_raw, d))
+    )
+    return folds

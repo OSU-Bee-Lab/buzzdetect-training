@@ -60,13 +60,11 @@ def labels_from_path(path_in):
     return labels
 
 
-def can_write_model(modelname):
-    dir_model = os.path.join(cfg.DIR_MODELS, modelname)
-
-    if not os.path.exists(os.path.join(dir_model, 'model.keras')):
+def can_write(dir_model):
+    if not os.path.exists(os.path.join(dir_model, 'config_model.json')):
         return True
 
-    if modelname == 'test':
+    if os.path.basename(dir_model) == 'test':
         return True
 
     if not os.listdir(dir_model):
