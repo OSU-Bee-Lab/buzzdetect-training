@@ -134,6 +134,51 @@ def metrics_at_precision(metrics_df, precisions=PRECISION_TARGETS):
     return pd.DataFrame(rows).round(3)
 
 
+FPR_TARGETS = (0.001, 0.005, 0.01)
+
+
+def metrics_at_fpr(metrics_df, fprs=FPR_TARGETS):
+    """Threshold, sensitivity, and precision at each target FPR via linear interpolation.
+
+    FPR and sensitivity are properties of the classifier, invariant to a
+    deployment's base rate — unlike precision, which mixes in how much of the
+    deployment's audio actually contains the target class. This is the
+    base-rate-free counterpart to metrics_at_precision.
+
+    Returns a DataFrame with columns: fpr, threshold, sensitivity, precision.
+    Rows where the model never reaches the target FPR have NaN values.
+    """
+    rows = []
+    for fpr_target in fprs:
+        delta = metrics_df['fpr'] - fpr_target
+        under = metrics_df[delta <= 0]
+        over = metrics_df[delta >= 0]
+
+        if under.empty or over.empty:
+            rows.append({'fpr': fpr_target, 'threshold': np.nan,
+                         'sensitivity': np.nan, 'precision': np.nan})
+            continue
+
+        u = under.loc[under['fpr'].sub(fpr_target).abs().idxmin()]
+        o = over.loc[over['fpr'].sub(fpr_target).abs().idxmin()]
+
+        if u['threshold'] == o['threshold']:
+            rows.append({'fpr': fpr_target, 'threshold': u['threshold'],
+                         'sensitivity': u['sensitivity'], 'precision': u['precision']})
+            continue
+
+        fpr_range = o['fpr'] - u['fpr']
+        d = (fpr_target - u['fpr']) / fpr_range
+        rows.append({
+            'fpr': fpr_target,
+            'threshold': u['threshold'] + (o['threshold'] - u['threshold']) * d,
+            'sensitivity': u['sensitivity'] + (o['sensitivity'] - u['sensitivity']) * d,
+            'precision': u['precision'] + (o['precision'] - u['precision']) * d,
+        })
+
+    return pd.DataFrame(rows).round(3)
+
+
 def compute_model_metrics(modelname, annotations, framelength=FRAMELENGTH):
     dir_results = os.path.join(cfg.DIR_MODELS, modelname, cfg.SUBDIR_TESTS, 'results')
     results_join = join_results(dir_results, annotations, framelength)
