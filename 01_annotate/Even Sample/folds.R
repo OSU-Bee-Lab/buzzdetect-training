@@ -8,8 +8,7 @@ folds <- annotations %>%
   unique() %>% 
   mutate(
     ident_recorder = dirname(ident),
-    fold = factor(ident_recorder) %>% 
-      as.integer()
+    fold = str_replace_all(ident_recorder, '/', '_')
   )
 
 write.csv(
@@ -44,10 +43,12 @@ summary_per_class <- annotations %>%
     names_from = fold,
     values_from=volume,
     values_fill=0
-  )
+  ) %>% 
+  arrange(label)
 
 write.csv(
   summary_per_class,
   'summary_per_class.csv',
   row.names=F
 )
+ 

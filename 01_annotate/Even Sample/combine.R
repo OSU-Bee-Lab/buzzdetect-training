@@ -72,29 +72,15 @@ annotations_combined <- paths_annotations %>%
       str_detect(label, 'ins_buzz_medium') ~ 'ins_buzz_medium',
       str_detect(label, 'ins_buzz_high') ~ 'ins_buzz_high',
       str_detect(label, 'ins_buzz_low') ~ 'ins_buzz_low',
-      label == 'ins_buzz_rasp' ~ '', # rasping of wings on mic, ignore for now
 
       str_detect(label, 'ins_trill') ~ 'ins_trill',
 
-      str_detect(label, 'mech_auto') ~ 'mech_auto',
-      label == 'mech_siren' ~ 'mech_auto',
-
-      str_detect(label, 'mech_plane') ~ 'mech_plane',
-
-      str_detect(label, 'mech_hum') ~ 'mech_hum',
-
-      
-      label %in% c(
-        "ambient_bang",
-        'ambient_scraping',
-        'ambient_rustle'
-      ) ~ 'ambient_noise',
-      
       label == 'animal_bird' ~ 'ambient_background',
       label == 'mech_farm' ~ '',
       label == 'ambient_thunder' ~ 'ambient_rain',
       label == 'happy 4th :)' ~ '', # :)
       label == 'unknown_rasp' ~ '',
+
 
       T ~ label
     )
@@ -103,7 +89,8 @@ annotations_combined <- paths_annotations %>%
 unique(annotations_combined$label) %>% sort()
 
 write.csv(
-  annotations_combined,
+  annotations_combined %>% 
+    filter(label != ''),
   'annotations_combined.csv',
   row.names=F
 )

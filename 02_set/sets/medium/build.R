@@ -3,8 +3,15 @@ library(stringr)
 
 dir_sources <- '../../../01_annotate'
 
-warning('training from Even Sample only')
-sources <- 'Even Sample'
+sources <- c(
+  'Even Sample',
+  '2025-06-04 original annotations'
+)
+
+message(
+  'sourcing from: ',
+  paste(sources, collapse = ', ')
+)
 
 # sources <- list.dirs(
 #   dir_sources,
@@ -35,6 +42,33 @@ annotations <- lapply(sources, read_annotations) %>%
   mutate(
     duration = end-start,
     item = row_number()
+  ) %>% 
+  mutate(
+    label = case_when(
+      str_detect(label, 'ins_buzz') ~ 'ins_buzz',
+
+      label == 'ambient_thunder' ~ 'ambient_rain',
+      label == 'animal_bird_goose' ~ 'ambient_background',
+
+      str_detect(label, 'animal_frog') ~ 'animal_frog',
+      label == 'ins_cicada' ~ 'ins_trill',
+
+      label == 'ins_buzz_rasp' ~ '', # rasping of wings on mic, ignore for now
+
+      str_detect(label, 'mech_auto') ~ 'mech_auto',
+      label == 'mech_siren' ~ 'mech_auto',
+
+      str_detect(label, 'mech_plane') ~ 'mech_plane',
+
+      str_detect(label, 'mech_hum') ~ 'mech_hum',
+            label %in% c(
+        "ambient_bang",
+        'ambient_scraping',
+        'ambient_rustle'
+      ) ~ 'ambient_noise',
+
+      T ~ label
+    )
   )
 
 annotations$label %>% unique() %>% sort()
@@ -56,13 +90,16 @@ read_folds <- function(source_set){
   }
   
   path_folds %>% 
-    read.csv() %>% 
+    read.csv(colClasses = 'character') %>% 
     mutate(.before=0, source = source_set)
 }
 
 folds <- lapply(sources, read_folds) %>% 
   bind_rows() %>% 
-  select(source, ident, fold)
+  select(source, ident, fold) %>% 
+  mutate(
+    fold = paste(source, fold, sep = '_')
+  )
 
 check_ident_conflict <- function(){
   df <- folds %>% 
@@ -124,7 +161,8 @@ summary_per_class <- annotations %>%
     names_from = fold,
     values_from=volume,
     values_fill = 0
-  )
+  ) %>% 
+  arrange(label)
 
 write.csv(
   summary_per_class,
