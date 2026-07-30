@@ -15,7 +15,7 @@ import config as cfg
 
 from dataset import (
     build_fold_dataset, load_augmented, read_fold_roles, folds_by_role,
-    split_internal_val, ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT,
+    ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT,
 )
 from train_utils import build_weights, build_classes, can_write, Sample
 from embedders.embedding import load_embedder
@@ -51,6 +51,7 @@ class TrainingData:
     folds_train: list = field(default_factory=list)
     frames_train: int = 0
     frames_val: int = 0
+    val_fold: str = None
 
 
 def _to_tf(data, size_batch, size_shuffle):
@@ -68,38 +69,35 @@ def _to_tf(data, size_batch, size_shuffle):
 
 
 def _load_data(setname, embeddername, folds_train, name_translation, aug_dirnames,
-               val_prop, seed):
-    """Pool folds_train, then carve the early-stopping split out of that pool.
+               val_fold=None):
+    """Pool folds_train for training; val_fold, if given, is a whole separate
+    deployment used as the early-stopping monitor.
 
-    The split is internal rather than a whole held-out fold: dedicating a
-    deployment to early stopping costs a fold from the rotation and makes the
-    stopping epoch hostage to that deployment's buzz content — some folds here
-    hold only tens of seconds of buzz, where val_loss is mostly a measure of
-    ambient reconstruction. It also keeps the procedure identical across every
-    rotation and for the shipped model.
+    Validation is always a whole fold, never a split within one. Snips from a
+    deployment share a recorder, a site and a background, so a within-fold
+    split would leak site identity into the stopping signal and bias the
+    stopping epoch late. val_fold=None means no monitor at all — the caller
+    fixes the epoch count instead.
 
-    Augmented embeddings go to training only; early stopping should track real
-    audio.
+    Augmented embeddings go to training only.
     """
     translation = pd.read_csv(os.path.join(cfg.DIR_TRANSLATIONS, name_translation + '.csv'))
     classes = build_classes(translation)
 
-    samples_by_fold = {}
+    data_train = []
     for fold in folds_train:
-        samples_by_fold[fold] = build_fold_dataset(
+        data_train += build_fold_dataset(
             cfg.dir_embeddings_fold(setname, embeddername, fold), translation,
         )
-
-    data_train, data_val = split_internal_val(samples_by_fold, val_prop, seed, classes)
-    if not data_val:
-        raise ValueError(
-            f'internal validation split came out empty at val_prop={val_prop}; '
-            f'raise --val-prop or check that the training folds hold more than '
-            f'one snip each'
-        )
-
     frames_train = sum(s.frames for s in data_train)
-    frames_val = sum(s.frames for s in data_val)
+
+    data_val = None
+    frames_val = 0
+    if val_fold is not None:
+        data_val = build_fold_dataset(
+            cfg.dir_embeddings_fold(setname, embeddername, val_fold), translation,
+        )
+        frames_val = sum(s.frames for s in data_val)
 
     if aug_dirnames:
         data_train += load_augmented(setname, embeddername, aug_dirnames, translation, folds_train)
@@ -112,7 +110,7 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
 
     return TrainingData(
         train_tf=_to_tf(data_train, size_batch, size_shuffle),
-        val_tf=_to_tf(data_val, size_batch, size_shuffle),
+        val_tf=_to_tf(data_val, size_batch, size_shuffle) if data_val is not None else None,
         classes=classes,
         weight_dict=weight_dict,
         weights=weights,
@@ -122,6 +120,7 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
         folds_train=list(folds_train),
         frames_train=frames_train,
         frames_val=frames_val,
+        val_fold=val_fold,
     )
 
 
@@ -200,15 +199,17 @@ def _collect_fold_results(dir_folds, folds_rotate):
 
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs_max, aug_dirnames, verbose,
-               val_prop, seed, held_out_fold, save_binary):
+               held_out_fold, save_binary, epochs_fixed=None):
     """Train one model. Returns (result_row, model); (None, None) if the model
     directory is already populated."""
     if not can_write(dir_model):
         print(f'[{modelname}] already trained; skipping')
         return None, None
 
+    monitor = (f'early stopping on {data.val_fold} ({data.frames_val} frames)'
+               if data.val_fold else f'{epochs_fixed} fixed epochs, no monitor')
     print(f'[{modelname}] training on {len(data.folds_train)} fold(s), '
-          f'{data.frames_train} frames ({data.frames_val} held for early stopping)...')
+          f'{data.frames_train} frames; {monitor}...')
     os.makedirs(dir_model, exist_ok=True)
 
     embedder = load_embedder(embeddername, framehop_prop=1, initialize=False)
@@ -227,30 +228,46 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         metrics=['accuracy'],
     )
 
-    callback = tf.keras.callbacks.EarlyStopping(
-        monitor='val_loss', patience=50, min_delta=0.002, restore_best_weights=True,
-    )
-    history = model.fit(
-        data.train_tf,
-        epochs=epochs_max,
-        validation_data=data.val_tf,
-        callbacks=callback,
-        class_weight=data.weight_dict,
-        verbose=1 if verbose else 0,
-    )
+    if data.val_tf is None:
+        # Shipped model: no fold is held out, so there's nothing clean to
+        # monitor. Train a fixed number of epochs instead, set by the caller
+        # from the median best epoch across the rotations.
+        history = model.fit(
+            data.train_tf, epochs=epochs_fixed, class_weight=data.weight_dict,
+            verbose=1 if verbose else 0,
+        )
+        best_epoch = epochs_fixed - 1
+        print(f'[{modelname}] done — {epochs_fixed} fixed epochs')
+        result = {
+            'n_epochs': epochs_fixed,
+            'best_epoch': epochs_fixed,
+            'frames_train': data.frames_train,
+        }
+    else:
+        callback = tf.keras.callbacks.EarlyStopping(
+            monitor='val_loss', patience=50, min_delta=0.002, restore_best_weights=True,
+        )
+        history = model.fit(
+            data.train_tf,
+            epochs=epochs_max,
+            validation_data=data.val_tf,
+            callbacks=callback,
+            class_weight=data.weight_dict,
+            verbose=1 if verbose else 0,
+        )
 
-    best_epoch = callback.best_epoch
-    best_val_loss = float(callback.best)
-    print(f'[{modelname}] done — {len(history.history["val_loss"])} epochs, '
-          f'best epoch {best_epoch + 1}, val_loss {best_val_loss:.4f}')
-    result = {
-        'n_epochs': len(history.history['val_loss']),
-        'best_epoch': best_epoch + 1,
-        'best_val_loss': best_val_loss,
-        'best_val_accuracy': history.history['val_accuracy'][best_epoch],
-        'frames_train': data.frames_train,
-        'frames_val': data.frames_val,
-    }
+        best_epoch = callback.best_epoch
+        best_val_loss = float(callback.best)
+        print(f'[{modelname}] done — {len(history.history["val_loss"])} epochs, '
+              f'best epoch {best_epoch + 1}, val_loss {best_val_loss:.4f}')
+        result = {
+            'n_epochs': len(history.history['val_loss']),
+            'best_epoch': best_epoch + 1,
+            'best_val_loss': best_val_loss,
+            'best_val_accuracy': history.history['val_accuracy'][best_epoch],
+            'frames_train': data.frames_train,
+            'frames_val': data.frames_val,
+        }
 
     if save_binary:
         model.save(os.path.join(dir_model, 'model.keras'), include_optimizer=True)
@@ -272,8 +289,8 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         'aug_dirnames': aug_dirnames or [],
         'held_out_fold': held_out_fold,
         'folds_train': data.folds_train,
-        'val_prop': val_prop,
-        'seed': seed,
+        'val_fold': data.val_fold,
+        'epochs_fixed': epochs_fixed,
     }
     # 'w' for the same reason as write_model_py's — can_write() is the gate
     with open(os.path.join(dir_model, 'config_model.json'), 'w') as f:
@@ -287,8 +304,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
 
 
 def train_set(name, embeddername, setname, name_translation,
-              epochs_max=400, aug_dirnames=None, verbose=False,
-              val_prop=0.1, seed=None):
+              epochs_max=400, aug_dirnames=None, verbose=False):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -308,8 +324,11 @@ def train_set(name, embeddername, setname, name_translation,
     dir_folds = os.path.join(dir_model_full, SUBDIR_FOLDS)
 
     # CV: hold out one 'rotate' fold at a time, train on the other 'rotate'
-    # folds plus every 'train' fold. Fold model binaries are not kept — only
-    # their held-out scores and training artifacts, archived under dir_folds.
+    # folds plus every 'train' fold. The held-out fold doubles as the
+    # early-stopping monitor — a within-fold split would leak site identity
+    # into the stopping signal, and dedicating a second fold to it would cost
+    # another deployment. Fold model binaries are not kept, only their scores
+    # and training artifacts, archived under dir_folds.
     for held_out in folds_rotate:
         folds_train = [f for f in folds_rotate if f != held_out] + folds_train_always
         dir_model = os.path.join(dir_folds, str(held_out))
@@ -320,11 +339,11 @@ def train_set(name, embeddername, setname, name_translation,
             continue
 
         data = _load_data(setname, embeddername, folds_train, name_translation,
-                          aug_dirnames, val_prop, seed)
+                          aug_dirnames, val_fold=held_out)
         result, model = _train_one(
             dir_model, modelname, embeddername, setname, name_translation,
             data, epochs_max, aug_dirnames, verbose,
-            val_prop, seed, held_out, save_binary=False,
+            held_out, save_binary=False,
         )
         if result is None:
             continue
@@ -362,16 +381,24 @@ def train_set(name, embeddername, setname, name_translation,
         print('  per-fold spread understates uncertainty about a new '
               'deployment (training pools overlap heavily)\n')
 
-    # Shipped model: trains on every fold except 'holdout', early-stopping on
-    # its own internal split exactly as the fold models do. Only model saved
-    # with a binary.
+    # Shipped model: trains on every fold except 'holdout'. No fold is held
+    # out, so there is nothing clean left to monitor — the epoch count comes
+    # from the median best epoch across the rotations. Only model saved with a
+    # binary.
+    epochs_fixed = epochs_max
+    if summary_rows:
+        epochs_fixed = int(round(np.median([r['best_epoch'] for r in summary_rows])))
+    else:
+        print(f'[{name}] no fold results to take a median epoch from; '
+              f'training the shipped model for the full {epochs_max} epochs')
+
     folds_shipped = folds_rotate + folds_train_always
     data = _load_data(setname, embeddername, folds_shipped, name_translation,
-                      aug_dirnames, val_prop, seed)
+                      aug_dirnames, val_fold=None)
     result, model = _train_one(
         dir_model_full, name, embeddername, setname, name_translation,
         data, epochs_max, aug_dirnames, verbose,
-        val_prop, seed, None, save_binary=True,
+        None, save_binary=True, epochs_fixed=epochs_fixed,
     )
 
     if result is None:

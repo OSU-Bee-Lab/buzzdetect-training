@@ -42,20 +42,19 @@ policy only; `02_set` embeds every fold regardless, so flipping a role never
 costs a re-extraction.
 
 Each `rotate` fold takes a turn held out: train on the other `rotate` folds plus
-all `train` folds, early-stop on a split carved from inside that pool, score the
-held-out fold. Fold model binaries are not kept. The shipped model trains on
-`rotate` + `train` pooled with the same internal-split early stopping, and is
-the only one saved with a binary.
+all `train` folds, early-stop on the held-out fold, score the held-out fold.
+Validation is always a whole deployment — never a split within one, which would
+leak site identity into the stopping signal. Fold model binaries are not kept.
+
+The shipped model trains on `rotate` + `train` pooled. Nothing is held out, so
+there is nothing clean to monitor: it trains for a fixed
+`median(best_epoch)` across the rotations. It's the only model saved with a
+binary.
 
 ```bash
 conda run -n buzzdetect-train python 03_train/main.py \
-  --name <name> --set <set> --embedder <emb> --translation <t> \
-  [--epochs E] [--val-prop P] [--seed S]
+  --name <name> --set <set> --embedder <emb> --translation <t> [--epochs E]
 ```
-
-`--val-prop` (default 0.1) is the fraction of the training pool held back for
-early stopping — split at snip level and stratified by fold and buzz presence,
-never a whole fold. `--seed` seeds that split.
 
 One model per fold — no repeat runs nested in the CV. (The old `_v1…_vN`
 repeated-run pattern was for a different purpose, hypothesis-testing noise
@@ -64,7 +63,7 @@ floors per `LOOP.md`, not for CV; it doesn't apply here.)
 Output under `models/<name>/`:
 - `model.keras` etc. — the shipped model
 - `folds_summary.csv` — one row per rotating fold: epochs, best val loss/accuracy, frame counts, sensitivity at each target FPR on the held-out fold
-- `folds_pooled_metrics.csv` / `folds_pooled_sx.csv` — every fold's held-out predictions pooled into one ROC (frame-weighted). Compare against the unweighted mean across folds that the run prints; a gap means one high-volume fold is carrying the result.
+- `folds_pooled_metrics.csv` / `folds_pooled_sx.csv` — every fold's held-out predictions pooled into one ROC (frame-weighted). Compare against the unweighted mean across folds that the run prints; a gap means one high-volume fold is carrying the result. Mildly optimistic, since each fold also chose its own stopping epoch — see README.
 - `folds/<fold>/` — archive for that held-out fold: `metrics.csv`, `sx.csv`, `predictions.csv`, `summary.json`, `config_model.json`, `history.pickle`, `loss_curves.svg`, `weights.csv`, `translation.csv`. No `model.keras`.
 - `holdout/<fold>/` — the shipped model scored on each `holdout` fold, same files as above.
 

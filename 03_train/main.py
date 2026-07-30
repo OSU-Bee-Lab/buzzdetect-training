@@ -22,17 +22,9 @@ if __name__ == '__main__':
     parser.add_argument('--embedder', required=True)
     parser.add_argument('--translation', required=True)
     parser.add_argument('--epochs', type=int, default=400)
-    parser.add_argument('--val-prop', type=float, default=0.1, dest='val_prop',
-                        help='proportion of the training pool held back for early '
-                             'stopping, split at snip level and stratified by fold')
-    parser.add_argument('--seed', type=int, default=None,
-                        help='seed for the internal validation split')
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
-
-    if not 0 < args.val_prop < 1:
-        parser.error(f'--val-prop must be between 0 and 1, got {args.val_prop}')
 
     train_set(
         name=args.name,
@@ -42,6 +34,4 @@ if __name__ == '__main__':
         epochs_max=args.epochs,
         aug_dirnames=args.aug_dirnames,
         verbose=args.verbose,
-        val_prop=args.val_prop,
-        seed=args.seed,
     )

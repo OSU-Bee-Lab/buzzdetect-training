@@ -3,7 +3,6 @@ import os
 import pickle
 import warnings
 
-import numpy as np
 import pandas as pd
 
 import config as cfg
@@ -190,47 +189,8 @@ def folds_by_role(roles, role):
     return [f for f, r in roles.items() if r == role]
 
 
-def split_internal_val(samples_by_fold, val_prop, seed, classes, class_stratify='ins_buzz'):
-    """Carve the early-stopping split out of the training pool.
-
-    Splits at the snip level, not the frame level. Frames within a snip are
-    adjacent ~1s windows of the same audio and are near-duplicates, so a
-    frame-level split would put copies of the same sound on both sides and
-    make val_loss useless as a stopping signal.
-
-    Stratified by fold and by presence of class_stratify, so every deployment
-    and the scarce buzz snips are both represented. val_prop is measured in
-    frames with snips as the indivisible unit, so a stratum small enough that
-    its smallest snip would overshoot contributes nothing — the pooled split
-    still lands near val_prop. Every stratum keeps at least one snip in
-    training.
-
-    Returns (data_train, data_val).
-    """
-    rng = np.random.default_rng(seed)
-    idx_class = classes.index(class_stratify) if class_stratify in classes else None
-
-    data_train, data_val = [], []
-    for fold in sorted(samples_by_fold):
-        strata = {}
-        for s in samples_by_fold[fold]:
-            key = bool(s.target_array[idx_class]) if idx_class is not None else True
-            strata.setdefault(key, []).append(s)
-
-        for key in sorted(strata, reverse=True):
-            group = strata[key]
-            order = rng.permutation(len(group))
-            frames_target = val_prop * sum(s.frames for s in group)
-            frames_val = 0
-            for rank, i in enumerate(order):
-                s = group[i]
-                last = rank == len(order) - 1
-                # round to nearest: take the snip only if it lands closer to
-                # frames_target than stopping short of it does
-                if not last and frames_val + s.frames / 2 <= frames_target:
-                    data_val.append(s)
-                    frames_val += s.frames
-                else:
-                    data_train.append(s)
-
-    return data_train, data_val
+# Note: no snip-level train/val splitter here, deliberately. Snips from one
+# deployment share a recorder, a site and a background, so a within-fold split
+# leaks site identity into the early-stopping signal and biases the stopping
+# epoch late. Submodels early-stop on their held-out fold instead; the shipped
+# model has no monitor and trains to the median of their best epochs.

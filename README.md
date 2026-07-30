@@ -55,23 +55,38 @@ re-extraction.
 
 ### There is no `validate` role
 
-Early stopping is a mechanism, not a property of the data. Making it a fold
-role costs a whole deployment and makes the stopping epoch hostage to whichever
-deployment drew the short straw — several folds here hold only a few dozen
-seconds of buzz, where `val_loss` is mostly a measure of ambient reconstruction
-and the stopping epoch is noise.
+Each rotation's held-out fold *is* its early-stopping monitor. A separate
+`validate` role would cost a second deployment per rotation, and which
+deployment drew the short straw would swing the stopping epoch — several folds
+here hold only a few dozen seconds of buzz, where `val_loss` is mostly a
+measure of ambient reconstruction.
 
-Instead the early-stop monitor is carved from within the training pool
-(`--val-prop`, default 10%). That keeps the procedure identical across every
-rotation and for the shipped model, and it removes a source of fold-to-fold
-variance that has nothing to do with the thing being measured.
+**Never split within a fold to make a validation set.** Snips from one
+deployment share a recorder, a site, a background, and a species assemblage, so
+a within-fold split puts the same site on both sides. The stopping signal then
+measures within-deployment generalization, which is easier than the
+cross-deployment thing we care about, and `val_loss` keeps falling after
+cross-site performance has started to degrade. The bias has a known direction:
+it stops too late and leaves the model more site-overfit than intended.
 
-The split is at **snip level, not frame level**, stratified by fold and by buzz
-presence. Frames within a snip are adjacent ~1s windows of the same audio and
-are near-duplicates, so splitting inside a snip would put copies of the same
-sound on both sides and make `val_loss` useless as a stopping signal.
-Stratifying by buzz presence matters because buzz snips are scarce in most
-folds — left to chance, a fold's entire buzz content can land on one side.
+The cost of monitoring on the held-out fold instead: each fold's reported score
+was measured on the fold that chose its stopping epoch, so per-fold numbers and
+the pooled ROC are mildly optimistic. Bounded, and small here — the stopping
+epoch is a single coarse scalar (patience 50, `min_delta` 0.002), adjacent
+epochs are highly correlated, and selection is on multi-class `val_loss` while
+the reported metric is buzz sensitivity at fixed FPR. It also mostly cancels
+when *comparing* configurations, since every config carries the same bias; it
+does not cancel when quoting an absolute number.
+
+Cheap to remove later if it ever matters: keep monitoring as-is but report each
+fold at `median(best_epoch)` of the *other* folds, so the epoch that produced
+the quoted number never saw the fold it's scored on. The probe is small enough
+(~13k params) to snapshot every epoch and re-score without retraining.
+
+Empirically this is close to moot — the loss curves are flat. On
+`yamnet_medium_v2`, every held-out fold plateaus and none turn back up, with a
+constant train/val gap of ~0.055. Early stopping is barely doing anything, which
+is also why the shipped model's fixed epoch count is safe.
 
 ## What gets trained
 
@@ -80,10 +95,10 @@ plus all `train` folds, early-stop on the internal split, score the held-out
 fold. Fold models are not kept as binaries — only their training and evaluation
 artifacts.
 
-The shipped model trains on everything except `holdout`/`exclude`, early-stopping
-on its own internal split exactly as the fold models do. It's the only model
-saved with a binary. `holdout` folds never train, so it can be scored on them
-directly.
+The shipped model trains on everything except `holdout`/`exclude`. Nothing is
+held out, so there is nothing clean to monitor — it trains for a fixed
+`median(best_epoch)` across the rotations. It's the only model saved with a
+binary. `holdout` folds never train, so it can be scored on them directly.
 
 ## Reading the results
 
@@ -121,10 +136,10 @@ base rate, FPR doesn't.
 ## Status
 
 Implemented: roles read from `folds.csv` and checked against what's extracted,
-rotation over `rotate` folds, internal snip-level validation split
-(`--val-prop`, `--seed`), per-fold held-out scoring, pooled ROC plus unweighted
-mean, `holdout` folds scored with the shipped model, partial reruns that
-reassemble the summary from disk.
+rotation over `rotate` folds with the held-out fold as the early-stopping
+monitor, shipped model at `median(best_epoch)`, per-fold held-out scoring,
+pooled ROC plus unweighted mean, `holdout` folds scored with the shipped model,
+partial reruns that reassemble the summary from disk.
 
 If `folds.csv` has no `role` column, every fold is treated as `rotate` and a
 warning is emitted.

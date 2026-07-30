@@ -4,9 +4,11 @@ from matplotlib import pyplot as plt
 
 
 def plot_history(history, modelname, best_epoch, path_out):
-    val_losses = history.history['val_loss']
+    # the shipped model trains to a fixed epoch count with no held-out fold to
+    # monitor, so it has no val_loss to plot
+    val_losses = history.history.get('val_loss')
     train_losses = history.history['loss']
-    loss_max = max(val_losses)
+    loss_max = max(val_losses if val_losses is not None else train_losses)
 
     plt.plot()
     ax = plt.gca()
@@ -15,9 +17,14 @@ def plot_history(history, modelname, best_epoch, path_out):
     plt.ylabel('loss')
     plt.xlabel('epoch')
     plt.plot(train_losses)
-    plt.plot(val_losses)
-    plt.legend(['training', 'validation'], loc='upper left')
-    plt.annotate(f'stopped at epoch {best_epoch} with val_loss: {round(val_losses[best_epoch], 3)}', (0, 0.05))
+    legend = ['training']
+    if val_losses is not None:
+        plt.plot(val_losses)
+        legend.append('validation')
+        plt.annotate(f'stopped at epoch {best_epoch} with val_loss: {round(val_losses[best_epoch], 3)}', (0, 0.05))
+    else:
+        plt.annotate(f'trained {best_epoch + 1} fixed epochs (median across folds)', (0, 0.05))
+    plt.legend(legend, loc='upper left')
     plt.vlines(x=best_epoch, ymin=0, ymax=loss_max)
 
     plt.savefig(path_out)
