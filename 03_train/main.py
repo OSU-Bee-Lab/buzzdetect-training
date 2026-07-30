@@ -22,6 +22,8 @@ if __name__ == '__main__':
     parser.add_argument('--embedder', required=True)
     parser.add_argument('--translation', required=True)
     parser.add_argument('--epochs', type=int, default=400)
+    parser.add_argument('--patience', type=int, default=50,
+                        help='EarlyStopping patience for the per-fold submodels')
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
@@ -34,4 +36,5 @@ if __name__ == '__main__':
         epochs_max=args.epochs,
         aug_dirnames=args.aug_dirnames,
         verbose=args.verbose,
+        patience=args.patience,
     )

@@ -161,20 +161,27 @@ def read_fold_roles(setname, embeddername):
     roles_all = folds_df.drop_duplicates('fold').set_index('fold')['role'].to_dict()
     roles = {f: r for f, r in sorted(roles_all.items()) if r != ROLE_EXCLUDE}
 
+    # A fold id may itself contain path separators (deployment paths like
+    # 'Chia - OSPT/2022/2022-07-26'), so resolve each one as a path rather than
+    # matching against a flat listing of dir_raw.
     dir_raw = cfg.dir_embeddings_raw(setname, embeddername)
-    extracted = {
-        d for d in os.listdir(dir_raw)
-        if os.path.isdir(os.path.join(dir_raw, d))
-    }
-
-    missing = sorted(set(roles) - extracted)
+    missing = sorted(
+        f for f in roles
+        if not os.path.isdir(cfg.dir_embeddings_fold(setname, embeddername, f))
+    )
     if missing:
         raise FileNotFoundError(
             f'no embeddings for fold(s) {missing} under {dir_raw}; '
             f'extraction is incomplete for set {setname!r} / embedder {embeddername!r}'
         )
 
-    unlisted = sorted(extracted - set(roles_all))
+    # Leftovers from an earlier build: a top-level entry that neither contains
+    # nor sits inside any known fold's path.
+    unlisted = sorted(
+        d for d in os.listdir(dir_raw)
+        if os.path.isdir(os.path.join(dir_raw, d))
+        and not any(f == d or f.startswith(d + os.sep) for f in roles_all)
+    )
     if unlisted:
         warnings.warn(
             f'{dir_raw} holds embeddings for fold(s) {unlisted} that are absent '

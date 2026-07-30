@@ -199,7 +199,7 @@ def _collect_fold_results(dir_folds, folds_rotate):
 
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs_max, aug_dirnames, verbose,
-               held_out_fold, save_binary, epochs_fixed=None):
+               held_out_fold, save_binary, epochs_fixed=None, patience=50):
     """Train one model. Returns (result_row, model); (None, None) if the model
     directory is already populated."""
     if not can_write(dir_model):
@@ -245,7 +245,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         }
     else:
         callback = tf.keras.callbacks.EarlyStopping(
-            monitor='val_loss', patience=50, min_delta=0.002, restore_best_weights=True,
+            monitor='val_loss', patience=patience, min_delta=0.002, restore_best_weights=True,
         )
         history = model.fit(
             data.train_tf,
@@ -291,6 +291,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         'folds_train': data.folds_train,
         'val_fold': data.val_fold,
         'epochs_fixed': epochs_fixed,
+        'patience': patience,
     }
     # 'w' for the same reason as write_model_py's — can_write() is the gate
     with open(os.path.join(dir_model, 'config_model.json'), 'w') as f:
@@ -304,7 +305,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
 
 
 def train_set(name, embeddername, setname, name_translation,
-              epochs_max=400, aug_dirnames=None, verbose=False):
+              epochs_max=400, aug_dirnames=None, verbose=False, patience=50):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -343,7 +344,7 @@ def train_set(name, embeddername, setname, name_translation,
         result, model = _train_one(
             dir_model, modelname, embeddername, setname, name_translation,
             data, epochs_max, aug_dirnames, verbose,
-            held_out, save_binary=False,
+            held_out, save_binary=False, patience=patience,
         )
         if result is None:
             continue
@@ -398,7 +399,7 @@ def train_set(name, embeddername, setname, name_translation,
     result, model = _train_one(
         dir_model_full, name, embeddername, setname, name_translation,
         data, epochs_max, aug_dirnames, verbose,
-        None, save_binary=True, epochs_fixed=epochs_fixed,
+        None, save_binary=True, epochs_fixed=epochs_fixed, patience=patience,
     )
 
     if result is None:
