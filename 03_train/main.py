@@ -18,9 +18,9 @@ from train import train_set
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', required=True)
-    parser.add_argument('--set', required=True, dest='setname')
-    parser.add_argument('--embedder', required=True)
-    parser.add_argument('--translation', required=True)
+    parser.add_argument('--set', default='medium', dest='setname')
+    parser.add_argument('--embedder', default='yamnet')
+    parser.add_argument('--translation', default='general')
     parser.add_argument('--epochs', type=int, default=400)
     parser.add_argument('--patience', type=int, default=50,
                         help='EarlyStopping patience for the per-fold submodels')
