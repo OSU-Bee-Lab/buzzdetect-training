@@ -26,8 +26,8 @@ before using it.
 
 - `audio/` — raw training audio
 - `02_set/sets/<setname>/` — `build.R`, `annotations.csv`, `folds.csv`,
-  `config_extract.json`, plus gitignored snips and embeddings. No set is
-  currently checked in; `medium` was removed during the fold-assignment move.
+  `config_extract.json`, plus gitignored snips and embeddings. `medium` and
+  `lite` are checked in; `lite` is Even Sample only, ~2.8h over 11 rotate folds.
 - `models/<modelname>/` — model artifacts
 - `04_test/audio/` — inference test audio
 
@@ -37,12 +37,14 @@ before using it.
 
 ## Train (leave-one-fold-out CV)
 
-A fold is one deployment (one recorder, one site, one period). Folds are
-assigned in the set: `02_set/sets/<set>/build.R` writes `folds.csv` (one row per
-ident, columns `ident`, `fold`, `role`). Annotation efforts in `01_annotate/`
-only emit `annotations_combined.csv` + `summary.csv` — the old per-effort
-`folds.R`/`folds.csv` were deprecated (`MAKE.R` still sources `folds.R` if one
-happens to exist). `README.md` has the design rationale; the mechanics:
+A fold is one deployment (one recorder, one site, one period). Each annotation
+effort assigns its own folds inside `combine.R`, writing `folds.csv` with
+columns `ident`, `fold`, `role` (the old standalone `folds.R` is gone, though
+`MAKE.R` still sources one if it happens to exist). `02_set/sets/<set>/build.R`
+concatenates those per-effort files into the set's own `folds.csv`, carrying
+`role` through unchanged — so a set picks roles by choosing sources, and
+overriding one means editing the set's build. `README.md` has the design
+rationale; the mechanics:
 
 `03_train` reads `02_set/sets/<set>/folds.csv` for each fold's **role** — `train`
 (always trains, never scored), `rotate` (the leave-one-fold-out set), `holdout`
