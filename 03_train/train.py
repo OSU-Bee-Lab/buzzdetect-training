@@ -156,9 +156,12 @@ def _format_sens(sens):
     )
 
 
-def _write_scores(dir_out, model, setname, embeddername, fold, translation, classes, tag):
+def _write_scores(dir_out, model, setname, embeddername, fold, translation, classes):
     """Score `fold`, write metrics/sx/predictions under dir_out, return
-    {sens_fpr<x>: value} for the summary table plus the raw predictions."""
+    {sens_fpr<x>: value} for the summary table plus the raw predictions.
+
+    Silent by design — the caller folds these numbers into its one-line
+    per-fold report rather than printing a second line here."""
     os.makedirs(dir_out, exist_ok=True)
     metrics_df, predictions = _score_fold(model, setname, embeddername, fold, translation, classes)
 
@@ -168,8 +171,7 @@ def _write_scores(dir_out, model, setname, embeddername, fold, translation, clas
     predictions.to_csv(os.path.join(dir_out, FNAME_PREDICTIONS), index=False)
 
     sens = sx_df.set_index('fpr')['sensitivity']
-    print(f'[{tag}] fold {fold}: {_format_sens(sens)}')
-    return {f'sens_fpr{f:g}': sens[f] for f in sens.index}, predictions
+    return {f'sens_fpr{f:g}': sens[f] for f in sens.index}, predictions, sens
 
 
 def _collect_fold_results(dir_folds, folds_rotate):
@@ -206,10 +208,11 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         print(f'[{modelname}] already trained; skipping')
         return None, None
 
-    monitor = (f'early stopping on {data.val_fold} ({data.frames_val} frames)'
-               if data.val_fold else f'{epochs_fixed} fixed epochs, no monitor')
-    print(f'[{modelname}] training on {len(data.folds_train)} fold(s), '
-          f'{data.frames_train} frames; {monitor}...')
+    if verbose:
+        monitor = (f'early stopping on {data.val_fold} ({data.frames_val} frames)'
+                   if data.val_fold else f'{epochs_fixed} fixed epochs, no monitor')
+        print(f'[{modelname}] training on {len(data.folds_train)} fold(s), '
+              f'{data.frames_train} frames; {monitor}...', flush=True)
     os.makedirs(dir_model, exist_ok=True)
 
     embedder = load_embedder(embeddername, framehop_prop=1, initialize=False)
@@ -236,10 +239,9 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         # from the median best epoch across the rotations.
         history = model.fit(
             data.train_tf, epochs=epochs_fixed, class_weight=data.weight_dict,
-            verbose=1 if verbose else 0,
+            verbose=2 if verbose else 0,  # 2 = one line per epoch, no progress bar
         )
         best_epoch = epochs_fixed - 1
-        print(f'[{modelname}] done — {epochs_fixed} fixed epochs')
         result = {
             'n_epochs': epochs_fixed,
             'best_epoch': epochs_fixed,
@@ -255,13 +257,11 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             validation_data=data.val_tf,
             callbacks=callback,
             class_weight=data.weight_dict,
-            verbose=1 if verbose else 0,
+            verbose=2 if verbose else 0,  # 2 = one line per epoch, no progress bar
         )
 
         best_epoch = callback.best_epoch
         best_val_loss = float(callback.best)
-        print(f'[{modelname}] done — {len(history.history["val_loss"])} epochs, '
-              f'best epoch {best_epoch + 1}, val_loss {best_val_loss:.4f}')
         result = {
             'n_epochs': len(history.history['val_loss']),
             'best_epoch': best_epoch + 1,
@@ -320,8 +320,9 @@ def train_set(name, embeddername, setname, name_translation,
             f'{ {r: len(folds_by_role(roles, r)) for r in sorted(set(roles.values()))} }'
         )
 
-    print(f'{len(folds_rotate)} rotating fold(s), {len(folds_train_always)} '
-          f'train-only, {len(folds_holdout)} holdout')
+    print(f'[{name}] set {setname}, embedder {embeddername}, translation '
+          f'{name_translation}: {len(folds_rotate)} rotating fold(s), '
+          f'{len(folds_train_always)} train-only, {len(folds_holdout)} holdout')
 
     dir_model_full = os.path.join(cfg.DIR_MODELS, name)
     dir_folds = os.path.join(dir_model_full, SUBDIR_FOLDS)
@@ -332,13 +333,14 @@ def train_set(name, embeddername, setname, name_translation,
     # into the stopping signal, and dedicating a second fold to it would cost
     # another deployment. Fold model binaries are not kept, only their scores
     # and training artifacts, archived under dir_folds.
-    for held_out in folds_rotate:
+    for i, held_out in enumerate(folds_rotate, 1):
         folds_train = [f for f in folds_rotate if f != held_out] + folds_train_always
         dir_model = os.path.join(dir_folds, str(held_out))
         modelname = f'{name}_fold{held_out}'
+        tag = f'[{i}/{len(folds_rotate)}] {held_out}'
 
         if not can_write(dir_model):
-            print(f'[{modelname}] already trained; skipping')
+            print(f'{tag}: already trained; skipping')
             continue
 
         data = _load_data(setname, embeddername, folds_train, name_translation,
@@ -351,12 +353,19 @@ def train_set(name, embeddername, setname, name_translation,
         if result is None:
             continue
 
-        scores, _ = _write_scores(
+        scores, _, sens = _write_scores(
             dir_model, model, setname, embeddername, held_out,
-            data.translation, data.classes, modelname,
+            data.translation, data.classes,
         )
         with open(os.path.join(dir_model, FNAME_FOLD_SUMMARY), 'w') as f:
             json.dump({**result, **scores}, f)
+
+        # One line per fold: everything worth knowing about this rotation, so a
+        # default run stays roughly one line per fold rather than three.
+        print(f"{tag}: {result['n_epochs']} epochs (best {result['best_epoch']}), "
+              f"val_loss {result['best_val_loss']:.4f}, "
+              f"{data.frames_train}/{data.frames_val} frames train/val, "
+              f"{_format_sens(sens)}", flush=True)
 
     summary_rows, predictions_pooled = _collect_fold_results(dir_folds, folds_rotate)
 
@@ -378,9 +387,16 @@ def train_set(name, embeddername, setname, name_translation,
         cols_sens = [c for c in summary.columns if c.startswith('sens_fpr')]
         print(f'\n[{name}] CV over {len(summary)} fold(s)')
         print(f'  pooled (frame-weighted): {_format_sens(pooled_sx.set_index("fpr")["sensitivity"])}')
+        # Report n alongside each mean: a fold with no buzz frames scores n/a
+        # and drops out silently, so the mean can rest on far fewer folds than
+        # the CV ran.
         print('  unweighted mean across folds: ' + ', '.join(
-            f'{c}={summary[c].mean():.3f}' for c in cols_sens
+            f'{c}={summary[c].mean():.3f} (n={int(summary[c].count())})' for c in cols_sens
         ))
+        n_scored = int(summary[cols_sens].notna().any(axis=1).sum())
+        if n_scored < len(summary):
+            print(f'  {len(summary) - n_scored} of {len(summary)} fold(s) had no '
+                  f'ins_buzz frames and could not be scored')
         print('  per-fold spread understates uncertainty about a new '
               'deployment (training pools overlap heavily)\n')
 
@@ -407,6 +423,9 @@ def train_set(name, embeddername, setname, name_translation,
     if result is None:
         return
 
+    print(f'[shipped] {name}: {epochs_fixed} fixed epochs on '
+          f'{len(folds_shipped)} fold(s), {data.frames_train} frames → {dir_model_full}')
+
     dir_set = cfg.dir_set(setname)
     shutil.copy(os.path.join(dir_set, 'annotations.csv'), dir_model_full)
     shutil.copy(os.path.join(dir_set, 'folds.csv'), dir_model_full)
@@ -414,8 +433,9 @@ def train_set(name, embeddername, setname, name_translation,
     # 'holdout' folds never train, so the shipped model can be scored on them
     # directly — an estimate untouched by the CV rotation.
     for fold in folds_holdout:
-        _write_scores(
+        _, _, sens = _write_scores(
             os.path.join(dir_model_full, SUBDIR_HOLDOUT, str(fold)),
             model, setname, embeddername, fold,
-            data.translation, data.classes, name,
+            data.translation, data.classes,
         )
+        print(f'[holdout] {fold}: {_format_sens(sens)}')

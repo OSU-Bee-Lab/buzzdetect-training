@@ -1,5 +1,12 @@
 """
-Run the full training pipeline (stages 2–4) for a model.
+Run the training pipeline (stages 2–3) for a model: extract the set's
+embeddings, then train leave-one-fold-out CV plus the shipped model.
+
+Stage 4 is deliberately not chained. 04_test scores a fixed model against a
+separate hand-curated corpus and expects the `<name>_v1…_vN` repeated-run
+layout; a CV run produces per-fold scores instead, which 03_train already
+writes to folds_summary.csv and folds_pooled_sx.csv. Run 04_test by hand if
+you have a corpus to score against.
 """
 # TensorFlow must be imported before pandas/pyarrow. pandas eagerly imports
 # pyarrow, and pyarrow + TF each bundle their own statically-linked abseil; the
@@ -31,49 +38,61 @@ def load_stage(path, module_name):
     spec.loader.exec_module(mod)
     return mod
 
-def main(modelname, setname, embeddername, name_translation, epochs_max, clear, aug_dirnames=None, verbose=False, n_workers=2):
+def main(modelname, setname, embeddername, name_translation, epochs_max, clear,
+         aug_dirnames=None, verbose=False, n_workers=2, patience=50,
+         overlap_event_prop=None, framehop_prop=None):
     model_dir = os.path.join(config.DIR_MODELS, modelname)
 
     if clear and os.path.exists(model_dir):
-        print(f'Clearing {model_dir}')
+        print(f'clearing {model_dir}')
         shutil.rmtree(model_dir)
 
-    print('\n=== 02 extract set ===')
+    print('=== 02 extract set ===')
     multiprocessing.set_start_method('fork', force=True)
     stage2 = load_stage('02_set/main.py', 'stage2_main')
     stage2.extract_set(
         setname=setname,
         embeddername=embeddername,
+        overlap_event_prop=overlap_event_prop,
+        framehop_prop=framehop_prop,
         n_workers=n_workers,
         verbose=verbose,
     )
 
     print('\n=== 03 train ===')
-    stage3 = load_stage('03_train/main.py', 'stage3_main')
-    stage3.train_model(
-        modelname=modelname,
+    stage3 = load_stage('03_train/train.py', 'stage3_train')
+    stage3.train_set(
+        name=modelname,
         embeddername=embeddername,
         setname=setname,
         name_translation=name_translation,
         epochs_max=epochs_max,
         aug_dirnames=aug_dirnames,
         verbose=verbose,
+        patience=patience,
     )
-
-    print('\n=== 04 test ===')
-    stage4 = load_stage('04_test/main.py', 'stage4_main')
-    stage4.test_model(modelname)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
+    # Defaults match 03_train/main.py — only --model is required.
     parser.add_argument('--model', required=True, help='Model name')
-    parser.add_argument('--set', dest='setname', required=True)
-    parser.add_argument('--embedder', required=True)
-    parser.add_argument('--translation', required=True)
-    parser.add_argument('--epochs', type=int, required=True)
-    parser.add_argument('--no-clear', action='store_false', dest='clear',
-                        help='Skip clearing existing model dir')
+    parser.add_argument('--set', dest='setname', default='medium')
+    parser.add_argument('--embedder', default='yamnet')
+    parser.add_argument('--translation', default='general')
+    parser.add_argument('--epochs', type=int, default=400)
+    parser.add_argument('--patience', type=int, default=50,
+                        help='EarlyStopping patience for the per-fold submodels')
+    parser.add_argument('--workers', type=int, default=2, dest='n_workers',
+                        help='extraction workers; 0 runs in-process')
+    # Only consulted when the set has no config_extract.json yet; see 02_set/main.py.
+    parser.add_argument('--overlap-event-prop', type=float, default=None, dest='overlap_event_prop')
+    parser.add_argument('--framehop-prop', type=float, default=None, dest='framehop_prop')
+    # Opt-in rather than opt-out: 03_train skips folds that already have a
+    # config_model.json, so a rerun resumes by default. Clearing throws that
+    # away, which should take an explicit flag rather than being the default.
+    parser.add_argument('--clear', action='store_true',
+                        help='Delete the existing model dir before training')
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME',
                         help='Augmented embedding dirs to include in training (must be built via 02_set/augment.py first)')
     parser.add_argument('--verbose', action='store_true')
@@ -88,4 +107,8 @@ if __name__ == '__main__':
         clear=args.clear,
         aug_dirnames=args.aug_dirnames,
         verbose=args.verbose,
+        n_workers=args.n_workers,
+        patience=args.patience,
+        overlap_event_prop=args.overlap_event_prop,
+        framehop_prop=args.framehop_prop,
     )

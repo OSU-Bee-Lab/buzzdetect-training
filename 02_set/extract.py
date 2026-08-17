@@ -195,6 +195,7 @@ def extract_snips(setname: str, verbose=False):
 
     idents = annotations['ident'].unique()
     n_missing = 0
+    n_done = 0
     t0 = time.time()
 
     for ident in idents:
@@ -204,14 +205,17 @@ def extract_snips(setname: str, verbose=False):
             n_missing += 1
             continue
 
-        if verbose:
-            print(f'extract_snips: {ident} ({time.time()-t0:.1f}s)')
         annotations_sub = annotations[annotations['ident'] == ident]
         dir_out = os.path.join(dir_snips_base, ident)
+        t_ident = time.time()
         _extract_snips_ident(ident, annotations_sub, path_audio, dir_out)
+        n_done += 1
+        if verbose:
+            print(f'extract_snips: [{n_done}/{len(idents)}] {ident} — '
+                  f'{len(annotations_sub)} annotations ({time.time()-t_ident:.1f}s)', flush=True)
 
-    if n_missing:
-        print(f'extract_snips: done ({n_missing} idents missing audio) ({time.time()-t0:.1f}s)')
+    print(f'extract_snips: {n_done} ident(s) snipped, {n_missing} missing audio '
+          f'({time.time()-t0:.1f}s)')
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +272,7 @@ class WorkerExtract:
         self.config_extract = config_extract
         self.name = name
         self.verbose = verbose
+        self.n_done = 0  # idents this worker has finished, for verbose progress
 
         # embedder has framehop of 1 because we're framing manually
         self.embedder: BaseEmbedder = load_embedder(self.config_extract.embeddername, framehop_prop=1, initialize=False)
@@ -317,7 +322,7 @@ class WorkerExtract:
 
         for path_audio in paths_audio:
             process_extracted_audio(path_audio)
-        return None
+        return f'{len(paths_audio)} cached label file(s) → embeddings'
 
     def extract_ident_both(self, a_ident: AssignIdent):
         annotations_sub = self.annotations[self.annotations['ident'] == a_ident.ident].copy()
@@ -362,9 +367,6 @@ class WorkerExtract:
                 ]
 
                 for chunk in chunks:
-                    if self.verbose:
-                        print(f'extractor {self.name}: {a_ident.ident} snip {snip_start:.3f}s chunk {chunk} ({time.time()-self.t0:.1f}s)')
-
                     audio_data = self.read_range(track, chunk)
 
                     if len(audio_data) < int(self.embedder.framelength_s * self.embedder.samplerate):
@@ -432,7 +434,20 @@ class WorkerExtract:
                     chunk = samples_flat[start: start + self.chunklength_samples]
                     for e in self.embedder.embed(chunk):
                         pickle.dump(e, file)
-        return None
+
+        n_frames = sum(len(s) for s in frames_by_label.values())
+        return (f'{len(snip_paths)} snip(s) → {n_frames} frames, '
+                f'{len(frames_by_label)} label(s)')
+
+    def _log_ident(self, ident, msg, t_ident):
+        """One line per ident, verbose only — the granularity a human watching a
+        long extraction wants. The default run stays silent here; its progress
+        signal is the ident counts printed by extract_set."""
+        if not self.verbose:
+            return
+        self.n_done += 1
+        print(f'extractor {self.name}: [{self.n_done}] {ident} — {msg} '
+              f'({time.time()-t_ident:.1f}s)', flush=True)
 
     def extract_ident(self, ident):
         fold = self.folds[self.folds['ident'] == ident]['fold'].unique()
@@ -451,19 +466,19 @@ class WorkerExtract:
             dir_embeddings_base=self.dir_embeddings_base,
             dir_snips_base=self.dir_snips_base,
         )
+        t_ident = time.time()
         try:
             if a_ident.handle == 'both':
-                self.extract_ident_both(a_ident)
+                msg = self.extract_ident_both(a_ident)
+                self._log_ident(ident, msg, t_ident)
             elif a_ident.handle == 'embeddings':
-                if self.verbose:
-                    print(f'extractor {self.name}: extracting embeddings for {ident} ({time.time()-self.t0:.1f}s)')
-                self.extract_ident_embeddings(a_ident)
+                msg = self.extract_ident_embeddings(a_ident)
+                self._log_ident(ident, msg, t_ident)
             elif a_ident.handle == 'no_snips':
                 warnings.warn(f'extractor {self.name}: skipping {ident}; {a_ident.handle_msg}')
                 return
             elif a_ident.handle == 'skip':
-                if self.verbose:
-                    print(f'extractor {self.name}: skipping {ident}; {a_ident.handle_msg} ({time.time()-self.t0:.1f}s)')
+                self._log_ident(ident, f'skipped — {a_ident.handle_msg}', t_ident)
             else:
                 raise ValueError(f'extractor {self.name}: unknown handle {a_ident.handle} for ident {ident}')
         except ValueError:
@@ -519,7 +534,11 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
                 f"\nDelete {path_config} and re-extract to change them."
             )
         config_extract = ConfigExtract(**saved)
-        print(f'loaded config_extract from {path_config} ({time.time()-t0:.1f}s)')
+        print(f"[{setname}/{embeddername}] existing config: "
+              f"overlap_event_prop={saved['overlap_event_prop']}, "
+              f"framehop_prop={saved['framehop_prop']}")
+        if verbose:
+            print(f'  loaded from {path_config}')
     else:
         if overlap_event_prop is None or framehop_prop is None:
             raise ValueError(f"No config_extract.json found for set '{setname}'; overlap_event_prop and framehop_prop must be provided")
@@ -528,7 +547,10 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
         stored = {k: getattr(config_extract, k) for k in ConfigExtract.STORED_FIELDS}
         with open(path_config, 'w') as f:
             json.dump(stored, f, indent=2)
-        print(f'saved config_extract to {path_config} ({time.time()-t0:.1f}s)')
+        print(f'[{setname}/{embeddername}] new config: '
+              f'overlap_event_prop={overlap_event_prop}, framehop_prop={framehop_prop}')
+        if verbose:
+            print(f'  saved to {path_config}')
 
     config_extract.embeddername = embeddername
 
@@ -539,7 +561,7 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
     dir_snips_base = cfg.dir_snips(setname)
     if not os.path.exists(dir_snips_base):
         print(f'snips dir not found; running extract_snips first ({time.time()-t0:.1f}s)')
-        extract_snips(setname)
+        extract_snips(setname, verbose=verbose)
 
     # Pre-filter: determine which idents actually need work before spawning workers
     embedder_tmp = load_embedder(embeddername, framehop_prop=1, initialize=False)
@@ -563,11 +585,16 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
             idents_todo.append(ident)
 
     n_skip = len(idents) - len(idents_todo)
-    print(f'  {len(idents_todo)} idents to process, {n_skip} already done or missing snips ({time.time()-t0:.1f}s)')
+    print(f'[{setname}/{embeddername}] {len(idents_todo)} of {len(idents)} idents to extract '
+          f'({n_skip} already done or missing snips)')
 
     if not idents_todo:
-        print(f'all idents already extracted; skipping workers ({time.time()-t0:.1f}s)')
+        print(f'[{setname}/{embeddername}] nothing to do ({time.time()-t0:.1f}s)')
         return True
+
+    if verbose:
+        print(f'  {n_workers} worker(s); folds: '
+              f"{folds[folds['ident'].isin(idents_todo)]['fold'].nunique()}")
 
     if n_workers <= 0:
         # In-process extraction: avoids multiprocessing fork, required for embedders
@@ -578,7 +605,7 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
         worker.embedder.initialize()
         for ident in idents_todo:
             worker.extract_ident(ident)
-        print(f'all extractions complete ({time.time()-t0:.1f}s)\n:)\n:D\n:O')
+        print(f'[{setname}/{embeddername}] extracted {len(idents_todo)} ident(s) ({time.time()-t0:.1f}s)\n:)\n:D\n:O')
         return True
 
     q_extract = multiprocessing.Queue()
