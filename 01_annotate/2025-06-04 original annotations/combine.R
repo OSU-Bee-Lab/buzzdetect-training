@@ -129,7 +129,7 @@ summary <- annotations_combined %>%
 
  write.csv(
   summary,
-  'summary_per_fold.csv',
+  'summary.csv',
   row.names=F
 )
 
