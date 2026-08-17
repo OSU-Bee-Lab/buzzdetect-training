@@ -88,7 +88,17 @@ def build_fold_dataset(dir_samples, translation, labels_keep_raw=None, exclusive
         samples_out.append(s)
 
     if len(samples_out) == 0:
-        raise ValueError(f'no samples found in {dir_samples}')
+        if not samples:
+            raise ValueError(f'no embedding files under {dir_samples}')
+        # Files exist but every one was dropped — almost always a label the
+        # translation can't resolve, which looks identical to "nothing was
+        # extracted" unless we say so.
+        labels = sorted({l for s in samples for l in s.labels_raw})
+        raise ValueError(
+            f'all {len(samples)} embedding file(s) under {dir_samples} were '
+            f'dropped by the translation; raw label(s) present: {labels}. '
+            f'Check that each appears in the translation\'s "from" column.'
+        )
     return samples_out
 
 
