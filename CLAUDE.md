@@ -4,12 +4,16 @@ Pipeline: raw audio + annotations → trained Keras classifiers for insect buzz 
 
 ## Pipeline
 
-| Stage | Dir | Entry point | Language |
-|-------|-----|-------------|----------|
-| 1. Build annotation sets | `01_annotate/` | `MAKE.R` | R |
-| 2–4. Extract, train, test | root | `main.py` | Python |
+| Stage | Entry point | Language |
+|-------|-------------|----------|
+| 1. Combine annotations per effort | `01_annotate/MAKE.R` | R |
+| 2. Build a set (`build.R` per set), extract embeddings | `02_set/sets/<set>/build.R`, `02_set/main.py` | R, Python |
+| 3. Train | `03_train/main.py` | Python |
+| 4. Test | `04_test/main.py` | Python |
 
-Stage scripts in `02_set/`, `03_train/`, `04_test/` can also be run independently.
+Run stages individually. Root `main.py` claims to chain 2–4 but is stale — it
+calls entry points that no longer exist (`train_model`, `test_model`); fix it
+before using it.
 
 ## Key files
 
@@ -21,7 +25,9 @@ Stage scripts in `02_set/`, `03_train/`, `04_test/` can also be run independentl
 ## Data layout (mostly gitignored)
 
 - `audio/` — raw training audio
-- `02_set/sets/<setname>/` — snips and embeddings
+- `02_set/sets/<setname>/` — `build.R`, `annotations.csv`, `folds.csv`,
+  `config_extract.json`, plus gitignored snips and embeddings. No set is
+  currently checked in; `medium` was removed during the fold-assignment move.
 - `models/<modelname>/` — model artifacts
 - `04_test/audio/` — inference test audio
 
@@ -31,8 +37,12 @@ Stage scripts in `02_set/`, `03_train/`, `04_test/` can also be run independentl
 
 ## Train (leave-one-fold-out CV)
 
-A fold is one deployment (one recorder, one site, one period), assigned upstream
-in `01_annotate/`. `README.md` has the design rationale; the mechanics:
+A fold is one deployment (one recorder, one site, one period). Folds are
+assigned in the set: `02_set/sets/<set>/build.R` writes `folds.csv` (one row per
+ident, columns `ident`, `fold`, `role`). Annotation efforts in `01_annotate/`
+only emit `annotations_combined.csv` + `summary.csv` — the old per-effort
+`folds.R`/`folds.csv` were deprecated (`MAKE.R` still sources `folds.R` if one
+happens to exist). `README.md` has the design rationale; the mechanics:
 
 `03_train` reads `02_set/sets/<set>/folds.csv` for each fold's **role** — `train`
 (always trains, never scored), `rotate` (the leave-one-fold-out set), `holdout`
@@ -53,12 +63,15 @@ binary.
 
 ```bash
 conda run -n buzzdetect-train python 03_train/main.py \
-  --name <name> --set <set> --embedder <emb> --translation <t> [--epochs E]
+  --name <name> --set <set> --embedder <emb> --translation <t> \
+  [--epochs 400] [--patience 50] [--augment <aug_dir> ...]
 ```
 
-One model per fold — no repeat runs nested in the CV. (The old `_v1…_vN`
-repeated-run pattern was for a different purpose, hypothesis-testing noise
-floors per `LOOP.md`, not for CV; it doesn't apply here.)
+A `folds.csv` with no `role` column warns and treats every fold as `rotate`.
+
+One model per fold — no repeat runs nested in the CV. (The `_v1…_vN`
+repeated-run pattern in `LOOP.md` is for hypothesis-testing noise floors, not
+CV; it doesn't apply here.)
 
 Output under `models/<name>/`:
 - `model.keras` etc. — the shipped model
