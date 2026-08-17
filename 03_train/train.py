@@ -15,7 +15,7 @@ import config as cfg
 
 from dataset import (
     build_fold_dataset, load_augmented, read_fold_roles, folds_by_role,
-    ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT,
+    survey_untranslated, ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT,
 )
 from train_utils import build_weights, build_classes, can_write, Sample
 from embedders.embedding import load_embedder
@@ -102,6 +102,13 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     if aug_dirnames:
         data_train += load_augmented(setname, embeddername, aug_dirnames, translation, folds_train)
 
+    if not data_train:
+        raise ValueError(
+            f'no trainable frames across {len(folds_train)} fold(s) of set '
+            f'{setname!r} under translation {name_translation!r} — every sample '
+            f'was ignored or excluded'
+        )
+
     weights = build_weights(data_train, classes)
     weight_dict = {i: w for i, w in enumerate(weights['weight'])}
 
@@ -135,6 +142,8 @@ def _score_fold(model, setname, embeddername, fold, translation, classes):
     samples = build_fold_dataset(
         cfg.dir_embeddings_fold(setname, embeddername, fold), translation,
     )
+    if not samples:
+        return None, None
     buzz_index = classes.index('ins_buzz')
 
     embeddings = np.concatenate([np.array(s.embeddings, dtype=np.float32) for s in samples])
@@ -164,6 +173,8 @@ def _write_scores(dir_out, model, setname, embeddername, fold, translation, clas
     per-fold report rather than printing a second line here."""
     os.makedirs(dir_out, exist_ok=True)
     metrics_df, predictions = _score_fold(model, setname, embeddername, fold, translation, classes)
+    if metrics_df is None:
+        return {}, None, None
 
     metrics_df.to_csv(os.path.join(dir_out, cfg.FNAME_METRICS), index=False)
     sx_df = metrics_at_fpr(metrics_df)
@@ -306,8 +317,42 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     return result, model
 
 
+def _confirm_untranslated(setname, embeddername, folds, name_translation, assume_yes):
+    """Report raw labels the translation has no row for, and get a go-ahead.
+
+    Training on a set with a missing translation row is expensive and silent —
+    the frames simply never contribute — so this is a gate before the first
+    epoch rather than a warning after the fact. Returns True to proceed.
+    """
+    translation = pd.read_csv(os.path.join(cfg.DIR_TRANSLATIONS, name_translation + '.csv'))
+    unknown = survey_untranslated(setname, embeddername, folds, translation)
+    if not unknown:
+        return True
+
+    n_files = sum(unknown.values())
+    print(f'\n{len(unknown)} raw label(s) across {n_files} embedding file(s) have no '
+          f'row in translations/{name_translation}.csv:')
+    for label, n in unknown.items():
+        print(f'    {label}  ({n} file(s))')
+    print('  Frames carrying only these labels will not train. Add a "from" row '
+          'mapping each to a class, to "ignore", or to "exclude" to silence this.')
+
+    if assume_yes:
+        print('  --yes given; continuing.\n')
+        return True
+    if not sys.stdin.isatty():
+        print('  Refusing to train unattended with unresolved labels. '
+              'Fix the translation, or pass --yes to accept them.\n')
+        return False
+
+    reply = input('  Continue anyway? [y/N] ').strip().lower()
+    print()
+    return reply in ('y', 'yes')
+
+
 def train_set(name, embeddername, setname, name_translation,
-              epochs_max=400, aug_dirnames=None, verbose=False, patience=50):
+              epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
+              assume_yes=False):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -323,6 +368,10 @@ def train_set(name, embeddername, setname, name_translation,
     print(f'[{name}] set {setname}, embedder {embeddername}, translation '
           f'{name_translation}: {len(folds_rotate)} rotating fold(s), '
           f'{len(folds_train_always)} train-only, {len(folds_holdout)} holdout')
+
+    if not _confirm_untranslated(setname, embeddername, list(roles),
+                                 name_translation, assume_yes):
+        return
 
     dir_model_full = os.path.join(cfg.DIR_MODELS, name)
     dir_folds = os.path.join(dir_model_full, SUBDIR_FOLDS)
@@ -345,6 +394,13 @@ def train_set(name, embeddername, setname, name_translation,
 
         data = _load_data(setname, embeddername, folds_train, name_translation,
                           aug_dirnames, val_fold=held_out)
+        if data.frames_val == 0:
+            # Nothing to early-stop on or score against — a legitimate state if
+            # every label in this deployment is ignored or excluded, but it
+            # can't take a turn as the held-out fold.
+            print(f'{tag}: no usable frames under this translation; skipping rotation')
+            continue
+
         result, model = _train_one(
             dir_model, modelname, embeddername, setname, name_translation,
             data, epochs_max, aug_dirnames, verbose,
@@ -438,4 +494,7 @@ def train_set(name, embeddername, setname, name_translation,
             model, setname, embeddername, fold,
             data.translation, data.classes,
         )
-        print(f'[holdout] {fold}: {_format_sens(sens)}')
+        if sens is None:
+            print(f'[holdout] {fold}: no usable frames under this translation; not scored')
+        else:
+            print(f'[holdout] {fold}: {_format_sens(sens)}')

@@ -25,6 +25,8 @@ if __name__ == '__main__':
     parser.add_argument('--patience', type=int, default=50,
                         help='EarlyStopping patience for the per-fold submodels')
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
+    parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
+                        help='accept untranslated labels without confirming')
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 
@@ -37,4 +39,5 @@ if __name__ == '__main__':
         aug_dirnames=args.aug_dirnames,
         verbose=args.verbose,
         patience=args.patience,
+        assume_yes=args.assume_yes,
     )

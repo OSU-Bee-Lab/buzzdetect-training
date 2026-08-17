@@ -33,6 +33,11 @@ def translate_labels(labels_raw: list, translation_dict: dict):
     When a raw label has a "to" value of "exclude", any sample matching that label will be dropped
     from the dataset, no matter what other labels are present for the sample.
 
+    A label with no row at all is left unchanged rather than silently treated as
+    "ignore". It still produces no target (it matches no class), but it stays
+    visible: survey_untranslated() reports it before training so a missing row
+    is caught as an omission rather than mistaken for a deliberate ignore.
+
     Args:
         labels_raw (list): The raw labels to translate.
         translation (DataFrame): A translation data frame with columns "from" and "to" containing the labels to translate from and to, respectively..
@@ -41,11 +46,30 @@ def translate_labels(labels_raw: list, translation_dict: dict):
         list: Translated labels with NaN values removed.
     """
     labels_translated = [
-        translation_dict.get(l, 'ignore')  # Translate if found, else leave unchanged
+        translation_dict.get(l, l)  # translate if found, else leave unchanged
         for l in labels_raw
     ]
 
     return labels_translated
+
+
+def survey_untranslated(setname, embeddername, folds, translation):
+    """Raw labels present in the extracted embeddings with no row in the
+    translation's "from" column, as {label: n_files}.
+
+    Run before training so a missing row surfaces while it's still cheap to
+    fix. An untranslated label is indistinguishable from an ignored one once
+    training starts — both simply produce no target.
+    """
+    known = set(translation['from'])
+    counts = {}
+    for fold in folds:
+        dir_fold = cfg.dir_embeddings_fold(setname, embeddername, fold)
+        for p in glob.glob(os.path.join(dir_fold, '**', '*.pickle'), recursive=True):
+            for label in labels_from_path(p):
+                if label not in known:
+                    counts[label] = counts.get(label, 0) + 1
+    return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
 
 
 def labels_to_targets(labels_translate, classes):
@@ -87,18 +111,18 @@ def build_fold_dataset(dir_samples, translation, labels_keep_raw=None, exclusive
         s.frames = len(s.embeddings)
         samples_out.append(s)
 
+    # An empty result is legitimate: every label in this fold may be genuinely
+    # excluded or ignored. Warn and hand back nothing; the caller decides
+    # whether a fold with no usable frames is fatal for what it's doing.
     if len(samples_out) == 0:
         if not samples:
-            raise ValueError(f'no embedding files under {dir_samples}')
-        # Files exist but every one was dropped — almost always a label the
-        # translation can't resolve, which looks identical to "nothing was
-        # extracted" unless we say so.
-        labels = sorted({l for s in samples for l in s.labels_raw})
-        raise ValueError(
-            f'all {len(samples)} embedding file(s) under {dir_samples} were '
-            f'dropped by the translation; raw label(s) present: {labels}. '
-            f'Check that each appears in the translation\'s "from" column.'
-        )
+            warnings.warn(f'no embedding files under {dir_samples}')
+        else:
+            labels = sorted({l for s in samples for l in s.labels_raw})
+            warnings.warn(
+                f'all {len(samples)} embedding file(s) under {dir_samples} were '
+                f'dropped by the translation; raw label(s) present: {labels}'
+            )
     return samples_out
 
 

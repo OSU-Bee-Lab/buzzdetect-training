@@ -40,7 +40,7 @@ def load_stage(path, module_name):
 
 def main(modelname, setname, embeddername, name_translation, epochs_max, clear,
          aug_dirnames=None, verbose=False, n_workers=2, patience=50,
-         overlap_event_prop=None, framehop_prop=None):
+         overlap_event_prop=None, framehop_prop=None, assume_yes=False):
     model_dir = os.path.join(config.DIR_MODELS, modelname)
 
     if clear and os.path.exists(model_dir):
@@ -70,6 +70,7 @@ def main(modelname, setname, embeddername, name_translation, epochs_max, clear,
         aug_dirnames=aug_dirnames,
         verbose=verbose,
         patience=patience,
+        assume_yes=assume_yes,
     )
 
 
@@ -95,6 +96,8 @@ if __name__ == '__main__':
                         help='Delete the existing model dir before training')
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME',
                         help='Augmented embedding dirs to include in training (must be built via 02_set/augment.py first)')
+    parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
+                        help='accept untranslated labels without confirming')
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 
@@ -111,4 +114,5 @@ if __name__ == '__main__':
         patience=args.patience,
         overlap_event_prop=args.overlap_event_prop,
         framehop_prop=args.framehop_prop,
+        assume_yes=args.assume_yes,
     )
