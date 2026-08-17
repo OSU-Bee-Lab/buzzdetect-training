@@ -4,8 +4,8 @@ library(stringr)
 dir_sources <- '../../../01_annotate'
 
 sources <- c(
-  'Even Sample',
-  '2025-06-04 original annotations'
+  'Even Sample'
+  # '2025-06-04 original annotations'
 )
 
 message(
@@ -69,7 +69,10 @@ annotations <- lapply(sources, read_annotations) %>%
 
       T ~ label
     )
-  )
+  ) %>% 
+  filter(duration < 310) %>% 
+  group_by(ident, label) %>% 
+  slice_min(n=4, order_by=start)
 
 annotations$label %>% unique() %>% sort()
 
@@ -96,7 +99,8 @@ read_folds <- function(source_set){
 
 folds <- lapply(sources, read_folds) %>% 
   bind_rows() %>% 
-  select(source, ident, fold, role)
+  select(source, ident, fold, role) 
+
 
 check_ident_conflict <- function(){
   df <- folds %>% 
