@@ -15,8 +15,26 @@ night <- read.csv('data/02_auto_night.csv') %>%
   select(ident, start, label) %>% 
   mutate(end = start + 0.96, label='auto_ambient_night')
 
+
+annotations <- bind_rows(bee, night)
+
 write.csv(
-  bind_rows(bee, night),
+  annotations,
   'annotations_combined.csv',
+  row.names=F
+)
+
+
+
+summary <- annotations %>% 
+  mutate(duration = round(end-start)) %>% 
+  group_by(label) %>% 
+  summarize(
+    volume = sum(duration)
+  )
+
+write.csv(
+  summary,
+  'summary.csv',
   row.names=F
 )

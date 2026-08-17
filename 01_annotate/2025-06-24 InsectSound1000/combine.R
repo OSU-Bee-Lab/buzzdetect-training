@@ -12,3 +12,16 @@ write.csv(
   'annotations_combined.csv',
   row.names=F
 )
+
+summary <- annotations %>% 
+  mutate(duration = round(end-start)) %>% 
+  group_by(label) %>% 
+  summarize(
+    volume = sum(duration)
+  )
+
+write.csv(
+  summary,
+  'summary.csv',
+  row.names=F
+)
