@@ -502,15 +502,22 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
     if os.path.exists(path_config):
         with open(path_config, 'r') as f:
             saved = json.load(f)
-        # Reject if caller passes set-level params that conflict with what's saved
+        # The saved config always wins — embeddings already on disk were built
+        # under it, and honoring a new value here would silently mix framings
+        # within one set. Changing extraction params means deleting
+        # config_extract.json (and the embeddings) and re-extracting.
         conflicts = {}
         if overlap_event_prop is not None and overlap_event_prop != saved.get('overlap_event_prop'):
             conflicts['overlap_event_prop'] = (saved['overlap_event_prop'], overlap_event_prop)
         if framehop_prop is not None and framehop_prop != saved.get('framehop_prop'):
             conflicts['framehop_prop'] = (saved['framehop_prop'], framehop_prop)
         if conflicts:
-            msgs = [f"  {k}: saved={v[0]}, got={v[1]}" for k, v in conflicts.items()]
-            raise ValueError(f"Set '{setname}' already extracted with different parameters:\n" + "\n".join(msgs))
+            msgs = [f"  {k}: keeping saved={v[0]}, ignoring requested={v[1]}" for k, v in conflicts.items()]
+            warnings.warn(
+                f"Set '{setname}' already has a config_extract.json; ignoring the "
+                f"extraction params passed for it:\n" + "\n".join(msgs) +
+                f"\nDelete {path_config} and re-extract to change them."
+            )
         config_extract = ConfigExtract(**saved)
         print(f'loaded config_extract from {path_config} ({time.time()-t0:.1f}s)')
     else:

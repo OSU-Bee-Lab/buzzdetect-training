@@ -22,6 +22,17 @@ if __name__ == '__main__':
     parser.add_argument('--set', required=True, dest='setname')
     parser.add_argument('--embedder', required=True)
     parser.add_argument('--workers', type=int, required=True)
+    # Only consulted when the set has no config_extract.json yet — a set that
+    # already has one keeps it, and these are ignored with a warning. Changing
+    # a set's extraction params means deleting that file and re-extracting.
+    parser.add_argument('--overlap-event-prop', type=float, default=None,
+                        dest='overlap_event_prop',
+                        help='annotation overlap required to label a frame '
+                             '(ignored if the set already has a config_extract.json)')
+    parser.add_argument('--framehop-prop', type=float, default=None,
+                        dest='framehop_prop',
+                        help='frame hop as a proportion of frame length; 1 = no '
+                             'overlap (ignored if the set already has a config_extract.json)')
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 
@@ -30,6 +41,8 @@ if __name__ == '__main__':
     extract_set(
         setname=args.setname,
         embeddername=args.embedder,
+        overlap_event_prop=args.overlap_event_prop,
+        framehop_prop=args.framehop_prop,
         n_workers=args.workers,
         verbose=args.verbose,
     )
