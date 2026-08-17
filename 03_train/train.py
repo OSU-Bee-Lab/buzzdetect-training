@@ -216,7 +216,9 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     # modelname may contain a fold identifier derived from a source name
     # (e.g. "2025-06-04 original annotations"), which can hold characters
     # invalid in a Keras/TF scope name — sanitize for that use only.
-    tf_name = re.sub(r'[^A-Za-z0-9_.\\/>-]', '_', modelname)
+    # Keras rejects '/' in layer/model names outright; fold ids are paths, so
+    # strip separators here rather than relying on the caller's naming.
+    tf_name = re.sub(r'[^A-Za-z0-9_.>-]', '_', modelname)
     model = tf.keras.Sequential(name=tf_name)
     model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
     model.add(tf.keras.layers.Dropout(0.2))
