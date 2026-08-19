@@ -27,7 +27,7 @@ Environment: `conda run -n buzzdetect-train python <script>`.
 - **Roles are training-time policy only.** `02_set` embeds every fold regardless, including `exclude`, so flipping a role never costs a re-extraction (`03_train/dataset.py::read_fold_roles`).
 - **Validation is always a whole fold, never a split within one.** A within-fold split leaks site identity into the early-stopping signal. There is no snip-level splitter and there should not be one; README explains why.
 - **An annotation effort is a directory under `01_annotate/` holding a `combine.R`** — that file is the whole contract, and it must write both `annotations_combined.csv` and `folds.csv` (fold assignment included). `MAKE.R` discovers efforts by that file, not by `.Rproj`, which is gitignored.
-- **`translations/build.R` is additive**: existing rows win, new labels are appended and reported. It never drops a curated row, since embeddings named after a since-retired label may still be on disk.
+- **`translations/build.R` regenerates the tables wholesale** from the labels currently observed across every effort's `annotations_combined.csv`; the mapping rules live in `build.R` itself, not in the CSVs. It is *not* additive — a label no effort emits any more loses its row, even though embeddings named after it may still be on disk. Such a label then has no row at all, which `translate_labels` leaves unchanged and `survey_untranslated` reports at train time. Edit the rules in `build.R` and rerun; hand-edits to `general.csv` / `binary.csv` are overwritten.
 - **Reruns resume.** `train_utils.can_write()` skips any model directory that already holds a `config_model.json`, and the CV summary is reassembled from disk so skipped folds still contribute.
 
 ## Where to look

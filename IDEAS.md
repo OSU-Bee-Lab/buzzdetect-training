@@ -2,7 +2,7 @@
 
 Candidate experiments for future LOOP agents. Each entry is a hypothesis ready to be taken through the standard experiment lifecycle in LOOP.md.
 
-Before picking one up, check `experiments/log.jsonl` to confirm it hasn't already been tried.
+Before picking one up, check `log.jsonl` to confirm it hasn't already been tried, and read `LOOP.md` — the methodology changed in 2026-08 and the log's numbers predate it.
 
 ---
 
