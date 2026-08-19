@@ -387,6 +387,8 @@ class WorkerExtract:
                 ann_rel['start'] = ann_rel['start'] - snip_start
                 ann_rel['end'] = ann_rel['end'] - snip_start
 
+                frames_rel = []  # snip-relative ranges of every frame emitted for this snip
+
                 if snip_duration < self.embedder.framelength_s:
                     # Snip is shorter than one frame — skip. Zero-padding to framelength would
                     # corrupt training embeddings (the model would see silence rather than missing
@@ -426,6 +428,8 @@ class WorkerExtract:
                     frame_starts = chunk_source_start + np.arange(len(frames)) * self.config_extract.framehop_prop * self.embedder.framelength_s
                     frametimes = [(s, s + self.embedder.framelength_s) for s in frame_starts]
 
+                    frames_rel += [(f[0] - snip_start, f[1] - snip_start) for f in frametimes]
+
                     for frame, frame_range in zip(frames, frametimes):
                         events_frame = events_in_frame(
                             range_frame=frame_range,
@@ -453,6 +457,57 @@ class WorkerExtract:
                                 )
                             continue
                         frames_by_label.setdefault(labels_collapse, []).append(frame)
+
+                # Rescue annotations the frame grid missed. Frames are cut on a grid anchored
+                # at each chunk's start, and with framehop_prop=1 they do not overlap each
+                # other, so a short event straddling a grid boundary — or sitting in the
+                # sub-frame remainder after a chunk's last whole hop — can hold less than
+                # overlap_event_s in every frame and be labelled nowhere. A labelled event
+                # must always reach the training data, so cut one extra frame centred on it.
+                for _, row in ann_rel.iterrows():
+                    event = (row['start'], row['end'])
+                    if any(ranges_overlap(f, event, self.overlap_event_s) for f in frames_rel):
+                        continue
+
+                    frame_start = min(
+                        max((event[0] + event[1]) / 2 - self.embedder.framelength_s / 2, 0.0),
+                        snip_duration - self.embedder.framelength_s,
+                    )
+                    frame_range_rel = (frame_start, frame_start + self.embedder.framelength_s)
+                    # read a hair wide, then truncate: resampling the exact frame length can
+                    # land a sample short depending on the source rate
+                    audio_data = self.read_range(
+                        track,
+                        (frame_range_rel[0], min(frame_range_rel[1] + 0.01, snip_duration)),
+                    )[:self.framelength_samples]
+
+                    if len(audio_data) < self.framelength_samples:
+                        warnings.warn(
+                            f'extractor {self.name}: could not rescue {row["label"]!r} at '
+                            f'{snip_start + event[0]:.3f}s in {a_ident.ident}; sub-frame audio'
+                        )
+                        continue
+
+                    frame_range = (snip_start + frame_range_rel[0], snip_start + frame_range_rel[1])
+                    labels_collapse = collapse_labels(events_in_frame(
+                        range_frame=frame_range,
+                        annotations=annotations_sub,
+                        event_overlap_s=self.overlap_event_s,
+                    ))
+                    if not labels_collapse:
+                        raise ValueError(
+                            f'extractor {self.name}: rescue frame {frame_range} centred on '
+                            f'{row["label"]!r} at {snip_start + event[0]:.3f}s in '
+                            f'{a_ident.ident} matched no annotation — extraction integrity violation'
+                        )
+
+                    frames_by_label.setdefault(labels_collapse, []).append(audio_data)
+                    frames_rel.append(frame_range_rel)
+
+                    if self.verbose:
+                        print(f'{time.time()-self.t0:.1f}s - extractor {self.name}: rescued '
+                              f'{row["label"]!r} at {snip_start + event[0]:.3f}s '
+                              f'({event[1]-event[0]:.3f}s) as {labels_collapse}', flush=True)
 
         os.makedirs(a_ident.dir_out_audio, exist_ok=True)
         os.makedirs(a_ident.dir_out_embeddings, exist_ok=True)
