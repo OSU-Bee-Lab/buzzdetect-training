@@ -1,5 +1,5 @@
 {
   "setname": "medium",
   "overlap_event_prop": 0.2,
-  "framehop_prop": 0.5
+  "framehop_prop": 1
 }
