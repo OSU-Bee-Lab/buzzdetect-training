@@ -1,9 +1,16 @@
 import glob
+import hashlib
 import json
 import os
 import pickle
+import shutil
+import sys
 import time
 import warnings
+
+# Run directly (`python 02_set/extract.py --set <set>`) as well as imported: the project
+# root holds config.py and the package dirs this module imports from.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dataclasses import dataclass
 import multiprocessing
@@ -142,6 +149,112 @@ def get_ident_audio_path(ident):
 # Snip extraction (layer 1: HDD → per-annotation-cluster WAV files)
 # ---------------------------------------------------------------------------
 
+FNAME_SNIP_MANIFEST = 'manifest.json'
+FNAME_FINGERPRINT = 'annotations.fingerprint'
+
+
+def _fingerprint_annotations(annotations_sub: pd.DataFrame) -> str:
+    """Hash one ident's annotations. Everything downstream of the snips — which
+    ranges get cut, how frames are labelled — is a pure function of these rows, so
+    a matching fingerprint means the extracted product is still current and a
+    differing one means it has to be rebuilt."""
+    rows = sorted(
+        f'{r.start:.6f}\x1f{r.end:.6f}\x1f{r.label}'
+        for r in annotations_sub.itertuples()
+    )
+    return hashlib.sha1('\x1e'.join(rows).encode()).hexdigest()
+
+
+def _read_json(path):
+    try:
+        with open(path, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def _read_fingerprint(dir_path):
+    try:
+        with open(os.path.join(dir_path, FNAME_FINGERPRINT), 'r') as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return None
+
+
+def _write_fingerprint(dir_path, fingerprint):
+    with open(os.path.join(dir_path, FNAME_FINGERPRINT), 'w') as f:
+        f.write(fingerprint + '\n')
+
+
+def _has_pickles(dir_path):
+    """Sidecar files (a fingerprint) don't count as extracted output."""
+    return os.path.isdir(dir_path) and any(n.endswith('.pickle') for n in os.listdir(dir_path))
+
+
+def _find_ident_dirs(root, ident):
+    """Directories under root whose trailing path components are the ident.
+
+    A walk rather than a glob: both fold names and idents are path-like and neither
+    has a fixed depth, so there is no pattern of '*'s that lands on the right level.
+    """
+    suffix = os.sep + ident.replace('/', os.sep)
+    found = []
+    for dirpath, dirnames, _ in os.walk(root):
+        if dirpath.endswith(suffix):
+            found.append(dirpath)
+            dirnames.clear()  # nothing nested under an ident dir
+    return found
+
+
+def _purge_ident_outputs(setname, ident, audio_key=None, embeddername=None):
+    """Delete the cached audio and embeddings for one ident, raw and augmented alike.
+
+    Fold is not passed: an ident that moved folds leaves its old copies behind, and
+    those are stale for the same reason. Pass audio_key/embeddername to confine the
+    purge to one embedder's products; with neither, every embedder's are removed.
+    """
+    dir_snips_base = cfg.dir_snips(setname)  # snips live under audio/ but are layer 1
+    roots = []
+    if audio_key is not None:
+        roots.append(os.path.join(cfg.dir_audio(setname), audio_key))
+    if embeddername is not None:
+        roots.append(os.path.join(cfg.dir_set(setname), cfg.SET_SUBDIR_EMBEDDINGS, embeddername))
+    if audio_key is None and embeddername is None:
+        roots = [cfg.dir_audio(setname),
+                 os.path.join(cfg.dir_set(setname), cfg.SET_SUBDIR_EMBEDDINGS)]
+
+    removed = []
+    for root in roots:
+        if not os.path.isdir(root):
+            continue
+        for path in _find_ident_dirs(root, ident):
+            if path == dir_snips_base or path.startswith(dir_snips_base + os.sep):
+                continue
+            shutil.rmtree(path)
+            removed.append(path)
+    return removed
+
+
+def _snip_paths(dir_snips_ident):
+    """Snips of one ident, sorted. The directory name comes from an ident (a file
+    path), so it is escaped — a '[' in a site name is not a character class."""
+    return sorted(glob.glob(os.path.join(glob.escape(dir_snips_ident), 'snip_*.flac')))
+
+
+def _find_snip_dirs(dir_snips_base):
+    """(path, ident) for every directory under dir_snips_base that holds snips.
+
+    An ident is a path into the source audio tree ('Effort/Site/1/file'), so its snip
+    directory is nested to match and the top level of dir_snips_base is a list of
+    effort names, not idents.
+    """
+    found = []
+    for dirpath, _, filenames in os.walk(dir_snips_base):
+        if any(n.startswith('snip_') and n.endswith('.flac') for n in filenames):
+            found.append((dirpath, os.path.relpath(dirpath, dir_snips_base)))
+    return found
+
+
 def _snip_filename(start: float, end: float) -> str:
     return f"snip_{start:.3f}_{end:.3f}.flac"
 
@@ -176,26 +289,59 @@ def _buffer_and_merge(chunks, buffer_s: float, duration: float):
     return [(start, end) for start, end in merged]
 
 
-def _extract_snips_ident(ident: str, annotations_sub: pd.DataFrame, path_audio: str, dir_out: str,
-                          verbose=False, t0=None):
-    """Write one FLAC per merged, buffered annotation cluster for a single ident."""
+def _sync_snips_ident(ident: str, annotations_sub: pd.DataFrame, path_audio: str, dir_out: str,
+                      verbose=False, t0=None):
+    """Bring one ident's snip directory in line with its current annotations.
+
+    Annotation efforts are ongoing, so the snip set an ident wants moves over time:
+    two fragmented events become one continuous one, an event is deleted, a cluster
+    widens past its neighbour and the two merge. Rather than trusting whatever is on
+    disk, this re-derives the wanted snips, deletes the files that no longer appear
+    in that list, and reads only the ranges that are missing — the source audio sits
+    on slow media, so reading nothing is the point.
+
+    The manifest is a fast path, not the source of truth: when its fingerprint still
+    matches and every snip it names is present, the source file is never opened.
+
+    Returns (status, n_written, n_deleted) where status is 'unchanged' or 'updated'.
+    """
+    fingerprint = _fingerprint_annotations(annotations_sub)
+    path_manifest = os.path.join(dir_out, FNAME_SNIP_MANIFEST)
+    manifest = _read_json(path_manifest)
+
+    if manifest is not None and manifest.get('fingerprint') == fingerprint:
+        wanted_names = [_snip_filename(s, e) for s, e in manifest.get('snips', ())]
+        if all(os.path.exists(os.path.join(dir_out, n)) for n in wanted_names):
+            return 'unchanged', 0, 0
+
     os.makedirs(dir_out, exist_ok=True)
 
     with sf.SoundFile(path_audio) as track:
         duration = track.frames / track.samplerate
         sr = track.samplerate
         chunks_raw = _buffer_and_merge(melt_coverage(annotations_sub), cfg.SNIP_BUFFER_S, duration)
+        wanted = {_snip_filename(start, end): (start, end) for start, end in chunks_raw}
 
-        for i, chunk in enumerate(chunks_raw):
-            start, end = chunk
-            path_out = os.path.join(dir_out, _snip_filename(start, end))
+        n_deleted = 0
+        for path_existing in _snip_paths(dir_out):
+            if os.path.basename(path_existing) in wanted:
+                continue
+            if verbose:
+                print(f'{time.time()-t0:.1f}s - extract_snips: {ident} '
+                      f'superseded, deleting {os.path.basename(path_existing)}', flush=True)
+            os.remove(path_existing)
+            n_deleted += 1
+
+        n_written = 0
+        for i, (name, (start, end)) in enumerate(wanted.items()):
+            path_out = os.path.join(dir_out, name)
 
             if os.path.exists(path_out):
                 continue
 
             if verbose:
                 print(f'{time.time()-t0:.1f}s - extract_snips: {ident} '
-                      f'[{i+1}/{len(chunks_raw)}] {start:.1f}-{end:.1f}s', flush=True)
+                      f'[{i+1}/{len(wanted)}] {start:.1f}-{end:.1f}s', flush=True)
 
             start_sample = round(sr * start)
             n_samples = round(sr * (end - start))
@@ -206,13 +352,26 @@ def _extract_snips_ident(ident: str, annotations_sub: pd.DataFrame, path_audio: 
                 audio_data = np.mean(audio_data, axis=1)
 
             sf.write(path_out, audio_data, sr)
+            n_written += 1
+
+    with open(path_manifest, 'w') as f:
+        json.dump({'fingerprint': fingerprint,
+                   'snips': [[start, end] for start, end in chunks_raw]}, f, indent=2)
+
+    status = 'updated' if (n_written or n_deleted) else 'unchanged'
+    return status, n_written, n_deleted
 
 
 def extract_snips(setname: str, verbose=False):
     """Extract raw audio snips for all idents in a set.
 
-    Run this before extract_set. Safe to re-run; already-extracted idents are
-    skipped. Snips are stored as:
+    Run this before extract_set. Safe and cheap to re-run: an ident whose
+    annotations are unchanged is skipped without opening its source audio, and one
+    whose annotations moved has only the superseded snips deleted and only the
+    missing ranges read. Returns {ident: 'unchanged' | 'updated' | 'missing_audio'}
+    so callers can invalidate what an 'updated' ident already had extracted.
+
+    Snips are stored as:
         02_set/sets/<setname>/audio/snips/<ident>/snip_<start>_<end>.flac
 
     Each snip covers one or more annotation clusters padded by SNIP_BUFFER_S on
@@ -228,28 +387,60 @@ def extract_snips(setname: str, verbose=False):
     dir_snips_base = cfg.dir_snips(setname)
 
     idents = annotations['ident'].unique()
-    n_missing = 0
+    status_by_ident = {}
+    n_written = n_deleted = 0
     n_done = 0
     t0 = time.time()
 
     for ident in idents:
-        path_audio = get_ident_audio_path(ident)
-        if not path_audio:
-            warnings.warn(f'extract_snips: no audio file for {ident}; skipping')
-            n_missing += 1
-            continue
-
         annotations_sub = annotations[annotations['ident'] == ident]
         dir_out = os.path.join(dir_snips_base, ident)
+
+        path_audio = get_ident_audio_path(ident)
+        if not path_audio:
+            # Only a problem if this ident actually needs a read; a fully snipped
+            # ident doesn't care that the source drive is unplugged.
+            manifest = _read_json(os.path.join(dir_out, FNAME_SNIP_MANIFEST))
+            if manifest is not None and manifest.get('fingerprint') == _fingerprint_annotations(annotations_sub):
+                status_by_ident[ident] = 'unchanged'
+                continue
+            warnings.warn(f'extract_snips: no audio file for {ident}; skipping')
+            status_by_ident[ident] = 'missing_audio'
+            continue
+
         if verbose:
             print(f'{time.time()-t0:.1f}s - extract_snips: [{n_done+1}/{len(idents)}] {ident} — '
                   f'starting ({len(annotations_sub)} annotations)', flush=True)
-        _extract_snips_ident(ident, annotations_sub, path_audio, dir_out, verbose=verbose, t0=t0)
+        status, written, deleted = _sync_snips_ident(
+            ident, annotations_sub, path_audio, dir_out, verbose=verbose, t0=t0)
+        status_by_ident[ident] = status
+        n_written += written
+        n_deleted += deleted
         n_done += 1
         if verbose:
-            print(f'{time.time()-t0:.1f}s - extract_snips: [{n_done}/{len(idents)}] {ident} — done', flush=True)
+            print(f'{time.time()-t0:.1f}s - extract_snips: [{n_done}/{len(idents)}] {ident} — '
+                  f'{status} ({written} written, {deleted} deleted)', flush=True)
 
-    print(f'{time.time()-t0:.1f}s - extract_snips: {n_done} ident(s) snipped, {n_missing} missing audio')
+    # An ident dropped from the annotations entirely: every snip it has is superseded.
+    # An ident is a source-audio path, so its snip directory sits at an arbitrary depth
+    # under dir_snips_base — walk for directories that actually hold snips rather than
+    # reading the top level as a list of idents.
+    known = set(idents)
+    for path_orphan, ident_orphan in sorted(_find_snip_dirs(dir_snips_base)):
+        if ident_orphan in known:
+            continue
+        warnings.warn(f'extract_snips: {ident_orphan} is no longer in annotations.csv; removing its snips')
+        shutil.rmtree(path_orphan)
+        for path_removed in _purge_ident_outputs(setname, ident_orphan):
+            warnings.warn(f'extract_snips: removed stale output {path_removed}')
+
+    n_updated = sum(1 for s in status_by_ident.values() if s == 'updated')
+    n_missing = sum(1 for s in status_by_ident.values() if s == 'missing_audio')
+    print(f'{time.time()-t0:.1f}s - extract_snips: {n_updated} ident(s) updated '
+          f'({n_written} snip(s) written, {n_deleted} superseded), '
+          f'{len(idents) - n_updated - n_missing} unchanged, {n_missing} missing audio')
+
+    return status_by_ident
 
 
 # ---------------------------------------------------------------------------
@@ -273,39 +464,89 @@ class ConfigExtract:
 
 
 class AssignIdent:
+    """What, if anything, still has to be done for one ident — and what already on
+    disk was built from annotations that have since changed.
+
+    Staleness is decided by the annotation fingerprint each output directory carries.
+    A directory with no fingerprint predates the check and is left alone: it can't be
+    judged, and the snip layer catches the case that matters (annotations that moved
+    far enough to change the snips), via `force_stale`.
+    """
+
     def __init__(self, ident: str, fold: str, config_extract: ConfigExtract,
-                 dir_audio_base: str, dir_embeddings_base: str, dir_snips_base: str):
+                 dir_audio_base: str, dir_embeddings_base: str, dir_snips_base: str,
+                 audio_key: str = None, fingerprint: str = None, force_stale: bool = False):
         self.ident = ident
         self.fold = fold
         self.config_extract = config_extract
+        self.audio_key = audio_key
+        self.fingerprint = fingerprint
 
         self.dir_out_audio = os.path.join(dir_audio_base, fold, ident)
-        self.audio_exists = bool(os.path.exists(self.dir_out_audio) and os.listdir(self.dir_out_audio))
+        self.audio_exists = _has_pickles(self.dir_out_audio)
 
         self.dir_out_embeddings = os.path.join(dir_embeddings_base, fold, ident)
-        self.embeddings_exist = bool(os.path.exists(self.dir_out_embeddings) and os.listdir(self.dir_out_embeddings))
+        self.embeddings_exist = _has_pickles(self.dir_out_embeddings)
 
         self.dir_snips_ident = os.path.join(dir_snips_base, ident)
-        self.snips_exist = bool(os.path.exists(self.dir_snips_ident) and os.listdir(self.dir_snips_ident))
+        self.snips_exist = bool(_snip_paths(self.dir_snips_ident))
+
+        self.audio_stale = self.audio_exists and self._is_stale(self.dir_out_audio, force_stale)
+        # Embeddings are derived from the cached audio, so stale audio implies stale embeddings.
+        self.embeddings_stale = self.embeddings_exist and (
+            self.audio_stale or self._is_stale(self.dir_out_embeddings, force_stale))
 
         self.handle, self.handle_msg = self._init_handle()
 
+    def _is_stale(self, dir_path, force_stale):
+        if force_stale:
+            return True
+        if self.fingerprint is None:
+            return False
+        found = _read_fingerprint(dir_path)
+        return found is not None and found != self.fingerprint
+
+    def purge_stale(self):
+        """Delete what the current annotations invalidated, augmented derivatives
+        included — an augmentation of a stale frame is just as stale. Idempotent, so
+        it is safe to call in the worker after the pre-filter has sized up the run."""
+        removed = []
+        if self.audio_stale:
+            removed += _purge_ident_outputs(
+                self.config_extract.setname, self.ident,
+                audio_key=self.audio_key, embeddername=self.config_extract.embeddername)
+            self.audio_exists = self.audio_stale = False
+            self.embeddings_exist = self.embeddings_stale = False
+        elif self.embeddings_stale:
+            removed += _purge_ident_outputs(
+                self.config_extract.setname, self.ident,
+                embeddername=self.config_extract.embeddername)
+            self.embeddings_exist = self.embeddings_stale = False
+        return removed
+
     def _init_handle(self):
-        if self.audio_exists and self.embeddings_exist:
+        audio_usable = self.audio_exists and not self.audio_stale
+        embeddings_usable = self.embeddings_exist and not self.embeddings_stale
+
+        if audio_usable and embeddings_usable:
             return 'skip', 'audio and embeddings already extracted'
-        if self.audio_exists and not self.embeddings_exist:
-            return 'embeddings', 'audio already extracted'
-        if not self.audio_exists and self.snips_exist:
-            return 'both', 'snips available, audio not extracted'
+        if audio_usable and not embeddings_usable:
+            return 'embeddings', ('embeddings stale; rebuilding from cached audio'
+                                  if self.embeddings_stale else 'audio already extracted')
+        if not audio_usable and self.snips_exist:
+            return 'both', ('annotations changed since extraction; re-extracting'
+                            if self.audio_stale else 'snips available, audio not extracted')
         return 'no_snips', 'snips not found; run extract_snips first'
 
 
 class WorkerExtract:
     def __init__(self, config_extract: ConfigExtract, annotations: pd.DataFrame, folds: pd.DataFrame,
-                 q_extract: multiprocessing.Queue, name='worker_extract', verbose=False):
+                 q_extract: multiprocessing.Queue, name='worker_extract', verbose=False,
+                 idents_forced=()):
         self.config_extract = config_extract
         self.name = name
         self.verbose = verbose
+        self.idents_forced = set(idents_forced)  # snips changed → whatever was extracted is stale
         self.n_done = 0  # idents this worker has finished, for verbose progress
 
         # embedder has framehop of 1 because we're framing manually
@@ -315,8 +556,8 @@ class WorkerExtract:
             self.embedder.framelength_s * self.config_extract.overlap_event_prop
         )
 
-        audio_key = self.embedder.audio_cache_key()
-        self.dir_audio_cache_base = os.path.join(cfg.dir_audio(self.config_extract.setname), audio_key, 'raw')
+        self.audio_key = self.embedder.audio_cache_key()
+        self.dir_audio_cache_base = os.path.join(cfg.dir_audio(self.config_extract.setname), self.audio_key, 'raw')
         self.dir_embeddings_base = self.config_extract.dir_out_embeddings(self.config_extract.embeddername)
         self.dir_snips_base = cfg.dir_snips(self.config_extract.setname)
 
@@ -337,7 +578,7 @@ class WorkerExtract:
         return librosa.resample(y=audio_data, orig_sr=track.samplerate, target_sr=self.embedder.samplerate)
 
     def extract_ident_embeddings(self, a_ident: AssignIdent):
-        paths_audio = glob.glob(os.path.join(a_ident.dir_out_audio, '*.pickle'))
+        paths_audio = glob.glob(os.path.join(glob.escape(a_ident.dir_out_audio), '*.pickle'))
 
         os.makedirs(a_ident.dir_out_embeddings, exist_ok=True)
 
@@ -356,12 +597,14 @@ class WorkerExtract:
 
         for path_audio in paths_audio:
             process_extracted_audio(path_audio)
+        if a_ident.fingerprint is not None:
+            _write_fingerprint(a_ident.dir_out_embeddings, a_ident.fingerprint)
         return f'{len(paths_audio)} cached label file(s) → embeddings'
 
     def extract_ident_both(self, a_ident: AssignIdent):
         annotations_sub = self.annotations[self.annotations['ident'] == a_ident.ident].copy()
 
-        snip_paths = sorted(glob.glob(os.path.join(a_ident.dir_snips_ident, 'snip_*.flac')))
+        snip_paths = _snip_paths(a_ident.dir_snips_ident)
         if not snip_paths:
             raise FileNotFoundError(
                 f'no snips for {a_ident.ident} in {a_ident.dir_snips_ident}; run extract_snips first'
@@ -528,6 +771,12 @@ class WorkerExtract:
                     for e in self.embedder.embed(chunk):
                         pickle.dump(e, file)
 
+        # Stamped last: a fingerprint means the directory's whole contents were built
+        # from these annotations, so a crash mid-write must not leave one behind.
+        if a_ident.fingerprint is not None:
+            _write_fingerprint(a_ident.dir_out_audio, a_ident.fingerprint)
+            _write_fingerprint(a_ident.dir_out_embeddings, a_ident.fingerprint)
+
         n_frames = sum(len(s) for s in frames_by_label.values())
         return (f'{len(snip_paths)} snip(s) → {n_frames} frames, '
                 f'{len(frames_by_label)} label(s)')
@@ -558,7 +807,13 @@ class WorkerExtract:
             dir_audio_base=self.dir_audio_cache_base,
             dir_embeddings_base=self.dir_embeddings_base,
             dir_snips_base=self.dir_snips_base,
+            audio_key=self.audio_key,
+            fingerprint=_fingerprint_annotations(self.annotations[self.annotations['ident'] == ident]),
+            force_stale=ident in self.idents_forced,
         )
+        for path_removed in a_ident.purge_stale():
+            warnings.warn(f'extractor {self.name}: {ident} superseded by new annotations; '
+                          f'removed {path_removed}')
         if self.verbose:
             print(f'{time.time()-self.t0:.1f}s - extractor {self.name}: [{self.n_done+1}] {ident} — '
                   f'starting ({a_ident.handle})', flush=True)
@@ -594,9 +849,10 @@ class WorkerExtract:
 
 
 def run_worker(config_extract: ConfigExtract, annotations: pd.DataFrame, folds: pd.DataFrame,
-               q_extract: multiprocessing.Queue, name, verbose=False):
+               q_extract: multiprocessing.Queue, name, verbose=False, idents_forced=()):
     try:
-        worker = WorkerExtract(config_extract, annotations, folds, q_extract, name, verbose=verbose)
+        worker = WorkerExtract(config_extract, annotations, folds, q_extract, name, verbose=verbose,
+                               idents_forced=idents_forced)
         worker.run()
     except Exception as e:
         import traceback
@@ -655,9 +911,11 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
     idents = annotations['ident'].unique()
 
     dir_snips_base = cfg.dir_snips(setname)
-    if not os.path.exists(dir_snips_base):
-        print(f'{time.time()-t0:.1f}s - snips dir not found; running extract_snips first')
-        extract_snips(setname, verbose=verbose)
+    # Always sync: annotation efforts are ongoing, and an ident whose annotations moved
+    # needs its superseded snips replaced before anything is extracted from them. Idents
+    # that didn't move cost a manifest read each.
+    snip_status = extract_snips(setname, verbose=verbose)
+    idents_forced = {i for i, s in snip_status.items() if s == 'updated'}
 
     # Pre-filter: determine which idents actually need work before spawning workers
     embedder_tmp = load_embedder(embeddername, framehop_prop=1, initialize=False)
@@ -666,23 +924,37 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
     dir_embeddings_base = config_extract.dir_out_embeddings(embeddername)
 
     idents_todo = []
+    n_stale = 0
     for ident in idents:
         fold_rows = folds[folds['ident'] == ident]['fold'].unique()
         if len(fold_rows) != 1:
             continue
         fold = str(fold_rows[0])
+        fingerprint = _fingerprint_annotations(annotations[annotations['ident'] == ident])
         a_ident = AssignIdent(
             ident=ident, fold=fold, config_extract=config_extract,
             dir_audio_base=dir_audio_cache_base,
             dir_embeddings_base=dir_embeddings_base,
             dir_snips_base=dir_snips_base,
+            audio_key=audio_key,
+            fingerprint=fingerprint,
+            force_stale=ident in idents_forced,
         )
+        if a_ident.audio_stale or a_ident.embeddings_stale:
+            n_stale += 1
         if a_ident.handle not in ('skip', 'no_snips'):
             idents_todo.append(ident)
+        elif a_ident.handle == 'skip':
+            # Adopt: nothing has changed under this ident, so record the fingerprint it
+            # was built from. Directories extracted before fingerprinting existed can't
+            # be judged retroactively; stamping them now makes the *next* edit detectable.
+            for dir_done in (a_ident.dir_out_audio, a_ident.dir_out_embeddings):
+                if _read_fingerprint(dir_done) is None:
+                    _write_fingerprint(dir_done, fingerprint)
 
     n_skip = len(idents) - len(idents_todo)
     print(f'{time.time()-t0:.1f}s - [{setname}/{embeddername}] {len(idents_todo)} of {len(idents)} idents to extract '
-          f'({n_skip} already done or missing snips)')
+          f'({n_skip} already done or missing snips; {n_stale} superseded by new annotations)')
 
     if not idents_todo:
         print(f'{time.time()-t0:.1f}s - [{setname}/{embeddername}] nothing to do')
@@ -696,7 +968,8 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
         # In-process extraction: avoids multiprocessing fork, required for embedders
         # that use TF SavedModel (fork corrupts GCD thread pools on macOS).
         worker = WorkerExtract(config_extract, annotations, folds,
-                               multiprocessing.Queue(), 'main', verbose=verbose)
+                               multiprocessing.Queue(), 'main', verbose=verbose,
+                               idents_forced=idents_forced)
         worker.t0 = time.time()
         worker.embedder.initialize()
         for ident in idents_todo:
@@ -711,7 +984,9 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
     workers = []
     for w in range(n_workers):
         q_extract.put('TERMINATE')
-        workers.append(multiprocessing.Process(target=run_worker, args=(config_extract, annotations, folds, q_extract, w, verbose)))
+        workers.append(multiprocessing.Process(
+            target=run_worker,
+            args=(config_extract, annotations, folds, q_extract, w, verbose, idents_forced)))
 
     for w in workers:
         w.start()
@@ -732,7 +1007,8 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description='Extract raw audio snips for a set (no embedder required).')
+    parser = argparse.ArgumentParser(
+        description='Sync raw audio snips for a set to its annotations (no embedder required).')
     parser.add_argument('--set', required=True, dest='setname')
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()

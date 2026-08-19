@@ -1,102 +1,56 @@
 # buzzdetect-training
 
-Pipeline: raw audio + annotations → trained Keras classifiers for insect buzz detection.
+Raw audio + annotations → a Keras probe (dropout + one dense layer) over frozen audio embeddings, for insect buzz detection.
 
-## Pipeline
+`README.md` is the operator's guide: how to run each stage, what every flag does, what the outputs mean, and the design rationale for folds and roles. Read it before changing pipeline behaviour. This file holds only what isn't obvious from the code itself.
+
+## Layout
 
 | Stage | Entry point | Language |
-|-------|-------------|----------|
-| 1. Combine annotations per effort | `01_annotate/MAKE.R` | R |
-| 2. Build a set (`build.R` per set), extract embeddings | `02_set/sets/<set>/build.R`, `02_set/main.py` | R, Python |
-| 3. Train | `03_train/main.py` | Python |
-| 4. Test | `04_test/main.py` | Python |
+|------------------|-------------------------------|------------------------|
+| 1\. Combine annotations per effort | `01_annotate/MAKE.R` | R |
+| 2\. Build a set, extract embeddings | `02_set/sets/<set>/build.R`, `02_set/main.py` | R, Python |
+| 3\. Train (leave-one-fold-out CV) | `03_train/main.py` | Python |
+| 4\. Test against a fixed corpus | `04_test/main.py` | Python |
 
-Run stages individually. Root `main.py` claims to chain 2–4 but is stale — it
-calls entry points that no longer exist (`train_model`, `test_model`); fix it
-before using it.
+Root `main.py` chains 2→3. It resolves stage paths relative to the cwd, so it only works from the project root. Stage 4 is deliberately not chained — see its docstring.
 
-## Key files
+Environment: `conda run -n buzzdetect-train python <script>`.
 
-- `config.py` — all paths/constants; anchors ROOT to the project directory
-- `embedders/embedding.py` — embedder interface
-- `models/models.py` — model loader
-- `translations/` — label translation CSVs
+## Invariants
 
-## Data layout (mostly gitignored)
+- **`import tensorflow` must come first** in any entry point that later imports pandas. Every entry point has the full explanation in a header comment; keep it there and keep the import at the top.
+- **`config.py` anchors `ROOT` to its own directory**, so stage scripts can be invoked from any cwd. Add paths there, not as literals in stage code.
+- **A set's `config_extract.json` always wins** over CLI extraction params — embeddings on disk were built under it. Changing them means deleting the file and re-extracting (`02_set/extract.py::extract_set`).
+- **Annotations are fingerprinted, and the fingerprint is what makes a rerun incremental.** Each ident's snip dir holds a `manifest.json` (fingerprint + the snips its annotations imply); each framed-audio and embedding dir holds an `annotations.fingerprint`. Matching means the product is current and the source file is never opened; differing means only that ident is deleted and rebuilt. Anything that changes what extraction produces from a given annotation set must be reflected in the fingerprint, or stale output will be kept (`02_set/extract.py::_fingerprint_annotations`, `AssignIdent`).
+- **Idents and fold names are both path-like**, of no fixed depth. Never glob a fixed number of `*` components to find an ident's directory, and never read the top level of `audio/snips/` as a list of idents — walk (`_find_ident_dirs`, `_find_snip_dirs`). Getting this wrong deletes data.
+- **Roles are training-time policy only.** `02_set` embeds every fold regardless, including `exclude`, so flipping a role never costs a re-extraction (`03_train/dataset.py::read_fold_roles`).
+- **Validation is always a whole fold, never a split within one.** A within-fold split leaks site identity into the early-stopping signal. There is no snip-level splitter and there should not be one; README explains why.
+- **An annotation effort is a directory under `01_annotate/` holding a `combine.R`** — that file is the whole contract, and it must write both `annotations_combined.csv` and `folds.csv` (fold assignment included). `MAKE.R` discovers efforts by that file, not by `.Rproj`, which is gitignored.
+- **`translations/build.R` is additive**: existing rows win, new labels are appended and reported. It never drops a curated row, since embeddings named after a since-retired label may still be on disk.
+- **Reruns resume.** `train_utils.can_write()` skips any model directory that already holds a `config_model.json`, and the CV summary is reassembled from disk so skipped folds still contribute.
 
-- `audio/` — raw training audio
-- `02_set/sets/<setname>/` — `build.R`, `annotations.csv`, `folds.csv`,
-  `config_extract.json`, plus gitignored snips and embeddings. `medium` and
-  `lite` are checked in; `lite` is Even Sample only, ~2.8h over 11 rotate folds.
-- `models/<modelname>/` — model artifacts
-- `04_test/audio/` — inference test audio
+## Where to look
 
-## Environment
+- Fold roles, CV loop, shipped-model epoch count — `03_train/train.py`, `03_train/dataset.py`
+- Three-layer extraction (snips → framed-audio cache → embeddings), worker fan-out — `02_set/extract.py`
+- Embedder interface — `embedders/embedding.py`; model loader — `models/models.py`
+- Threshold sweeps (`metrics_by_group`, `metrics_at_fpr`, `metrics_at_precision`) — `04_test/metrics.py`, imported by `03_train`
+- Label translation semantics (`ignore` / `exclude` / missing row) — `03_train/dataset.py::translate_labels`
 
-`conda run -n buzzdetect-train python <script>`
+## Known stale
 
-## Train (leave-one-fold-out CV)
+- `04_test/` and `summarize_metrics.py` / `compare_metrics.py` / `evaluate_set.py` / `compare_sets.py` predate the CV rework: they assume a fixed model plus a hand-curated corpus at `models/<model>/tests/metrics.csv`, which CV runs don't produce.
+- `log.jsonl` entries all predate the CV rework — measured against the old fixed `04_test` corpus, so their numbers aren't comparable to a CV run's. `LOOP.md` is current and explains the break.
+- `02_set/sets/medium/` is a work in progress; its `folds.csv` predates roles.
 
-A fold is one deployment (one recorder, one site, one period). Each annotation
-effort assigns its own folds inside `combine.R`, writing `folds.csv` with
-columns `ident`, `fold`, `role` (the old standalone `folds.R` is gone, though
-`MAKE.R` still sources one if it happens to exist). `02_set/sets/<set>/build.R`
-concatenates those per-effort files into the set's own `folds.csv`, carrying
-`role` through unchanged — so a set picks roles by choosing sources, and
-overriding one means editing the set's build. `README.md` has the design
-rationale; the mechanics:
+## Testing
+For testing code, debugging, etc., you may do the following:
 
-`03_train` reads `02_set/sets/<set>/folds.csv` for each fold's **role** — `train`
-(always trains, never scored), `rotate` (the leave-one-fold-out set), `holdout`
-(only ever scored), `exclude` (neither) — and cross-checks it against the folds
-actually extracted under `embeddings/<embedder>/raw/`. Roles are training-time
-policy only; `02_set` embeds every fold regardless, so flipping a role never
-costs a re-extraction.
+- **01_annotate.** You may create a dummy annotation project under 01_annotate called "test"
 
-Each `rotate` fold takes a turn held out: train on the other `rotate` folds plus
-all `train` folds, early-stop on the held-out fold, score the held-out fold.
-Validation is always a whole deployment — never a split within one, which would
-leak site identity into the stopping signal. Fold model binaries are not kept.
+- **02_set.** You may create a dummy training set under 02_set/sets/
 
-The shipped model trains on `rotate` + `train` pooled. Nothing is held out, so
-there is nothing clean to monitor: it trains for a fixed
-`median(best_epoch)` across the rotations. It's the only model saved with a
-binary.
+- **03_train.** You may create dummy models prepended with "test\_". E.g., "test_new_metrics"
 
-```bash
-conda run -n buzzdetect-train python 03_train/main.py \
-  --name <name> --set <set> --embedder <emb> --translation <t> \
-  [--epochs 400] [--patience 50] [--augment <aug_dir> ...]
-```
-
-A `folds.csv` with no `role` column warns and treats every fold as `rotate`.
-
-One model per fold — no repeat runs nested in the CV. (The `_v1…_vN`
-repeated-run pattern in `LOOP.md` is for hypothesis-testing noise floors, not
-CV; it doesn't apply here.)
-
-Output under `models/<name>/`:
-- `model.keras` etc. — the shipped model
-- `folds_summary.csv` — one row per rotating fold: epochs, best val loss/accuracy, frame counts, sensitivity at each target FPR on the held-out fold
-- `folds_pooled_metrics.csv` / `folds_pooled_sx.csv` — every fold's held-out predictions pooled into one ROC (frame-weighted). Compare against the unweighted mean across folds that the run prints; a gap means one high-volume fold is carrying the result. Mildly optimistic, since each fold also chose its own stopping epoch — see README.
-- `folds/<fold>/` — archive for that held-out fold: `metrics.csv`, `sx.csv`, `predictions.csv`, `summary.json`, `config_model.json`, `history.pickle`, `loss_curves.svg`, `weights.csv`, `translation.csv`. No `model.keras`.
-- `holdout/<fold>/` — the shipped model scored on each `holdout` fold, same files as above.
-
-Reruns skip any model whose directory already holds a `config_model.json`, and
-the CV summary is reassembled from disk, so a partial rerun keeps the folds it
-skipped.
-
-## Evaluation tools (stale — predate the CV rework)
-
-`04_test` and the scripts below assume a fixed model + a separate hand-curated
-test corpus (`models/<model>/tests/metrics.csv`), which CV-trained models
-don't produce. Read `folds_summary.csv`, `folds_pooled_sx.csv`, or
-`folds/<fold>/sx.csv` directly until these are reworked to aggregate across
-folds.
-
-```bash
-conda run -n buzzdetect-train python summarize_metrics.py <model> [<model> ...]
-conda run -n buzzdetect-train python compare_metrics.py [<model>] [--top N]
-conda run -n buzzdetect-train python evaluate_set.py <set_base> [<set_base> ...]
-conda run -n buzzdetect-train python compare_sets.py [<set_base> ...] [--top N]
-```
+You have permission to create, modify, or delete any of these test locations. You must ask the user before creating, editing, or modifying existing annotation projects, training sets, or models unless you have been directed to do so.
