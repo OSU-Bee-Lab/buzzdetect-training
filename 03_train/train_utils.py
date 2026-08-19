@@ -10,7 +10,12 @@ import config as cfg
 
 def build_classes(translation):
     classes = translation['to'].unique().tolist()
-    classes = [c for c in classes if not c in  ['ignore', np.nan, '', 'exclude']]
+    # The sentinels are matched case-insensitively: translations/build.R writes
+    # them uppercase, but hand-curated rows have used lowercase.
+    classes = [
+        c for c in classes
+        if not (c is np.nan or not isinstance(c, str) or c.strip().lower() in ['', 'ignore', 'exclude'])
+    ]
     classes = sorted(classes)
 
     return classes

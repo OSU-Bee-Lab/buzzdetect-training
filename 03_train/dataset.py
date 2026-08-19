@@ -96,8 +96,9 @@ def build_fold_dataset(dir_samples, translation, labels_keep_raw=None, exclusive
     for s in samples:
         s.labels_translate = translate_labels(s.labels_raw, translation_dict)
 
-        # drop samples where any "to" label is set to exclude
-        if 'exclude' in s.labels_translate:
+        # drop samples where any "to" label is set to exclude (case-insensitive:
+        # translations/build.R writes EXCLUDE, curated rows have used exclude)
+        if any(isinstance(l, str) and l.strip().lower() == 'exclude' for l in s.labels_translate):
             continue
 
         s.target_array = labels_to_targets(s.labels_translate, classes)
