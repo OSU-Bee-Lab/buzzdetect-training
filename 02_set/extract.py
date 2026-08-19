@@ -28,7 +28,10 @@ def melt_coverage(cover_df, framelength=None):
         cover_df['end'] = cover_df['start'] + framelength
 
     cover_df.sort_values("start", inplace=True)
-    cover_df["coverageGroup"] = (cover_df["start"] > cover_df["end"].shift()).cumsum()
+    # cummax, not the previous row's end: an annotation that encloses later ones must keep
+    # the group open. Without it a segment-spanning label (e.g. a 300 s ins_trill over a
+    # gap-filled segment) shatters into one cluster per annotation.
+    cover_df["coverageGroup"] = (cover_df["start"] > cover_df["end"].shift().cummax()).cumsum()
     df_coverage = cover_df.groupby("coverageGroup").agg({"start": "min", "end": "max"})
 
     coverage = list(zip(df_coverage['start'], df_coverage['end']))
@@ -149,22 +152,50 @@ def _parse_snip_bounds(path: str) -> tuple[float, float]:
     return float(parts[1]), float(parts[2])
 
 
-def _extract_snips_ident(ident: str, annotations_sub: pd.DataFrame, path_audio: str, dir_out: str):
-    """Write one WAV per annotation cluster (+ 30 s buffer) for a single ident."""
+def _buffer_and_merge(chunks, buffer_s: float, duration: float):
+    """Pad each annotation cluster by buffer_s, then merge ranges that now overlap.
+
+    The buffer is a staging decision only — it says which clusters are close enough to
+    pull off slow storage in one read. Merging is what keeps snips disjoint; overlapping
+    snips would frame (and label, and embed) the shared seconds once per snip. Chunk
+    boundaries inside a snip are re-derived from the annotations, so merging here never
+    widens a training sample.
+    """
+    padded = sorted(
+        (max(0.0, start - buffer_s), min(duration, end + buffer_s))
+        for start, end in chunks
+    )
+
+    merged = []
+    for start, end in padded:
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+
+    return [(start, end) for start, end in merged]
+
+
+def _extract_snips_ident(ident: str, annotations_sub: pd.DataFrame, path_audio: str, dir_out: str,
+                          verbose=False, t0=None):
+    """Write one FLAC per merged, buffered annotation cluster for a single ident."""
     os.makedirs(dir_out, exist_ok=True)
 
     with sf.SoundFile(path_audio) as track:
         duration = track.frames / track.samplerate
         sr = track.samplerate
-        chunks_raw = melt_coverage(annotations_sub)
+        chunks_raw = _buffer_and_merge(melt_coverage(annotations_sub), cfg.SNIP_BUFFER_S, duration)
 
-        for chunk in chunks_raw:
-            start = max(0.0, chunk[0] - cfg.SNIP_BUFFER_S)
-            end = min(duration, chunk[1] + cfg.SNIP_BUFFER_S)
+        for i, chunk in enumerate(chunks_raw):
+            start, end = chunk
             path_out = os.path.join(dir_out, _snip_filename(start, end))
 
             if os.path.exists(path_out):
                 continue
+
+            if verbose:
+                print(f'{time.time()-t0:.1f}s - extract_snips: {ident} '
+                      f'[{i+1}/{len(chunks_raw)}] {start:.1f}-{end:.1f}s', flush=True)
 
             start_sample = round(sr * start)
             n_samples = round(sr * (end - start))
@@ -184,10 +215,13 @@ def extract_snips(setname: str, verbose=False):
     skipped. Snips are stored as:
         02_set/sets/<setname>/audio/snips/<ident>/snip_<start>_<end>.flac
 
-    Each snip covers one annotation cluster padded by SNIP_BUFFER_S on each
-    side. Overlapping clusters are NOT merged — separate snip files are written
-    for each, intentionally. Snips are at the source file's native sample rate
-    (no per-embedder resampling at this stage).
+    Each snip covers one or more annotation clusters padded by SNIP_BUFFER_S on
+    each side; clusters whose padded ranges overlap are merged into a single
+    snip, so snips for an ident are always disjoint. The buffer is a staging
+    decision (what to pull off slow storage in one read), not a training-sample
+    boundary — extract_ident_both re-derives chunks from the annotations inside
+    each snip. Snips are at the source file's native sample rate (no
+    per-embedder resampling at this stage).
     """
     dir_set = cfg.dir_set(setname)
     annotations = pd.read_csv(os.path.join(dir_set, 'annotations.csv'))
@@ -207,15 +241,15 @@ def extract_snips(setname: str, verbose=False):
 
         annotations_sub = annotations[annotations['ident'] == ident]
         dir_out = os.path.join(dir_snips_base, ident)
-        t_ident = time.time()
-        _extract_snips_ident(ident, annotations_sub, path_audio, dir_out)
+        if verbose:
+            print(f'{time.time()-t0:.1f}s - extract_snips: [{n_done+1}/{len(idents)}] {ident} — '
+                  f'starting ({len(annotations_sub)} annotations)', flush=True)
+        _extract_snips_ident(ident, annotations_sub, path_audio, dir_out, verbose=verbose, t0=t0)
         n_done += 1
         if verbose:
-            print(f'extract_snips: [{n_done}/{len(idents)}] {ident} — '
-                  f'{len(annotations_sub)} annotations ({time.time()-t_ident:.1f}s)', flush=True)
+            print(f'{time.time()-t0:.1f}s - extract_snips: [{n_done}/{len(idents)}] {ident} — done', flush=True)
 
-    print(f'extract_snips: {n_done} ident(s) snipped, {n_missing} missing audio '
-          f'({time.time()-t0:.1f}s)')
+    print(f'{time.time()-t0:.1f}s - extract_snips: {n_done} ident(s) snipped, {n_missing} missing audio')
 
 
 # ---------------------------------------------------------------------------
@@ -335,8 +369,12 @@ class WorkerExtract:
 
         frames_by_label = {}
 
-        for snip_path in snip_paths:
+        for i, snip_path in enumerate(snip_paths):
             snip_start, _ = _parse_snip_bounds(snip_path)
+
+            if self.verbose:
+                print(f'{time.time()-self.t0:.1f}s - extractor {self.name}: {a_ident.ident} '
+                      f'snip [{i+1}/{len(snip_paths)}] {os.path.basename(snip_path)}', flush=True)
 
             with sf.SoundFile(snip_path) as track:
                 snip_duration = track.frames / track.samplerate
@@ -446,8 +484,8 @@ class WorkerExtract:
         if not self.verbose:
             return
         self.n_done += 1
-        print(f'extractor {self.name}: [{self.n_done}] {ident} — {msg} '
-              f'({time.time()-t_ident:.1f}s)', flush=True)
+        print(f'{time.time()-self.t0:.1f}s - extractor {self.name}: [{self.n_done}] {ident} — {msg} '
+              f'(ident took {time.time()-t_ident:.1f}s)', flush=True)
 
     def extract_ident(self, ident):
         fold = self.folds[self.folds['ident'] == ident]['fold'].unique()
@@ -466,6 +504,9 @@ class WorkerExtract:
             dir_embeddings_base=self.dir_embeddings_base,
             dir_snips_base=self.dir_snips_base,
         )
+        if self.verbose:
+            print(f'{time.time()-self.t0:.1f}s - extractor {self.name}: [{self.n_done+1}] {ident} — '
+                  f'starting ({a_ident.handle})', flush=True)
         t_ident = time.time()
         try:
             if a_ident.handle == 'both':
@@ -494,7 +535,7 @@ class WorkerExtract:
             self.extract_ident(ident)
             ident = self.q_extract.get()
         if self.verbose:
-            print(f'extractor {self.name}: terminating ({time.time()-self.t0:.1f}s)')
+            print(f'{time.time()-self.t0:.1f}s - extractor {self.name}: terminating')
 
 
 def run_worker(config_extract: ConfigExtract, annotations: pd.DataFrame, folds: pd.DataFrame,
@@ -534,11 +575,11 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
                 f"\nDelete {path_config} and re-extract to change them."
             )
         config_extract = ConfigExtract(**saved)
-        print(f"[{setname}/{embeddername}] existing config: "
+        print(f"{time.time()-t0:.1f}s - [{setname}/{embeddername}] existing config: "
               f"overlap_event_prop={saved['overlap_event_prop']}, "
               f"framehop_prop={saved['framehop_prop']}")
         if verbose:
-            print(f'  loaded from {path_config}')
+            print(f'{time.time()-t0:.1f}s -   loaded from {path_config}')
     else:
         if overlap_event_prop is None or framehop_prop is None:
             raise ValueError(f"No config_extract.json found for set '{setname}'; overlap_event_prop and framehop_prop must be provided")
@@ -547,10 +588,10 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
         stored = {k: getattr(config_extract, k) for k in ConfigExtract.STORED_FIELDS}
         with open(path_config, 'w') as f:
             json.dump(stored, f, indent=2)
-        print(f'[{setname}/{embeddername}] new config: '
+        print(f'{time.time()-t0:.1f}s - [{setname}/{embeddername}] new config: '
               f'overlap_event_prop={overlap_event_prop}, framehop_prop={framehop_prop}')
         if verbose:
-            print(f'  saved to {path_config}')
+            print(f'{time.time()-t0:.1f}s -   saved to {path_config}')
 
     config_extract.embeddername = embeddername
 
@@ -560,7 +601,7 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
 
     dir_snips_base = cfg.dir_snips(setname)
     if not os.path.exists(dir_snips_base):
-        print(f'snips dir not found; running extract_snips first ({time.time()-t0:.1f}s)')
+        print(f'{time.time()-t0:.1f}s - snips dir not found; running extract_snips first')
         extract_snips(setname, verbose=verbose)
 
     # Pre-filter: determine which idents actually need work before spawning workers
@@ -585,15 +626,15 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
             idents_todo.append(ident)
 
     n_skip = len(idents) - len(idents_todo)
-    print(f'[{setname}/{embeddername}] {len(idents_todo)} of {len(idents)} idents to extract '
+    print(f'{time.time()-t0:.1f}s - [{setname}/{embeddername}] {len(idents_todo)} of {len(idents)} idents to extract '
           f'({n_skip} already done or missing snips)')
 
     if not idents_todo:
-        print(f'[{setname}/{embeddername}] nothing to do ({time.time()-t0:.1f}s)')
+        print(f'{time.time()-t0:.1f}s - [{setname}/{embeddername}] nothing to do')
         return True
 
     if verbose:
-        print(f'  {n_workers} worker(s); folds: '
+        print(f'{time.time()-t0:.1f}s -   {n_workers} worker(s); folds: '
               f"{folds[folds['ident'].isin(idents_todo)]['fold'].nunique()}")
 
     if n_workers <= 0:
@@ -605,7 +646,7 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
         worker.embedder.initialize()
         for ident in idents_todo:
             worker.extract_ident(ident)
-        print(f'[{setname}/{embeddername}] extracted {len(idents_todo)} ident(s) ({time.time()-t0:.1f}s)\n:)\n:D\n:O')
+        print(f'{time.time()-t0:.1f}s - [{setname}/{embeddername}] extracted {len(idents_todo)} ident(s)\n:)\n:D\n:O')
         return True
 
     q_extract = multiprocessing.Queue()
@@ -630,7 +671,7 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
             f'(exit codes: {[w.exitcode for w in failed]})'
         )
 
-    print(f'all extractions complete ({time.time()-t0:.1f}s)\n:)\n:D\n:O')
+    print(f'{time.time()-t0:.1f}s - all extractions complete\n:)\n:D\n:O')
     return True
 
 
