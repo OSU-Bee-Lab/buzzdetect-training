@@ -24,6 +24,16 @@ condaenv.l8rr463d.requirements.txt
 01_annotate/**/local/
 01_annotate/**/seenote/
 
+# generated outputs. combine.R writes the first three, build.R the rest; all of
+# them are rebuilt from the (already ignored) raw annotations, and they churn on
+# every rerun. The scripts that produce them are the tracked record.
+01_annotate/**/annotations_combined.csv
+01_annotate/**/folds.csv
+01_annotate/**/summary*.csv
+02_set/sets/*/annotations.csv
+02_set/sets/*/folds.csv
+02_set/sets/*/summary*.csv
+
 # model artifacts
 *.keras
 *.pickle
