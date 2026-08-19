@@ -54,14 +54,20 @@ annotations_combined <- lapply(paths_annotations, read_annotation) %>%
         ),
 
         label = case_when(
-            label == 'ambient_thunder' ~ 'ambient_rain',
             label == 'ins_buzz_bee' ~ 'ins_buzz_medium',
             label == 'ins_cicada' ~ 'ins_trill',
-
 
             label == 'bird_goose' ~ 'animal_bird_goose',
             label == 'frog_tree' ~ 'animal_frog_tree',
             label == 'frog_pickerel' ~ 'animal_frog_pickerel',
+
+            label == 'mech_auto_bike' ~ 'mech_auto_motorcycle',
+            label == 'mech_hum_auto' ~ 'mech_hum_traffic',
+
+            label == 'mech_hum_chainsaw' ~ 'mech_chainsaw',
+
+            label == 'mech_hum_lawnmower' ~ 'mech_lawnmower',
+
             label %in% c('ambient_day', 'ambient_night') ~ 'ambient_background',
             T~label
         )

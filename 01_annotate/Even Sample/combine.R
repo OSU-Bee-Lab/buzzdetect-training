@@ -71,6 +71,7 @@ annotations_combined <- paths_annotations %>%
   lapply(translate_annotation) %>% 
   bind_rows() %>% 
   mutate(
+    label = str_trim(label),
     label = case_when(
       str_detect(label, 'ins_buzz_pollination') ~ 'ins_buzz_pollination',
       str_detect(label, 'ins_buzz_medium') ~ 'ins_buzz_medium',
@@ -81,10 +82,8 @@ annotations_combined <- paths_annotations %>%
 
       label == 'animal_bird' ~ 'ambient_background',
       label == 'mech_farm' ~ '',
-      label == 'ambient_thunder' ~ 'ambient_rain',
       label == 'happy 4th :)' ~ '', # :)
       label == 'unknown_rasp' ~ '',
-
 
       T ~ label
     )
