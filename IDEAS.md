@@ -46,32 +46,30 @@ what survives the honest eval is the real number.
 if duration is the mechanism, k=2 or 3 should keep helping until the window
 starts smearing onsets.
 
-### yamnet-combined
+### input-standardization
 
-**Hypothesis:** YAMNet's 521 AudioSet class scores are a semantically meaningful
-projection of the same audio — "Insect", "Bee, wasp, etc.", "Buzz", "Vehicle",
-"Wind" — learned on far more data than we have. Concatenating them with the
-1024-d embedding gives the probe both the raw representation and AudioSet's own
-read of it, which may carry signal the linear probe can't recover from the
-embedding alone.
+**Hypothesis:** `exp/yamnet-combined` (+0.016) concatenated YAMNet's 521 sigmoid
+class scores onto the 1024-d embedding, and the two blocks are on very different
+scales — score block mean 0.004 / max 0.41 against embedding mean 0.041 / max
+2.6, roughly 10x. Nothing in `03_train` normalizes its input. `Dropout(0.2)`
+drops units uniformly regardless of scale, so the small block is effectively
+regularized far harder than the large one, and the probe may never get to use
+the scores properly.
 
-**What to do:** the embedder already exists — `embedders/yamnet_combined/`,
-built during the fixed-test era and never extracted for a current set. It emits
-`concat(embedding, scores)` at 1545-d and reports `n_embeddings = 1545`, so
-nothing in 03_train needs changing. This is an extraction plus a training run:
+**What to do:** standardize per feature block (or per dimension) before the
+probe. Cheapest honest version is a fixed transform computed on the training
+folds only and applied at scoring, not a `BatchNormalization` layer —
+BatchNorm was tried in the fixed-test era and was a clear negative because its
+running statistics didn't transfer across deployments, which is a real risk here
+too.
 
-    python 02_set/main.py --set medium --embedder yamnet_combined --workers 2
-    python 03_train/main.py --name <slug> --set medium --embedder yamnet_combined --translation general -y
+**Why it might help:** it decides whether `yamnet-combined`'s modest gain is the
+ceiling or an artifact of the scores being drowned out. Answer that before
+composing combined with anything else.
 
-**Why it might help:** the probe is linear, so it can only use structure already
-linearly available in its input. Class scores are a nonlinear function of the
-embedding that YAMNet's own trained head computed — exactly the kind of feature
-a linear probe cannot construct for itself.
-
-**Caveats:** costs a re-extraction. The scores are a softmax over classes, so
-their scale is very different from the embedding's — worth checking whether the
-probe can use both without one dominating. Composes with `context-embedder`; try
-them separately before combining.
+**Caveats:** no re-extraction needed — the `yamnet_combined` embeddings for
+`medium` are already cached. Applies equally to any future concatenated
+representation, `context-embedder` included.
 
 ### willard-regression
 
@@ -142,6 +140,10 @@ do the same, and rerun rather than defer to it.
 
 Full entries: `.local/archive/log_precv.jsonl`. Working trees and notes:
 `.local/worktrees-fixed-test/`.
+
+One has already been retested under CV: the fixed-test entry `combined-embedder`
+was about validation scope, but the `yamnet_combined` *embedder* it left behind
+was finally extracted and trained as `exp/yamnet-combined` (+0.016).
 
 | Area | What was tried | Old verdict |
 |---|---|---|
