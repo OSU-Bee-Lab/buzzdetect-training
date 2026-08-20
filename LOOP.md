@@ -78,6 +78,12 @@ why the endpoint is per-deployment rather than pooled.
   `tiny` for smoke-testing the pipeline; neither is a place to draw conclusions.
   Annotation is still in progress, so folds will gain data over time and old
   numbers will drift; say which commit of the set a run used if it matters.
+  Every entry in `log.jsonl` is implicitly on `medium` at 11 folds — that's
+  fixed for as long as the log exists, so neither is logged per entry. If the
+  fold roster itself ever changes (a deployment added or dropped), archive
+  `log.jsonl` the way the pre-CV log was archived and rerun whichever
+  experiments are worth keeping under the new set, rather than mixing fold
+  counts silently in one log.
 - Augmentation: has hurt training so far — avoid without strong reason.
 - Err against hyperparameter tuning, unless you have a strong reason. We're
   looking for structural gains; hyperparameters can be tuned in one large sweep
@@ -160,6 +166,13 @@ conda run -n buzzdetect-train python 03_train/main.py \
   --name <modelname> --set medium --embedder yamnet --translation general -y
 ```
 
+Both stages run far longer than a foreground command should block for. Launch
+each with `run_in_background: true` and then stop — do not sleep-loop, do not
+`cat` the task's output file, do not spin up a `Monitor`. A backgrounded
+command already delivers a completion notification on its own; that
+notification *is* the wait. `Monitor` is for streaming an ongoing process's
+events, not for a one-shot "tell me when this exits."
+
 There is no `--runs` and no stage 4. One training call *is* the experiment: it
 trains one model per rotating fold and the shipped model, and prints the pooled
 and unweighted numbers when it finishes.
@@ -230,8 +243,30 @@ Append one line to `log.jsonl` in **main** and commit it. Be very brief; the log
 only guides later agents toward where to dig. The `"method": "cv"` field is what
 separates these entries from the pre-rework ones — always include it.
 
+Every entry also needs a `trust` judgment, kept separate from the delta itself.
+This is not a statistical significance test — there's no seed control to build
+one from (see the noise-floor caution above) — just whether a later reader
+should act on the number as measured, or dig first:
+
+- `"clean"` — nothing about how it was measured should make you discount it.
+- `"caveated"` — a specific factor (a stopping rule tuned for a different input
+  scale, a fold too small to read, a metric that doesn't transfer across
+  deployments) means the direction is probably right but the size shouldn't be
+  trusted as stated.
+- `"artifact"` — something about the *setup*, not the effect, inflated or
+  deflated the number enough that comparing it to other entries at face value
+  would mislead.
+
+Say *why* in `conclusion`; `trust` is just the flag a later agent scans for
+before building on your number. `context-stack` (`+0.050`, `artifact`) is why
+this field exists: the eval's same-label-neighbour bug materially inflated
+that number, and only `context-embedder`'s honest rerun (`+0.022`, `clean`)
+revealed the size of the gap. Without a separate flag, a later agent skimming
+deltas would have picked `context-stack` as the biggest win in the log and
+built on the wrong number.
+
 ```json
-{"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "main_commit": "<git rev-parse --short HEAD>", "method": "cv", "set": "medium", "hypothesis": "...", "metrics": {"sens_at_fpr0.005_persite": 0.0, "n_folds": 0}, "baseline": {"model": "cv-baseline", "sens_at_fpr0.005_persite": 0.0}, "conclusion": "..."}
+{"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "main_commit": "<git rev-parse --short HEAD>", "method": "cv", "hypothesis": "...", "metrics": {"sens_at_fpr0.005_persite": 0.0}, "baseline": {"model": "cv-baseline", "sens_at_fpr0.005_persite": 0.0}, "trust": "clean", "conclusion": "..."}
 ```
 
 ### 6. Commit worktree
