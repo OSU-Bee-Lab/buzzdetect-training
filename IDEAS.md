@@ -20,6 +20,37 @@ any of it as settled.
 ### Different levels of automatic annotation generation
 From bee hive and from nighttime audio
 
+### tail-loss-fair-retest
+
+**Hypothesis:** the endpoint reads sensitivity at 0.5% FPR, where a typical
+fold's threshold rests on ~22 top-scoring negative frames
+(`neg_frames_fold_median` in `folds_sx.csv`), but every model in the log trains
+on plain BCE, which spends most of its gradient on the easy negative mass
+nowhere near that operating point. A loss term targeting rank position among
+negatives should lift the low-FPR region specifically.
+
+**Why it needs a retest:** `exp/tail-loss` implemented this as an OHEM term
+added to the compiled loss and collapsed (`trust: artifact`) — but for an
+implementation reason, not a representational one. The compiled loss is what
+`EarlyStopping` monitors, and a term whose value depends on within-batch rank is
+noisy when evaluated on a single small validation fold, so `val_loss` bottomed
+out in the first handful of epochs and `restore_best_weights` locked in a
+near-random model. The mechanism was never actually tested.
+
+**What to do:** keep the tail term in the *training* loss but stop early on
+plain BCE — a separate compiled metric, or a custom callback monitoring the BCE
+term alone. Alternatively compute the tail term against a fixed reference pool
+of negatives rather than the current batch, which removes the batch-locality
+that made it a bad monitor signal. Sanity-check that `best_epoch` lands in the
+same ballpark as baseline (~60-130) before reading any sensitivity number.
+
+**Caveats:** with the operating point resting on ~20 negatives per validation
+fold, genuine tail overfitting is still a live risk — check whether folds with
+small negative populations swing hardest. Also note `exp/tail-loss` hit a TF
+graph bug (out-of-range gather under fused multi-step execution) with a
+data-dependent `top_k` count; prefer a fixed-size `top_k` to avoid it. Smoke-test
+with `tools/smoke_model.py` before spending a CV.
+
 ### standardization-convergence
 
 **Hypothesis:** `exp/input-standardization` added a `Normalization` layer
