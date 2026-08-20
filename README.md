@@ -98,8 +98,8 @@ Or both at once, from the project root:
 conda run -n buzzdetect-train python main.py --model my_first_model --set lite
 ```
 
-Results land in `models/my_first_model/`. Start with `folds_summary.csv` and
-`folds_pooled_sx.csv`.
+Results land in `models/my_first_model/`. Start with `folds_sx.csv`, then
+`folds_summary.csv` for the per-fold detail.
 
 ---
 
@@ -351,9 +351,9 @@ models/<name>/
 ├── model.keras, model.py, config_model.json   the shipped model
 ├── annotations.csv, folds.csv                 copies of the set's, for provenance
 ├── weights.csv, translation.csv, history.pickle, loss_curves.svg
+├── folds_sx.csv               the headline: sens_persite, and what it rests on
 ├── folds_summary.csv          one row per rotating fold
 ├── folds_pooled_metrics.csv   every fold's held-out predictions pooled into one ROC
-├── folds_pooled_sx.csv        that ROC read at target FPRs
 ├── folds/<fold>/              per-rotation archive (no model.keras)
 │   ├── metrics.csv, sx.csv, predictions.csv, summary.json
 │   ├── config_model.json, history.pickle, loss_curves.svg
@@ -380,19 +380,47 @@ Stage 4 is not chained, by design.
 
 ## Reading the results
 
-**Report both pooled and per-deployment.** A run prints both and writes the
-pooled ROC to `folds_pooled_metrics.csv` / `folds_pooled_sx.csv`: every fold's
-held-out predictions pooled, threshold picked once. That's frame-weighted by
-construction, which matches how the shipped model is actually biased. The
-unweighted mean across deployments comes from `folds_summary.csv`. The gap
-between the two *is* the answer to "should I weight for volume?": if they agree,
-fold identity doesn't matter; if they diverge, one high-volume deployment is
-carrying the result and the headline needs that caveat attached.
+**Sensitivity at a fixed FPR depends on who draws the threshold.** It is not a
+property of a model on its own — it is what the model catches once a line is
+drawn, and where that line goes is a deployment decision. buzzdetect ships no
+threshold: operators are told to find their own. So every fold is scored at a
+threshold set on its own held-out audio, and the headline is the plain mean
+across folds — `sens_persite` in `folds_sx.csv`, at fpr 0.005. Each deployment
+counts once, because the question is what a new deployment gets, and a new
+deployment is one site.
 
-Don't reweight the training set to equalize folds. Fold volumes here are an
-artifact of annotation effort, not of nature, so there's no correct weighting to
-recover — and the shipped model will be biased toward high-volume folds either
-way. Better to know that than to launder it.
+It is an oracle: putting a fold at exactly 0.5% FPR uses that fold's labels,
+which an operator doesn't have. Read it as the ceiling on operator tuning. Both
+models in a comparison get the same ceiling, so it is fair for ranking.
+
+Two readings deliberately *not* reported, both of which have misled here before:
+
+- A **buzz-weighted** mean — total buzzes found over total buzzes present. Its
+  weights are annotated hours times buzz density, so a full-bloom mustard field
+  speaks over a quiet soybean patch, and real ecology is mixed with how much of
+  each site got worked up. It is the lower-variance estimator, which only helps
+  if the folds share one true sensitivity — and the premise here is that they
+  don't.
+- A **pooled** read, one global threshold across every fold. It answers "one
+  shipped threshold, everywhere", which is not how the tool is used, and it
+  confounds detection with how portable a model's score scale is. It has made a
+  strictly better model look half as good. `folds_pooled_metrics.csv` still
+  holds the full pooled sweep for ROC plots and `metrics_at_precision`.
+
+**Check what a number rests on.** `folds_sx.csv` carries `folds_scored` and
+`neg_frames_persite_median`: how many folds could reach the target at all, and
+how many non-buzz frames sat above a typical fold's threshold. At fpr 0.001 on a
+set this size that is about four frames per fold, and some folds can't reach it
+— which is why only 0.005 is reported. A fold too small for the target is
+dropped from the mean rather than interpolated inside a single frame. No amount
+of data elsewhere fixes a per-site read on one small site.
+
+Don't reweight the training set to equalize folds. How many *hours* a fold
+contributes is an artifact of annotation effort; how much *buzz* those hours
+hold is largely real, and the two are tangled together in any fold's frame
+count, so there's no correct weighting to recover — and the shipped model will
+be biased toward high-volume folds either way. Better to know that than to
+launder it.
 
 **Don't read the fold-to-fold spread as a confidence interval.** Training pools
 overlap by ~90% across rotations, so fold models are highly correlated and the
@@ -439,8 +467,8 @@ conda run -n buzzdetect-train python evaluate_set.py <set_base> [<set_base> ...]
 conda run -n buzzdetect-train python compare_sets.py [<set_base> ...] [--top N]
 ```
 
-Until these are reworked to aggregate across folds, read `folds_summary.csv`,
-`folds_pooled_sx.csv`, or `folds/<fold>/sx.csv` directly.
+Until these are reworked to aggregate across folds, read `folds_sx.csv`,
+`folds_summary.csv`, or `folds/<fold>/sx.csv` directly.
 
 `04_test/night_positives.py` is standalone and still useful: it plots a model's
 activations across a night recording, the known failure mode.

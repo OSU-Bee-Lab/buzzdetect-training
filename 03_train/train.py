@@ -27,11 +27,12 @@ from write_model_py import write_model_py
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '04_test'))
 from metrics import metrics_by_group, metrics_at_fpr
 
+from sx import summarize_sx, format_sx_report, FPR_TARGETS, FNAME_SX_SUMMARY
+
 FNAME_PREDICTIONS = 'predictions.csv'
 FNAME_FOLD_SUMMARY = 'summary.json'
 FNAME_FOLDS_SUMMARY = 'folds_summary.csv'
 FNAME_POOLED_METRICS = 'folds_pooled_metrics.csv'
-FNAME_POOLED_SX = 'folds_pooled_sx.csv'
 SUBDIR_FOLDS = 'folds'
 SUBDIR_HOLDOUT = 'holdout'
 
@@ -154,10 +155,6 @@ def _score_fold(model, setname, embeddername, fold, translation, classes):
     return metrics_by_group(predictions), predictions
 
 
-def _sens_by_fpr(metrics_df):
-    return metrics_at_fpr(metrics_df).set_index('fpr')['sensitivity']
-
-
 def _format_sens(sens):
     return ', '.join(
         f'sens@fpr{f:.1%}={sens[f]:.3f}' if pd.notna(sens[f]) else f'sens@fpr{f:.1%}=n/a'
@@ -177,7 +174,7 @@ def _write_scores(dir_out, model, setname, embeddername, fold, translation, clas
         return {}, None, None
 
     metrics_df.to_csv(os.path.join(dir_out, cfg.FNAME_METRICS), index=False)
-    sx_df = metrics_at_fpr(metrics_df)
+    sx_df = metrics_at_fpr(metrics_df, FPR_TARGETS)
     sx_df.to_csv(os.path.join(dir_out, cfg.FNAME_SX), index=False)
     predictions.to_csv(os.path.join(dir_out, FNAME_PREDICTIONS), index=False)
 
@@ -430,31 +427,18 @@ def train_set(name, embeddername, setname, name_translation,
         summary = pd.DataFrame(summary_rows)
         summary.to_csv(os.path.join(dir_model_full, FNAME_FOLDS_SUMMARY), index=False)
 
-        # Two headline numbers, deliberately: pooled is frame-weighted, which
-        # matches how the shipped model is actually biased; the unweighted mean
-        # treats every deployment equally. A gap between them means one
-        # high-volume fold is carrying the result — see README.
+        # The headline read — sx.py explains the policies, the weightings, and
+        # why the primary one is the per-deployment mean. The full pooled sweep
+        # is still written out: it is what plots a ROC and what
+        # metrics_at_precision reads. Its sens-at-target is a column of
+        # folds_sx.csv now, so it gets no file of its own.
         pooled = pd.concat(predictions_pooled, ignore_index=True)
         pooled_metrics = metrics_by_group(pooled.drop(columns='fold'))
         pooled_metrics.to_csv(os.path.join(dir_model_full, FNAME_POOLED_METRICS), index=False)
-        pooled_sx = metrics_at_fpr(pooled_metrics)
-        pooled_sx.to_csv(os.path.join(dir_model_full, FNAME_POOLED_SX), index=False)
 
-        cols_sens = [c for c in summary.columns if c.startswith('sens_fpr')]
-        print(f'\n[{name}] CV over {len(summary)} fold(s)')
-        print(f'  pooled (frame-weighted): {_format_sens(pooled_sx.set_index("fpr")["sensitivity"])}')
-        # Report n alongside each mean: a fold with no buzz frames scores n/a
-        # and drops out silently, so the mean can rest on far fewer folds than
-        # the CV ran.
-        print('  unweighted mean across folds: ' + ', '.join(
-            f'{c}={summary[c].mean():.3f} (n={int(summary[c].count())})' for c in cols_sens
-        ))
-        n_scored = int(summary[cols_sens].notna().any(axis=1).sum())
-        if n_scored < len(summary):
-            print(f'  {len(summary) - n_scored} of {len(summary)} fold(s) had no '
-                  f'ins_buzz frames and could not be scored')
-        print('  per-fold spread understates uncertainty about a new '
-              'deployment (training pools overlap heavily)\n')
+        sx = summarize_sx(pooled)
+        sx.to_csv(os.path.join(dir_model_full, FNAME_SX_SUMMARY), index=False)
+        print(format_sx_report(name, sx))
 
     # Shipped model: trains on every fold except 'holdout'. No fold is held
     # out, so there is nothing clean left to monitor — the epoch count comes

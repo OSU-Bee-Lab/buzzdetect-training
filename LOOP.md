@@ -16,15 +16,34 @@ is where the metric choices below come from.
 ## Goal
 
 Improve `ins_buzz` sensitivity at a fixed false-positive rate on **held-out
-deployments**.
+deployments**, with each deployment's threshold set on its own audio.
 
-Primary number: `models/<name>/folds_pooled_sx.csv`, the `sensitivity` column at
-`fpr` 0.001 / 0.005 / 0.01 — every rotating fold's held-out predictions pooled
-into one ROC, threshold picked once. A training run prints it.
+**The number: `sens_persite` at `fpr` 0.005, from `models/<name>/folds_sx.csv`.**
+Every rotating fold is tuned to 0.5% FPR on its own held-out audio; the primary
+figure is the plain mean of those sensitivities, each deployment counted once. A
+training run prints it.
 
-Secondary: the unweighted mean across folds, also printed, from
-`folds_summary.csv`. If the two diverge, one high-volume deployment is carrying
-the result and that belongs in the conclusion.
+Each deployment counts once because the goal is a new deployment, and a new
+deployment is one site — not a weighted blend of eleven. A buzz-weighted mean
+would let a full-bloom mustard field speak over a quiet soybean patch, and its
+weights mix real ecology with how many hours happened to get annotated.
+
+The threshold is set per site because buzzdetect ships none: operators are told
+to find their own. A metric that forces one global threshold measures a
+constraint the product doesn't have, and confounds detection with how portable a
+model's score scale is — it has made a strictly better model look half as good.
+`folds_pooled_metrics.csv` still holds the pooled sweep for ROC plots; it is not
+an endpoint.
+
+`sens_persite` is an oracle: placing a fold at exactly 0.5% FPR uses that fold's
+labels, which an operator doesn't have. Read it as the ceiling on operator
+tuning. It is a fair ceiling to compare two models by, since both get it.
+
+Why 0.005: 0.01 is too loose to be operationally useful, and 0.001 is not
+measurable on the sets we have — it rests on ~4 negative frames per fold, and
+some folds can't reach it at all. `folds_sx.csv` carries
+`neg_frames_persite_median` and `folds_scored` so you can see what a row rests
+on.
 
 Sensitivity at fixed *precision* — the old goal — is still recoverable from
 `folds_pooled_metrics.csv` via `04_test/metrics.py::metrics_at_precision`, but
@@ -133,9 +152,16 @@ models and reports a mix of both. Always use a fresh `--name`, or pass
 
 ```
 models/<modelname>/
-├── folds_pooled_sx.csv     ← primary: sensitivity at each target FPR
-├── folds_summary.csv       ← per fold: epochs, val loss, frame counts, sens at each FPR
+├── folds_sx.csv            ← the number: sens_persite, and what it rests on
+├── folds_summary.csv       ← per fold: epochs, val loss, frame counts, sens@fpr
 └── folds/<fold>/sx.csv     ← the same read, one fold at a time
+```
+
+`folds_sx.csv` is written by a training run, and can be rebuilt for a model
+trained before it existed — no retraining, no TensorFlow:
+
+```bash
+conda run -n buzzdetect-train python 03_train/resummarize.py <modelname>
 ```
 
 `summarize_metrics.py`, `compare_metrics.py`, `evaluate_set.py`,
@@ -146,7 +172,8 @@ directly.
 **Compare paired, per fold.** Both configs ran on the same folds, so the useful
 comparison is the per-fold difference — join the two `folds_summary.csv` files
 on `fold` and look at the deltas and how many folds moved which way. Comparing
-two pooled scalars throws that pairing away.
+two scalars throws that pairing away, and a headline gap that vanishes under
+pairing was never a capability gap.
 
 Two cautions from the README, both of which apply to every conclusion you write:
 
@@ -177,10 +204,9 @@ touching code; fill in the rest after. Commit it.
 ## Results
 | fold | baseline sens@fpr0.005 | this exp | delta | val frames |
 |---|---|---|---|---|
-- Pooled (frame-weighted): baseline <val> → this <val>
-- Unweighted mean across folds: baseline <val> → this <val>
-<interpretation: how many folds moved which way? do the pooled and unweighted
-numbers agree? are the movers folds with enough buzz to trust?>
+- sens_persite @ fpr0.005: baseline <val> → this <val>
+<interpretation: how many folds moved which way? are the movers folds with
+enough buzz to trust? did any fold fail to reach the target FPR?>
 ## Conclusion
 ```
 
@@ -189,7 +215,7 @@ only guides later agents toward where to dig. The `"method": "cv"` field is what
 separates these entries from the pre-rework ones — always include it.
 
 ```json
-{"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "main_commit": "<git rev-parse --short HEAD>", "method": "cv", "set": "lite", "hypothesis": "...", "metrics": {"sens_at_fpr0.005_pooled": 0.0, "sens_at_fpr0.005_mean": 0.0, "n_folds": 0}, "baseline": {"model": "cv-baseline", "sens_at_fpr0.005_pooled": 0.0, "sens_at_fpr0.005_mean": 0.0}, "conclusion": "..."}
+{"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "main_commit": "<git rev-parse --short HEAD>", "method": "cv", "set": "lite", "hypothesis": "...", "metrics": {"sens_at_fpr0.005_persite": 0.0, "n_folds": 0}, "baseline": {"model": "cv-baseline", "sens_at_fpr0.005_persite": 0.0}, "conclusion": "..."}
 ```
 
 ### 6. Commit worktree

@@ -36,6 +36,7 @@ Environment: `conda run -n buzzdetect-train python <script>`.
 - Three-layer extraction (snips → framed-audio cache → embeddings), worker fan-out — `02_set/extract.py`
 - Embedder interface — `embedders/embedding.py`; model loader — `models/models.py`
 - Threshold sweeps (`metrics_by_group`, `metrics_at_fpr`, `metrics_at_precision`) — `04_test/metrics.py`, imported by `03_train`
+- What the headline sens@FPR number means, and the two readings deliberately not reported — `03_train/sx.py`; its module docstring is the argument, README's "Reading the results" is the operator-facing version. `03_train/resummarize.py` rebuilds `folds_sx.csv` for an already-trained model, no TensorFlow
 - Label translation semantics (`ignore` / `exclude` / missing row) — `03_train/dataset.py::translate_labels`
 
 ## Known stale
