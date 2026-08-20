@@ -59,8 +59,13 @@ labels does; and our field recordings' background (wind, traffic, other
 insects) may not resemble AudioSet's distribution closely enough for its
 scores to transfer.
 
-Only "Buzz" (class 125) was tested. "Insect" (class 121) and "Cricket"/
-"Mosquito"/"Fly, housefly"/"Bee, wasp, etc." are also on the class map and
-untested — worth a quick look if this idea gets picked up again, but given how
-far off "Buzz" landed, unlikely to close the gap. Not adding to IDEAS.md as a
-follow-up since the result is this decisive.
+Also tried "Bee, wasp, etc." (class 126, the other obviously insect-sounding
+neighbour on the class map): sens_persite 0.002, same pattern — all folds near
+zero regardless of size. Confirms this isn't a matter of having picked the
+wrong AudioSet class; the head doesn't carry a usable insect-buzz signal under
+either label.
+
+"Insect" (class 121), "Cricket" (122), "Mosquito" (123), and "Fly, housefly"
+(124) remain untested, but given two different classes landed in the same
+place, further class picks are unlikely to close a 0.002→0.206 gap. Not
+adding to IDEAS.md as a follow-up.
