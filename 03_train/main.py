@@ -24,6 +24,18 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=400)
     parser.add_argument('--patience', type=int, default=50,
                         help='EarlyStopping patience for the per-fold submodels')
+    parser.add_argument('--learning-rate', type=float, default=0.002, dest='learning_rate',
+                        help='Adam learning rate (std-convergence sweep knob)')
+    parser.add_argument('--min-delta', type=float, default=0.002, dest='min_delta',
+                        help='EarlyStopping min_delta (std-convergence sweep knob)')
+    parser.add_argument('--clipnorm', type=float, default=None,
+                        help='Adam clipnorm; optimizer-level safeguard, not a structural '
+                             'change (std-convergence sweep knob)')
+    parser.add_argument('--only-folds', nargs='*', dest='only_folds', metavar='FOLD',
+                        help='restrict which rotate folds take a turn as held-out '
+                             '(cheap diagnosis only; does not touch folds.csv)')
+    parser.add_argument('--skip-shipped', action='store_true', dest='skip_shipped',
+                        help='skip training the final shipped model (cheap diagnosis only)')
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
@@ -40,4 +52,8 @@ if __name__ == '__main__':
         verbose=args.verbose,
         patience=args.patience,
         assume_yes=args.assume_yes,
+        learning_rate=args.learning_rate,
+        min_delta=args.min_delta,
+        only_folds=args.only_folds,
+        skip_shipped=args.skip_shipped,
     )

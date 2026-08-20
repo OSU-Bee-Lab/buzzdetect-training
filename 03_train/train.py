@@ -206,7 +206,8 @@ def _collect_fold_results(dir_folds, folds_rotate):
 
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs_max, aug_dirnames, verbose,
-               held_out_fold, save_binary, epochs_fixed=None, patience=50):
+               held_out_fold, save_binary, epochs_fixed=None, patience=50,
+               learning_rate=0.002, min_delta=0.002, clipnorm=None):
     """Train one model. Returns (result_row, model); (None, None) if the model
     directory is already populated."""
     if not can_write(dir_model):
@@ -229,12 +230,21 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     tf_name = re.sub(r'[^A-Za-z0-9_.>-]', '_', modelname)
     model = tf.keras.Sequential(name=tf_name)
     model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
+    # Ported unmodified from exp/input-standardization: fixed per-dimension
+    # standardization, not BatchNorm. adapt() sets mean/variance once from the
+    # training folds and freezes them as non-trainable weights baked into
+    # model.keras, unlike BatchNorm's moving averages (tried pre-CV, -5.8pp —
+    # running stats didn't transfer across deployments). This experiment only
+    # sweeps learning_rate/patience/min_delta around this fixed structure.
+    normalizer = tf.keras.layers.Normalization(axis=-1)
+    normalizer.adapt(data.train_tf.map(lambda x, y: x))
+    model.add(normalizer)
     model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.Dense(len(data.classes)))
 
     model.compile(
         loss=tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.2),
-        optimizer=tf.keras.optimizers.Adam(learning_rate=0.002),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate, clipnorm=clipnorm),
         metrics=['accuracy'],
     )
 
@@ -254,7 +264,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         }
     else:
         callback = tf.keras.callbacks.EarlyStopping(
-            monitor='val_loss', patience=patience, min_delta=0.002, restore_best_weights=True,
+            monitor='val_loss', patience=patience, min_delta=min_delta, restore_best_weights=True,
         )
         history = model.fit(
             data.train_tf,
@@ -346,11 +356,24 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
 
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
-              assume_yes=False):
+              assume_yes=False, learning_rate=0.002, min_delta=0.002, only_folds=None,
+              skip_shipped=False, clipnorm=None):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
     folds_holdout = folds_by_role(roles, ROLE_HOLDOUT)
+
+    if only_folds:
+        # Cheap-diagnosis knob for the std-convergence sweep only: restrict
+        # which rotate folds actually get a turn as the held-out fold, without
+        # touching folds.csv (which is main's data, shared via symlink). The
+        # other rotate folds still train into everyone else's training pool as
+        # normal 'rotate' folds do when they're not the one held out this
+        # round — this is not a role change, just fewer rotations run.
+        missing = set(only_folds) - set(folds_rotate)
+        if missing:
+            raise ValueError(f'--only-folds names not in rotate role: {missing}')
+        folds_rotate = [f for f in folds_rotate if f in only_folds]
 
     if len(folds_rotate) < 2:
         raise ValueError(
@@ -399,6 +422,7 @@ def train_set(name, embeddername, setname, name_translation,
             dir_model, modelname, embeddername, setname, name_translation,
             data, epochs_max, aug_dirnames, verbose,
             held_out, save_binary=False, patience=patience,
+            learning_rate=learning_rate, min_delta=min_delta, clipnorm=clipnorm,
         )
         if result is None:
             continue
@@ -439,6 +463,10 @@ def train_set(name, embeddername, setname, name_translation,
         sx_byfold.to_csv(os.path.join(dir_model_full, FNAME_SX_BYFOLD), index=False)
         print(format_sx_report(name, sx, sx_byfold))
 
+    if skip_shipped:
+        print(f'[{name}] --skip-shipped given; not training the shipped model')
+        return
+
     # Shipped model: trains on every fold except 'holdout'. No fold is held
     # out, so there is nothing clean left to monitor — the epoch count comes
     # from the median best epoch across the rotations. Only model saved with a
@@ -457,6 +485,7 @@ def train_set(name, embeddername, setname, name_translation,
         dir_model_full, name, embeddername, setname, name_translation,
         data, epochs_max, aug_dirnames, verbose,
         None, save_binary=True, epochs_fixed=epochs_fixed, patience=patience,
+        learning_rate=learning_rate, min_delta=min_delta, clipnorm=clipnorm,
     )
 
     if result is None:
