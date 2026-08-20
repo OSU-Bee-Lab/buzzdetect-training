@@ -568,6 +568,23 @@ class WorkerExtract:
         self.framelength_samples = int(self.embedder.framelength_s * self.embedder.samplerate)
         self.chunklength_samples = cfg.CHUNK_FRAMES * self.framelength_samples
 
+        # An embedder that folds neighbouring frames into each frame's embedding needs
+        # to see contiguous audio: it must be handed a whole chunk in time order, and
+        # its output bucketed by label afterwards. Embedding the label buckets instead
+        # (the default path below) would give every frame neighbours that share its own
+        # label, which is not what neighbouring audio looks like. 0 = ordinary embedder,
+        # nothing on this path changes.
+        self.context_frames = int(getattr(self.embedder, 'context_frames', 0) or 0)
+        if self.context_frames and self.config_extract.framehop_prop != 1:
+            # The contiguous buffer handed to embed() is np.concatenate(frames), which
+            # only reconstructs the chunk's audio when the frames tile it without
+            # overlap. At framehop_prop < 1 it would splice duplicated audio — and the
+            # frame count would still come out right, so nothing downstream would notice.
+            raise NotImplementedError(
+                f'{self.embedder.embeddername} needs contiguous audio; '
+                f'framehop_prop must be 1, got {self.config_extract.framehop_prop}'
+            )
+
     def read_range(self, track: sf.SoundFile, audiorange: tuple[float, float]):
         start_sample = round(track.samplerate * audiorange[0])
         samples_to_read = round(track.samplerate * (audiorange[1] - audiorange[0]))
@@ -578,6 +595,13 @@ class WorkerExtract:
         return librosa.resample(y=audio_data, orig_sr=track.samplerate, target_sr=self.embedder.samplerate)
 
     def extract_ident_embeddings(self, a_ident: AssignIdent):
+        if self.context_frames:
+            # The cached audio is grouped by label, so the order within a file is not
+            # the order in the recording and the frames either side of a frame are
+            # missing. Context has to come from the snips.
+            raise NotImplementedError(
+                f'{self.embedder.embeddername} needs contiguous audio; rebuild from snips'
+            )
         paths_audio = glob.glob(os.path.join(glob.escape(a_ident.dir_out_audio), '*.pickle'))
 
         os.makedirs(a_ident.dir_out_embeddings, exist_ok=True)
@@ -601,7 +625,7 @@ class WorkerExtract:
             _write_fingerprint(a_ident.dir_out_embeddings, a_ident.fingerprint)
         return f'{len(paths_audio)} cached label file(s) → embeddings'
 
-    def extract_ident_both(self, a_ident: AssignIdent):
+    def extract_ident_both(self, a_ident: AssignIdent, write_audio: bool = True):
         annotations_sub = self.annotations[self.annotations['ident'] == a_ident.ident].copy()
 
         snip_paths = _snip_paths(a_ident.dir_snips_ident)
@@ -611,6 +635,7 @@ class WorkerExtract:
             )
 
         frames_by_label = {}
+        embeddings_by_label = {}  # context embedders only; parallel to frames_by_label
 
         for i, snip_path in enumerate(snip_paths):
             snip_start, _ = _parse_snip_bounds(snip_path)
@@ -673,7 +698,20 @@ class WorkerExtract:
 
                     frames_rel += [(f[0] - snip_start, f[1] - snip_start) for f in frametimes]
 
-                    for frame, frame_range in zip(frames, frametimes):
+                    # One call for the whole chunk, in time order: every frame's
+                    # neighbours are the frames that really sat either side of it, and
+                    # the embedder does its own memory chunking so nothing here can
+                    # split the buffer and clamp a frame's context by accident.
+                    embeddings_chunk = None
+                    if self.context_frames:
+                        embeddings_chunk = self.embedder.embed(np.concatenate(frames))
+                        if len(embeddings_chunk) != len(frames):
+                            raise ValueError(
+                                f'extractor {self.name}: {self.embedder.embeddername} returned '
+                                f'{len(embeddings_chunk)} embeddings for {len(frames)} frames'
+                            )
+
+                    for i_frame, (frame, frame_range) in enumerate(zip(frames, frametimes)):
                         events_frame = events_in_frame(
                             range_frame=frame_range,
                             annotations=annotations_sub,
@@ -700,6 +738,9 @@ class WorkerExtract:
                                 )
                             continue
                         frames_by_label.setdefault(labels_collapse, []).append(frame)
+                        if self.context_frames:
+                            embeddings_by_label.setdefault(labels_collapse, []).append(
+                                embeddings_chunk[i_frame])
 
                 # Rescue annotations the frame grid missed. Frames are cut on a grid anchored
                 # at each chunk's start, and with framehop_prop=1 they do not overlap each
@@ -745,6 +786,11 @@ class WorkerExtract:
                         )
 
                     frames_by_label.setdefault(labels_collapse, []).append(audio_data)
+                    if self.context_frames:
+                        # A rescued frame is cut off the grid and has no neighbours to
+                        # hand it; the embedder clamps its context to itself.
+                        embeddings_by_label.setdefault(labels_collapse, []).append(
+                            self.embedder.embed(audio_data)[0])
                     frames_rel.append(frame_range_rel)
 
                     if self.verbose:
@@ -752,29 +798,35 @@ class WorkerExtract:
                               f'{row["label"]!r} at {snip_start + event[0]:.3f}s '
                               f'({event[1]-event[0]:.3f}s) as {labels_collapse}', flush=True)
 
-        os.makedirs(a_ident.dir_out_audio, exist_ok=True)
+        if write_audio:
+            os.makedirs(a_ident.dir_out_audio, exist_ok=True)
         os.makedirs(a_ident.dir_out_embeddings, exist_ok=True)
 
         for labels_collapse, samples in frames_by_label.items():
             path_out_samples = os.path.join(a_ident.dir_out_audio, labels_collapse + '.pickle')
             path_out_embedding = os.path.join(a_ident.dir_out_embeddings, labels_collapse + '.pickle')
 
-            with open(path_out_samples, 'wb') as file:
-                for s in samples:
-                    pickle.dump(s, file)
-
-            samples_flat = np.concatenate(samples)
+            if write_audio:
+                with open(path_out_samples, 'wb') as file:
+                    for s in samples:
+                        pickle.dump(s, file)
 
             with open(path_out_embedding, 'wb') as file:
-                for start in range(0, len(samples_flat), self.chunklength_samples):
-                    chunk = samples_flat[start: start + self.chunklength_samples]
-                    for e in self.embedder.embed(chunk):
+                if self.context_frames:
+                    for e in embeddings_by_label[labels_collapse]:
                         pickle.dump(e, file)
+                else:
+                    samples_flat = np.concatenate(samples)
+                    for start in range(0, len(samples_flat), self.chunklength_samples):
+                        chunk = samples_flat[start: start + self.chunklength_samples]
+                        for e in self.embedder.embed(chunk):
+                            pickle.dump(e, file)
 
         # Stamped last: a fingerprint means the directory's whole contents were built
         # from these annotations, so a crash mid-write must not leave one behind.
         if a_ident.fingerprint is not None:
-            _write_fingerprint(a_ident.dir_out_audio, a_ident.fingerprint)
+            if write_audio:
+                _write_fingerprint(a_ident.dir_out_audio, a_ident.fingerprint)
             _write_fingerprint(a_ident.dir_out_embeddings, a_ident.fingerprint)
 
         n_frames = sum(len(s) for s in frames_by_label.values())
@@ -823,7 +875,14 @@ class WorkerExtract:
                 msg = self.extract_ident_both(a_ident)
                 self._log_ident(ident, msg, t_ident)
             elif a_ident.handle == 'embeddings':
-                msg = self.extract_ident_embeddings(a_ident)
+                if self.context_frames:
+                    # Cached audio can't supply context, so go back to the snips — but
+                    # leave the audio cache alone. It is shared with every other
+                    # embedder at this sample rate and frame length, and rewriting it
+                    # would only risk a half-written pickle in someone else's cache.
+                    msg = self.extract_ident_both(a_ident, write_audio=False)
+                else:
+                    msg = self.extract_ident_embeddings(a_ident)
                 self._log_ident(ident, msg, t_ident)
             elif a_ident.handle == 'no_snips':
                 warnings.warn(f'extractor {self.name}: skipping {ident}; {a_ident.handle_msg}')
