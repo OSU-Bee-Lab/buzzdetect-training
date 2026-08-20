@@ -24,7 +24,7 @@ FNAME_FOLDS_SUMMARY = 'folds_summary.csv'
 FNAME_SX_SUMMARY = 'folds_sx.csv'
 
 
-def _resolve_dir_model(name):
+def resolve_dir_model(name):
     """A model is usually a bare name under this repo's models/, but an
     experiment's model lives under a worktree's own models/ dir (not
     symlinked from main — see setup_worktree.sh), so also accept a direct
@@ -36,15 +36,15 @@ def _resolve_dir_model(name):
 
 
 def _read_summary(name):
-    dir_model = _resolve_dir_model(name)
+    dir_model = resolve_dir_model(name)
     path = os.path.join(dir_model, FNAME_FOLDS_SUMMARY)
     if not os.path.exists(path):
         raise FileNotFoundError(f'{path} not found — has {name!r} finished training?')
     return pd.read_csv(path)
 
 
-def _read_headline(name):
-    dir_model = _resolve_dir_model(name)
+def read_headline(name):
+    dir_model = resolve_dir_model(name)
     path = os.path.join(dir_model, FNAME_SX_SUMMARY)
     if not os.path.exists(path):
         return None
@@ -82,8 +82,8 @@ def format_report(merged, baseline, exp, fpr):
         f'(mean delta {merged["delta"].mean():+.4f})'
     )
 
-    head_base = _read_headline(baseline)
-    head_exp = _read_headline(exp)
+    head_base = read_headline(baseline)
+    head_exp = read_headline(exp)
     if head_base is not None and head_exp is not None:
         lines.append(
             f'sens_persite @ fpr{fpr}: {baseline} {head_base:.3f} -> {exp} {head_exp:.3f} '
