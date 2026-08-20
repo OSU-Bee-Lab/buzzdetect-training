@@ -1,75 +1,163 @@
 # Experiment Ideas
 
-Candidate experiments for future LOOP agents. Each entry is a hypothesis ready to be taken through the standard experiment lifecycle in LOOP.md.
+Check this file and `log.jsonl` before proposing an experiment, then take it
+through the lifecycle in `LOOP.md`.
 
-Before picking one up, check `log.jsonl` to confirm it hasn't already been tried, and read `LOOP.md` — the methodology changed in 2026-08 and the log's numbers predate it.
+`log.jsonl` holds CV-era runs only — measured by leave-one-fold-out on day-long
+annotated recordings, against `sens_persite`. Those numbers are comparable to
+each other and are the ones to beat.
 
----
-
-## top-layer-unfreeze
-
-**Hypothesis:** Fine-tuning the last few layers of the embedder backbone on this task will yield more discriminative embeddings than the frozen baseline, without the overfitting risk of full fine-tuning.
-
-**What to do:** This requires an end-to-end training script that bypasses the pre-extracted pickle embeddings. Suggested approach:
-1. Write a new training script (e.g. `03_train/train_finetune.py`) that loads raw audio snips, runs them through the embedder with gradients enabled for the top N layers only (bottom layers frozen), and jointly optimizes embedder tail + classifier head.
-2. Start with N=1 (only the final projection/pooling layer), then try N=2–3.
-3. Use a backbone LR ~50–100x smaller than the head LR (e.g. 1e-5 backbone, 5e-4 head).
-4. After training, save the fine-tuned backbone as a new embedder (e.g. `embedders/yamnet_ft/`) and re-extract embeddings with it for a clean eval.
-
-**Why it might help:** The pretrained embedder was not trained on buzz sounds specifically. Nudging the upper layers toward the buzz/non-buzz boundary should improve sensitivity without catastrophic forgetting of useful low-level features.
-
-**Caveats:** Requires significant changes to the training pipeline (on-the-fly audio loading instead of pickle embeddings). Memory and compute cost will be higher. Start with YAMNet (lightest backbone) or Nighthawk (ResNet34, well-understood).
+Everything under [Tried before the rework](#tried-before-the-rework) comes from
+an era with a different metric, a different eval corpus, and a training set that
+was a scattershot of collection methods. Its numbers are gone and its verdicts
+are unreliable — see the warning at the head of that section before you treat
+any of it as settled.
 
 ---
 
-## lora-adapter
+## Open ideas
 
-**Hypothesis:** Adding lightweight LoRA adapters inside the frozen embedder backbone and training only those adapters + the classifier head will improve embedding quality with minimal overfitting risk.
+### Different levels of automatic annotation generation
+From bee hive and from nighttime audio
 
-**What to do:**
-1. Install `peft` (HuggingFace parameter-efficient fine-tuning library).
-2. Wrap the embedder backbone with LoRA adapters on its linear/attention layers (rank 4–16).
-3. Train adapters + head jointly on raw audio (same on-the-fly loading approach as `top-layer-unfreeze`).
-4. Save the adapted backbone as a new embedder and re-extract for eval.
+### context-embedder
 
-**Why it might help:** LoRA adds very few trainable parameters (~0.1–1% of backbone params), making overfitting on small datasets much less likely than full fine-tuning. It's the standard approach for adapting large pretrained models to narrow tasks with limited data.
+**Hypothesis:** `exp/context-stack` showed that widening each frame with its
+neighbours (t-1, t, t+1) is worth +0.050 — buzz is sustained, and the hard
+negatives are transient. But it was implemented in the training code, which
+leaves two problems: the shipped model can't run (inference feeds 1024-dim
+embeddings to a 3072-dim model), and every frame in a snip shares that snip's
+label, so the neighbours always agree in a way continuous audio won't reproduce.
 
-**Caveats:** LoRA was developed for transformer architectures; applying it to CNN-based embedders (YAMNet, Nighthawk's ResNet) is less standard and requires manually inserting adapters into conv layers. Best first target is a transformer-based embedder (AVES or AST, once implemented).
+**What to do:** implement the same idea as a *new embedder* instead — a wrapper
+over YAMNet that emits the stacked representation. Then:
+
+1. Extract embeddings for the set under it. The snips carry a generous buffer of
+   audio before and after the labeled events, so the context frames are real
+   neighbouring audio rather than repeated edges or same-label padding.
+2. Train unchanged — the probe just sees a wider embedding.
+3. Inference gets it for free, because the embedder is part of the shipped path.
+
+**Why it might help:** it is the same mechanism that already worked, measured
+honestly and in a form that can actually ship. The +0.050 is an upper bound;
+what survives the honest eval is the real number.
+
+**Caveats:** costs a re-extraction. Sweep k after the k=1 result is confirmed —
+if duration is the mechanism, k=2 or 3 should keep helping until the window
+starts smearing onsets.
+
+### yamnet-combined
+
+**Hypothesis:** YAMNet's 521 AudioSet class scores are a semantically meaningful
+projection of the same audio — "Insect", "Bee, wasp, etc.", "Buzz", "Vehicle",
+"Wind" — learned on far more data than we have. Concatenating them with the
+1024-d embedding gives the probe both the raw representation and AudioSet's own
+read of it, which may carry signal the linear probe can't recover from the
+embedding alone.
+
+**What to do:** the embedder already exists — `embedders/yamnet_combined/`,
+built during the fixed-test era and never extracted for a current set. It emits
+`concat(embedding, scores)` at 1545-d and reports `n_embeddings = 1545`, so
+nothing in 03_train needs changing. This is an extraction plus a training run:
+
+    python 02_set/main.py --set medium --embedder yamnet_combined --workers 2
+    python 03_train/main.py --name <slug> --set medium --embedder yamnet_combined --translation general -y
+
+**Why it might help:** the probe is linear, so it can only use structure already
+linearly available in its input. Class scores are a nonlinear function of the
+embedding that YAMNet's own trained head computed — exactly the kind of feature
+a linear probe cannot construct for itself.
+
+**Caveats:** costs a re-extraction. The scores are a softmax over classes, so
+their scale is very different from the embedding's — worth checking whether the
+probe can use both without one dominating. Composes with `context-embedder`; try
+them separately before combining.
+
+### willard-regression
+
+**Hypothesis:** `exp/context-stack` gained in 8 of 11 deployments but lost 0.074
+at `Lily Adam - One Hive/recorders/willard/2024-08-07/1_11`, a large fold. There
+is something specific about that deployment that temporal context hurts.
+
+**What to do:** pull the frames where the two models most disagree at their
+per-fold thresholds and listen. Not a training experiment — a diagnostic that
+should precede the next context experiment.
+
+### near-chance-deployments
+
+**Hypothesis:** two deployments (`Luke - Diel Drivers/2026-05-06/1_95` and
+`Luke - Various Opportunistic Recordings/2025-08-27/48`) sit near zero for every
+model tried, including one with 430 buzz frames — so it is not a small-sample
+artifact. Whatever is wrong there is the largest single source of headroom in
+the endpoint, since the endpoint averages deployments equally.
+
+**What to do:** diagnostic first. Are the buzzes audible? Is the annotation
+right? Is the recorder gain or placement different? Answer that before designing
+a training change around it.
+
+### aves-intermediate-layer
+
+**Hypothesis:** AVES embeddings from the last transformer layer are too
+bird-specific to discriminate insect buzz; an intermediate layer (6-9 of 12)
+carries more general acoustic features.
+
+**What to do:** in `embedders/aves/embedder.py`, change `layer_outputs[-1]` to
+`layer_outputs[N]` for N in {5, 7, 9}; re-extract; train. `n_embeddings` stays
+768, so no other code changes.
+
+**Background:** `aves_lite` performed at chance. AVES embeddings are symmetric
+around zero for both classes, where YAMNet's are ReLU-sparse and linearly
+separable. Wav2vec2 transfer literature consistently favours middle layers.
+
+**Caveats:** LOOP.md currently constrains the embedder to YAMNet, so this needs
+that constraint lifted first. Requires a re-extraction per layer tried.
+
+### lora-adapter
+
+**Hypothesis:** LoRA adapters inside the frozen backbone, training only adapters
+plus head, improve embedding quality with far less overfitting risk than full
+fine-tuning.
+
+**Caveats:** LoRA is a transformer technique; inserting it into YAMNet's conv
+layers is non-standard. Best first target is a transformer embedder. Note that
+straightforward backbone fine-tuning already failed badly on the old data
+(`yamnet-ft`, -8.3pp) — that verdict is from the bad-data era and may not hold,
+but the overfitting mechanism it described is plausible either way.
 
 ---
 
-## aves-intermediate-layer
+## Tried before the rework
 
-**Hypothesis:** AVES embeddings from the last transformer layer are too bird-classification-specific to discriminate insect buzz. An intermediate layer (e.g. layer 6–9 of 12) carries more general acoustic features that may separate buzz from non-buzz more reliably.
+**Read these as leads, not verdicts.** They were measured on a fixed
+train/validate split against a retired hand-curated corpus, with a training set
+of mixed provenance, at a time when single-run variance was wide enough
+(~0.16-0.25 on the same config) that several entries were later invalidated as
+dataset artifacts.
 
-**Background:** We trained `aves_lite` and found it performs at random-guess level on test data (precision ≈ base rate of 18%, decreasing with threshold — i.e. inverted). Investigation showed the pipeline is correct (same 242 buzz frames as YAMNet, same audio source). The problem is embedding discrimination: AVES embeddings have roughly half the mean absolute dimension-wise difference between buzz and non-buzz (0.13 vs 0.23 for YAMNet). YAMNet's non-buzz embeddings are sparse and non-negative (ReLU-activated), making the classes easy to linearly separate. AVES embeddings are symmetric around zero for both classes, so the buzz signal is weak.
+The clearest reason not to trust them: **`temporal-context` — concatenating
+[prev, curr, next] frames — was logged as a clear negative (-2pp). The identical
+change, rerun as `exp/context-stack` on the current set and metric, is the
+largest gain yet (+0.050).** A verdict inverted. Assume any of the below could
+do the same, and rerun rather than defer to it.
 
-The likely cause: AVES is a self-supervised wav2vec2 model fine-tuned on bird vocalizations. Its last transformer layer encodes bird-specific representations. Wav2vec2 transfer learning literature consistently shows that middle layers (~6–9 of 12) carry more general phonetic/acoustic features better suited to novel downstream tasks.
+Full entries: `.local/archive/log_precv.jsonl`. Working trees and notes:
+`.local/worktrees-fixed-test/`.
 
-**What to do:**
-1. In `embedders/aves/embedder.py`, change `layer_outputs[-1]` to `layer_outputs[N]` for N in {5, 7, 9, 11} (0-indexed, so layer 6, 8, 10, 12 of the 12-layer base model).
-2. Re-extract aves embeddings for the lite set with each layer choice (or just try one — layer 8 is a reasonable first pick based on the literature).
-3. Train a new model (e.g. `aves_lite_L8`) with the new embeddings.
-4. Compare test metrics to `aves_lite` (last layer). Any precision > 18% at moderate recall would confirm the hypothesis.
-
-**Implementation note:** `extract_features()` returns a list of 12 tensors, each shape `(1, T', 768)`. The index is 0-based, so `layer_outputs[11]` is the last layer (what we currently use) and `layer_outputs[7]` is layer 8. No other code changes needed — `n_embeddings=768` stays the same across all layers.
-
-**Why it might help:** The last layer of wav2vec2 is the most task-specialized. For bird sounds, it likely encodes species/call-type features. Insect buzz has very different spectrotemporal structure, and the bird-specific features may be anti-correlated with buzz in out-of-domain (test) recordings — which is exactly what we observed (inverted predictions on test, model learned spurious training-set-specific pattern).
-
-**Caveats:** Requires re-extracting embeddings for each layer tried (slow). Start with one layer (8 or 9) before sweeping. If no improvement across layers, the issue may be that AVES is simply not the right embedder for insect sounds regardless of layer choice — in which case consider a general-purpose audio embedder (PANNs CNN14, LAION-CLAP, AST).
-
----
-
-## differential-lr
-
-**Hypothesis:** Training the full embedder end-to-end with a very small backbone LR and normal head LR will outperform both the frozen baseline and aggressive fine-tuning.
-
-**What to do:** Same on-the-fly training setup as `top-layer-unfreeze`, but unfreeze the entire backbone. Use a LR schedule where backbone LR = head LR / 100. Apply early stopping on validation loss to prevent catastrophic forgetting. Compare to `top-layer-unfreeze` result.
-
-**Why it might help:** When data is sufficient, full backbone adaptation outperforms partial. This experiment establishes whether the dataset is large enough for this approach.
-
-**Caveats:** High risk of overfitting with small datasets. Only worth trying after `top-layer-unfreeze` shows positive signal. If `top-layer-unfreeze` fails, skip this one.
-
-
-
-
+| Area | What was tried | Old verdict |
+|---|---|---|
+| Regularization | Dropout(0.2) + label smoothing 0.2 | The whole gain over an unregularized probe (3.6pp). Current default. |
+| | Label smoothing 0.3 | Collapses. 0.2 was the peak of a monotone trend. |
+| | L2(1e-4), alone or added | Indistinguishable from no regularization. |
+| | BatchNorm on input embeddings | Clear negative (-5.8pp) — training-set running stats didn't transfer. |
+| Head shape | Dense(128, relu) before output | Worse than a linear probe, replicated twice, no overfitting signature. |
+| Input surgery | Bandpass 100-3000 Hz before YAMNet | Clear negative (-4.7pp); corrupts YAMNet's expected input. |
+| | Zeroing mel bins above 3000 Hz | Catastrophic (-14.3pp). |
+| | Handcrafted frequency features | Neutral twice; YAMNet already encodes it. |
+| | White-noise samples as 'static' | Neutral; the false positives are structured, not broadband. |
+| Backbone | Fine-tune YAMNet layers 13-14 at 1e-5 | Clear negative (-8.3pp); overfit, train 78% vs val 59%. |
+| Class weighting | 2x buzz upweight over balanced | Negative-to-neutral; balanced weights already fine. |
+| Loss | Focal loss, alpha 0.25 and 0.75 | Shifts the operating point, doesn't lift the curve. |
+| Translation | Binary (all non-buzz collapsed) | Hurt; multi-class auxiliary supervision helped. Retested under CV — see `binary-translation-cv`, neutral on the endpoint. |
+| Training procedure | min_delta=0.002 early stopping | 6.6x variance reduction, no mean change. Adopted as default. |
+| | Forcing buzz out of validation | Negative; early stopping needs buzz in the monitor fold. |
+| Temporal | [prev, curr, next] frame concatenation | Negative (-2pp) — **and now known to be wrong**, see above. |

@@ -1,14 +1,16 @@
 # Autoresearch Loop
 
-> **Methodology changed in 2026-08.** Every entry in `log.jsonl` predates the
-> leave-one-fold-out rework: it was measured by training 5 models on a fixed
-> train/validate split and scoring them against the hand-curated `04_test`
-> corpus. That corpus, that split, and the `<name>_v1…_vN` layout are all gone.
-> **Old numbers are not comparable to new ones** — read them for direction
-> (which ideas are dead ends) and never as a baseline to beat.
+> **The slate was cleared in 2026-08.** `log.jsonl` holds CV-era runs only —
+> leave-one-fold-out on day-long annotated recordings, scored on `sens_persite`.
+> Those are comparable to each other and are what you beat.
 >
-> The first experiment after the rework must re-establish a baseline. See
-> [Baseline](#baseline).
+> The 29 experiments before that ran on a fixed train/validate split against a
+> retired corpus, with a training set of mixed provenance. They are archived at
+> `.local/archive/log_precv.jsonl` and `.local/worktrees-fixed-test/`, and
+> distilled into `IDEAS.md`. **Their verdicts are leads, not settled answers** —
+> `temporal-context` was logged there as a clear negative and, rerun on the
+> current set as `exp/context-stack`, is the largest gain yet. Read `IDEAS.md`
+> rather than the archive; rerun rather than defer.
 
 Read `README.md` first — [Reading the results](README.md#reading-the-results)
 is where the metric choices below come from.
@@ -46,32 +48,51 @@ some folds can't reach it at all. `folds_sx.csv` carries
 on.
 
 Sensitivity at fixed *precision* — the old goal — is still recoverable from
-`folds_pooled_metrics.csv` via `04_test/metrics.py::metrics_at_precision`, but
+`folds_pooled_metrics.csv` via `03_train/metrics.py::metrics_at_precision`, but
 precision mixes in each deployment's base rate, so prefer FPR when comparing.
 The old log's "28% production standard" was measured on a different corpus with
 a different base rate; it is not a target on this metric.
 
 ## Baseline
 
-Main's default config is a linear probe on frozen YAMNet with `Dropout(0.2)` and
-`BinaryCrossentropy(label_smoothing=0.2)`, Adam at 0.002 — the old `with-dropout`
-config, which the log established as the best of the pre-CV era.
+`cv-baseline` in `log.jsonl`: main's default config — a linear probe on frozen
+YAMNet with `Dropout(0.2)`, `BinaryCrossentropy(label_smoothing=0.2)`, Adam at
+0.002, under the `general` translation on the `medium` set.
 
-There is no CV-era baseline yet. Establish one before testing anything against
-it: train main's default config unchanged, on the set you intend to use, and log
-it as `cv-baseline`. Every later experiment compares against that.
+**sens_persite @ fpr0.005 = 0.206**, over 11 rotating folds. The model is kept
+at `models/yamnet_medium_general/`; its per-fold numbers are in
+`folds_summary.csv` there, which is what you join against for a paired
+comparison.
+
+`models/yamnet_medium_binary/` is the same config under the `binary`
+translation, at 0.203 — logged as `binary-translation-cv`. Keep it: the pair is
+why the endpoint is per-deployment rather than pooled.
 
 ## Constraints
 
-- Embedder: YAMNet only. Others have proven wasteful.
-- Set: `lite`. (`medium` is a work in progress and its `folds.csv` predates
-  roles, so every fold there is silently treated as `rotate`.)
+- Embedder: YAMNet only, unless the experiment *is* the embedder — see
+  `context-embedder` and `yamnet-combined` in `IDEAS.md`, both of which need a
+  re-extraction and should be run deliberately, not incidentally.
+- Set: `medium` — day-long annotated recordings across a diversity of
+  environments, 11 rotating folds. `lite` is kept for troubleshooting and
+  `tiny` for smoke-testing the pipeline; neither is a place to draw conclusions.
+  Annotation is still in progress, so folds will gain data over time and old
+  numbers will drift; say which commit of the set a run used if it matters.
 - Augmentation: has hurt training so far — avoid without strong reason.
 - Err against hyperparameter tuning, unless you have a strong reason. We're
   looking for structural gains; hyperparameters can be tuned in one large sweep
   once a good structure is identified.
 - Change one thing. Layering a change on top of another risks interaction
   effects that obscure whether the change itself helped.
+- **Look for clear signals; don't try to measure the noise floor.** There is no
+  seed control in the pipeline and a full CV is expensive, so repeating runs to
+  bootstrap a confidence interval is not how this loop spends its compute. A
+  result worth acting on shows up as most folds moving the same way, not as a
+  small mean shift with folds scattered either side. Report the direction and
+  the count; never compute a CI across folds and treat it as one (the training
+  pools overlap ~90%, so folds are not independent). If a result is small and
+  the folds are split, say it is inconclusive and move on rather than spending
+  another CV on it.
 
 ## Experiment lifecycle
 
@@ -87,8 +108,8 @@ tried, and the pre-CV conclusions about *dead ends* (bandpass, mel masking,
 backbone fine-tuning, MLP heads, L2, handcrafted frequency features) still
 stand; only the numbers are incomparable.
 
-Entries with a `null` commit predate commit tracking — directional only. Read
-`notes.md` on the relevant `exp/<slug>` branch for details on any entry.
+Every entry in `log.jsonl` carries a `main_commit` and a `branch`; read
+`notes.md` on that `exp/<slug>` branch for the detail behind any of them.
 
 If you use an IDEA, remove it from `IDEAS.md` after testing.
 
@@ -132,11 +153,11 @@ WT=/Users/luke/Documents/bioacoustics/buzzdetect-training/.local/worktrees/<slug
 cd $WT
 
 # Stage 2 — only if the embedder or extraction changed
-conda run -n buzzdetect-train python 02_set/main.py --set lite --embedder yamnet --workers 2
+conda run -n buzzdetect-train python 02_set/main.py --set medium --embedder yamnet --workers 2
 
 # Stage 3 — the whole CV: one model per rotating fold, then the shipped model
 conda run -n buzzdetect-train python 03_train/main.py \
-  --name <modelname> --set lite --embedder yamnet --translation general -y
+  --name <modelname> --set medium --embedder yamnet --translation general -y
 ```
 
 There is no `--runs` and no stage 4. One training call *is* the experiment: it
@@ -163,11 +184,6 @@ trained before it existed — no retraining, no TensorFlow:
 ```bash
 conda run -n buzzdetect-train python 03_train/resummarize.py <modelname>
 ```
-
-`summarize_metrics.py`, `compare_metrics.py`, `evaluate_set.py`,
-`compare_sets.py` and `04_test/` all read `models/<model>/tests/metrics.csv`,
-which a CV run does not produce. **They do not work here.** Read the CSVs above
-directly.
 
 **Compare paired, per fold.** Both configs ran on the same folds, so the useful
 comparison is the per-fold difference — join the two `folds_summary.csv` files
@@ -215,7 +231,7 @@ only guides later agents toward where to dig. The `"method": "cv"` field is what
 separates these entries from the pre-rework ones — always include it.
 
 ```json
-{"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "main_commit": "<git rev-parse --short HEAD>", "method": "cv", "set": "lite", "hypothesis": "...", "metrics": {"sens_at_fpr0.005_persite": 0.0, "n_folds": 0}, "baseline": {"model": "cv-baseline", "sens_at_fpr0.005_persite": 0.0}, "conclusion": "..."}
+{"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "main_commit": "<git rev-parse --short HEAD>", "method": "cv", "set": "medium", "hypothesis": "...", "metrics": {"sens_at_fpr0.005_persite": 0.0, "n_folds": 0}, "baseline": {"model": "cv-baseline", "sens_at_fpr0.005_persite": 0.0}, "conclusion": "..."}
 ```
 
 ### 6. Commit worktree
@@ -238,7 +254,6 @@ git worktree add .local/worktrees/<slug> exp/<slug>
 Do not modify `01_annotate/`, `translations/`, or any set's `build.R` — changing
 the data under an experiment makes it incomparable to everything else in the log.
 
-Do not modify `04_test/metrics.py`. It is no longer only test code: `03_train`
+Do not modify `03_train/metrics.py`. `03_train`
 imports `metrics_by_group` and `metrics_at_fpr` from it, so editing it changes
-the metric itself. `04_test/`, `summarize_metrics.py` and `compare_metrics.py`
-are stale but stay untouched until someone reworks them deliberately.
+the metric itself.

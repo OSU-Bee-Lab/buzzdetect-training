@@ -18,7 +18,7 @@ it produces. `CLAUDE.md` is the orientation file for agents editing the code.
 - [Stage 2 — build a set and extract](#stage-2--build-a-set-and-extract)
 - [Stage 3 — train](#stage-3--train)
 - [Reading the results](#reading-the-results)
-- [Stage 4 — test (stale)](#stage-4--test-stale)
+- [Tools](#tools)
 - [Design: why folds are deployments](#design-why-folds-are-deployments)
 - [Troubleshooting](#troubleshooting)
 
@@ -43,7 +43,6 @@ Data lives outside git (see `.gitignore`):
 | `01_annotate/<effort>/data/` | that effort's raw annotation files |
 | `02_set/sets/<set>/audio/`, `.../embeddings/` | snips, framed-audio cache, embeddings |
 | `models/<name>/` | model artifacts |
-| `04_test/audio/` | inference test audio |
 
 An **ident** is a single recording, named by its path under `audio/` without
 extension (e.g. `JamesU - MustardBumbler/1_29/240903_1319`). It is the join key
@@ -67,8 +66,6 @@ audio/ + 01_annotate/<effort>/data/
         ▼
 03_train/main.py                           → models/<name>/  (CV folds + shipped model)
         │
-        │  3.  (optional) 04_test/main.py  → scores a fixed model on a separate corpus
-        ▼
 ```
 
 Stages are normally run one at a time. Root `main.py` chains 2→3 for
@@ -174,8 +171,11 @@ Checked-in sets:
 | `lite` | same, Even Sample only in practice | ~325 annotations, 11 rotate folds, ~2.8 h |
 | `tiny` | same, two annotations per ident | smoke-test scale |
 
-> `medium` is a work in progress. Its `folds.csv` predates the `role` column, so
-> training against it warns and treats every fold as `rotate`.
+> `medium` is the set experiments run on: day-long annotated recordings from a
+> diversity of environments. Its `folds.csv` assigns `rotate` to 11 deployment
+> folds and `train` to the rest. Annotation is ongoing, so folds gain data over
+> time and numbers drift — note the set's state when a run matters.
+> `lite` is kept for troubleshooting, `tiny` for smoke-testing the pipeline.
 
 ### 2b. Extract embeddings
 
@@ -374,7 +374,7 @@ conda run -n buzzdetect-train python main.py --model <name> [--set medium] \
 
 Same flags as the stage scripts, except the model name is `--model`. **Must be
 run from the project root** — it resolves stage paths relative to the cwd.
-Stage 4 is not chained, by design.
+There is no stage 4; see [Tools](#tools).
 
 ---
 
@@ -446,37 +446,29 @@ worth and how to remove it if it ever matters.
 
 ---
 
-## Stage 4 — test (stale)
+## Tools
 
-`04_test/` scores a fixed model against a separate hand-curated corpus
-(`04_test/audio/` + `04_test/annotations.csv`), writing to
-`models/<model>/tests/`. It expects the older `<name>_v1 … _vN` repeated-run
-layout and so does not fit CV-trained models:
-
-```bash
-conda run -n buzzdetect-train python 04_test/main.py --name <base> --runs 5
-```
-
-The same applies to the top-level analysis scripts, which all read
-`models/<model>/tests/metrics.csv`:
+`tools/night_positives.py` plots a model's activations across an all-night
+recording — the known real-world failure mode, since nothing should be buzzing.
+It takes its threshold off `folds_pooled_metrics.csv` at fpr 0.005, which is the
+one place a single global threshold is the right choice: an unlabeled night the
+model has never seen.
 
 ```bash
-conda run -n buzzdetect-train python summarize_metrics.py <model> [<model> ...]
-conda run -n buzzdetect-train python compare_metrics.py [<model>] [--top N]
-conda run -n buzzdetect-train python evaluate_set.py <set_base> [<set_base> ...]
-conda run -n buzzdetect-train python compare_sets.py [<set_base> ...] [--top N]
+conda run -n buzzdetect-train python tools/night_positives.py --name <model>
 ```
 
-Until these are reworked to aggregate across folds, read `folds_sx.csv`,
-`folds_summary.csv`, or `folds/<fold>/sx.csv` directly.
+There is no stage 4. It scored a fixed model against a hand-curated corpus and
+expected the pre-CV repeated-run layout; a CV run scores every held-out fold
+itself. The code is gone (recoverable from git); the corpus is at
+`.local/archive/04_test-corpus/`.
 
-`04_test/night_positives.py` is standalone and still useful: it plots a model's
-activations across a night recording, the known failure mode.
+---
 
 `LOOP.md` is the experiment protocol — one worktree per hypothesis, results in
-`log.jsonl`, candidate ideas in `IDEAS.md`. Every logged number predates the CV
-rework and was measured against the fixed `04_test` corpus, so treat the log as
-a record of which ideas are dead ends rather than as scores to beat.
+`log.jsonl`, candidate ideas in `IDEAS.md`. `log.jsonl` holds CV-era runs only;
+the 29 experiments that predate the rework are archived under `.local/` and
+distilled into `IDEAS.md`, where they are marked as leads rather than verdicts.
 
 ---
 

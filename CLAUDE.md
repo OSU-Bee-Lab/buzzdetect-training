@@ -11,9 +11,8 @@ Raw audio + annotations → a Keras probe (dropout + one dense layer) over froze
 | 1\. Combine annotations per effort | `01_annotate/MAKE.R` | R |
 | 2\. Build a set, extract embeddings | `02_set/sets/<set>/build.R`, `02_set/main.py` | R, Python |
 | 3\. Train (leave-one-fold-out CV) | `03_train/main.py` | Python |
-| 4\. Test against a fixed corpus | `04_test/main.py` | Python |
 
-Root `main.py` chains 2→3. It resolves stage paths relative to the cwd, so it only works from the project root. Stage 4 is deliberately not chained — see its docstring.
+Root `main.py` chains 2→3. It resolves stage paths relative to the cwd, so it only works from the project root. There is no stage 4 — it was retired with the CV rework.
 
 Environment: `conda run -n buzzdetect-train python <script>`.
 
@@ -35,15 +34,13 @@ Environment: `conda run -n buzzdetect-train python <script>`.
 - Fold roles, CV loop, shipped-model epoch count — `03_train/train.py`, `03_train/dataset.py`
 - Three-layer extraction (snips → framed-audio cache → embeddings), worker fan-out — `02_set/extract.py`
 - Embedder interface — `embedders/embedding.py`; model loader — `models/models.py`
-- Threshold sweeps (`metrics_by_group`, `metrics_at_fpr`, `metrics_at_precision`) — `04_test/metrics.py`, imported by `03_train`
+- Threshold sweeps (`metrics_by_group`, `metrics_at_fpr`, `metrics_at_precision`) — `03_train/metrics.py`
 - What the headline sens@FPR number means, and the two readings deliberately not reported — `03_train/sx.py`; its module docstring is the argument, README's "Reading the results" is the operator-facing version. `03_train/resummarize.py` rebuilds `folds_sx.csv` for an already-trained model, no TensorFlow
 - Label translation semantics (`ignore` / `exclude` / missing row) — `03_train/dataset.py::translate_labels`
 
 ## Known stale
 
-- `04_test/` and `summarize_metrics.py` / `compare_metrics.py` / `evaluate_set.py` / `compare_sets.py` predate the CV rework: they assume a fixed model plus a hand-curated corpus at `models/<model>/tests/metrics.csv`, which CV runs don't produce.
-- `log.jsonl` entries all predate the CV rework — measured against the old fixed `04_test` corpus, so their numbers aren't comparable to a CV run's. `LOOP.md` is current and explains the break.
-- `02_set/sets/medium/` is a work in progress; its `folds.csv` predates roles.
+- `models/model_general_v3/` predates the CV rework and is kept only as an artifact.
 
 ## Testing
 For testing code, debugging, etc., you may do the following:
