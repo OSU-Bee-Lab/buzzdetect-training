@@ -229,6 +229,13 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     tf_name = re.sub(r'[^A-Za-z0-9_.>-]', '_', modelname)
     model = tf.keras.Sequential(name=tf_name)
     model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
+    # Fixed per-dimension standardization, not BatchNorm: adapt() sets mean/
+    # variance once from the training folds and freezes them as non-trainable
+    # weights baked into model.keras, unlike BatchNorm's moving averages
+    # (tried pre-CV, -5.8pp — running stats didn't transfer across deployments).
+    normalizer = tf.keras.layers.Normalization(axis=-1)
+    normalizer.adapt(data.train_tf.map(lambda x, y: x))
+    model.add(normalizer)
     model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.Dense(len(data.classes)))
 
