@@ -17,6 +17,7 @@
 !yamnet_bandpass
 !yamnet_combined
 !yamnet_doublerate
+!yamnet_context_k2
 
 # Ignore binary model files within unignored embedders
 panns_cnn14/*.pth
