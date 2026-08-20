@@ -150,6 +150,20 @@ All code changes go in the worktree. Do not touch main's tracked files.
 | Training | `03_train/train.py`, `03_train/dataset.py`, `03_train/train_utils.py` |
 | Config/paths | `config.py` |
 
+If the change touches `model.compile()` — a custom loss, a different output
+layer — smoke-test it before spending a CV run on it:
+
+```bash
+conda run -n buzzdetect-train python tools/smoke_model.py  # self-test, no changes needed
+```
+
+`tools/smoke_model.py::smoke_test_loss()` builds the same architecture as
+`03_train/train.py`, fits one step on dummy data, and runs it through the
+exact `save(include_optimizer=True)` → `load(compile=False)` round trip
+`write_model_py.py`'s inference path uses — a custom loss/metric that isn't
+serializable the way that path expects fails in seconds instead of after a
+full CV.
+
 ### 3. Run the pipeline
 
 From the worktree, using the path `setup_worktree.sh` printed:
@@ -203,6 +217,16 @@ comparison is the per-fold difference — join the two `folds_summary.csv` files
 on `fold` and look at the deltas and how many folds moved which way. Comparing
 two scalars throws that pairing away, and a headline gap that vanishes under
 pairing was never a capability gap.
+
+```bash
+python tools/compare_folds.py <baseline model dir> <exp model dir>
+```
+
+Does the join above and prints the per-fold delta table, the up/down count,
+and the two headline `sens_persite` numbers from `folds_sx.csv`. Either model
+argument can be a bare name under `models/` or a path — an experiment's model
+usually lives in its worktree's own (unsymlinked) `models/` dir, so pass
+`.local/worktrees/<slug>/models/<modelname>` directly for that side.
 
 Two cautions from the README, both of which apply to every conclusion you write:
 
@@ -267,6 +291,25 @@ built on the wrong number.
 
 ```json
 {"name": "<slug>", "branch": "exp/<slug>", "date": "<YYYY-MM-DD>", "main_commit": "<git rev-parse --short HEAD>", "method": "cv", "hypothesis": "...", "metrics": {"sens_at_fpr0.005_persite": 0.0}, "baseline": {"model": "cv-baseline", "sens_at_fpr0.005_persite": 0.0}, "trust": "clean", "conclusion": "..."}
+```
+
+`main_commit` means **main's HEAD at the moment you log**, not the commit the
+experiment's worktree branched from — those two diverge whenever main moves
+while a long CV run is in flight (it did for `class-weight-fix`). Run
+`git rev-parse --short HEAD` in the main checkout right before you commit the
+log entry, not in the worktree.
+
+`tools/log_entry.py` builds this line for you — it reads `sens_persite`
+straight from each model's `folds_sx.csv` (no copying numbers by hand) and
+fills in `branch`/`date`/`main_commit` by the convention above:
+
+```bash
+python tools/log_entry.py \
+  --name <slug> \
+  --model <experiment model dir, e.g. .local/worktrees/<slug>/models/<modelname>> \
+  --baseline-model models/yamnet_medium_general \
+  --hypothesis "..." --trust clean --conclusion "..." \
+  --write   # omit to preview without appending
 ```
 
 ### 6. Commit worktree
