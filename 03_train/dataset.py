@@ -8,6 +8,12 @@ import pandas as pd
 import config as cfg
 from train_utils import build_classes, labels_from_path, Sample
 
+# build_fold_dataset() is called once per fold per CV rotation (~11x per
+# training run), so a fold that's genuinely and permanently empty (e.g. an
+# always-excluded ident) re-triggers an identical warning on every rotation.
+# Warn about a given dir_samples once per process rather than once per call.
+_warned_empty_dirs = set()
+
 
 def read_pickle_exhaustive(path_pickle):
     elements = []
@@ -115,7 +121,8 @@ def build_fold_dataset(dir_samples, translation, labels_keep_raw=None, exclusive
     # An empty result is legitimate: every label in this fold may be genuinely
     # excluded or ignored. Warn and hand back nothing; the caller decides
     # whether a fold with no usable frames is fatal for what it's doing.
-    if len(samples_out) == 0:
+    if len(samples_out) == 0 and dir_samples not in _warned_empty_dirs:
+        _warned_empty_dirs.add(dir_samples)
         if not samples:
             warnings.warn(f'no embedding files under {dir_samples}')
         else:
