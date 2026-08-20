@@ -20,56 +20,31 @@ any of it as settled.
 ### Different levels of automatic annotation generation
 From bee hive and from nighttime audio
 
-### context-embedder
+### standardization-convergence
 
-**Hypothesis:** `exp/context-stack` showed that widening each frame with its
-neighbours (t-1, t, t+1) is worth +0.050 — buzz is sustained, and the hard
-negatives are transient. But it was implemented in the training code, which
-leaves two problems: the shipped model can't run (inference feeds 1024-dim
-embeddings to a 3072-dim model), and every frame in a snip shares that snip's
-label, so the neighbours always agree in a way continuous audio won't reproduce.
+**Hypothesis:** `exp/input-standardization` added a `Normalization` layer
+(adapt()-ed on training folds, frozen — not `BatchNormalization`) ahead of the
+probe on `yamnet_combined`. Per-fold it was a modest further gain over
+`yamnet-combined` (+0.014 on the 8 folds with enough validation buzz to read),
+but 10 of 11 folds ran to the full 400-epoch cap without early stopping ever
+firing, against a median ~120 epochs unstandardized, and `best_val_loss` came
+in consistently higher despite `sens@fpr` improving in most folds. The fixed
+Adam LR (0.002) and the `min_delta=0.002`/`patience=50` stopping rule were
+tuned against unstandardized inputs; a `Normalization` layer changes the
+gradient scale the optimizer sees, and neither was revisited.
 
-**What to do:** implement the same idea as a *new embedder* instead — a wrapper
-over YAMNet that emits the stacked representation. Then:
+**What to do:** the one deliberate hyperparameter sweep LOOP.md allows once a
+structure looks worth it — LR and/or patience, on the *standardized*
+`yamnet_combined` config, before trusting any sens number from that structure.
 
-1. Extract embeddings for the set under it. The snips carry a generous buffer of
-   audio before and after the labeled events, so the context frames are real
-   neighbouring audio rather than repeated edges or same-label padding.
-2. Train unchanged — the probe just sees a wider embedding.
-3. Inference gets it for free, because the embedder is part of the shipped path.
+**Why it might help:** `exp/input-standardization`'s headline was flat
+(-0.004) but every fold hit the epoch cap, which means the run doesn't know if
+it converged. The per-fold gain (+0.014) could be understated or overstated by
+that; the honest number needs a stopping rule matched to the new input scale.
 
-**Why it might help:** it is the same mechanism that already worked, measured
-honestly and in a form that can actually ship. The +0.050 is an upper bound;
-what survives the honest eval is the real number.
-
-**Caveats:** costs a re-extraction. Sweep k after the k=1 result is confirmed —
-if duration is the mechanism, k=2 or 3 should keep helping until the window
-starts smearing onsets.
-
-### input-standardization
-
-**Hypothesis:** `exp/yamnet-combined` (+0.016) concatenated YAMNet's 521 sigmoid
-class scores onto the 1024-d embedding, and the two blocks are on very different
-scales — score block mean 0.004 / max 0.41 against embedding mean 0.041 / max
-2.6, roughly 10x. Nothing in `03_train` normalizes its input. `Dropout(0.2)`
-drops units uniformly regardless of scale, so the small block is effectively
-regularized far harder than the large one, and the probe may never get to use
-the scores properly.
-
-**What to do:** standardize per feature block (or per dimension) before the
-probe. Cheapest honest version is a fixed transform computed on the training
-folds only and applied at scoring, not a `BatchNormalization` layer —
-BatchNorm was tried in the fixed-test era and was a clear negative because its
-running statistics didn't transfer across deployments, which is a real risk here
-too.
-
-**Why it might help:** it decides whether `yamnet-combined`'s modest gain is the
-ceiling or an artifact of the scores being drowned out. Answer that before
-composing combined with anything else.
-
-**Caveats:** no re-extraction needed — the `yamnet_combined` embeddings for
-`medium` are already cached. Applies equally to any future concatenated
-representation, `context-embedder` included.
+**Caveats:** no re-extraction, no code change beyond training hyperparameters.
+Applies to `yamnet_combined` (and anything layering a `Normalization` step) —
+not the plain 1024-d embedder, which converges fine as is.
 
 ### willard-regression
 
