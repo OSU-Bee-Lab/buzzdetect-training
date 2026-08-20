@@ -17,7 +17,7 @@ from dataset import (
     build_fold_dataset, load_augmented, read_fold_roles, folds_by_role,
     survey_untranslated, ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT,
 )
-from train_utils import build_weights, build_classes, can_write, Sample
+from train_utils import build_weights, build_classes, can_write, weighted_bce_loss, Sample
 from embedders.embedding import load_embedder
 from plot_history import plot_history
 from write_model_py import write_model_py
@@ -232,8 +232,9 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.Dense(len(data.classes)))
 
+    weights_ordered = [data.weight_dict[i] for i in range(len(data.classes))]
     model.compile(
-        loss=tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.2),
+        loss=weighted_bce_loss(weights_ordered, label_smoothing=0.2),
         optimizer=tf.keras.optimizers.Adam(learning_rate=0.002),
         metrics=['accuracy'],
     )
@@ -243,7 +244,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         # monitor. Train a fixed number of epochs instead, set by the caller
         # from the median best epoch across the rotations.
         history = model.fit(
-            data.train_tf, epochs=epochs_fixed, class_weight=data.weight_dict,
+            data.train_tf, epochs=epochs_fixed,
             verbose=2 if verbose else 0,  # 2 = one line per epoch, no progress bar
         )
         best_epoch = epochs_fixed - 1
@@ -261,7 +262,6 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             epochs=epochs_max,
             validation_data=data.val_tf,
             callbacks=callback,
-            class_weight=data.weight_dict,
             verbose=2 if verbose else 0,  # 2 = one line per epoch, no progress bar
         )
 
