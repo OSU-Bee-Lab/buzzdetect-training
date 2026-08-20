@@ -26,14 +26,24 @@ for d in "$ROOT/embedders/"/*/; do
 done
 ln -sf "$ROOT/embedders/embedding.py" "$WT/embedders/embedding.py"
 
-# Set embeddings and audio: symlink gitignored data dirs for every set that exists
-echo "Symlinking set data (embeddings + audio)..."
+# Set data: symlink the gitignored products of build.R and extraction for every
+# set that exists. A set whose build.R isn't committed has no directory in the
+# worktree at all — skip it rather than dying halfway through the loop, or the
+# steps after this one never run.
+echo "Symlinking set data (embeddings + audio + build products)..."
 for set_dir in "$ROOT/02_set/sets/"/*/; do
     setname="$(basename "$set_dir")"
-    for subdir in embeddings audio; do
-        src="$ROOT/02_set/sets/$setname/$subdir"
-        dst="$WT/02_set/sets/$setname/$subdir"
-        if [ -d "$src" ] && [ ! -e "$dst" ]; then
+    if [ ! -d "$WT/02_set/sets/$setname" ]; then
+        echo "  skipping '$setname' (not tracked in git; nothing in the worktree to link into)"
+        continue
+    fi
+    # folds.csv and annotations.csv are as necessary as the embeddings —
+    # 03_train reads folds.csv before it opens a single pickle.
+    for name in embeddings audio folds.csv annotations.csv \
+                summary_per_class.csv summary_per_fold.csv; do
+        src="$ROOT/02_set/sets/$setname/$name"
+        dst="$WT/02_set/sets/$setname/$name"
+        if [ -e "$src" ] && [ ! -e "$dst" ]; then
             ln -s "$src" "$dst"
         fi
     done
