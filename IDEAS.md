@@ -51,31 +51,25 @@ graph bug (out-of-range gather under fused multi-step execution) with a
 data-dependent `top_k` count; prefer a fixed-size `top_k` to avoid it. Smoke-test
 with `tools/smoke_model.py` before spending a CV.
 
-### standardization-convergence
+### normalization-zero-variance
 
-**Hypothesis:** `exp/input-standardization` added a `Normalization` layer
-(adapt()-ed on training folds, frozen — not `BatchNormalization`) ahead of the
-probe on `yamnet_combined`. Per-fold it was a modest further gain over
-`yamnet-combined` (+0.014 on the 8 folds with enough validation buzz to read),
-but 10 of 11 folds ran to the full 400-epoch cap without early stopping ever
-firing, against a median ~120 epochs unstandardized, and `best_val_loss` came
-in consistently higher despite `sens@fpr` improving in most folds. The fixed
-Adam LR (0.002) and the `min_delta=0.002`/`patience=50` stopping rule were
-tuned against unstandardized inputs; a `Normalization` layer changes the
-gradient scale the optimizer sees, and neither was revisited.
+**Status:** the `standardization-convergence` sweep this replaces was run as
+`exp/std-convergence` and came back negative-to-inconclusive — see `log.jsonl`.
+What it left behind is a concrete bug rather than an open hyperparameter
+question.
 
-**What to do:** the one deliberate hyperparameter sweep LOOP.md allows once a
-structure looks worth it — LR and/or patience, on the *standardized*
-`yamnet_combined` config, before trusting any sens number from that structure.
+**The problem:** 52 of `yamnet_combined`'s 1545 input dims have ~zero variance
+across the training folds. A `Normalization` layer divides by
+`sqrt(var + 1e-7) ~ 3e-4` on those dims, amplifying anything nonzero by ~3000x.
+This produced a genuine NaN blowup at lr=5e-4 without gradient clipping, and it
+is structural — no learning rate avoids it.
 
-**Why it might help:** `exp/input-standardization`'s headline was flat
-(-0.004) but every fold hit the epoch cap, which means the run doesn't know if
-it converged. The per-fold gain (+0.014) could be understated or overstated by
-that; the honest number needs a stopping rule matched to the new input scale.
-
-**Caveats:** no re-extraction, no code change beyond training hyperparameters.
-Applies to `yamnet_combined` (and anything layering a `Normalization` step) —
-not the plain 1024-d embedder, which converges fine as is.
+**What to do if anyone revisits standardization:** mask or floor the
+near-zero-variance dims before adapting the layer (a variance floor well above
+1e-7, or drop those dims outright — they carry no training signal by
+definition). Until that's done, any standardized-input result is running on a
+numerically fragile setup and its failures can't be attributed to the
+hypothesis.
 
 ### willard-regression
 
