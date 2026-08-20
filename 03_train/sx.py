@@ -34,17 +34,14 @@ frames per fold, and some folds cannot reach it at all.
 
 import glob
 import os
-import sys
 
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '04_test'))
 from metrics import metrics_by_group, metrics_at_fpr
 
-# The training path's target, deliberately one number. 04_test/metrics.py keeps
-# its own three-target default for the stale stage-4 readers; everything under
-# 03_train passes this instead.
+# The training path's target, deliberately one number. metrics.py keeps a
+# three-target default of its own; everything here passes this instead.
 FPR_TARGETS = (0.005,)
 
 FNAME_SX_SUMMARY = 'folds_sx.csv'

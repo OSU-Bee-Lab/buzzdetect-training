@@ -22,9 +22,6 @@ from embedders.embedding import load_embedder
 from plot_history import plot_history
 from write_model_py import write_model_py
 
-# metrics_by_group/metrics_at_fpr are the same threshold-sweep logic 04_test
-# used against its on-disk results; reused here in-memory.
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '04_test'))
 from metrics import metrics_by_group, metrics_at_fpr
 
 from sx import summarize_sx, format_sx_report, FPR_TARGETS, FNAME_SX_SUMMARY
@@ -135,8 +132,8 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
 def _score_fold(model, setname, embeddername, fold, translation, classes):
     """Score a trained model on a fold it never saw, ins_buzz only.
 
-    Same threshold sweep 04_test computes from on-disk inference results, run
-    here straight off the fold's known frame labels. Returns
+    Runs the threshold sweep straight off the fold's known frame labels.
+    Returns
     (metrics_df, predictions_df); predictions are kept so the per-fold results
     can be pooled into one ROC afterwards.
     """

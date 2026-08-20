@@ -2,11 +2,10 @@
 Run the training pipeline (stages 2–3) for a model: extract the set's
 embeddings, then train leave-one-fold-out CV plus the shipped model.
 
-Stage 4 is deliberately not chained. 04_test scores a fixed model against a
-separate hand-curated corpus and expects the `<name>_v1…_vN` repeated-run
-layout; a CV run produces per-fold scores instead, which 03_train already
-writes to folds_summary.csv and folds_pooled_sx.csv. Run 04_test by hand if
-you have a corpus to score against.
+There is no stage 4. It scored a fixed model against a hand-curated corpus and
+expected the `<name>_v1…_vN` repeated-run layout, both of which the CV rework
+replaced; a CV run scores every held-out fold and writes folds_sx.csv and
+folds_summary.csv itself.
 """
 # TensorFlow must be imported before pandas/pyarrow. pandas eagerly imports
 # pyarrow, and pyarrow + TF each bundle their own statically-linked abseil; the

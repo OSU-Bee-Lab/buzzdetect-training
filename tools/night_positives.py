@@ -1,4 +1,4 @@
-import tensorflow  # noqa: F401  -- load-order side effect (see 04_test/main.py)
+import tensorflow  # noqa: F401  -- load-order side effect (see 03_train/main.py)
 
 import argparse
 import json
@@ -6,6 +6,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '03_train'))
 
 import keras
 import librosa
@@ -16,11 +17,19 @@ import soundfile as sf
 
 import config as cfg
 from embedders.embedding import load_embedder
+from metrics import metrics_at_fpr
 
-AUDIO_FILE = os.path.join(cfg.TEST_DIR, 'night-positives', '260507_0000.mp3')
-OUT_SUBPATH = os.path.join('night-positives', '260507_0000_buzzdetect.csv')
-PART_SUBPATH = os.path.join('night-positives', '260507_0000_buzzpart.csv')
-PLOT_SUBPATH = os.path.join('night-positives', 'night-positives.png')
+AUDIO_FILE = os.path.join(cfg.NIGHT_DIR, '260507_0000.mp3')
+OUT_SUBPATH = '260507_0000_buzzdetect.csv'
+PART_SUBPATH = '260507_0000_buzzpart.csv'
+PLOT_SUBPATH = 'night-positives.png'
+
+# There are no labels for this recording, so the threshold has to come from
+# somewhere else — and a night the model has never seen is exactly the case a
+# single global threshold is for. Taken off the pooled CV sweep at the target
+# FPR. This is the one place the pooled read is the right one; see 03_train/sx.py.
+FPR_TARGET = 0.005
+FNAME_POOLED_METRICS = 'folds_pooled_metrics.csv'
 
 DEFAULT_CHUNK_S = 200
 
@@ -84,16 +93,16 @@ def run_analysis(modelname, chunk_seconds=DEFAULT_CHUNK_S, verbose=False):
     chunk_frames = round(chunk_seconds / framelength_s)
     chunk_duration_s = chunk_frames * framelength_s
 
-    path_sx = os.path.join(dir_model, cfg.SUBDIR_TESTS, cfg.FNAME_SX)
-    sx = pd.read_csv(path_sx)
-    threshold = float(sx.loc[sx['precision'] == 0.95, 'threshold'].iloc[0])
+    path_pooled = os.path.join(dir_model, FNAME_POOLED_METRICS)
+    pooled = pd.read_csv(path_pooled)
+    threshold = float(metrics_at_fpr(pooled, (FPR_TARGET,))['threshold'].iloc[0])
 
     classifier = keras.saving.load_model(
         os.path.join(dir_model, 'model.keras'), compile=False
     )
 
-    path_out = os.path.join(dir_model, cfg.SUBDIR_TESTS, OUT_SUBPATH)
-    path_part = os.path.join(dir_model, cfg.SUBDIR_TESTS, PART_SUBPATH)
+    path_out = os.path.join(dir_model, cfg.SUBDIR_NIGHT, OUT_SUBPATH)
+    path_part = os.path.join(dir_model, cfg.SUBDIR_NIGHT, PART_SUBPATH)
     os.makedirs(os.path.dirname(path_out), exist_ok=True)
 
     if os.path.exists(path_part):
@@ -135,9 +144,9 @@ def run_analysis(modelname, chunk_seconds=DEFAULT_CHUNK_S, verbose=False):
 
 def run_plot(modelname):
     dir_model = os.path.join(cfg.DIR_MODELS, modelname)
-    path_out = os.path.join(dir_model, cfg.SUBDIR_TESTS, OUT_SUBPATH)
+    path_out = os.path.join(dir_model, cfg.SUBDIR_NIGHT, OUT_SUBPATH)
     df = pd.read_csv(path_out)
-    path_plot = os.path.join(dir_model, cfg.SUBDIR_TESTS, PLOT_SUBPATH)
+    path_plot = os.path.join(dir_model, cfg.SUBDIR_NIGHT, PLOT_SUBPATH)
     os.makedirs(os.path.dirname(path_plot), exist_ok=True)
     plot_detections(df, path_plot, modelname)
     print(f'  [{modelname}] plot -> {path_plot}')
