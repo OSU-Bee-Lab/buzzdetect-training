@@ -77,3 +77,28 @@ def can_write(dir_model):
 
     return False
 
+
+
+# Frames either side of the target frame handed to the probe alongside it.
+# 0 restores the frame-at-a-time baseline.
+CONTEXT_FRAMES = 1
+
+
+def stack_context(embeddings, k=CONTEXT_FRAMES):
+    """Widen each frame's embedding with its k neighbours on either side.
+
+    (n_frames, n_dim) -> (n_frames, n_dim * (2k + 1)), frames in time order,
+    edges clamped by repeating the first and last frame. k=0 is a no-op.
+
+    Called per snip, never across snips: frames within a pickle are contiguous
+    audio, frames in different pickles are not adjacent to anything.
+    """
+    embeddings = np.asarray(embeddings, dtype=np.float32)
+    if k == 0:
+        return embeddings
+    n = len(embeddings)
+    idx = np.arange(n)
+    return np.concatenate(
+        [embeddings[np.clip(idx + offset, 0, n - 1)] for offset in range(-k, k + 1)],
+        axis=1,
+    )

@@ -17,7 +17,7 @@ from dataset import (
     build_fold_dataset, load_augmented, read_fold_roles, folds_by_role,
     survey_untranslated, ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT,
 )
-from train_utils import build_weights, build_classes, can_write, Sample
+from train_utils import build_weights, build_classes, can_write, stack_context, CONTEXT_FRAMES, Sample
 from embedders.embedding import load_embedder
 from plot_history import plot_history
 from write_model_py import write_model_py
@@ -58,7 +58,7 @@ class TrainingData:
 def _to_tf(data, size_batch, size_shuffle):
     embeddings, targets = [], []
     for s in data:
-        embeddings.extend(s.embeddings)
+        embeddings.extend(stack_context(s.embeddings))
         targets.extend([s.target_array] * s.frames)
     idx = np.random.permutation(len(embeddings))
     emb_np = np.array(embeddings, dtype=np.float32)[idx]
@@ -147,7 +147,7 @@ def _score_fold(model, setname, embeddername, fold, translation, classes):
         return None, None
     buzz_index = classes.index('ins_buzz')
 
-    embeddings = np.concatenate([np.array(s.embeddings, dtype=np.float32) for s in samples])
+    embeddings = np.concatenate([stack_context(s.embeddings) for s in samples])
     correct = np.concatenate([np.full(s.frames, bool(s.target_array[buzz_index])) for s in samples])
     activation = model(embeddings, training=False)[:, buzz_index].numpy()
 
@@ -231,7 +231,8 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     # strip separators here rather than relying on the caller's naming.
     tf_name = re.sub(r'[^A-Za-z0-9_.>-]', '_', modelname)
     model = tf.keras.Sequential(name=tf_name)
-    model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
+    n_input = embedder.n_embeddings * (2 * CONTEXT_FRAMES + 1)
+    model.add(tf.keras.layers.Input(shape=(n_input,), dtype=tf.float32, name='input'))
     model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.Dense(len(data.classes)))
 
