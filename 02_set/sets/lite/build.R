@@ -70,9 +70,8 @@ annotations <- lapply(sources, read_annotations) %>%
       T ~ label
     )
   ) %>% 
-  filter(duration < 310) %>% 
   group_by(ident, label) %>% 
-  slice_min(n=4, order_by=start)
+  slice_min(n=10, order_by=start)
 
 annotations$label %>% unique() %>% sort()
 
