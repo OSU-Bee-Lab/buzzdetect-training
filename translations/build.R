@@ -40,18 +40,40 @@ write.csv(
 translation_general <- translation_blank %>%
   mutate(
     to = case_when(
-      from %in% c('ambient_background', 'ambient_music') ~ 'ambient_background',
+      # Background sounds
+      from %in% c('ambient_wind') ~ 'ambient_background',
 
-      from %in% c('ambient_bang', 'ambient_noise', 'ambient_rustle', 'ambient_scraping', 'ambient_scrape', 'ambient_squeak') ~ 'ambient_noise',
+      str_detect(from, 'music') ~ 'ambient_music',
+
+      from %in% c(
+        'ambient_bang',
+        'ambient_noise',
+        'ambient_rustle',
+        'ambient_scraping',
+        'ambient_scrape',
+        'ambient_squeak'
+      ) ~ 'ambient_noise',
+      
+      str_detect(from, '^animal_') ~ 'animal', 
+
+      # Weather
       from %in% c('ambient_rain', 'ambient_thunder') ~ 'ambient_rain',
-      str_detect(from, '^animal_') ~ 'animal',  #
       from == 'human' ~ 'human',
+
+      # Insects
       str_detect(from, '^ins_buzz') ~ 'ins_buzz',
       from %in% c('ins_trill', 'ins_cicada') ~ 'ins_trill',
+
+      # Mechanical
       str_detect(from, '^mech_auto') ~ 'mech_auto',
       from %in% c('mech_siren', 'mech_train', 'mech_combine') ~ 'mech_auto',
       str_detect(from, '^mech_plane') ~ 'mech_plane',
-      from %in% c('mech_hum', 'mech_hum_auto', 'ambient_hum_traffic', 'mech_hum_RECLASSIFY', 'mech_hum_traffic', 'mech_chainsaw', 'mech_ac', 'mech_lawnmower') ~ 'mech_hum',
+      
+      # Weird hums; mostly these appear to be from traffic road noise - not for anything that's hummy
+      from %in% c('mech_hum', 'mech_hum_auto', 'ambient_hum_traffic', 'mech_hum_RECLASSIFY', 'mech_hum_traffic') ~ 'mech_hum',
+
+      # Loud droning power tools
+      from %in% c('mech_chainsaw', 'mech_weedwhacker', 'mech_lawnmower') ~ 'mech_tool',
 
       # TODO: double check if mech_drone == quad copter
       from == 'mech_drone' ~ 'ignore',
@@ -60,6 +82,15 @@ translation_general <- translation_blank %>%
       T ~ from
     )
   )
+
+annotations %>% 
+  left_join(
+    translation_general %>% 
+      rename('label'='from')
+  ) %>% 
+  pull(to) %>% 
+  unique() %>% 
+  sort()
 
 
 write.csv(
