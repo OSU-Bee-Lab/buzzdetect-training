@@ -26,6 +26,87 @@ from metrics import metrics_by_group, metrics_at_fpr
 
 from sx import summarize_sx, summarize_sx_byfold, format_sx_report, FPR_TARGETS, FNAME_SX_SUMMARY, FNAME_SX_BYFOLD
 
+@tf.keras.utils.register_keras_serializable(package='buzzdetect')
+class TailBCELoss(tf.keras.losses.Loss):
+    """BinaryCrossentropy(label_smoothing) plus an OHEM-style tail term on one
+    neuron ('ins_buzz' in practice).
+
+    The endpoint metric (sensitivity_mean @ fpr0.005) is decided by a handful
+    of top-scoring negative frames per fold (neg_frames_fold_median=22 on
+    cv-baseline) — plain BCE spends nearly all its gradient on the easy
+    negative mass nowhere near that boundary. This adds a second term that
+    looks, within each training batch, at only the highest-scoring negative
+    frames on `buzz_index` and adds extra loss for them specifically — an
+    OHEM-style hard-negative mining term, not a focal reweighting (focal
+    reweights every example by the model's own confidence, globally; this
+    reweights by rank position among negatives in the current batch).
+
+    `call()` returns one loss value per sample, matching what
+    `BinaryCrossentropy.call()` returns — so Keras's `sample_weight` /
+    `class_weight` machinery multiplies and reduces this exactly the way it
+    does the baseline loss, including the known argmax-collapse class_weight
+    bug (see log.jsonl, class-weight-fix). Not fixed here; kept live so this
+    stays paired with cv-baseline.
+    """
+
+    def __init__(self, buzz_index, label_smoothing=0.2, ohem_frac=0.01, ohem_weight=1.0,
+                 name='tail_bce_loss'):
+        super().__init__(name=name)
+        self.buzz_index = buzz_index
+        self.label_smoothing = label_smoothing
+        self.ohem_frac = ohem_frac
+        self.ohem_weight = ohem_weight
+
+    def call(self, y_true, y_pred):
+        y_true = tf.cast(y_true, y_pred.dtype)
+
+        # base: per-sample mean over classes of smoothed sigmoid cross-entropy,
+        # numerically the same as BinaryCrossentropy(from_logits=True,
+        # label_smoothing=...).call().
+        labels_smoothed = y_true * (1.0 - self.label_smoothing) + 0.5 * self.label_smoothing
+        elementwise = tf.nn.sigmoid_cross_entropy_with_logits(labels=labels_smoothed, logits=y_pred)
+        base = tf.reduce_mean(elementwise, axis=-1)
+
+        logits_buzz = y_pred[:, self.buzz_index]
+        labels_buzz = y_true[:, self.buzz_index]
+        is_neg = tf.equal(labels_buzz, 0.0)
+        neg_idx = tf.where(is_neg)[:, 0]
+        neg_logits = tf.gather(logits_buzz, neg_idx)
+        n_neg = tf.shape(neg_logits)[0]
+
+        def scatter_ohem():
+            k = tf.maximum(1, tf.cast(tf.math.ceil(tf.cast(n_neg, tf.float32) * self.ohem_frac), tf.int32))
+            k = tf.minimum(k, n_neg)
+            top_vals, top_pos = tf.math.top_k(neg_logits, k=k)
+            top_sample_idx = tf.gather(neg_idx, top_pos)
+            target = tf.fill(tf.shape(top_vals), tf.constant(0.5, dtype=y_pred.dtype) * self.label_smoothing)
+            hard_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=target, logits=top_vals)
+            return tf.scatter_nd(
+                tf.expand_dims(tf.cast(top_sample_idx, tf.int32), -1),
+                self.ohem_weight * hard_loss,
+                tf.shape(base),
+            )
+
+        addition = tf.cond(n_neg > 0, scatter_ohem, lambda: tf.zeros_like(base))
+        return base + addition
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'buzz_index': self.buzz_index,
+            'label_smoothing': self.label_smoothing,
+            'ohem_frac': self.ohem_frac,
+            'ohem_weight': self.ohem_weight,
+        })
+        return config
+
+
+# tail-loss experiment knobs (see notes.md). ohem_weight is fixed at 1.0 for
+# every run; ohem_frac is the one hyperparameter varied across runs — edit
+# here and use a fresh --name per value tried.
+OHEM_FRAC = 0.01
+OHEM_WEIGHT = 1.0
+
 FNAME_PREDICTIONS = 'predictions.csv'
 FNAME_FOLD_SUMMARY = 'summary.json'
 FNAME_FOLDS_SUMMARY = 'folds_summary.csv'
@@ -232,8 +313,10 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.Dense(len(data.classes)))
 
+    buzz_index = data.classes.index('ins_buzz')
     model.compile(
-        loss=tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.2),
+        loss=TailBCELoss(buzz_index=buzz_index, label_smoothing=0.2,
+                         ohem_frac=OHEM_FRAC, ohem_weight=OHEM_WEIGHT),
         optimizer=tf.keras.optimizers.Adam(learning_rate=0.002),
         metrics=['accuracy'],
     )
