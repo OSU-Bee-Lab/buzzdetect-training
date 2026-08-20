@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>buzzdetect experiment log</title>
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --panel: #ffffff;
+    --border: #e2e0da;
+    --text: #2a2924;
+    --muted: #7a776d;
+    --mono-bg: #efece4;
+    --up: #1f7a3f;
+    --up-bg: #e6f4ea;
+    --down: #a4272c;
+    --down-bg: #fbe9e9;
+    --neutral: #7a776d;
+    --neutral-bg: #eeece6;
+    --accent: #8a5a2f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1b18;
+      --panel: #262420;
+      --border: #3a382f;
+      --text: #eae7de;
+      --muted: #9c988a;
+      --mono-bg: #302e27;
+      --up: #6fcf8f;
+      --up-bg: #1e3324;
+      --down: #e5898d;
+      --down-bg: #3a2224;
+      --neutral: #9c988a;
+      --neutral-bg: #33312a;
+      --accent: #d3a06c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+  }
+  header {
+    padding: 28px 24px 16px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.4rem;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .toolbar {
+    max-width: 900px;
+    margin: 12px auto 0;
+    padding: 0 24px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  input[type="search"] {
+    flex: 1;
+    min-width: 180px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 0.9rem;
+  }
+  select, button, .file-btn {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .file-btn { position: relative; overflow: hidden; }
+  .file-btn input[type="file"] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer;
+  }
+  #dropzone {
+    max-width: 900px;
+    margin: 16px auto;
+    padding: 40px 24px;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+  #dropzone.drag {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  #dropzone code {
+    background: var(--mono-bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 8px 24px 60px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 14px;
+  }
+  .card-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .name {
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+  .branch {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    color: var(--muted);
+    background: var(--mono-bg);
+    padding: 1px 6px;
+    border-radius: 5px;
+  }
+  .date-col {
+    margin-left: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+  }
+  .date {
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+  .meta {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .badge {
+    display: inline-block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .badge.up { color: var(--up); background: var(--up-bg); }
+  .badge.down { color: var(--down); background: var(--down-bg); }
+  .badge.neutral { color: var(--neutral); background: var(--neutral-bg); }
+  .trust {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: transparent;
+  }
+  .trust.clean { color: var(--muted); border-color: var(--border); }
+  .trust.caveated { color: var(--accent); border-color: var(--accent); }
+  .trust.artifact { color: var(--down); border-color: var(--down); }
+  .hypothesis {
+    margin: 10px 0 0;
+    font-size: 0.88rem;
+    color: var(--muted);
+    font-style: italic;
+  }
+  .conclusion {
+    margin: 10px 0 0;
+    font-size: 0.92rem;
+  }
+  .commit {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  #status {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 24px;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  #summary {
+    max-width: 900px;
+    margin: 4px auto 0;
+    padding: 0 24px;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>buzzdetect experiment log</h1>
+  <div class="subtitle">reads <code>log.jsonl</code> from the project root</div>
+</header>
+
+<div class="toolbar">
+  <input type="text" id="fetchpath" placeholder="path or URL to fetch, e.g. ../log.jsonl">
+  <button id="reload-btn" title="retry fetching the path above">reload</button>
+  <label class="file-btn">load log.jsonl…
+    <input type="file" id="filepicker" accept=".jsonl,.json,.txt">
+  </label>
+</div>
+<div id="sourceStatus" class="subtitle"></div>
+
+<div class="toolbar">
+  <input type="search" id="search" placeholder="filter by name, hypothesis, conclusion…">
+  <select id="sort">
+    <option value="file">file order</option>
+    <option value="date-desc">newest first</option>
+    <option value="date-asc">oldest first</option>
+    <option value="delta-desc">best delta first</option>
+  </select>
+  <select id="trustFilter">
+    <option value="">any trust</option>
+    <option value="clean">clean only</option>
+    <option value="caveated">caveated only</option>
+    <option value="artifact">artifact only</option>
+  </select>
+</div>
+
+<div id="status"></div>
+<div id="summary"></div>
+
+<div id="dropzone">
+  drop <code>log.jsonl</code> here, or use "load log.jsonl…" above<br>
+  <span style="font-size:0.82rem">the fetch path is remembered, and the last file you load is cached, so most opens need neither</span>
+</div>
+
+<main id="cards"></main>
+
+<script>
+let entries = [];
+
+function fmt(n) {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  return n.toFixed(3);
+}
+
+function deltaInfo(entry) {
+  const sens = entry.metrics && entry.metrics["sens_at_fpr0.005_persite"] !== undefined
+    ? entry.metrics["sens_at_fpr0.005_persite"] : undefined;
+  const base = entry.baseline && entry.baseline["sens_at_fpr0.005_persite"] !== undefined
+    ? entry.baseline["sens_at_fpr0.005_persite"] : null;
+  if (sens === undefined || base === null || base === undefined) {
+    return { label: sens !== undefined ? fmt(sens) : "—", cls: "neutral", value: -Infinity };
+  }
+  const d = sens - base;
+  const cls = d > 0.0005 ? "up" : d < -0.0005 ? "down" : "neutral";
+  const sign = d >= 0 ? "+" : "";
+  return { label: `${sign}${d.toFixed(3)}`, cls, value: d };
+}
+
+const TRUST_LABEL = { clean: "clean", caveated: "⚠ caveated", artifact: "✕ artifact" };
+
+function render() {
+  const q = document.getElementById("search").value.trim().toLowerCase();
+  const sortMode = document.getElementById("sort").value;
+  const trustMode = document.getElementById("trustFilter").value;
+
+  let list = entries.filter(e => {
+    if (trustMode && e.trust !== trustMode) return false;
+    if (!q) return true;
+    const hay = [e.name, e.hypothesis, e.conclusion, e.branch]
+      .filter(Boolean).join(" ").toLowerCase();
+    return hay.includes(q);
+  });
+
+  list = list.map((e, i) => ({ e, i, d: deltaInfo(e) }));
+
+  if (sortMode === "date-desc") list.sort((a, b) => (b.e.date || "").localeCompare(a.e.date || "") || b.i - a.i);
+  else if (sortMode === "date-asc") list.sort((a, b) => (a.e.date || "").localeCompare(b.e.date || "") || a.i - b.i);
+  else if (sortMode === "delta-desc") list.sort((a, b) => b.d.value - a.d.value);
+  // "file" order: leave as-is
+
+  const cardsEl = document.getElementById("cards");
+  cardsEl.innerHTML = "";
+
+  for (const { e, d } of list) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const baselineNote = e.baseline
+      ? `vs <b>${e.baseline.model ?? "?"}</b> (${fmt(e.baseline["sens_at_fpr0.005_persite"])})`
+      : "reference baseline";
+
+    card.innerHTML = `
+      <div class="card-head">
+        <span class="name">${escapeHtml(e.name ?? "?")}</span>
+        <span class="branch">${escapeHtml(e.branch ?? "")}</span>
+        <div class="date-col">
+          <span class="date">${escapeHtml(e.date ?? "")}</span>
+          <span class="commit">${escapeHtml(e.main_commit ?? "")}</span>
+        </div>
+      </div>
+      <div class="meta">
+        <span class="badge ${d.cls}">${d.label}</span>
+        ${e.trust ? `<span class="trust ${escapeHtml(e.trust)}">${escapeHtml(TRUST_LABEL[e.trust] ?? e.trust)}</span>` : ""}
+        <span>sens@fpr0.005 = ${fmt(e.metrics ? e.metrics["sens_at_fpr0.005_persite"] : null)}</span>
+        <span>·</span>
+        <span>${baselineNote}</span>
+      </div>
+      ${e.hypothesis ? `<p class="hypothesis">${escapeHtml(e.hypothesis)}</p>` : ""}
+      ${e.conclusion ? `<p class="conclusion">${escapeHtml(e.conclusion)}</p>` : ""}
+    `;
+    cardsEl.appendChild(card);
+  }
+
+  document.getElementById("status").textContent =
+    entries.length ? `${list.length} of ${entries.length} experiments shown` : "";
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+function parseJsonl(text) {
+  return text.split("\n")
+    .map(l => l.trim())
+    .filter(Boolean)
+    .map(l => { try { return JSON.parse(l); } catch { return null; } })
+    .filter(Boolean);
+}
+
+const LS_PATH = "buzzdetect_log_viewer.fetch_path";
+const LS_TEXT = "buzzdetect_log_viewer.cached_text";
+const LS_META = "buzzdetect_log_viewer.cached_meta"; // {source, time}
+
+function relTime(ms) {
+  const s = Math.round((Date.now() - ms) / 1000);
+  if (s < 60) return "just now";
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
+function loadText(text, opts = {}) {
+  entries = parseJsonl(text);
+  document.getElementById("dropzone").classList.add("hidden");
+  const best = entries.reduce((acc, e) => {
+    const v = e.metrics ? e.metrics["sens_at_fpr0.005_persite"] : null;
+    return v != null && (!acc || v > acc.v) ? { v, name: e.name } : acc;
+  }, null);
+  document.getElementById("summary").textContent = best
+    ? `${entries.length} experiments logged · best sens@fpr0.005: ${fmt(best.v)} (${best.name})`
+    : `${entries.length} experiments logged`;
+
+  const statusEl = document.getElementById("sourceStatus");
+  if (opts.fromCache) {
+    statusEl.textContent = `showing a cached copy (${opts.source}, loaded ${relTime(opts.time)}) — reload or drop a fresh file to update`;
+  } else {
+    statusEl.textContent = `loaded from ${opts.source}`;
+    try {
+      localStorage.setItem(LS_TEXT, text);
+      localStorage.setItem(LS_META, JSON.stringify({ source: opts.source, time: Date.now() }));
+    } catch (e) { /* storage unavailable or full; not fatal */ }
+  }
+  render();
+}
+
+document.getElementById("search").addEventListener("input", render);
+document.getElementById("sort").addEventListener("change", render);
+document.getElementById("trustFilter").addEventListener("change", render);
+document.getElementById("filepicker").addEventListener("change", (ev) => {
+  const f = ev.target.files[0];
+  if (!f) return;
+  f.text().then(text => loadText(text, { source: f.name }));
+});
+
+const dz = document.getElementById("dropzone");
+["dragenter", "dragover"].forEach(evt =>
+  dz.addEventListener(evt, e => { e.preventDefault(); dz.classList.add("drag"); }));
+["dragleave", "drop"].forEach(evt =>
+  dz.addEventListener(evt, e => { e.preventDefault(); dz.classList.remove("drag"); }));
+dz.addEventListener("drop", e => {
+  const f = e.dataTransfer.files[0];
+  if (f) f.text().then(text => loadText(text, { source: f.name }));
+});
+
+const pathInput = document.getElementById("fetchpath");
+pathInput.value = localStorage.getItem(LS_PATH) || "../log.jsonl";
+pathInput.addEventListener("change", () => {
+  try { localStorage.setItem(LS_PATH, pathInput.value.trim()); } catch (e) {}
+});
+
+function attemptLoad() {
+  const path = pathInput.value.trim() || "../log.jsonl";
+  try { localStorage.setItem(LS_PATH, path); } catch (e) {}
+  fetch(path)
+    .then(r => r.ok ? r.text() : Promise.reject(new Error("http " + r.status)))
+    .then(text => loadText(text, { source: path }))
+    .catch(() => {
+      let cachedText, cachedMeta;
+      try {
+        cachedText = localStorage.getItem(LS_TEXT);
+        cachedMeta = JSON.parse(localStorage.getItem(LS_META) || "null");
+      } catch (e) {}
+      if (cachedText && cachedMeta) {
+        loadText(cachedText, { fromCache: true, source: cachedMeta.source, time: cachedMeta.time });
+      } else {
+        document.getElementById("dropzone").classList.remove("hidden");
+        document.getElementById("sourceStatus").textContent =
+          `couldn't fetch "${path}" (blocked on file:// or not found) and nothing cached yet`;
+      }
+    });
+}
+
+document.getElementById("reload-btn").addEventListener("click", attemptLoad);
+attemptLoad();
+</script>
+
+</body>
+</html>
