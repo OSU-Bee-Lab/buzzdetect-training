@@ -23,8 +23,8 @@ from embedders.yamnet.yamnet import yamnet_frames_model
 SETNAME = 'medium'
 EMBEDDERNAME = 'yamnet'
 TRANSLATION = 'general'
-NAME = 'yamnet_native_beewasp'
-TARGET_CLASS_NAME = 'Bee, wasp, etc.'  # AudioSet class map row 126
+NAME = 'yamnet_native_insect'
+TARGET_CLASS_NAME = 'Insect'  # AudioSet class map row 121
 
 FNAME_PREDICTIONS = 'predictions.csv'
 FNAME_FOLD_SUMMARY = 'summary.json'

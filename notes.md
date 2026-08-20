@@ -65,7 +65,9 @@ zero regardless of size. Confirms this isn't a matter of having picked the
 wrong AudioSet class; the head doesn't carry a usable insect-buzz signal under
 either label.
 
-"Insect" (class 121), "Cricket" (122), "Mosquito" (123), and "Fly, housefly"
-(124) remain untested, but given two different classes landed in the same
-place, further class picks are unlikely to close a 0.002→0.206 gap. Not
-adding to IDEAS.md as a follow-up.
+Also tried "Insect" (class 121, the broadest, most literal match): sens_persite
+0.005, same pattern again — every fold near zero.
+
+"Cricket" (122), "Mosquito" (123), and "Fly, housefly" (124) remain untested,
+but three different classes landing in the same place makes it clear this
+isn't about class choice. Not adding to IDEAS.md as a follow-up.
