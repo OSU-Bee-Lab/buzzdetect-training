@@ -351,7 +351,8 @@ models/<name>/
 ├── model.keras, model.py, config_model.json   the shipped model
 ├── annotations.csv, folds.csv                 copies of the set's, for provenance
 ├── weights.csv, translation.csv, history.pickle, loss_curves.svg
-├── folds_sx.csv               the headline: sens_persite, and what it rests on
+├── folds_sx.csv               the headline: sensitivity_mean, threshold, and what they rest on
+├── folds_sx_byfold.csv        the breakdown: each fold's own threshold and sensitivity
 ├── folds_summary.csv          one row per rotating fold
 ├── folds_pooled_metrics.csv   every fold's held-out predictions pooled into one ROC
 ├── folds/<fold>/              per-rotation archive (no model.keras)
@@ -385,9 +386,12 @@ property of a model on its own — it is what the model catches once a line is
 drawn, and where that line goes is a deployment decision. buzzdetect ships no
 threshold: operators are told to find their own. So every fold is scored at a
 threshold set on its own held-out audio, and the headline is the plain mean
-across folds — `sens_persite` in `folds_sx.csv`, at fpr 0.005. Each deployment
-counts once, because the question is what a new deployment gets, and a new
-deployment is one site.
+across folds — `sensitivity_mean` in `folds_sx.csv`, at fpr 0.005. Each
+deployment counts once, because the question is what a new deployment gets,
+and a new deployment is one fold. `folds_sx.csv` also carries `threshold_mean`
+and `threshold_median` — what a typical fold's own audio set, i.e. what to
+actually try shipping — and `folds_sx_byfold.csv` breaks that down per fold, so
+you can see how much folds disagree rather than just the average.
 
 It is an oracle: putting a fold at exactly 0.5% FPR uses that fold's labels,
 which an operator doesn't have. Read it as the ceiling on operator tuning. Both
@@ -408,12 +412,12 @@ Two readings deliberately *not* reported, both of which have misled here before:
   holds the full pooled sweep for ROC plots and `metrics_at_precision`.
 
 **Check what a number rests on.** `folds_sx.csv` carries `folds_scored` and
-`neg_frames_persite_median`: how many folds could reach the target at all, and
+`neg_frames_fold_median`: how many folds could reach the target at all, and
 how many non-buzz frames sat above a typical fold's threshold. At fpr 0.001 on a
 set this size that is about four frames per fold, and some folds can't reach it
 — which is why only 0.005 is reported. A fold too small for the target is
 dropped from the mean rather than interpolated inside a single frame. No amount
-of data elsewhere fixes a per-site read on one small site.
+of data elsewhere fixes a per-fold read on one small fold.
 
 Don't reweight the training set to equalize folds. How many *hours* a fold
 contributes is an artifact of annotation effort; how much *buzz* those hours

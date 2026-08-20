@@ -18,21 +18,26 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config as cfg
-from sx import summarize_sx, format_sx_report, read_fold_predictions, FNAME_SX_SUMMARY
+from sx import (
+    summarize_sx, summarize_sx_byfold, format_sx_report, read_fold_predictions,
+    FNAME_SX_SUMMARY, FNAME_SX_BYFOLD,
+)
 
 SUBDIR_FOLDS = 'folds'
 
 
 def resummarize(name):
-    """Write folds_sx.csv for one model; return the table, or None if the
-    model has no fold predictions to read."""
+    """Write folds_sx.csv and folds_sx_byfold.csv for one model; return
+    (sx, sx_byfold), or None if the model has no fold predictions to read."""
     dir_model = os.path.join(cfg.DIR_MODELS, name)
     predictions = read_fold_predictions(os.path.join(dir_model, SUBDIR_FOLDS))
     if predictions is None:
         return None
     sx = summarize_sx(predictions)
     sx.to_csv(os.path.join(dir_model, FNAME_SX_SUMMARY), index=False)
-    return sx
+    sx_byfold = summarize_sx_byfold(predictions)
+    sx_byfold.to_csv(os.path.join(dir_model, FNAME_SX_BYFOLD), index=False)
+    return sx, sx_byfold
 
 
 if __name__ == '__main__':
@@ -47,8 +52,9 @@ if __name__ == '__main__':
     )
 
     for name in names:
-        sx = resummarize(name)
-        if sx is None:
+        result = resummarize(name)
+        if result is None:
             print(f'[{name}] no fold predictions on disk; skipped')
             continue
-        print(format_sx_report(name, sx))
+        sx, sx_byfold = result
+        print(format_sx_report(name, sx, sx_byfold))

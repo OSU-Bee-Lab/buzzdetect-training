@@ -1,7 +1,7 @@
 """Build and append one log.jsonl entry — LOOP.md step 5 — without hand-typing
 JSON in a shell heredoc.
 
-Pulls `sens_persite` straight from folds_sx.csv for both the experiment and
+Pulls `sensitivity_mean` straight from folds_sx.csv for both the experiment and
 the baseline model (reusing compare_folds.py's reader) instead of taking
 numbers by hand, and fills `main_commit`/`branch`/`date` in from git and the
 name unless overridden.

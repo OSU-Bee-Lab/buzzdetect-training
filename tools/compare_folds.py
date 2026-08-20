@@ -49,7 +49,7 @@ def read_headline(name):
     if not os.path.exists(path):
         return None
     sx = pd.read_csv(path)
-    return sx.iloc[0]['sens_persite'] if len(sx) else None
+    return sx.iloc[0]['sensitivity_mean'] if len(sx) else None
 
 
 def compare_folds(baseline, exp, fpr=0.005):
@@ -86,7 +86,7 @@ def format_report(merged, baseline, exp, fpr):
     head_exp = read_headline(exp)
     if head_base is not None and head_exp is not None:
         lines.append(
-            f'sens_persite @ fpr{fpr}: {baseline} {head_base:.3f} -> {exp} {head_exp:.3f} '
+            f'sensitivity_mean @ fpr{fpr}: {baseline} {head_base:.3f} -> {exp} {head_exp:.3f} '
             f'({head_exp - head_base:+.3f})'
         )
 

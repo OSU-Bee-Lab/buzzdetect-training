@@ -24,7 +24,7 @@ from write_model_py import write_model_py
 
 from metrics import metrics_by_group, metrics_at_fpr
 
-from sx import summarize_sx, format_sx_report, FPR_TARGETS, FNAME_SX_SUMMARY
+from sx import summarize_sx, summarize_sx_byfold, format_sx_report, FPR_TARGETS, FNAME_SX_SUMMARY, FNAME_SX_BYFOLD
 
 FNAME_PREDICTIONS = 'predictions.csv'
 FNAME_FOLD_SUMMARY = 'summary.json'
@@ -435,7 +435,9 @@ def train_set(name, embeddername, setname, name_translation,
 
         sx = summarize_sx(pooled)
         sx.to_csv(os.path.join(dir_model_full, FNAME_SX_SUMMARY), index=False)
-        print(format_sx_report(name, sx))
+        sx_byfold = summarize_sx_byfold(pooled)
+        sx_byfold.to_csv(os.path.join(dir_model_full, FNAME_SX_BYFOLD), index=False)
+        print(format_sx_report(name, sx, sx_byfold))
 
     # Shipped model: trains on every fold except 'holdout'. No fold is held
     # out, so there is nothing clean left to monitor — the epoch count comes
