@@ -26,6 +26,130 @@ from metrics import metrics_by_group, metrics_at_fpr
 
 from sx import summarize_sx, summarize_sx_byfold, format_sx_report, FPR_TARGETS, FNAME_SX_SUMMARY, FNAME_SX_BYFOLD
 
+
+@tf.keras.utils.register_keras_serializable(package='buzzdetect')
+class TailBCELoss(tf.keras.losses.Loss):
+    """BinaryCrossentropy(label_smoothing) plus an OHEM-style tail term on one
+    neuron ('ins_buzz' in practice).
+
+    The endpoint metric (sensitivity_mean @ fpr0.005) is decided by a handful
+    of top-scoring negative frames per fold (neg_frames_fold_median=22 on
+    cv-baseline) — plain BCE spends nearly all its gradient on the easy
+    negative mass nowhere near that boundary. This adds a second term that
+    looks, within each training batch, at only the highest-scoring negative
+    frames on `buzz_index` and adds extra loss for them specifically — an
+    OHEM-style hard-negative mining term, not a focal reweighting (focal
+    reweights every example by the model's own confidence, globally; this
+    reweights by rank position among negatives in the current batch).
+
+    `call()` returns one loss value per sample, matching what
+    `BinaryCrossentropy.call()` returns — so Keras's `sample_weight` /
+    `class_weight` machinery multiplies and reduces this exactly the way it
+    does the baseline loss, including the known argmax-collapse class_weight
+    bug (see log.jsonl, class-weight-fix). Not fixed here; kept live so this
+    stays paired with cv-baseline.
+
+    Ported from exp/tail-loss (log.jsonl, trust=artifact), which collapsed
+    sensitivity 0.305 -> 0.007 for two reasons, both fixed here:
+
+    1. That loss was the *compiled* loss, so Keras also evaluated it (OHEM
+       term included) on the single held-out validation fold, and that value
+       fed EarlyStopping's val_loss monitor. The OHEM term's hard-negative set
+       is batch-local; a single fold's negatives are a much smaller, noisier
+       population than the pooled training batch, so which frames counted as
+       "hard" swung early in training and val_loss hit a spurious minimum in
+       the first handful of epochs. Fix lives in `_train_one`: EarlyStopping
+       now monitors a separately compiled plain-BCE metric (`make_bce_metric`
+       below), not this loss.
+    2. `top_k`'s `k` was computed from `n_neg` (a fraction of however many
+       negatives happened to be in the batch) — a data-dependent shape that
+       triggered an out-of-range gather under Keras's fused multi-step
+       execution. `ohem_k` here is a fixed Python int baked into the graph at
+       trace time, never derived from a tensor.
+    """
+
+    def __init__(self, buzz_index, label_smoothing=0.2, ohem_k=200, ohem_weight=1.0,
+                 name='tail_bce_loss'):
+        super().__init__(name=name)
+        self.buzz_index = buzz_index
+        self.label_smoothing = label_smoothing
+        self.ohem_k = ohem_k
+        self.ohem_weight = ohem_weight
+
+    def call(self, y_true, y_pred):
+        y_true = tf.cast(y_true, y_pred.dtype)
+
+        # base: per-sample mean over classes of smoothed sigmoid cross-entropy,
+        # numerically the same as BinaryCrossentropy(from_logits=True,
+        # label_smoothing=...).call().
+        labels_smoothed = y_true * (1.0 - self.label_smoothing) + 0.5 * self.label_smoothing
+        elementwise = tf.nn.sigmoid_cross_entropy_with_logits(labels=labels_smoothed, logits=y_pred)
+        base = tf.reduce_mean(elementwise, axis=-1)
+
+        logits_buzz = y_pred[:, self.buzz_index]
+        labels_buzz = y_true[:, self.buzz_index]
+        is_neg = tf.equal(labels_buzz, 0.0)
+        neg_idx = tf.where(is_neg)[:, 0]
+        neg_logits = tf.gather(logits_buzz, neg_idx)
+
+        # Fixed-size top_k: ohem_k is a Python int, never a tensor derived
+        # from batch contents, so this op's output shape is static at
+        # graph-trace time. Every batch encountered in practice (pooled
+        # training pool ~65-70k frames; a validation fold's few-thousand
+        # frames, mostly negative) has far more than ohem_k negatives, so no
+        # runtime clamping against n_neg happens here. A batch with fewer
+        # than ohem_k negatives would make top_k raise, not silently cheat
+        # the sample size.
+        top_vals, top_pos = tf.math.top_k(neg_logits, k=self.ohem_k)
+        top_sample_idx = tf.gather(neg_idx, top_pos)
+        target = tf.fill(tf.shape(top_vals), tf.constant(0.5, dtype=y_pred.dtype) * self.label_smoothing)
+        hard_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=target, logits=top_vals)
+        addition = tf.scatter_nd(
+            tf.expand_dims(tf.cast(top_sample_idx, tf.int32), -1),
+            self.ohem_weight * hard_loss,
+            tf.shape(base),
+        )
+        return base + addition
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'buzz_index': self.buzz_index,
+            'label_smoothing': self.label_smoothing,
+            'ohem_k': self.ohem_k,
+            'ohem_weight': self.ohem_weight,
+        })
+        return config
+
+
+def make_bce_metric(label_smoothing):
+    """Plain BCE as a metric, decoupled from TailBCELoss, so EarlyStopping can
+    monitor 'val_bce' instead of the compiled (tail-contaminated) val_loss.
+
+    Numerically identical to TailBCELoss's `base` term / to
+    BinaryCrossentropy(from_logits=True, label_smoothing=...) — no OHEM
+    addition, so its value on the held-out fold isn't batch-locality-noisy the
+    way the tail term is. The tail term stays live in the training gradient
+    (it's still part of the compiled loss); it just never reaches the
+    stopping signal.
+    """
+    def bce(y_true, y_pred):
+        y_true = tf.cast(y_true, y_pred.dtype)
+        labels_smoothed = y_true * (1.0 - label_smoothing) + 0.5 * label_smoothing
+        elementwise = tf.nn.sigmoid_cross_entropy_with_logits(labels=labels_smoothed, logits=y_pred)
+        return tf.reduce_mean(elementwise, axis=-1)
+    bce.__name__ = 'bce'
+    return bce
+
+
+# tail-loss-retest experiment knobs (see notes.md). ohem_weight is fixed at
+# 1.0; ohem_k is the one hyperparameter varied across runs — edit here and use
+# a fresh --name per value tried. 200 ~= 10x the ~22-frame validation-side
+# neg_frames_fold_median, matching the training pool's ~10x scale (pooled
+# across folds vs. one fold at validation).
+OHEM_K = 200
+OHEM_WEIGHT = 1.0
+
 FNAME_PREDICTIONS = 'predictions.csv'
 FNAME_FOLD_SUMMARY = 'summary.json'
 FNAME_FOLDS_SUMMARY = 'folds_summary.csv'
@@ -232,10 +356,12 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.Dense(len(data.classes)))
 
+    buzz_index = data.classes.index('ins_buzz')
     model.compile(
-        loss=tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.2),
+        loss=TailBCELoss(buzz_index=buzz_index, label_smoothing=0.2,
+                         ohem_k=OHEM_K, ohem_weight=OHEM_WEIGHT),
         optimizer=tf.keras.optimizers.Adam(learning_rate=0.002),
-        metrics=['accuracy'],
+        metrics=['accuracy', make_bce_metric(label_smoothing=0.2)],
     )
 
     if data.val_tf is None:
@@ -253,8 +379,14 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             'frames_train': data.frames_train,
         }
     else:
+        # Monitor plain BCE ('val_bce'), NOT 'val_loss' — val_loss is
+        # TailBCELoss including the OHEM term, which is batch-local and noisy
+        # on a single held-out fold (see class docstring / exp/tail-loss in
+        # log.jsonl). The tail term still trains the weights; it just isn't
+        # allowed to drive early stopping.
         callback = tf.keras.callbacks.EarlyStopping(
-            monitor='val_loss', patience=patience, min_delta=0.002, restore_best_weights=True,
+            monitor='val_bce', mode='min', patience=patience, min_delta=0.002,
+            restore_best_weights=True,
         )
         history = model.fit(
             data.train_tf,
@@ -266,11 +398,12 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         )
 
         best_epoch = callback.best_epoch
-        best_val_loss = float(callback.best)
+        best_val_bce = float(callback.best)
         result = {
             'n_epochs': len(history.history['val_loss']),
             'best_epoch': best_epoch + 1,
-            'best_val_loss': best_val_loss,
+            'best_val_loss': history.history['val_loss'][best_epoch],  # tail-inclusive, informational only
+            'best_val_bce': best_val_bce,  # the actual stopping monitor
             'best_val_accuracy': history.history['val_accuracy'][best_epoch],
             'frames_train': data.frames_train,
             'frames_val': data.frames_val,
