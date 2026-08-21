@@ -20,36 +20,82 @@ any of it as settled.
 ### Different levels of automatic annotation generation
 From bee hive and from nighttime audio
 
-### tail-loss-fair-retest
+### stopping-rule-scale
 
-**Hypothesis:** the endpoint reads sensitivity at 0.5% FPR, where a typical
-fold's threshold rests on ~22 top-scoring negative frames
-(`neg_frames_fold_median` in `folds_sx.csv`), but every model in the log trains
-on plain BCE, which spends most of its gradient on the easy negative mass
-nowhere near that operating point. A loss term targeting rank position among
-negatives should lift the low-FPR region specifically.
+**Hypothesis:** `EarlyStopping`'s `min_delta=0.002` on `val_loss`
+(`03_train/train.py:257`) was tuned for the 1024-d linear probe at
+`framehop_prop=1`. It is an absolute threshold on a loss whose scale and
+per-epoch improvement both depend on input width and on how many frames an
+epoch contains, so it is not obviously portable to any other structure — and
+four runs on 2026-08-20/21 all stopped earlier than baseline, monotonically in
+input width:
 
-**Why it needs a retest:** `exp/tail-loss` implemented this as an OHEM term
-added to the compiled loss and collapsed (`trust: artifact`) — but for an
-implementation reason, not a representational one. The compiled loss is what
-`EarlyStopping` monitors, and a term whose value depends on within-batch rank is
-noisy when evaluated on a single small validation fold, so `val_loss` bottomed
-out in the first handful of epochs and `restore_best_weights` locked in a
-near-random model. The mechanism was never actually tested.
+| config | width | median best_epoch |
+|---|---|---|
+| cv-baseline | 1024-d | 56 |
+| context-embedder (k=1) | 3072-d | 38 |
+| context-width (k=2) | 5120-d | 32 |
+| framehop-overlap (2x frames/epoch) | 1024-d | 13 |
+| context-pooling (attention) | 3072-d | 4 |
 
-**What to do:** keep the tail term in the *training* loss but stop early on
-plain BCE — a separate compiled metric, or a custom callback monitoring the BCE
-term alone. Alternatively compute the tail term against a fixed reference pool
-of negatives rather than the current batch, which removes the batch-locality
-that made it a bad monitor signal. Sanity-check that `best_epoch` lands in the
-same ballpark as baseline (~60-130) before reading any sensitivity number.
+If this is real, every structural experiment in the log has been partly
+measuring a stopping rule rather than a representation, and the two context
+results in particular (`context-embedder` +0.022, `context-width` -0.043 vs k=1)
+are confounded with it.
 
-**Caveats:** with the operating point resting on ~20 negatives per validation
-fold, genuine tail overfitting is still a live risk — check whether folds with
-small negative populations swing hardest. Also note `exp/tail-loss` hit a TF
-graph bug (out-of-range gather under fused multi-step execution) with a
-data-dependent `top_k` count; prefer a fixed-size `top_k` to avoid it. Smoke-test
-with `tools/smoke_model.py` before spending a CV.
+**What to do:** one CV at k=1 with a smaller `min_delta` (or a relative
+criterion), against `exp/context-embedder` as the paired comparator. If k=1's
+number moves materially, rerun `context-width` before believing the
+dose-response turnover.
+
+**Caveats:** `framehop-overlap`'s agent found per-fold epoch ratio correlates
+only weakly with per-fold delta (r=0.155), so early stopping does not explain
+*which* folds moved there — the effect may be real but not the whole story.
+Also note `min_delta=0.002` was itself adopted for a reason (6.6x variance
+reduction pre-rework), so loosening it may trade bias for variance.
+
+### noise-floor-cv
+
+**Hypothesis:** run-to-run variance on this pipeline is far larger than the loop
+assumes, and single-run per-fold deltas carry little signal.
+
+**Why now:** `exp/tail-loss-retest` ran a `weight=0.0` control — mathematically
+identical to `cv-baseline`'s loss — on `JamesU - MustardBumbler/1_29` and got
+sensitivity 0.002-0.070 against the logged 0.448, then reproduced the same
+collapse through main's completely unmodified `train.py`. The driver
+(`tools/diag_tailloss.py` on that branch) calls the same `_load_data` /
+`_train_one` / `_write_scores` with the same fold composition, `epochs=400`,
+`patience=50` as `train_set`'s rotation loop, and `frames_train` matches
+baseline's to within ~100 frames — so no harness difference has been found to
+explain it.
+
+**What to do:** the control LOOP.md names as expensive and never run — repeat the
+baseline config as a full CV under a fresh `--name`, join per fold against
+`models/yamnet_medium_general`, and report the per-fold spread. That number is
+the denominator for every delta in this log.
+
+**Caveats:** interacts with `stopping-rule-scale` — if stopping is unstable,
+some of this "seed noise" may be stopping-rule noise with a fixable cause.
+
+### event-level-metric
+
+**Problem, not yet a hypothesis:** `predictions.csv` stores only
+`activation_ins_buzz` and `correct` per frame (`03_train/train.py:148-151`) —
+no event id, no timestamp. So there is no way to ask "did any frame overlapping
+this annotated event clear the threshold?", and every comparison is locked to a
+per-frame rate.
+
+That made `exp/framehop-overlap` uninterpretable: halving the hop doubled both
+the buzz frames and the negative population the FPR threshold rests on
+(`buzz_frames_total` 5641 -> 11225, `neg_frames_fold_median` 22 -> 43), so its
+-0.152 is measured over a different frame population than baseline's and cannot
+be read as a capability gap in either direction.
+
+**What to do:** carry event identity (or frame start time) into `predictions.csv`
+and add an event-level read alongside the frame-level one. Any future experiment
+that changes frame density — hop, framelength, rescue policy — needs it to be
+comparable at all. Note this changes what a model directory contains, not the
+metric itself, so it does not run afoul of the `03_train/metrics.py` rule.
 
 ### normalization-zero-variance
 
@@ -77,9 +123,19 @@ hypothesis.
 at `Lily Adam - One Hive/recorders/willard/2024-08-07/1_11`, a large fold. There
 is something specific about that deployment that temporal context hurts.
 
+**Strengthened by `exp/context-width`:** the regression scales with context
+width, monotonically — baseline 0.177, k=1 0.118 (-0.059), k=2 0.066 (-0.111).
+Roughly double the hit for double the window, on a fold that is mid-pack in
+`frames_val` (4730), so this is not a thin-fold swing. `exp/deployment-forensics`
+attributes it to willard having the highest fraction of short (<1s: 68%) and
+isolated (>5s gap: 68%) buzz events of any fold — stacking dilutes a brief
+isolated buzz with silent neighbours, and a wider window dilutes it further.
+
 **What to do:** pull the frames where the two models most disagree at their
 per-fold thresholds and listen. Not a training experiment — a diagnostic that
-should precede the next context experiment.
+should precede the next context experiment. If the dilution story survives
+listening, the follow-up is context width that adapts to event length rather
+than a single fixed k.
 
 ### near-chance-deployments
 
