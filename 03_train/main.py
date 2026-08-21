@@ -28,6 +28,12 @@ if __name__ == '__main__':
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
     parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--batch', type=int, default=65568, dest='size_batch',
+                        help='training batch size; the default is larger than the '
+                             'training pool, i.e. full-batch')
+    parser.add_argument('--lr-backbone', type=float, default=0.0, dest='lr_backbone',
+                        help='learning rate for backbone layers carried in the head '
+                             '(yamnet_trunk only); 0 freezes them')
     args = parser.parse_args()
 
     train_set(
@@ -40,4 +46,6 @@ if __name__ == '__main__':
         verbose=args.verbose,
         patience=args.patience,
         assume_yes=args.assume_yes,
+        size_batch=args.size_batch,
+        lr_backbone=args.lr_backbone,
     )
