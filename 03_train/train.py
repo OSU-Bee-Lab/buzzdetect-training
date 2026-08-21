@@ -26,6 +26,74 @@ from metrics import metrics_by_group, metrics_at_fpr
 
 from sx import summarize_sx, summarize_sx_byfold, format_sx_report, FPR_TARGETS, FNAME_SX_SUMMARY, FNAME_SX_BYFOLD
 
+# context-pooling experiment: how to reduce a context embedder's stacked
+# (n_frames, 1024) representation to one 1024-d vector before the probe.
+# 'attention' is the hypothesis under test; 'max' is the cheap non-learned
+# control. Only takes effect when the embedder actually stacks frames
+# (n_embeddings a multiple of 1024 greater than 1024) — see
+# `_build_context_pool_head` / `_uses_context_pooling`.
+POOL_MODE = 'attention'
+CONTEXT_FRAME_DIM = 1024
+
+
+@tf.keras.utils.register_keras_serializable(package='buzzdetect')
+class AttentionPool(tf.keras.layers.Layer):
+    """Learned attention pooling over a small number of stacked context frames.
+
+    Input: (batch, n_frames, frame_dim). A shared Dense(1) scores each frame,
+    softmax over the frame axis turns the scores into weights, and the output
+    is the weighted sum over frames: (batch, frame_dim).
+
+    Registered serializable so it survives the save(include_optimizer=True) ->
+    load(compile=False) round trip write_model_py's inference path uses (see
+    tools/smoke_model.py).
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.score = tf.keras.layers.Dense(1, name='pool_score')
+
+    def call(self, inputs):
+        scores = self.score(inputs)  # (batch, n_frames, 1)
+        weights = tf.nn.softmax(scores, axis=1)  # (batch, n_frames, 1)
+        return tf.reduce_sum(inputs * weights, axis=1)  # (batch, frame_dim)
+
+
+def _uses_context_pooling(embedder):
+    """True if the embedder stacks more than one frame's embedding, i.e. a
+    context embedder like yamnet_context (3072-d = 3 x 1024-d frames)."""
+    n = embedder.n_embeddings
+    return n > CONTEXT_FRAME_DIM and n % CONTEXT_FRAME_DIM == 0
+
+
+def _build_model(tf_name, embedder, n_classes):
+    """Build the (uncompiled) model. A plain context embedder gets the usual
+    flat linear probe; a context embedder (n_embeddings a multiple of 1024)
+    gets its input reshaped to (n_frames, 1024) and pooled across frames
+    before the same Dropout(0.2) + Dense(n_classes) head, per POOL_MODE."""
+    if not _uses_context_pooling(embedder):
+        model = tf.keras.Sequential(name=tf_name)
+        model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
+        model.add(tf.keras.layers.Dropout(0.2))
+        model.add(tf.keras.layers.Dense(n_classes))
+        return model
+
+    n_frames = embedder.n_embeddings // CONTEXT_FRAME_DIM
+    inputs = tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input')
+    reshaped = tf.keras.layers.Reshape((n_frames, CONTEXT_FRAME_DIM))(inputs)
+
+    if POOL_MODE == 'attention':
+        pooled = AttentionPool(name='attention_pool')(reshaped)
+    elif POOL_MODE == 'max':
+        pooled = tf.keras.layers.GlobalMaxPooling1D(name='max_pool')(reshaped)
+    else:
+        raise ValueError(f'unknown POOL_MODE {POOL_MODE!r}')
+
+    dropped = tf.keras.layers.Dropout(0.2)(pooled)
+    outputs = tf.keras.layers.Dense(n_classes)(dropped)
+    return tf.keras.Model(inputs=inputs, outputs=outputs, name=tf_name)
+
+
 FNAME_PREDICTIONS = 'predictions.csv'
 FNAME_FOLD_SUMMARY = 'summary.json'
 FNAME_FOLDS_SUMMARY = 'folds_summary.csv'
@@ -227,10 +295,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     # Keras rejects '/' in layer/model names outright; fold ids are paths, so
     # strip separators here rather than relying on the caller's naming.
     tf_name = re.sub(r'[^A-Za-z0-9_.>-]', '_', modelname)
-    model = tf.keras.Sequential(name=tf_name)
-    model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
-    model.add(tf.keras.layers.Dropout(0.2))
-    model.add(tf.keras.layers.Dense(len(data.classes)))
+    model = _build_model(tf_name, embedder, len(data.classes))
 
     model.compile(
         loss=tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.2),
