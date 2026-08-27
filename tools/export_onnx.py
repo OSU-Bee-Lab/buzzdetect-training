@@ -49,7 +49,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config as cfg  # noqa: E402
-from tools.onnx_passes import optimize  # noqa: E402
+from tools.onnx_passes import count_fusable, optimize  # noqa: E402
 
 DEST_DEFAULT = '/Users/luke/Documents/bioacoustics/buzzdetect/engine/models'
 
@@ -87,6 +87,10 @@ FNAME_FP16 = 'model.fp16.onnx'
 # conversion produced the model rather than mush. The number it actually lands
 # on is printed, and the engine warns the user when it loads this file.
 TOL_FP16 = 5e-2
+
+# And how much of the top class it is allowed to change. A shifted activation
+# is expected; a different answer on one frame in fifty is not.
+AGREE_FP16 = 0.98
 
 # Only what the engine reads: classes names the result columns and
 # digits_results sets their rounding. Everything else about the model -- its
@@ -181,18 +185,27 @@ def export_graph(combined, path_onnx):
     onnx.checker.check_model(model)
     onnx.save(model, path_onnx)
 
+    n_conv = sum(1 for n in model.graph.node if n.op_type in ('Conv', 'FusedConv'))
     print(f'  {n_before} -> {len(model.graph.node)} nodes: '
           f'{n_folded} batchnorms folded into their convolutions, '
-          f'{n_fused} Conv+Relu pairs fused, '
+          f'{n_fused} of {n_conv} convolutions fused with their Relu, '
           f'{n_dropped} orphaned initializers dropped')
-    # Both counts are signals, not statistics. Zero folds means tf2onnx changed
-    # what it emits; zero fusions means the pattern stopped matching -- a
-    # different activation, or a fold that did not happen. Either way the graph
-    # that would ship is not the graph that was measured.
-    if n_folded == 0 or n_fused == 0:
-        raise SystemExit(
-            f'graph rewrites did not match ({n_folded} folded, {n_fused} fused). '
-            f'Nothing shipped; see tools/onnx_passes.py.')
+
+    # A pair the pass should have taken and did not is a bug in the pass.
+    n_left = count_fusable(model)
+    if n_left:
+        raise SystemExit(f'{n_left} Conv+Relu pairs were left unfused; '
+                         f'tools/onnx_passes.py did not do its job.')
+    # Nothing to fuse is a different thing, and not necessarily wrong: a
+    # backbone using Relu6 or HardSwish has no plain Conv->Relu, and neither
+    # does one whose batchnorms never folded. Worth saying out loud, because on
+    # YAMNet it would mean the graph that ships is not the graph that was
+    # measured -- but not worth refusing an export over, since the parity
+    # checks below are what decide whether the model is right.
+    if n_fused == 0 and n_conv:
+        print(f'  WARNING: no Conv+Relu pairs matched. If this model is meant '
+              f'to fuse, the export is slower than it should be on CUDA; check '
+              f'what activation the backbone uses.')
     return model
 
 
@@ -404,10 +417,20 @@ def write_fp16(path_onnx, path_fp16, samples):
     d = float(np.abs(expected - got).max())
     agree = float((expected.argmax(1) == got.argmax(1)).mean())
     print(f'  {os.path.getsize(path_fp16) / 1e6:.2f} MB, '
-          f'{len(frontend)} front-end nodes left in fp32, '
+          f'{len(frontend)} of {len(nodes)} nodes left in fp32, '
           f'max|d|={d:.2e}, top-class agreement={agree:.4f}')
-    if d > TOL_FP16:
-        raise SystemExit(f'fp16 conversion looks broken: {d:.2e} > {TOL_FP16}')
+    # Both bounds are loose on purpose. This is not a parity check -- reduced
+    # precision is a deliberate trade the operator opts into -- it is a check
+    # that the conversion produced the model rather than mush, and in
+    # particular that the fp32/fp16 boundary landed somewhere sensible. A model
+    # whose feature extractor is itself convolutional would put that boundary
+    # in the wrong place, and this is what would say so.
+    if d > TOL_FP16 or agree < AGREE_FP16:
+        raise SystemExit(
+            f'fp16 conversion looks wrong: max|d|={d:.2e} (limit {TOL_FP16}), '
+            f'top-class agreement={agree:.4f} (limit {AGREE_FP16}). The fp32 '
+            f'prefix is {len(frontend)} nodes; if this model\'s front end is '
+            f'itself convolutional, that boundary is in the wrong place.')
 
 
 def export(modelname, dir_dest, force=False, path_audio=None):

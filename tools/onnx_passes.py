@@ -184,6 +184,36 @@ def drop_orphan_initializers(model):
     return model, len(orphans)
 
 
+def count_fusable(model):
+    """Conv+Relu pairs fuse_conv_relu would take. Zero once it has run.
+
+    The point of counting is to tell "this backbone has no plain Conv->Relu to
+    fuse" -- Relu6 and HardSwish backbones do not, and neither does a graph
+    whose batchnorms never folded -- apart from "the pass ran and missed some",
+    which would be a bug here.
+    """
+    producer = {out: n for n in model.graph.node for out in n.output}
+    consumers = {}
+    for node in model.graph.node:
+        for inp in node.input:
+            consumers.setdefault(inp, []).append(node)
+    outputs = {o.name for o in model.graph.output}
+
+    n = 0
+    for relu in model.graph.node:
+        if relu.op_type != 'Relu':
+            continue
+        conv = producer.get(relu.input[0])
+        if conv is None or conv.op_type != 'Conv':
+            continue
+        if len(consumers.get(conv.output[0], [])) != 1:
+            continue
+        if conv.output[0] in outputs:
+            continue
+        n += 1
+    return n
+
+
 def optimize(model):
     """The passes, in the only order that works.
 
