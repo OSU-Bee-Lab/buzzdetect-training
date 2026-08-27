@@ -2,19 +2,32 @@
 
     conda run -n buzzdetect-train python tools/export_onnx.py yamnet_medium_general
 
-Reads models/<name>/ here and writes <dest>/<name>/ over in buzzdetect,
-carrying both halves of the model: model.onnx for onnxruntime and model.keras
-for TensorFlow, plus a model.py subclassing DualRuntimeModel, which runs
-whichever of the two that environment can. One directory, either runtime --
-the frozen sidecar has no TensorFlow, a checkout usually does.
+Reads models/<name>/ here and writes <dest>/<name>/ over in buzzdetect. The
+ONNX half is one graph that takes a waveform and returns predictions -- the
+embedder's log-mel front end, the embedder's trunk and the trained classifier
+head, all fused into a single model.onnx. buzzdetect runs that graph and
+nothing else: no embedder plugin, no NumPy front end, no TensorFlow.
 
-The name is deliberately unchanged. Both halves are the same model: the ONNX
-head matches Keras to <1e-4 and the ONNX YAMNet trunk matches the TensorFlow
-one to ~1e-5 (asserted by that embedder's BUILD.py), both re-checked here on
-every export. Renaming would make it look like a second model.
+The Keras half ships beside it unchanged, as model.keras. Nothing in buzzdetect
+reads it -- the engine is ONNX-only -- but it is the artifact of record for the
+model, and having both halves in one directory is what makes the ONNX one
+checkable: every export runs the two against each other on real audio and
+refuses to ship a mismatch.
 
-Only the classifier head is converted. The YAMNet trunk is not duplicated per
-model -- it lives once, in buzzdetect's engine/embedders/yamnet_onnx/.
+Why fuse the front end in rather than keeping the embedder separate, which is
+how buzzdetect worked before:
+
+  - It was the single largest cost in the pipeline. The NumPy front end took
+    118 ms of a 170 ms chunk on macOS and 147 ms of 177 ms on the Linux box,
+    all of it on the CPU, competing with the audio decoder threads for cores.
+    In the graph it runs wherever the rest of the graph runs; the same chunk
+    now takes 68 ms on CoreML.
+  - It removes the second implementation. The front end existed twice, once in
+    TensorFlow and once in NumPy, held together by a parity test.
+  - One file is the whole model, so a newly trained model is shippable the
+    moment it is exported.
+
+See buzzdetect's benchmarks/onnx-vs-tf/{RESULTS.md,COREML.md} for the numbers.
 """
 
 # IMPORTANT: `import tensorflow` must come first, before anything that pulls in
@@ -28,7 +41,6 @@ import argparse
 import json
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 
@@ -37,163 +49,293 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config as cfg  # noqa: E402
+from tools.onnx_passes import optimize  # noqa: E402
 
 DEST_DEFAULT = '/Users/luke/Documents/bioacoustics/buzzdetect/engine/models'
 
 # Five minutes of field audio from Lily - Fit+Fast/2023_R3_Marysville/53. Real
-# audio matters here: the head check below runs on gaussian noise, which proves
-# the graph exported correctly but says nothing about behaviour on the
-# post-ReLU, sparse, non-negative embeddings the model actually sees.
+# audio matters here: the synthetic lengths below run on gaussian noise, which
+# proves the graph exported correctly but says nothing about behaviour on the
+# post-ReLU, sparse, non-negative activations the model actually sees.
 FIXTURE_AUDIO = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                              'fixtures', '230808_1208_s89520.flac')
 
-# Loose enough for float32 reassociation between two runtimes, tight enough to
-# catch a mis-exported graph. Same budget the engine's own tooling uses, and
-# it covers both checks: the head alone lands around 7e-6, and the end-to-end
-# check -- which composes the ONNX trunk's own ~1e-5 drift through the head --
-# lands around 4e-5 on the fixture.
+# Loose enough for float32 reassociation between two runtimes -- and for the
+# batchnorm fold, which is exact in real arithmetic but moves the last bits --
+# tight enough to catch a mis-exported graph. The fixture lands around 4e-5.
 TOL = 1e-4
 
-# Which ONNX embedder in buzzdetect stands in for each embedder here. An
-# embedder missing from this table has no ONNX build over there yet; adding a
-# row without building one just produces a model the engine can't load.
-EMBEDDERS_ONNX = {
-    'yamnet': 'yamnet_onnx',
-}
+# The graph's input and output are renamed to these on the way out. Nothing
+# requires it -- the engine reads them by index -- but the engine also has to
+# name the input's symbolic dimension to fix it before session creation, and a
+# contract worth relying on is worth writing down.
+NAME_IN = 'waveform'
+NAME_OUT = 'predictions'
+DIM_SAMPLES = 'samples'
 
 # Only what the engine reads: classes names the result columns and
-# digits_results sets their rounding. The embedder is not among them -- the
-# generated model.py names one per runtime, because which embedder applies
-# depends on which runtime ends up running. Training metadata is deliberately
-# not shipped yet.
+# digits_results sets their rounding. Everything else about the model -- its
+# sample rate, frame length, class list -- is either in model.py or not the
+# engine's business. Training metadata is deliberately not shipped.
 KEYS_CONFIG = ('classes', 'digits_results')
 
-TEMPLATE_MODEL_PY = '''from src.inference.models import DualRuntimeModel
+TEMPLATE_MODEL_PY = '''from src.inference.models import OnnxModel
 
 
-class {classname}(DualRuntimeModel):
+class {classname}(OnnxModel):
     """Generated by buzzdetect-training tools/export_onnx.py. Do not edit.
 
-    Holds both halves: model.onnx for onnxruntime and model.keras for
-    TensorFlow, checked against each other at export time. DualRuntimeModel
-    runs whichever this environment can.
+    model.onnx is the whole model: waveform in, predictions out. The front end
+    that used to live in an embedder plugin is inside the graph.
     """
 
     modelname = "{modelname}"
-    embeddername_onnx = '{embeddername_onnx}'
-    embeddername_tensorflow = '{embeddername_tensorflow}'
+    samplerate = {samplerate}
+    framelength_s = {framelength_s}
+    digits_time = {digits_time}
     digits_results = {digits_results}
+    samples_hop = {samples_hop}
+    samples_min = {samples_min}
 '''
-
-
-# Run by the engine's own interpreter, because neither environment
-# has both halves: TensorFlow lives here, onnxruntime plus the ONNX YAMNet trunk
-# live there. Takes decoded samples rather than an audio path so that any
-# difference in how the two repos load and resample audio stays out of the
-# comparison -- what's being measured is the model, not the decoder.
-DRIVER_VERIFY = '''
-import os, sys
-import numpy as np
-
-sys.path.insert(0, os.getcwd())
-from src import config as cfg
-cfg.DIR_MODELS = sys.argv[1]
-import src.inference.models as models
-models.cfg = cfg
-
-model = models.load_model(sys.argv[2], framehop_prop=1, initialize=True)
-np.save(sys.argv[4], np.asarray(model.predict(np.load(sys.argv[3]))))
-'''
-
-
-def engine_python_for(dir_dest):
-    """The engine's interpreter, inferred from the destination.
-
-    dir_dest is <repo>/engine/models, so the engine is its parent.
-    """
-    return os.path.join(os.path.dirname(os.path.abspath(dir_dest)),
-                        '.venv', 'bin', 'python3')
-
-
-def verify_audio(modelname, dir_stage, path_audio, python_engine, dir_engine):
-    """Compare scores from real audio, TensorFlow here against ONNX there.
-
-    Stronger than the head check: this runs the whole path, so it sees the ONNX
-    YAMNet trunk's drift composed through the head, which is what actually
-    decides whether an analysis moves. Only valid at framehop_prop=1 -- the ONNX
-    embedder refuses anything else.
-    """
-    import keras
-    import librosa
-
-    from embedders.embedding import load_embedder
-
-
-
-    print(f'verifying end-to-end on {os.path.basename(path_audio)}')
-    embedder = load_embedder('yamnet', framehop_prop=1, initialize=True)
-    samples, _ = librosa.load(path_audio, sr=embedder.samplerate, mono=True)
-    samples = samples.astype(np.float32)
-
-    model = keras.saving.load_model(
-        os.path.join(cfg.DIR_MODELS, modelname, 'model.keras'), compile=False)
-    scores_tf = np.asarray(model(np.asarray(embedder.embed(samples))))
-
-    with tempfile.TemporaryDirectory() as dir_tmp:
-        path_samples = os.path.join(dir_tmp, 'samples.npy')
-        path_scores = os.path.join(dir_tmp, 'scores.npy')
-        np.save(path_samples, samples)
-        # Pin the runtime. The staged directory holds both halves now, so an
-        # engine venv that happens to have TensorFlow would otherwise pick it
-        # and the check would compare TensorFlow against itself.
-        env = dict(os.environ, BUZZDETECT_RUNTIME='onnx')
-        subprocess.run(
-            [python_engine, '-c', DRIVER_VERIFY, os.path.dirname(dir_stage),
-             modelname, path_samples, path_scores],
-            cwd=dir_engine, check=True, env=env)
-        scores_onnx = np.load(path_scores)
-
-    if scores_tf.shape != scores_onnx.shape:
-        raise SystemExit(f'frame/class mismatch: tensorflow {scores_tf.shape} vs '
-                         f'onnx {scores_onnx.shape}')
-
-    d = float(np.abs(scores_tf - scores_onnx).max())
-    agree = float((scores_tf.argmax(1) == scores_onnx.argmax(1)).mean())
-    print(f'  {scores_tf.shape[0]} frames, max|d|={d:.2e}, top-class agreement={agree:.4f}')
-    if d > TOL:
-        raise SystemExit(f'end-to-end parity FAILED: {d:.2e} > {TOL}')
-    return d
 
 
 def classname_for(modelname):
     return ''.join(part[:1].upper() + part[1:] for part in modelname.split('_'))
 
 
-def export(modelname, dir_dest, embeddername=None, force=False,
-           path_audio=None, python_engine=None):
+def build_combined(modelname, embeddername):
+    """One Keras model, waveform -> predictions.
+
+    The embedder is loaded through its own plugin rather than by reaching for
+    a .keras path, so whatever that plugin does at load time -- retuning the
+    patch hop, in yamnet's case -- is done here too, and a new embedder needs
+    no change in this file.
+    """
+    import keras
+
+    from embedders.embedding import load_embedder
+
+    # framehop_prop=1: the graph is exported with the patch hop welded to the
+    # patch window. An overlapping framehop would have to be a graph parameter,
+    # and buzzdetect's ONNX path has never supported one.
+    embedder = load_embedder(embeddername, framehop_prop=1, initialize=True)
+    trunk = embedder.model
+    if not isinstance(trunk, keras.Model):
+        raise SystemExit(
+            f"embedder '{embeddername}' does not load a Keras model "
+            f'({type(trunk).__name__}), so it cannot be exported to ONNX here.')
+
+    head = keras.saving.load_model(
+        os.path.join(cfg.DIR_MODELS, modelname, 'model.keras'), compile=False)
+    # Keras refuses to hand out .inputs for a model it has never seen called,
+    # and refuses to export one either.
+    head(np.zeros((1, embedder.n_embeddings), dtype=np.float32))
+
+    combined = keras.Model(trunk.input, head(trunk.output), name=modelname)
+    combined(np.zeros(int(embedder.framelength_s * embedder.samplerate) * 3,
+                      dtype=np.float32))
+    return combined, embedder, head
+
+
+def rename_io(model):
+    """Give the graph's input, output and symbolic length stable names."""
+    graph = model.graph
+    old_in, old_out = graph.input[0].name, graph.output[0].name
+    for node in graph.node:
+        node.input[:] = [NAME_IN if i == old_in else i for i in node.input]
+        node.output[:] = [NAME_OUT if o == old_out else o for o in node.output]
+    graph.input[0].name = NAME_IN
+    graph.output[0].name = NAME_OUT
+    dim = graph.input[0].type.tensor_type.shape.dim[0]
+    if dim.HasField('dim_param'):
+        dim.dim_param = DIM_SAMPLES
+    return model
+
+
+def export_graph(combined, path_onnx):
+    """Keras -> ONNX -> folded and fused, written to path_onnx."""
+    import onnx
+
+    print(f'exporting {path_onnx}')
+    combined.export(path_onnx, format='onnx', verbose=False)
+
+    model = onnx.load(path_onnx)
+    n_before = len(model.graph.node)
+    model, n_folded, n_fused = optimize(model)
+    model = rename_io(model)
+    onnx.checker.check_model(model)
+    onnx.save(model, path_onnx)
+
+    print(f'  {n_before} -> {len(model.graph.node)} nodes: '
+          f'{n_folded} batchnorms folded into their convolutions, '
+          f'{n_fused} Conv+Relu pairs fused')
+    # Both counts are signals, not statistics. Zero folds means tf2onnx changed
+    # what it emits; zero fusions means the pattern stopped matching -- a
+    # different activation, or a fold that did not happen. Either way the graph
+    # that would ship is not the graph that was measured.
+    if n_folded == 0 or n_fused == 0:
+        raise SystemExit(
+            f'graph rewrites did not match ({n_folded} folded, {n_fused} fused). '
+            f'Nothing shipped; see tools/onnx_passes.py.')
+    return model
+
+
+def verify(path_onnx, combined, embedder, path_audio):
+    """Run the ONNX graph against the Keras model it was built from.
+
+    Real audio first, then synthetic lengths chosen to cover the ragged cases:
+    several whole frames, exactly one, one sample under the padding floor, a
+    ragged tail, and a clip too short to make a frame at all. Those last three
+    exercise the front end's padding, which is inside the graph now.
+    """
+    import librosa
+    import onnxruntime as ort
+
+    session = ort.InferenceSession(path_onnx, providers=['CPUExecutionProvider'])
+    name_in = session.get_inputs()[0].name
+    print(f'  {os.path.getsize(path_onnx) / 1e6:.2f} MB, '
+          f'in {session.get_inputs()[0].shape} out {session.get_outputs()[0].shape}')
+
+    cases = []
+    if path_audio is not None:
+        samples, _ = librosa.load(path_audio, sr=embedder.samplerate, mono=True)
+        cases.append((os.path.basename(path_audio), samples.astype(np.float32)))
+
+    rng = np.random.default_rng(0)
+    n_frame = int(embedder.framelength_s * embedder.samplerate)
+    for n in (n_frame * 8, n_frame, n_frame - 1, n_frame * 3 + 137, n_frame // 4):
+        cases.append((f'noise n={n}',
+                      (rng.standard_normal(n) * 0.1).astype(np.float32)))
+
+    worst = 0.0
+    for label, samples in cases:
+        expected = np.asarray(combined(samples))
+        got = session.run(None, {name_in: samples})[0]
+        if expected.shape != got.shape:
+            raise SystemExit(f'{label}: shape mismatch, keras {expected.shape} '
+                             f'vs onnx {got.shape}')
+        d = float(np.abs(expected - got).max()) if got.size else 0.0
+        agree = ((expected.argmax(1) == got.argmax(1)).mean()
+                 if got.size else float('nan'))
+        worst = max(worst, d)
+        print(f'  {label:<34} {str(got.shape):<12} max|d|={d:.2e}  agree={agree:.4f}')
+
+    if worst > TOL:
+        raise SystemExit(f'parity FAILED: {worst:.2e} > {TOL}; nothing shipped')
+    print(f'parity OK: {worst:.2e}')
+    return worst
+
+
+def frames_for(n_samples, samples_hop, samples_min):
+    """How many frames the graph returns for n_samples of audio.
+
+    The engine needs this to know how much of a padded chunk's output is real.
+    It is the front end's own framing rule: pad up to the first whole frame,
+    then hop. Note samples_min exceeds samples_hop -- YAMNet's first frame needs
+    the STFT window's overhang as well as the 0.96 s patch -- so this is not
+    simply ceil(n / samples_hop).
+    """
+    if n_samples <= 0:
+        return 0
+    return 1 + max(0, -(-(n_samples - samples_min) // samples_hop))
+
+
+def probe_framing(path_onnx, embedder):
+    """Find the graph's framing rule by asking it, rather than by assuming it.
+
+    samples_hop follows from the frame length, but the floor below which the
+    front end pads up to a single frame is a property of that front end -- for
+    YAMNet it is the patch window plus the STFT window's overhang, which is not
+    something the engine should be expected to know. Binary-searching for it
+    costs a handful of runs on inputs under two frames long, and the result is
+    checked against the graph at awkward lengths before it is shipped.
+    """
+    import onnxruntime as ort
+
+    session = ort.InferenceSession(path_onnx, providers=['CPUExecutionProvider'])
+
+    def n_frames(n):
+        x = np.zeros(n, dtype=np.float32)
+        return session.run(None, {NAME_IN: x})[0].shape[0]
+
+    samples_hop = int(round(embedder.framelength_s * embedder.samplerate))
+    # The largest input that still yields exactly one frame.
+    lo, hi = 1, 4 * samples_hop
+    if n_frames(hi) < 2:
+        raise SystemExit(f'{hi} samples still gives one frame; framing is not '
+                         f'what this assumes')
+    while lo < hi - 1:
+        mid = (lo + hi) // 2
+        if n_frames(mid) == 1:
+            lo = mid
+        else:
+            hi = mid
+    samples_min = lo
+
+    for n in (1, samples_hop, samples_min, samples_min + 1,
+              samples_hop * 7 + 137, samples_hop * 40):
+        expected = frames_for(n, samples_hop, samples_min)
+        got = n_frames(n)
+        if expected != got:
+            raise SystemExit(f'framing rule wrong at n={n}: predicted {expected} '
+                             f'frames, graph returned {got}')
+    print(f'framing: hop {samples_hop} samples, first frame needs {samples_min}')
+    return samples_hop, samples_min
+
+
+def verify_fixed_length(path_onnx, embedder, samples_hop, samples_min, seconds=200):
+    """Check the graph still agrees with itself once its input length is pinned.
+
+    This is how buzzdetect runs it. CoreML's MLProgram format cannot compile a
+    graph with an unbounded dimension at all, so the engine fixes the waveform
+    length before creating the session and zero-pads short chunks up to it
+    (see COREML.md). That makes the padding contract part of what ships, so it
+    is checked here rather than only over there: a chunk padded up to the fixed
+    length, then truncated to the frames the real audio covers, must give what
+    the unpadded graph gives.
+    """
+    import onnx
+    import onnxruntime as ort
+    from onnxruntime.tools.onnx_model_utils import fix_output_shapes, make_dim_param_fixed
+
+    n_fixed = int(seconds * embedder.samplerate)
+    model = onnx.load(path_onnx)
+    make_dim_param_fixed(model.graph, DIM_SAMPLES, n_fixed)
+    fix_output_shapes(model)
+
+    dynamic = ort.InferenceSession(path_onnx, providers=['CPUExecutionProvider'])
+    fixed = ort.InferenceSession(model.SerializeToString(),
+                                 providers=['CPUExecutionProvider'])
+
+    rng = np.random.default_rng(1)
+    worst = 0.0
+    for n in (n_fixed, samples_hop * 7, samples_hop * 7 + 137, samples_min - 1):
+        samples = (rng.standard_normal(n) * 0.1).astype(np.float32)
+        padded = np.zeros(n_fixed, dtype=np.float32)
+        padded[:n] = samples
+        got = fixed.run(None, {NAME_IN: padded})[0][:frames_for(n, samples_hop, samples_min)]
+        expected = dynamic.run(None, {NAME_IN: samples})[0]
+        if expected.shape != got.shape:
+            raise SystemExit(f'padded n={n}: {got.shape} against '
+                             f'{expected.shape} unpadded')
+        worst = max(worst, float(np.abs(expected - got).max()))
+    print(f'fixed-length parity OK at {seconds:g}s: {worst:.2e}')
+    return worst
+
+
+def export(modelname, dir_dest, force=False, path_audio=None):
     """Build the export in a staging dir, check it, and only then move it into place.
 
     Staging is what makes a failed check harmless: nothing lands in the
-    destination -- and no existing export there is disturbed -- unless both
-    parity checks pass.
+    destination -- and no existing export there is disturbed -- unless every
+    check passes.
     """
-    import keras
-    import onnxruntime as ort
-
     dir_src = os.path.join(cfg.DIR_MODELS, modelname)
     if not os.path.isdir(dir_src):
         raise SystemExit(f'no such model: {dir_src}')
 
     with open(os.path.join(dir_src, 'config_model.json')) as f:
         config = json.load(f)
-
-    embeddername_tf = config['embeddername']
-    if embeddername is None:
-        embeddername = EMBEDDERS_ONNX.get(embeddername_tf)
-        if embeddername is None:
-            raise SystemExit(
-                f"no ONNX embedder known for '{config['embeddername']}'. Build one in "
-                f'buzzdetect and add it to EMBEDDERS_ONNX, or pass --embeddername.')
 
     dir_out = os.path.join(dir_dest, modelname)
     if os.path.exists(dir_out) and not force:
@@ -203,39 +345,19 @@ def export(modelname, dir_dest, embeddername=None, force=False,
     dir_stage = os.path.join(dir_staging, modelname)
     os.makedirs(dir_stage)
 
-    print(f'loading {dir_src}/model.keras')
-    model = keras.saving.load_model(os.path.join(dir_src, 'model.keras'), compile=False)
-    n_embeddings = model.inputs[0].shape[-1]
-    # Keras refuses to export a model it has never seen called.
-    model(np.zeros((1, n_embeddings), dtype=np.float32))
+    print(f"building {modelname} on embedder '{config['embeddername']}'")
+    combined, embedder, _ = build_combined(modelname, config['embeddername'])
 
     path_onnx = os.path.join(dir_stage, 'model.onnx')
-    print(f'exporting {path_onnx}')
-    model.export(path_onnx, format='onnx', verbose=False)
+    export_graph(combined, path_onnx)
 
-    session = ort.InferenceSession(path_onnx, providers=['CPUExecutionProvider'])
-    name_in = session.get_inputs()[0].name
-    print(f'  {os.path.getsize(path_onnx) / 1e6:.2f} MB, '
-          f'in {session.get_inputs()[0].shape} out {session.get_outputs()[0].shape}')
+    print('checking the graph against the keras model it came from')
+    verify(path_onnx, combined, embedder, path_audio)
+    samples_hop, samples_min = probe_framing(path_onnx, embedder)
+    verify_fixed_length(path_onnx, embedder, samples_hop, samples_min)
 
-    print('checking parity against the keras model')
-    rng = np.random.default_rng(0)
-    worst = 0.0
-    for n_frames in (1, 8, 512):
-        embeddings = rng.standard_normal((n_frames, n_embeddings)).astype(np.float32)
-        expected = np.asarray(model(embeddings))
-        got = session.run(None, {name_in: embeddings})[0]
-        if expected.shape != got.shape:
-            raise SystemExit(f'shape mismatch: keras {expected.shape} vs onnx {got.shape}')
-        d = float(np.abs(expected - got).max())
-        worst = max(worst, d)
-        print(f'  n_frames={n_frames:<5} max|d|={d:.2e}')
-    if worst > TOL:
-        raise SystemExit(f'head parity FAILED: {worst:.2e} > {TOL}; nothing shipped')
-    print(f'head parity OK: {worst:.2e}')
-
-    # The TensorFlow half, shipped beside the ONNX one so a checkout with
-    # TensorFlow can run the model the way it was trained.
+    # The artifact of record. Nothing in buzzdetect reads it; it is here so the
+    # directory holds the model rather than one build of it.
     shutil.copy2(os.path.join(dir_src, 'model.keras'),
                  os.path.join(dir_stage, 'model.keras'))
 
@@ -247,19 +369,13 @@ def export(modelname, dir_dest, embeddername=None, force=False,
         f.write(TEMPLATE_MODEL_PY.format(
             classname=classname_for(modelname),
             modelname=modelname,
-            embeddername_onnx=embeddername,
-            embeddername_tensorflow=embeddername_tf,
+            samplerate=embedder.samplerate,
+            framelength_s=embedder.framelength_s,
+            digits_time=embedder.digits_time,
             digits_results=config_out['digits_results'],
+            samples_hop=samples_hop,
+            samples_min=samples_min,
         ))
-
-    # Needs the finished staging dir -- the engine loads the model by name out
-    # of it, model.py and config_model.json included.
-    if path_audio is not None:
-        verify_audio(modelname, dir_stage, path_audio, python_engine,
-                     os.path.dirname(os.path.abspath(dir_dest)))
-
-    # Loading model.py leaves bytecode behind; it must not ship.
-    shutil.rmtree(os.path.join(dir_stage, '__pycache__'), ignore_errors=True)
 
     if os.path.exists(dir_out):
         shutil.rmtree(dir_out)
@@ -273,35 +389,23 @@ def main():
     parser.add_argument('modelname', help='model directory name under models/')
     parser.add_argument('--dest', default=DEST_DEFAULT,
                         help=f'engine model directory (default: {DEST_DEFAULT})')
-    parser.add_argument('--embeddername', default=None,
-                        help='override the ONNX embedder chosen from EMBEDDERS_ONNX')
     parser.add_argument('--force', action='store_true',
                         help='overwrite an existing export')
     parser.add_argument('--verify-audio', default=FIXTURE_AUDIO, metavar='PATH',
-                        help='audio to run the end-to-end check on '
+                        help='audio to run the parity check on '
                              '(default: the bundled fixture)')
     parser.add_argument('--no-verify-audio', dest='verify_audio',
                         action='store_const', const=None,
-                        help="skip the end-to-end check, leaving only the head "
-                             "check; use when the engine's venv isn't available")
-    parser.add_argument('--engine-python', default=None, metavar='PATH',
-                        help='engine interpreter '
-                             '(default: <dest>/../.venv/bin/python3)')
+                        help='check on synthetic lengths only')
     args = parser.parse_args()
 
     if not os.path.isdir(args.dest):
         raise SystemExit(f'destination does not exist: {args.dest}')
-    python_engine = args.engine_python or engine_python_for(args.dest)
-    if args.verify_audio is not None:
-        # Both checked up front: the export is a slow way to discover a typo.
-        if not os.path.isfile(args.verify_audio):
-            raise SystemExit(f'no such audio: {args.verify_audio}')
-        if not os.path.isfile(python_engine):
-            raise SystemExit(f'no engine interpreter at {python_engine}; pass '
-                             f'--engine-python or --no-verify-audio')
+    # Checked up front: the export is a slow way to discover a typo.
+    if args.verify_audio is not None and not os.path.isfile(args.verify_audio):
+        raise SystemExit(f'no such audio: {args.verify_audio}')
 
-    export(args.modelname, args.dest, args.embeddername, args.force,
-           args.verify_audio, python_engine)
+    export(args.modelname, args.dest, args.force, args.verify_audio)
 
 
 if __name__ == '__main__':
