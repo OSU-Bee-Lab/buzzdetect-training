@@ -1,13 +1,13 @@
-"""Paired per-fold comparison between two trained models' folds_summary.csv.
+"""Paired per-fold comparison between two trained models' folds_sx.csv.
 
-LOOP.md step 4 asks for this on every experiment: "join the two
-folds_summary.csv files on fold and look at the deltas and how many folds
-moved which way." This is that join, done the same way every time.
+LOOP.md step 4 asks for this on every experiment: "join the two folds_sx.csv
+files on fold and look at the deltas and how many folds moved which way." This
+is that join, done the same way every time.
 
     conda run -n buzzdetect-train python tools/compare_folds.py <baseline> <exp>
     conda run -n buzzdetect-train python tools/compare_folds.py <baseline> <exp> --fpr 0.01
 
-No TensorFlow: reads folds_summary.csv only, nothing here loads a model.
+No TensorFlow: reads folds_sx.csv only, nothing here loads a model.
 """
 
 import argparse
@@ -20,8 +20,8 @@ import pandas as pd
 
 import config as cfg
 
-FNAME_FOLDS_SUMMARY = 'folds_summary.csv'
 FNAME_SX_SUMMARY = 'folds_sx.csv'
+TOTAL_ROW = 'total'
 
 
 def resolve_dir_model(name):
@@ -29,42 +29,47 @@ def resolve_dir_model(name):
     experiment's model lives under a worktree's own models/ dir (not
     symlinked from main — see setup_worktree.sh), so also accept a direct
     path to a model dir for cross-worktree comparisons."""
-    direct = os.path.join(name, FNAME_FOLDS_SUMMARY)
+    direct = os.path.join(name, FNAME_SX_SUMMARY)
     if os.path.exists(direct):
         return name
     return os.path.join(cfg.DIR_MODELS, name)
 
 
-def _read_summary(name):
+def _read_sx(name, fpr):
+    """One model's folds_sx.csv, rows for this FPR target, total row dropped."""
     dir_model = resolve_dir_model(name)
-    path = os.path.join(dir_model, FNAME_FOLDS_SUMMARY)
+    path = os.path.join(dir_model, FNAME_SX_SUMMARY)
     if not os.path.exists(path):
         raise FileNotFoundError(f'{path} not found — has {name!r} finished training?')
-    return pd.read_csv(path)
+    sx = pd.read_csv(path)
+    here = sx[(sx['fpr'] == fpr) & (sx['fold'] != TOTAL_ROW)]
+    if here.empty:
+        raise ValueError(f'{path} has no rows at fpr {fpr}; available: '
+                         f'{sorted(sx["fpr"].unique())}')
+    return here
 
 
-def read_headline(name):
+def read_headline(name, fpr=0.005):
+    """The total row's sensitivity — the mean over folds, the headline."""
     dir_model = resolve_dir_model(name)
     path = os.path.join(dir_model, FNAME_SX_SUMMARY)
     if not os.path.exists(path):
         return None
     sx = pd.read_csv(path)
-    return sx.iloc[0]['sensitivity_mean'] if len(sx) else None
+    total = sx[(sx['fpr'] == fpr) & (sx['fold'] == TOTAL_ROW)]
+    return total.iloc[0]['sensitivity'] if len(total) else None
 
 
 def compare_folds(baseline, exp, fpr=0.005):
-    col = f'sens_fpr{fpr}'
-    base = _read_summary(baseline)
-    other = _read_summary(exp)
+    base = _read_sx(baseline, fpr)
+    other = _read_sx(exp, fpr)
 
-    if col not in base.columns or col not in other.columns:
-        available = sorted(c for c in base.columns if c.startswith('sens_fpr'))
-        raise ValueError(f'{col!r} not in folds_summary.csv; available: {available}')
-
-    merged = base[['fold', col, 'frames_val']].merge(
-        other[['fold', col]], on='fold', suffixes=('_base', '_exp'),
+    # frames_val is absent for models resummarized without their summary.json
+    cols = ['fold', 'sensitivity'] + (['frames_val'] if 'frames_val' in base else [])
+    merged = base[cols].merge(
+        other[['fold', 'sensitivity']], on='fold', suffixes=('_base', '_exp'),
     )
-    merged['delta'] = merged[f'{col}_exp'] - merged[f'{col}_base']
+    merged['delta'] = merged['sensitivity_exp'] - merged['sensitivity_base']
     merged = merged.sort_values('delta').reset_index(drop=True)
 
     return merged
@@ -82,11 +87,11 @@ def format_report(merged, baseline, exp, fpr):
         f'(mean delta {merged["delta"].mean():+.4f})'
     )
 
-    head_base = read_headline(baseline)
-    head_exp = read_headline(exp)
+    head_base = read_headline(baseline, fpr)
+    head_exp = read_headline(exp, fpr)
     if head_base is not None and head_exp is not None:
         lines.append(
-            f'sensitivity_mean @ fpr{fpr}: {baseline} {head_base:.3f} -> {exp} {head_exp:.3f} '
+            f'sensitivity (mean over folds) @ fpr{fpr}: {baseline} {head_base:.3f} -> {exp} {head_exp:.3f} '
             f'({head_exp - head_base:+.3f})'
         )
 

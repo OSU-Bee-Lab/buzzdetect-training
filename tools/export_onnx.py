@@ -73,6 +73,21 @@ NAME_IN = 'waveform'
 NAME_OUT = 'predictions'
 DIM_SAMPLES = 'samples'
 
+# The reduced-precision sibling. buzzdetect loads it instead of model.onnx when
+# a run sets BUZZDETECT_GPU_FP16=1 and the provider can act on it -- today only
+# CoreML, where it reaches the Neural Engine and is worth 1.9x end to end at
+# ~2e-2 on the predictions (buzzdetect's benchmarks/onnx-vs-tf/COREML.md).
+# Reduced precision is a different file rather than a provider option because
+# handing an fp32 graph to the Neural Engine means CoreML's NeuralNetwork
+# format, which declines the FusedConv nodes and ends up slower than the CPU.
+FNAME_FP16 = 'model.fp16.onnx'
+
+# What the fp16 graph is allowed to differ by. Two orders of magnitude past
+# TOL, and deliberately so: this is not a parity check, it is a check that the
+# conversion produced the model rather than mush. The number it actually lands
+# on is printed, and the engine warns the user when it loads this file.
+TOL_FP16 = 5e-2
+
 # Only what the engine reads: classes names the result columns and
 # digits_results sets their rounding. Everything else about the model -- its
 # sample rate, frame length, class list -- is either in model.py or not the
@@ -161,14 +176,15 @@ def export_graph(combined, path_onnx):
 
     model = onnx.load(path_onnx)
     n_before = len(model.graph.node)
-    model, n_folded, n_fused = optimize(model)
+    model, n_folded, n_fused, n_dropped = optimize(model)
     model = rename_io(model)
     onnx.checker.check_model(model)
     onnx.save(model, path_onnx)
 
     print(f'  {n_before} -> {len(model.graph.node)} nodes: '
           f'{n_folded} batchnorms folded into their convolutions, '
-          f'{n_fused} Conv+Relu pairs fused')
+          f'{n_fused} Conv+Relu pairs fused, '
+          f'{n_dropped} orphaned initializers dropped')
     # Both counts are signals, not statistics. Zero folds means tf2onnx changed
     # what it emits; zero fusions means the pattern stopped matching -- a
     # different activation, or a fold that did not happen. Either way the graph
@@ -338,7 +354,60 @@ def verify_fixed_length(path_onnx, embedder, samples_hop, samples_min, seconds=2
                              f'{expected.shape} unpadded')
         worst = max(worst, float(np.abs(expected - got).max()))
     print(f'fixed-length parity OK at {seconds:g}s: {worst:.2e}')
-    return worst
+    return n_fixed
+
+
+def write_fp16(path_onnx, path_fp16, samples):
+    """Convert the trunk and head to fp16, leaving the front end alone.
+
+    Two reasons the front end stays in fp32. It is where the dynamic range is
+    -- a log of a mel spectrogram, before any normalisation -- and it is cheap,
+    so converting it would buy little. It also breaks the converter, which
+    mistypes an explicit Cast in the framing code and produces a graph
+    onnxruntime refuses to load.
+
+    "Everything from the first convolution on" is the rule for what to convert.
+    It is a rule about this shape of model -- a signal front end followed by a
+    convolutional trunk -- rather than about YAMNet specifically.
+    """
+    import onnx
+    import onnxruntime as ort
+    from onnxconverter_common import float16
+
+    model = onnx.load(path_onnx)
+    nodes = list(model.graph.node)
+    first_conv = next((i for i, n in enumerate(nodes)
+                       if n.op_type in ('Conv', 'FusedConv')), None)
+    if first_conv is None:
+        raise SystemExit('no convolution in the graph; fp16 conversion has no '
+                         'sensible boundary to stop at')
+    frontend = [n.name for n in nodes[:first_conv]]
+
+    converted = float16.convert_float_to_float16(
+        model, keep_io_types=True, node_block_list=frontend)
+    onnx.save(converted, path_fp16)
+
+    # It loads, it runs, and it still resembles the model it came from. The
+    # fixed length is what the engine will use, so check it at that shape.
+    rng = np.random.default_rng(2)
+    x = (rng.standard_normal(samples) * 0.1).astype(np.float32)
+    so32 = ort.SessionOptions()
+    so32.add_free_dimension_override_by_name(DIM_SAMPLES, samples)
+    reference = ort.InferenceSession(path_onnx, so32,
+                                     providers=['CPUExecutionProvider'])
+    so16 = ort.SessionOptions()
+    so16.add_free_dimension_override_by_name(DIM_SAMPLES, samples)
+    session = ort.InferenceSession(path_fp16, so16,
+                                   providers=['CPUExecutionProvider'])
+    expected = reference.run(None, {NAME_IN: x})[0]
+    got = session.run(None, {NAME_IN: x})[0]
+    d = float(np.abs(expected - got).max())
+    agree = float((expected.argmax(1) == got.argmax(1)).mean())
+    print(f'  {os.path.getsize(path_fp16) / 1e6:.2f} MB, '
+          f'{len(frontend)} front-end nodes left in fp32, '
+          f'max|d|={d:.2e}, top-class agreement={agree:.4f}')
+    if d > TOL_FP16:
+        raise SystemExit(f'fp16 conversion looks broken: {d:.2e} > {TOL_FP16}')
 
 
 def export(modelname, dir_dest, force=False, path_audio=None):
@@ -372,7 +441,10 @@ def export(modelname, dir_dest, force=False, path_audio=None):
     print('checking the graph against the keras model it came from')
     verify(path_onnx, combined, embedder, path_audio)
     samples_hop, samples_min = probe_framing(path_onnx, embedder)
-    verify_fixed_length(path_onnx, embedder, samples_hop, samples_min)
+    n_session = verify_fixed_length(path_onnx, embedder, samples_hop, samples_min)
+
+    print('writing the reduced-precision sibling')
+    write_fp16(path_onnx, os.path.join(dir_stage, FNAME_FP16), n_session)
 
     # The artifact of record. Nothing in buzzdetect reads it; it is here so the
     # directory holds the model rather than one build of it.

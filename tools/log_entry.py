@@ -1,7 +1,7 @@
 """Build and append one log.jsonl entry — LOOP.md step 5 — without hand-typing
 JSON in a shell heredoc.
 
-Pulls `sensitivity_mean` straight from folds_sx.csv for both the experiment and
+Pulls the `total` row's sensitivity straight from folds_sx.csv for both the experiment and
 the baseline model (reusing compare_folds.py's reader) instead of taking
 numbers by hand, and fills `main_commit`/`branch`/`date` in from git and the
 name unless overridden.
@@ -49,10 +49,10 @@ def build_entry(name, model, baseline_model, hypothesis, trust, conclusion,
     if trust not in TRUST_VALUES:
         raise ValueError(f'trust must be one of {TRUST_VALUES}, got {trust!r}')
 
-    sens = read_headline(model)
+    sens = read_headline(model, fpr)
     if sens is None:
         raise FileNotFoundError(f'no folds_sx.csv under {model!r} — run resummarize.py first if needed')
-    baseline_sens = read_headline(baseline_model)
+    baseline_sens = read_headline(baseline_model, fpr)
     if baseline_sens is None:
         raise FileNotFoundError(f'no folds_sx.csv under {baseline_model!r}')
 

@@ -160,11 +160,43 @@ def fuse_conv_relu(model):
     return model, n_fused
 
 
+def drop_orphan_initializers(model):
+    """Remove initializers no node reads any more.
+
+    fold_batchnorm leaves the batchnorm's scale and shift behind, along with
+    whatever tf2onnx precomputed to build them. onnxruntime prints a warning
+    per orphan on every session creation -- around thirty lines before a single
+    chunk is analysed -- and the export is the right place to make that stop.
+
+    Returns (model, n_dropped).
+    """
+    graph = model.graph
+    used = {i for n in graph.node for i in n.input}
+    used |= {o.name for o in graph.output}
+    orphans = [i for i in graph.initializer if i.name not in used]
+    for i in orphans:
+        graph.initializer.remove(i)
+    # Graph inputs that shadow an initializer go too, or the checker complains
+    # about an input with no producer and no value.
+    names = {i.name for i in orphans}
+    for value in [v for v in graph.input if v.name in names]:
+        graph.input.remove(value)
+    return model, len(orphans)
+
+
 def optimize(model):
-    """Both passes, in the only order that works. Returns (model, n_folded, n_fused)."""
+    """The passes, in the only order that works.
+
+    fold_batchnorm has to run before fuse_conv_relu: the Mul and Add it removes
+    sit between the Conv and its Relu, and while they are there only the
+    already-folded pointwise convolutions can fuse -- 14 of 27 on YAMNet.
+
+    Returns (model, n_folded, n_fused, n_dropped).
+    """
     model, n_folded = fold_batchnorm(model)
     model, n_fused = fuse_conv_relu(model)
-    return model, n_folded, n_fused
+    model, n_dropped = drop_orphan_initializers(model)
+    return model, n_folded, n_fused, n_dropped
 
 
 def main():
@@ -176,11 +208,12 @@ def main():
 
     model = onnx.load(args.src)
     before = len(model.graph.node)
-    model, n_folded, n_fused = optimize(model)
+    model, n_folded, n_fused, n_dropped = optimize(model)
     onnx.checker.check_model(model)
     onnx.save(model, args.dst)
     print(f'{args.src}: {before} -> {len(model.graph.node)} nodes, '
-          f'{n_folded} batchnorms folded, {n_fused} Conv+Relu pairs fused')
+          f'{n_folded} batchnorms folded, {n_fused} Conv+Relu pairs fused, '
+          f'{n_dropped} orphaned initializers dropped')
     print(f'wrote {args.dst}')
 
 
