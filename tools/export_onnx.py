@@ -8,11 +8,11 @@ embedder's log-mel front end, the embedder's trunk and the trained classifier
 head, all fused into a single model.onnx. buzzdetect runs that graph and
 nothing else: no embedder plugin, no NumPy front end, no TensorFlow.
 
-The Keras half ships beside it unchanged, as model.keras. Nothing in buzzdetect
-reads it -- the engine is ONNX-only -- but it is the artifact of record for the
-model, and having both halves in one directory is what makes the ONNX one
-checkable: every export runs the two against each other on real audio and
-refuses to ship a mismatch.
+The Keras weights stay here. buzzdetect gets the ONNX graph and nothing else,
+which is why the export is worth checking rather than trusting: every run
+compares the graph against the Keras model it was built from, on real audio and
+on the lengths that exercise the front end's padding, and refuses to write a
+mismatch.
 
 Why fuse the front end in rather than keeping the embedder separate, which is
 how buzzdetect worked before:
@@ -122,7 +122,32 @@ def classname_for(modelname):
     return ''.join(part[:1].upper() + part[1:] for part in modelname.split('_'))
 
 
-def build_combined(modelname, embeddername):
+def load_head(dir_src, n_embeddings):
+    """The trained classifier, from a model.keras or from a SavedModel directory.
+
+    Everything trained here is a model.keras. The SavedModel branch is for
+    models released before that -- model_general_v3 is one -- whose weights
+    exist only in the form TensorFlow 2 saved them in, and which would
+    otherwise have to be retrained to be shipped again.
+    """
+    import keras
+
+    path_keras = os.path.join(dir_src, 'model.keras')
+    if os.path.exists(path_keras):
+        head = keras.saving.load_model(path_keras, compile=False)
+        # Keras refuses to hand out .inputs for a model it has never seen
+        # called, and refuses to export one either.
+        head(np.zeros((1, n_embeddings), dtype=np.float32))
+        return head
+
+    if os.path.exists(os.path.join(dir_src, 'saved_model.pb')):
+        from keras.layers import TFSMLayer
+        return TFSMLayer(dir_src, call_endpoint='serving_default')
+
+    raise SystemExit(f'no model.keras and no saved_model.pb in {dir_src}')
+
+
+def build_combined(modelname, dir_src, embeddername):
     """One Keras model, waveform -> predictions.
 
     The embedder is loaded through its own plugin rather than by reaching for
@@ -144,13 +169,13 @@ def build_combined(modelname, embeddername):
             f"embedder '{embeddername}' does not load a Keras model "
             f'({type(trunk).__name__}), so it cannot be exported to ONNX here.')
 
-    head = keras.saving.load_model(
-        os.path.join(cfg.DIR_MODELS, modelname, 'model.keras'), compile=False)
-    # Keras refuses to hand out .inputs for a model it has never seen called,
-    # and refuses to export one either.
-    head(np.zeros((1, embedder.n_embeddings), dtype=np.float32))
+    head = load_head(dir_src, embedder.n_embeddings)
+    predictions = head(trunk.output)
+    # A SavedModel hands its outputs back in a dict keyed by layer name.
+    if isinstance(predictions, dict):
+        (predictions,) = predictions.values()
 
-    combined = keras.Model(trunk.input, head(trunk.output), name=modelname)
+    combined = keras.Model(trunk.input, predictions, name=modelname)
     combined(np.zeros(int(embedder.framelength_s * embedder.samplerate) * 3,
                       dtype=np.float32))
     return combined, embedder, head
@@ -433,19 +458,27 @@ def write_fp16(path_onnx, path_fp16, samples):
             f'itself convolutional, that boundary is in the wrong place.')
 
 
-def export(modelname, dir_dest, force=False, path_audio=None):
+def export(modelname, dir_dest, force=False, path_audio=None,
+           dir_src=None, embeddername=None):
     """Build the export in a staging dir, check it, and only then move it into place.
 
     Staging is what makes a failed check harmless: nothing lands in the
     destination -- and no existing export there is disturbed -- unless every
     check passes.
+
+    The staged files are then copied over the destination rather than replacing
+    the directory. A model directory is not only the export: it also holds the
+    README, the test plots, the training history and the weights table, none of
+    which this tool produces and all of which replacing the directory would
+    delete.
     """
-    dir_src = os.path.join(cfg.DIR_MODELS, modelname)
+    dir_src = dir_src or os.path.join(cfg.DIR_MODELS, modelname)
     if not os.path.isdir(dir_src):
         raise SystemExit(f'no such model: {dir_src}')
 
     with open(os.path.join(dir_src, 'config_model.json')) as f:
         config = json.load(f)
+    embeddername = embeddername or config['embeddername']
 
     dir_out = os.path.join(dir_dest, modelname)
     if os.path.exists(dir_out) and not force:
@@ -455,8 +488,8 @@ def export(modelname, dir_dest, force=False, path_audio=None):
     dir_stage = os.path.join(dir_staging, modelname)
     os.makedirs(dir_stage)
 
-    print(f"building {modelname} on embedder '{config['embeddername']}'")
-    combined, embedder, _ = build_combined(modelname, config['embeddername'])
+    print(f"building {modelname} from {dir_src} on embedder '{embeddername}'")
+    combined, embedder, _ = build_combined(modelname, dir_src, embeddername)
 
     path_onnx = os.path.join(dir_stage, 'model.onnx')
     export_graph(combined, path_onnx)
@@ -468,11 +501,6 @@ def export(modelname, dir_dest, force=False, path_audio=None):
 
     print('writing the reduced-precision sibling')
     write_fp16(path_onnx, os.path.join(dir_stage, FNAME_FP16), n_session)
-
-    # The artifact of record. Nothing in buzzdetect reads it; it is here so the
-    # directory holds the model rather than one build of it.
-    shutil.copy2(os.path.join(dir_src, 'model.keras'),
-                 os.path.join(dir_stage, 'model.keras'))
 
     config_out = {k: config[k] for k in KEYS_CONFIG}
     with open(os.path.join(dir_stage, 'config_model.json'), 'w') as f:
@@ -490,11 +518,12 @@ def export(modelname, dir_dest, force=False, path_audio=None):
             samples_min=samples_min,
         ))
 
-    if os.path.exists(dir_out):
-        shutil.rmtree(dir_out)
-    shutil.move(dir_stage, dir_out)
+    os.makedirs(dir_out, exist_ok=True)
+    written = sorted(os.listdir(dir_stage))
+    for name in written:
+        shutil.copy2(os.path.join(dir_stage, name), os.path.join(dir_out, name))
     shutil.rmtree(dir_staging, ignore_errors=True)
-    print(f'wrote {dir_out}')
+    print(f'wrote {dir_out}: {", ".join(written)}')
 
 
 def main():
@@ -504,6 +533,15 @@ def main():
                         help=f'engine model directory (default: {DEST_DEFAULT})')
     parser.add_argument('--force', action='store_true',
                         help='overwrite an existing export')
+    parser.add_argument('--from', dest='dir_src', default=None, metavar='DIR',
+                        help='read the trained weights and config_model.json '
+                             'from DIR instead of models/<modelname>. For a '
+                             'model that lives only in buzzdetect, released '
+                             'before this repo held it')
+    parser.add_argument('--embedder', default=None, metavar='NAME',
+                        help="override the embedder named in config_model.json, "
+                             "for a config that names one of buzzdetect's "
+                             "(yamnet_k2 is this repo's yamnet)")
     parser.add_argument('--verify-audio', default=FIXTURE_AUDIO, metavar='PATH',
                         help='audio to run the parity check on '
                              '(default: the bundled fixture)')
@@ -518,7 +556,8 @@ def main():
     if args.verify_audio is not None and not os.path.isfile(args.verify_audio):
         raise SystemExit(f'no such audio: {args.verify_audio}')
 
-    export(args.modelname, args.dest, args.force, args.verify_audio)
+    export(args.modelname, args.dest, args.force, args.verify_audio,
+           args.dir_src, args.embedder)
 
 
 if __name__ == '__main__':
