@@ -229,15 +229,24 @@ def verify(path_onnx, combined, embedder, path_audio):
 def frames_for(n_samples, samples_hop, samples_min):
     """How many frames the graph returns for n_samples of audio.
 
-    The engine needs this to know how much of a padded chunk's output is real.
-    It is the front end's own framing rule: pad up to the first whole frame,
-    then hop. Note samples_min exceeds samples_hop -- YAMNet's first frame needs
-    the STFT window's overhang as well as the 0.96 s patch -- so this is not
-    simply ceil(n / samples_hop).
+    Two things here are not what they look like.
+
+    The first frame needs more samples than the hop -- the front end pads up to
+    a whole patch plus the STFT window's overhang -- so this is not
+    ceil(n_samples / samples_hop).
+
+    And the hop division is a float32 multiply by the reciprocal of the hop,
+    not a division. tf2onnx emits it that way, and it matters: 1/15360 is not
+    exact in float32, so at some exact multiples of the hop the quotient lands
+    just above the integer and the ceil returns one more frame than real
+    arithmetic would. Doing it in float64, or as an honest division, is wrong
+    by one frame at those lengths -- 61680 samples and 3210480 samples are two
+    of them. probe_framing() checks this against the graph before shipping.
     """
     if n_samples <= 0:
         return 0
-    return 1 + max(0, -(-(n_samples - samples_min) // samples_hop))
+    after = np.float32(max(0, n_samples - samples_min))
+    return 1 + int(np.ceil(after * (np.float32(1.0) / np.float32(samples_hop))))
 
 
 def probe_framing(path_onnx, embedder):
@@ -272,13 +281,22 @@ def probe_framing(path_onnx, embedder):
             hi = mid
     samples_min = lo
 
-    for n in (1, samples_hop, samples_min, samples_min + 1,
-              samples_hop * 7 + 137, samples_hop * 40):
+    # Every exact multiple of the hop, either side of it, plus a few ragged
+    # lengths. The multiples are the ones that matter: that is where the
+    # float32 reciprocal in frames_for() disagrees with real arithmetic, and
+    # checking a handful of round numbers would miss it.
+    checks = [1, samples_min - 1, samples_min, samples_min + 1]
+    for m in range(0, 220):
+        base = samples_min + samples_hop * m
+        checks += [base - 1, base, base + 1]
+    checks += [samples_hop * 7 + 137, samples_hop * 40 + 1]
+    for n in sorted({n for n in checks if n >= 1}):
         expected = frames_for(n, samples_hop, samples_min)
         got = n_frames(n)
         if expected != got:
             raise SystemExit(f'framing rule wrong at n={n}: predicted {expected} '
                              f'frames, graph returned {got}')
+    print(f'framing rule checked at {len(set(checks))} lengths')
     print(f'framing: hop {samples_hop} samples, first frame needs {samples_min}')
     return samples_hop, samples_min
 
