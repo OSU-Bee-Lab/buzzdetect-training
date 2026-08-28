@@ -95,8 +95,8 @@ Or both at once, from the project root:
 conda run -n buzzdetect-train python main.py --model my_first_model --set lite
 ```
 
-Results land in `models/my_first_model/`. Start with `folds_sx.csv`, then
-`folds_summary.csv` for the per-fold detail.
+Results land in `models/my_first_model/`. Everything numeric is in
+`folds_sx.csv`: a row per held-out fold, then a `total` row.
 
 ---
 
@@ -351,20 +351,47 @@ models/<name>/
 ├── model.keras, model.py, config_model.json   the shipped model
 ├── annotations.csv, folds.csv                 copies of the set's, for provenance
 ├── weights.csv, translation.csv, history.pickle, loss_curves.svg
-├── folds_sx.csv               the headline: sensitivity_mean, threshold, and what they rest on
-├── folds_sx_byfold.csv        the breakdown: each fold's own threshold and sensitivity
-├── folds_summary.csv          one row per rotating fold
-├── folds_pooled_metrics.csv   every fold's held-out predictions pooled into one ROC
+├── folds_sx.csv               the results: a row per fold, then a `total` row
 ├── folds/<fold>/              per-rotation archive (no model.keras)
-│   ├── metrics.csv, sx.csv, predictions.csv, summary.json
-│   ├── config_model.json, history.pickle, loss_curves.svg
-│   └── weights.csv, translation.csv
+│   ├── predictions.csv        every held-out frame's activation and label
+│   ├── summary.json           epochs, val_loss, frame counts, sens-monitor peaks
+│   ├── config_model.json, loss_curves.svg, sens_curves.svg
 └── holdout/<fold>/            shipped model scored on each holdout fold
 ```
 
-`metrics.csv` is the full threshold sweep; `sx.csv` reads it at FPR targets
-0.1% / 0.5% / 1%. `model.py` is generated so `models.load_model('<name>')` works
-for inference.
+`model.py` is generated so `models.load_model('<name>')` works for inference.
+
+**`folds_sx.csv` is the whole metrics summary.** Columns: `fold`, `fpr`,
+`threshold`, `sensitivity`, `precision`, `buzz_frames`, `neg_frames`,
+`frames_val`, `best_epoch`. One row per (fold, FPR target), then a row with
+`fold` = `total`, where the counts are summed and threshold/sensitivity/
+precision are the plain mean over the folds that could reach the target. That
+mean is the headline number. A fold that couldn't reach the target keeps its
+row with blanks and is not averaged in, so counting the non-blank rows tells
+you what the total rests on.
+
+Three files used to carry this, disagreeing with each other about folds too
+small to reach the target; see `03_train/sx.py::_fold_sens` for the policy that
+survived. `predictions.csv` is the source everything is derived from —
+`03_train/resummarize.py` rebuilds `folds_sx.csv` from it without TensorFlow,
+and a pooled ROC or a `metrics_at_precision` read is `read_fold_predictions()`
+plus `metrics_by_group()` away.
+
+`sens_curves.svg` plots sens@fpr0.005 on the held-out fold per epoch, with
+val_loss on a twin axis and a line at the epoch EarlyStopping restored to. It's
+a diagnostic, not a control: stopping is still on val_loss, and nothing reads
+these curves back. What they're for is the question of whether it *should* be —
+if the sens@FPR peak sits far from the restored epoch, run after run, val_loss
+is a poor proxy for the number the model is judged by. Three keys in that
+fold's `summary.json` say the same thing numerically:
+`val_sens_fpr0.005_at_best` (sensitivity at the restored epoch — it should
+equal that fold's `sensitivity` in `folds_sx.csv`, since they score the same
+weights on the same frames), `val_sens_fpr0.005_peak`, and
+`val_sens_fpr0.005_peak_epoch`.
+
+All of them are blank on a fold that never reaches 0.005 FPR at any epoch — too
+few negative frames for the target to correspond to even one of them. Small
+sets are mostly blank; see the caveat in `03_train/sx.py`.
 
 ### Running stages 2 and 3 together
 
@@ -386,12 +413,12 @@ property of a model on its own — it is what the model catches once a line is
 drawn, and where that line goes is a deployment decision. buzzdetect ships no
 threshold: operators are told to find their own. So every fold is scored at a
 threshold set on its own held-out audio, and the headline is the plain mean
-across folds — `sensitivity_mean` in `folds_sx.csv`, at fpr 0.005. Each
-deployment counts once, because the question is what a new deployment gets,
-and a new deployment is one fold. `folds_sx.csv` also carries `threshold_mean`
-and `threshold_median` — what a typical fold's own audio set, i.e. what to
-actually try shipping — and `folds_sx_byfold.csv` breaks that down per fold, so
-you can see how much folds disagree rather than just the average.
+across folds — the `total` row's `sensitivity` in `folds_sx.csv`, at fpr 0.005.
+Each deployment counts once, because the question is what a new deployment
+gets, and a new deployment is one fold. The same row's `threshold` is what a
+typical fold's own audio set, i.e. what to actually try shipping, and the
+per-fold rows above it show how much folds disagree rather than just the
+average.
 
 It is an oracle: putting a fold at exactly 0.5% FPR uses that fold's labels,
 which an operator doesn't have. Read it as the ceiling on operator tuning. Both
@@ -408,12 +435,15 @@ Two readings deliberately *not* reported, both of which have misled here before:
 - A **pooled** read, one global threshold across every fold. It answers "one
   shipped threshold, everywhere", which is not how the tool is used, and it
   confounds detection with how portable a model's score scale is. It has made a
-  strictly better model look half as good. `folds_pooled_metrics.csv` still
-  holds the full pooled sweep for ROC plots and `metrics_at_precision`.
+  strictly better model look half as good. It used to be written out anyway, as
+  `folds_pooled_metrics.csv`; it no longer is. `read_fold_predictions()` plus
+  `metrics_by_group()` rebuilds it if you want a ROC or a
+  `metrics_at_precision` read.
 
-**Check what a number rests on.** `folds_sx.csv` carries `folds_scored` and
-`neg_frames_fold_median`: how many folds could reach the target at all, and
-how many non-buzz frames sat above a typical fold's threshold. At fpr 0.001 on a
+**Check what a number rests on.** Count the per-fold rows in `folds_sx.csv`
+with a `sensitivity`, and read their `neg_frames`: how many folds could reach
+the target at all, and how many non-buzz frames sat above each fold's
+threshold. At fpr 0.001 on a
 set this size that is about four frames per fold, and some folds can't reach it
 — which is why only 0.005 is reported. A fold too small for the target is
 dropped from the mean rather than interpolated inside a single frame. No amount
@@ -439,9 +469,11 @@ to support it. The quiet folds aren't weak folds; they're the best
 false-positive probes available, and nighttime false positives are the known
 real-world failure mode (see `log.jsonl`, `yamnet-mask`).
 
-Prefer sensitivity at fixed FPR (`metrics_at_fpr`, the `sx.csv` files) over
-sensitivity at fixed precision when comparing across folds — precision mixes in
-each deployment's base rate, FPR doesn't.
+Prefer sensitivity at fixed FPR over sensitivity at fixed precision when
+comparing across folds — precision mixes in each deployment's base rate, FPR
+doesn't. `folds_sx.csv` carries a `precision` column because it is what an
+operator sees in the output, but read it against that fold's own buzz density,
+which is a property of what got annotated.
 
 The per-fold and pooled numbers are mildly optimistic: each fold also chose its
 own stopping epoch on the fold it's scored against. See
@@ -452,15 +484,17 @@ worth and how to remove it if it ever matters.
 
 ## Tools
 
-`tools/night_positives.py` plots a model's activations across an all-night
-recording — the known real-world failure mode, since nothing should be buzzing.
-It takes its threshold off `folds_pooled_metrics.csv` at fpr 0.005, which is the
-one place a single global threshold is the right choice: an unlabeled night the
-model has never seen.
+`tools/compare_folds.py` joins two models' `folds_sx.csv` on fold and prints
+the per-fold deltas — LOOP.md step 4. `tools/check_sens_at_fpr.py` pins
+`metrics.sens_at_fpr` (the per-epoch monitor's read) to the `metrics_by_group`
+→ `metrics_at_fpr` pair it restates.
 
-```bash
-conda run -n buzzdetect-train python tools/night_positives.py --name <model>
-```
+`tools/night_positives.py` is gone. It plotted a model's activations across an
+all-night recording, taking its threshold off `folds_pooled_metrics.csv`, which
+is no longer written. The recording is still at `tools/night-positives/`, and
+nighttime false positives are still the known real-world failure mode (see
+`log.jsonl`, `yamnet-mask`) — the tool is recoverable from git if that check is
+wanted again.
 
 There is no stage 4. It scored a fixed model against a hand-curated corpus and
 expected the pre-CV repeated-run layout; a CV run scores every held-out fold

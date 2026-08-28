@@ -19,17 +19,15 @@ from dataset import (
 )
 from train_utils import build_weights, build_classes, can_write, Sample
 from embedders.embedding import load_embedder
-from plot_history import plot_history
+from plot_history import plot_history, plot_sens_history
 from write_model_py import write_model_py
 
-from metrics import metrics_by_group, metrics_at_fpr
+from callbacks import SensAtFPR
 
-from sx import summarize_sx, summarize_sx_byfold, format_sx_report, FPR_TARGETS, FNAME_SX_SUMMARY, FNAME_SX_BYFOLD
+from sx import summarize_folds, format_sx_report, _fold_sens, FPR_TARGETS, FNAME_SX_SUMMARY
 
 FNAME_PREDICTIONS = 'predictions.csv'
 FNAME_FOLD_SUMMARY = 'summary.json'
-FNAME_FOLDS_SUMMARY = 'folds_summary.csv'
-FNAME_POOLED_METRICS = 'folds_pooled_metrics.csv'
 SUBDIR_FOLDS = 'folds'
 SUBDIR_HOLDOUT = 'holdout'
 
@@ -50,6 +48,9 @@ class TrainingData:
     frames_train: int = 0
     frames_val: int = 0
     val_fold: str = None
+    # (embeddings, is_buzz) for the validation fold, unshuffled and paired,
+    # for the per-epoch sens@FPR monitor. None when there is no val fold.
+    val_eval: tuple = None
 
 
 def _to_tf(data, size_batch, size_shuffle):
@@ -64,6 +65,18 @@ def _to_tf(data, size_batch, size_shuffle):
         tf.data.Dataset.from_tensor_slices((emb_np, tgt_np))
         .cache().shuffle(size_shuffle).batch(size_batch).prefetch(tf.data.AUTOTUNE)
     )
+
+
+def _eval_arrays(samples, classes):
+    """Frame-level (embeddings, is_buzz) for a fold, in sample order.
+
+    Scoring pairs each frame's activation with its own label, so unlike
+    _to_tf's training pipeline this must not shuffle.
+    """
+    buzz_index = classes.index('ins_buzz')
+    embeddings = np.concatenate([np.array(s.embeddings, dtype=np.float32) for s in samples])
+    correct = np.concatenate([np.full(s.frames, bool(s.target_array[buzz_index])) for s in samples])
+    return embeddings, correct
 
 
 def _load_data(setname, embeddername, folds_train, name_translation, aug_dirnames,
@@ -91,11 +104,14 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
 
     data_val = None
     frames_val = 0
+    val_eval = None
     if val_fold is not None:
         data_val = build_fold_dataset(
             cfg.dir_embeddings_fold(setname, embeddername, val_fold), translation,
         )
         frames_val = sum(s.frames for s in data_val)
+        if data_val:
+            val_eval = _eval_arrays(data_val, classes)
 
     if aug_dirnames:
         data_train += load_augmented(setname, embeddername, aug_dirnames, translation, folds_train)
@@ -126,30 +142,28 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
         frames_train=frames_train,
         frames_val=frames_val,
         val_fold=val_fold,
+        val_eval=val_eval,
     )
 
 
 def _score_fold(model, setname, embeddername, fold, translation, classes):
     """Score a trained model on a fold it never saw, ins_buzz only.
 
-    Runs the threshold sweep straight off the fold's known frame labels.
-    Returns
-    (metrics_df, predictions_df); predictions are kept so the per-fold results
-    can be pooled into one ROC afterwards.
+    Returns the frame-level (activation, correct) table, or None if the fold
+    has no usable frames. Every reported number is derived from this: it is the
+    only per-fold result kept on disk, and sx.py and resummarize.py rebuild the
+    sweeps from it on demand.
     """
     samples = build_fold_dataset(
         cfg.dir_embeddings_fold(setname, embeddername, fold), translation,
     )
     if not samples:
-        return None, None
-    buzz_index = classes.index('ins_buzz')
+        return None
 
-    embeddings = np.concatenate([np.array(s.embeddings, dtype=np.float32) for s in samples])
-    correct = np.concatenate([np.full(s.frames, bool(s.target_array[buzz_index])) for s in samples])
-    activation = model(embeddings, training=False)[:, buzz_index].numpy()
+    embeddings, correct = _eval_arrays(samples, classes)
+    activation = model(embeddings, training=False)[:, classes.index('ins_buzz')].numpy()
 
-    predictions = pd.DataFrame({'activation_ins_buzz': activation, 'correct': correct})
-    return metrics_by_group(predictions), predictions
+    return pd.DataFrame({'activation_ins_buzz': activation, 'correct': correct})
 
 
 def _format_sens(sens):
@@ -159,24 +173,28 @@ def _format_sens(sens):
     )
 
 
-def _write_scores(dir_out, model, setname, embeddername, fold, translation, classes):
-    """Score `fold`, write metrics/sx/predictions under dir_out, return
-    {sens_fpr<x>: value} for the summary table plus the raw predictions.
+def _write_predictions(dir_out, model, setname, embeddername, fold, translation, classes):
+    """Score `fold`, write predictions.csv under dir_out, return
+    (predictions, sens) — sens for the caller's one-line report.
 
-    Silent by design — the caller folds these numbers into its one-line
-    per-fold report rather than printing a second line here."""
+    The sweeps are not written. metrics.csv and sx.csv used to land here too,
+    both pure functions of predictions.csv and neither read by anything;
+    metrics.csv alone was four times the size of the file it derived from.
+
+    sens comes from sx._fold_sens, the guarded read, so this line agrees with
+    folds_summary.csv and folds_sx.csv instead of quietly interpolating a
+    sensitivity inside a single frame.
+
+    Otherwise silent by design — the caller folds these numbers into its
+    per-fold line rather than printing a second one here."""
     os.makedirs(dir_out, exist_ok=True)
-    metrics_df, predictions = _score_fold(model, setname, embeddername, fold, translation, classes)
-    if metrics_df is None:
-        return {}, None, None
+    predictions = _score_fold(model, setname, embeddername, fold, translation, classes)
+    if predictions is None:
+        return None, None
 
-    metrics_df.to_csv(os.path.join(dir_out, cfg.FNAME_METRICS), index=False)
-    sx_df = metrics_at_fpr(metrics_df, FPR_TARGETS)
-    sx_df.to_csv(os.path.join(dir_out, cfg.FNAME_SX), index=False)
     predictions.to_csv(os.path.join(dir_out, FNAME_PREDICTIONS), index=False)
-
-    sens = sx_df.set_index('fpr')['sensitivity']
-    return {f'sens_fpr{f:g}': sens[f] for f in sens.index}, predictions, sens
+    cols, _ = _fold_sens(predictions, FPR_TARGETS)
+    return predictions, cols['sensitivity']
 
 
 def _collect_fold_results(dir_folds, folds_rotate):
@@ -256,11 +274,18 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         callback = tf.keras.callbacks.EarlyStopping(
             monitor='val_loss', patience=patience, min_delta=0.002, restore_best_weights=True,
         )
+        # Reporting only, and listed first so its keys are in `logs` before
+        # EarlyStopping and History see them. Stopping still happens on
+        # val_loss; these curves are the evidence for whether it should.
+        sens_callback = SensAtFPR(
+            *data.val_eval, data.classes.index('ins_buzz'), FPR_TARGETS,
+            batch_size=data.size_batch,
+        )
         history = model.fit(
             data.train_tf,
             epochs=epochs_max,
             validation_data=data.val_tf,
-            callbacks=callback,
+            callbacks=[sens_callback, callback],
             class_weight=data.weight_dict,
             verbose=2 if verbose else 0,  # 2 = one line per epoch, no progress bar
         )
@@ -271,19 +296,24 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             'n_epochs': len(history.history['val_loss']),
             'best_epoch': best_epoch + 1,
             'best_val_loss': best_val_loss,
-            'best_val_accuracy': history.history['val_accuracy'][best_epoch],
             'frames_train': data.frames_train,
             'frames_val': data.frames_val,
+            **_sens_history_summary(history.history, best_epoch),
         }
 
     if save_binary:
         model.save(os.path.join(dir_model, 'model.keras'), include_optimizer=True)
 
-    with open(os.path.join(dir_model, 'history.pickle'), 'wb') as f:
-        pickle.dump(history, f)
-
-    data.weights.to_csv(os.path.join(dir_model, 'weights.csv'), index=False)
-    data.translation.to_csv(os.path.join(dir_model, 'translation.csv'), index=False)
+    if save_binary:
+        # Provenance for the model that ships. The rotations' copies were
+        # byte-identical to these (translation) or near enough (weights), and
+        # their pickled histories were the biggest thing in the model dir after
+        # the sweeps -- what a rotation is kept for is its predictions and its
+        # curves, both of which survive below.
+        with open(os.path.join(dir_model, 'history.pickle'), 'wb') as f:
+            pickle.dump(history, f)
+        data.weights.to_csv(os.path.join(dir_model, 'weights.csv'), index=False)
+        data.translation.to_csv(os.path.join(dir_model, 'translation.csv'), index=False)
 
     config_model = {
         'embeddername': embeddername,
@@ -305,10 +335,36 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         f.write(json.dumps(config_model))
 
     plot_history(history, modelname, best_epoch, os.path.join(dir_model, 'loss_curves.svg'))
+    plot_sens_history(history, modelname, best_epoch, FPR_TARGETS,
+                      SensAtFPR.key, os.path.join(dir_model, 'sens_curves.svg'))
     if save_binary:
         write_model_py(dir_model, modelname, embeddername, config_model['digits_results'])
 
     return result, model
+
+
+def _sens_history_summary(hist, best_epoch):
+    """sens@FPR at the restored epoch, and where it actually peaked.
+
+    The gap between the two is the whole point of the monitor: val_loss picks
+    best_epoch, and these say what that choice cost (or saved) on the number
+    the model is judged by. Nothing acts on them.
+    """
+    out = {}
+    for fpr in FPR_TARGETS:
+        curve = hist.get(SensAtFPR.key(fpr))
+        if not curve:
+            continue
+        arr = np.array(curve, dtype=float)
+        out[f'val_sens_fpr{fpr:g}_at_best'] = arr[best_epoch]
+        if np.isnan(arr).all():
+            # Fold never reaches this FPR at any epoch -- too few negative
+            # frames for the target, most likely. sx.py's _fold_sens says more.
+            continue
+        peak = int(np.nanargmax(arr))
+        out[f'val_sens_fpr{fpr:g}_peak'] = arr[peak]
+        out[f'val_sens_fpr{fpr:g}_peak_epoch'] = peak + 1
+    return out
 
 
 def _confirm_untranslated(setname, embeddername, folds, name_translation, assume_yes):
@@ -403,12 +459,15 @@ def train_set(name, embeddername, setname, name_translation,
         if result is None:
             continue
 
-        scores, _, sens = _write_scores(
+        _, sens = _write_predictions(
             dir_model, model, setname, embeddername, held_out,
             data.translation, data.classes,
         )
+        # Training-side facts only. The scores are not duplicated here: they
+        # are recomputed from predictions.csv into folds_sx.csv, so a resumed
+        # run and a fresh one cannot disagree about them.
         with open(os.path.join(dir_model, FNAME_FOLD_SUMMARY), 'w') as f:
-            json.dump({**result, **scores}, f)
+            json.dump(result, f)
 
         # One line per fold: everything worth knowing about this rotation, so a
         # default run stays roughly one line per fold rather than three.
@@ -421,23 +480,16 @@ def train_set(name, embeddername, setname, name_translation,
 
     if summary_rows:
         os.makedirs(dir_model_full, exist_ok=True)
-        summary = pd.DataFrame(summary_rows)
-        summary.to_csv(os.path.join(dir_model_full, FNAME_FOLDS_SUMMARY), index=False)
 
-        # The headline read — sx.py explains the policies, the weightings, and
-        # why the primary one is the per-deployment mean. The full pooled sweep
-        # is still written out: it is what plots a ROC and what
-        # metrics_at_precision reads. Its sens-at-target is a column of
-        # folds_sx.csv now, so it gets no file of its own.
+        # The one results table — per fold, then the total. sx.py explains the
+        # policies, the weightings, and why the primary read is the
+        # per-deployment mean.
         pooled = pd.concat(predictions_pooled, ignore_index=True)
-        pooled_metrics = metrics_by_group(pooled.drop(columns='fold'))
-        pooled_metrics.to_csv(os.path.join(dir_model_full, FNAME_POOLED_METRICS), index=False)
-
-        sx = summarize_sx(pooled)
+        facts = {r['fold']: {'frames_val': r['frames_val'], 'best_epoch': r['best_epoch']}
+                 for r in summary_rows}
+        sx = summarize_folds(pooled, facts)
         sx.to_csv(os.path.join(dir_model_full, FNAME_SX_SUMMARY), index=False)
-        sx_byfold = summarize_sx_byfold(pooled)
-        sx_byfold.to_csv(os.path.join(dir_model_full, FNAME_SX_BYFOLD), index=False)
-        print(format_sx_report(name, sx, sx_byfold))
+        print(format_sx_report(name, sx))
 
     # Shipped model: trains on every fold except 'holdout'. No fold is held
     # out, so there is nothing clean left to monitor — the epoch count comes
@@ -472,7 +524,7 @@ def train_set(name, embeddername, setname, name_translation,
     # 'holdout' folds never train, so the shipped model can be scored on them
     # directly — an estimate untouched by the CV rotation.
     for fold in folds_holdout:
-        _, _, sens = _write_scores(
+        _, sens = _write_predictions(
             os.path.join(dir_model_full, SUBDIR_HOLDOUT, str(fold)),
             model, setname, embeddername, fold,
             data.translation, data.classes,

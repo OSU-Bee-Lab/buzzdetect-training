@@ -36,6 +36,8 @@ Environment: `conda run -n buzzdetect-train python <script>`.
 - Embedder interface — `embedders/embedding.py`; model loader — `models/models.py`
 - Threshold sweeps (`metrics_by_group`, `metrics_at_fpr`, `metrics_at_precision`) — `03_train/metrics.py`
 - What the headline sens@FPR number means, and the two readings deliberately not reported — `03_train/sx.py`; its module docstring is the argument, README's "Reading the results" is the operator-facing version. `03_train/resummarize.py` rebuilds `folds_sx.csv` for an already-trained model, no TensorFlow
+- **`folds_sx.csv` is the only metrics summary**, one row per (fold, FPR target) plus a `total` row, written by `sx.py::summarize_folds`. It replaced three files that reported the same per-fold sensitivity under three different NaN policies; `_fold_sens` holds the one that survived. Everything else is derived from `folds/<fold>/predictions.csv` on demand — don't add a fourth summary file, add a column or a function
+- Per-epoch sens@FPR monitor (reporting only; stopping is still on `val_loss`) — `03_train/callbacks.py`, plotted by `plot_history.py::plot_sens_history`
 - Label translation semantics (`ignore` / `exclude` / missing row) — `03_train/dataset.py::translate_labels`
 
 ## Known stale

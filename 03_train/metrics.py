@@ -45,6 +45,64 @@ def metrics_by_group(results_join, groups=None):
     ]
 
 
+def sens_at_fpr(activation, correct, fprs):
+    """Sensitivity at each target FPR, straight off frame-level scores.
+
+    A numpy transcription of metrics_by_group -> metrics_at_fpr for the one
+    column that matters, so it can run every epoch instead of once per fold.
+    Same conventions as those two: thresholds are the distinct activation
+    values taken descending, the operating point is linearly interpolated
+    between the bracketing thresholds, and a target the fold cannot reach is
+    NaN rather than clamped. tools/check_sens_at_fpr.py asserts the agreement.
+
+    Returns {fpr_target: sensitivity}.
+    """
+    correct = np.asarray(correct, dtype=bool)
+    activation = np.asarray(activation, dtype=np.float64)
+
+    n_pos = int(correct.sum())
+    n_neg = int(correct.size - n_pos)
+    if n_pos == 0 or n_neg == 0:
+        # No buzz frames to be sensitive about, or no negatives to set an FPR
+        # against. Both are legitimate states for a fold under a translation.
+        return {f: float('nan') for f in fprs}
+
+    order = np.argsort(-activation, kind='mergesort')
+    a = activation[order]
+    c = correct[order]
+
+    # One row per distinct threshold, matching metrics_by_group's groupby: keep
+    # the last frame of each run of equal activations, so its cumulative counts
+    # are the totals at-or-above that threshold.
+    last_of_run = np.append(np.diff(a) != 0, True)
+    sens = np.cumsum(c)[last_of_run] / n_pos
+    fpr = np.cumsum(~c)[last_of_run] / n_neg
+
+    out = {}
+    for target in fprs:
+        # Outside the sweep's range there is no bracketing pair to interpolate
+        # between -- most often because the fold has too few negative frames
+        # for the target to correspond to even one of them.
+        if target < fpr[0] or target > fpr[-1]:
+            out[target] = float('nan')
+            continue
+
+        # FPR only moves when a threshold admits a negative, so runs of
+        # positives sit at one FPR with rising sensitivity. metrics_at_fpr
+        # brackets with idxmin over a descending-threshold frame, which takes
+        # the *first* row of such a plateau -- the lowest sensitivity of the
+        # run. np.interp would take the last, and read a few points high.
+        hi = int(np.searchsorted(fpr, target, side='left'))
+        lo = int(np.searchsorted(fpr, fpr[int(np.searchsorted(fpr, target, side='right')) - 1],
+                                 side='left'))
+        if fpr[lo] == fpr[hi]:
+            out[target] = float(sens[lo])
+        else:
+            d = (target - fpr[lo]) / (fpr[hi] - fpr[lo])
+            out[target] = float(sens[lo] + (sens[hi] - sens[lo]) * d)
+    return out
+
+
 PRECISION_TARGETS = (0.90, 0.95, 0.99)
 
 
