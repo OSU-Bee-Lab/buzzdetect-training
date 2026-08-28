@@ -7,6 +7,7 @@ dependencies:
   - pip:
     - tensorflow>=2.16,<2.17  # tensorflow-metal 1.2.0 (latest on PyPI) only loads against this ABI
     - tensorflow-metal; sys_platform == "darwin"  # macOS GPU plugin; no Linux/Windows wheels exist
+    - tensorflow[and-cuda]>=2.16,<2.17; sys_platform == "linux"  # bundles the CUDA/cuDNN wheels for NVIDIA GPU accel
     - librosa
     - soundfile
     - numpy<2
