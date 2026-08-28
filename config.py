@@ -36,8 +36,10 @@ def dir_embeddings_augment(setname, embeddername, aug_dirname):
     return os.path.join(SET_DIR, setname, SET_SUBDIR_EMBEDDINGS, embeddername, aug_dirname)
 
 
-# embedding memory management
-CHUNK_FRAMES = 300
+# embedding memory management. Frames per embedder forward pass — a pure
+# batching knob, output-invariant. Lower it (via the env var) on GPUs with
+# little VRAM; the default suits unified-memory / large-VRAM machines.
+CHUNK_FRAMES = int(os.environ.get('BUZZDETECT_CHUNK_FRAMES', '300'))
 
 # snip extraction
 SNIP_BUFFER_S = 30.0

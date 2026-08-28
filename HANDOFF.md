@@ -79,3 +79,56 @@ Outputs land in `models/test_medium_rebuild/`; the metrics summary is
   `folds.csv` under `01_annotate/<effort>/` (gitignored, not copied) to re-run
   `02_set/sets/large/build.R`. Same three sources as medium:
   `Even Sample`, `2025-06-04 original annotations`, `2025-06-24 InsectSound1000`.
+
+---
+
+## Brought online 2026-08-28 (this machine: Linux, GTX 1650 4 GB)
+
+Status: **pipeline verified end-to-end** with a full 2->3 run on the `lite`
+set / `yamnet` embedder (`models/test_lite_rebuild/`, `folds_sx.csv` written).
+`medium` was not run yet.
+
+What changed to get here:
+
+- **`audio` symlink** -> `/media/server storage/experiments`, kept out of git
+  with `git update-index --skip-worktree audio`. No pipeline code hardcodes
+  paths; `~/projects/buzzdetect` is not referenced by stages 2-3.
+- **`environment.yml`** made cross-platform (committed): `tensorflow-metal`
+  guarded to macOS, Linux gets `tensorflow[and-cuda]`, `protobuf<5` pinned
+  (perch-hoplite's gcloud deps pull protobuf 7, which breaks TF 2.16).
+- **conda env** built from a Linux-adapted copy; `conda env create -f
+  environment.yml` now works directly.
+- **`config.py`**: `CHUNK_FRAMES` is now read from `$BUZZDETECT_CHUNK_FRAMES`
+  (default 300). The 4 GB card OOMs at 300.
+
+### GPU run recipe for this machine
+
+The 4 GB GTX 1650 cannot host multiple extraction workers, and YAMNet's
+default 300-frame batch alone overflows it. Run stage 2 as:
+
+```
+BUZZDETECT_CHUNK_FRAMES=48 TF_FORCE_GPU_ALLOW_GROWTH=true \
+TF_GPU_ALLOCATOR=cuda_malloc_async \
+conda run --no-capture-output -n buzzdetect-train python -u main.py \
+  --model <name> --set <set> --embedder yamnet --workers 1 --yes
+```
+
+Stage 3 (single process) is fine with these same env vars. On a bigger GPU,
+drop `BUZZDETECT_CHUNK_FRAMES` and raise `--workers`.
+
+### The `lite` set manifest
+
+`02_set/sets/lite/{annotations,folds}.csv` are gitignored and there is no
+`01_annotate/Even Sample/` raw data on this machine, so `lite/build.R` cannot
+run. They were synthesized by filtering the copied `medium` manifest down to
+`source == 'Even Sample'` (11 idents). Regenerate the same way, or copy the
+`Even Sample` effort's `annotations_combined.csv` + `folds.csv` to run build.R.
+
+### Known bad source audio
+
+`Lily Adam - One Hive/recorders/wooster/2024-07-26/1_143/240726_1446.mp3`
+(~1 GB) makes libsndfile report ~7.7 billion frames (~48 h) and `psf_fseek()`
+fails partway through extraction -- a classic large/VBR-MP3 seek bug, not a
+pipeline issue. This ident is currently **dropped from the `lite` manifest**.
+Transcoding the file to FLAC/WAV (or CBR MP3) should fix it; it will also
+affect `medium`, which still lists this ident.
