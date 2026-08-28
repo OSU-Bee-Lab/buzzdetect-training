@@ -4,7 +4,7 @@ Check this file and `log.jsonl` before proposing an experiment, then take it
 through the lifecycle in `LOOP.md`.
 
 `log.jsonl` holds CV-era runs only — measured by leave-one-fold-out on day-long
-annotated recordings, against `sensitivity_mean`. Those numbers are comparable to
+annotated recordings, against mean per-fold sens@fpr0.005. Those numbers are comparable to
 each other and are the ones to beat.
 
 Everything under [Tried before the rework](#tried-before-the-rework) comes from

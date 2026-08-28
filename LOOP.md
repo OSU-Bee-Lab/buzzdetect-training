@@ -1,7 +1,8 @@
 # Autoresearch Loop
 
 > **The slate was cleared in 2026-08.** `log.jsonl` holds CV-era runs only —
-> leave-one-fold-out on day-long annotated recordings, scored on `sensitivity_mean`.
+> leave-one-fold-out on day-long annotated recordings, scored on mean per-fold
+> sens@fpr0.005.
 > Those are comparable to each other and are what you beat.
 >
 > The 29 experiments before that ran on a fixed train/validate split against a
@@ -20,7 +21,8 @@ is where the metric choices below come from.
 Improve `ins_buzz` sensitivity at a fixed false-positive rate on **held-out
 deployments**, with each deployment's threshold set on its own audio.
 
-**The number: `sensitivity_mean` at `fpr` 0.005, from `models/<name>/folds_sx.csv`.**
+**The number: the `total` row's `sensitivity` at `fpr` 0.005, from
+`models/<name>/folds_sx.csv`.**
 Every rotating fold is tuned to 0.5% FPR on its own held-out audio; the primary
 figure is the plain mean of those sensitivities, each deployment counted once. A
 training run prints it.
@@ -34,22 +36,24 @@ The threshold is set per site because buzzdetect ships none: operators are told
 to find their own. A metric that forces one global threshold measures a
 constraint the product doesn't have, and confounds detection with how portable a
 model's score scale is — it has made a strictly better model look half as good.
-`folds_pooled_metrics.csv` still holds the pooled sweep for ROC plots; it is not
-an endpoint.
+The pooled sweep is no longer written out; `read_fold_predictions()` plus
+`metrics_by_group()` rebuilds it. It is not an endpoint.
 
-`sensitivity_mean` is an oracle: placing a fold at exactly 0.5% FPR uses that fold's
+That mean is an oracle: placing a fold at exactly 0.5% FPR uses that fold's
 labels, which an operator doesn't have. Read it as the ceiling on operator
 tuning. It is a fair ceiling to compare two models by, since both get it.
 
 Why 0.005: 0.01 is too loose to be operationally useful, and 0.001 is not
 measurable on the sets we have — it rests on ~4 negative frames per fold, and
-some folds can't reach it at all. `folds_sx.csv` carries
-`neg_frames_fold_median` and `folds_scored` so you can see what a row rests
-on.
+some folds can't reach it at all. Every fold keeps its own row in
+`folds_sx.csv` with its own `neg_frames`, and a fold that couldn't reach the
+target is blank rather than averaged in, so what the total rests on is visible
+in the file.
 
-Sensitivity at fixed *precision* — the old goal — is still recoverable from
-`folds_pooled_metrics.csv` via `03_train/metrics.py::metrics_at_precision`, but
-precision mixes in each deployment's base rate, so prefer FPR when comparing.
+Sensitivity at fixed *precision* — the old goal — is a `precision` column of
+`folds_sx.csv` at the same operating point, or a full sweep away via
+`03_train/metrics.py::metrics_at_precision`, but precision mixes in each
+deployment's base rate, so prefer FPR when comparing.
 The old log's "28% production standard" was measured on a different corpus with
 a different base rate; it is not a target on this metric.
 
@@ -59,10 +63,11 @@ a different base rate; it is not a target on this metric.
 YAMNet with `Dropout(0.2)`, `BinaryCrossentropy(label_smoothing=0.2)`, Adam at
 0.002, under the `general` translation on the `medium` set.
 
-**sensitivity_mean @ fpr0.005 = 0.206**, over 11 rotating folds. The model is kept
-at `models/yamnet_medium_general/`; its per-fold numbers are in
-`folds_summary.csv` there, which is what you join against for a paired
-comparison.
+**mean sensitivity @ fpr0.005 = 0.206**, over 11 rotating folds. The model is
+kept at `models/yamnet_medium_general/`; its per-fold numbers are in
+`folds_sx.csv` there, which is what you join against for a paired comparison.
+It was trained before the summary files were unified, so run
+`03_train/resummarize.py` on it once to get the current layout.
 
 `models/yamnet_medium_binary/` is the same config under the `binary`
 translation, at 0.203 — logged as `binary-translation-cv`. Keep it: the pair is
@@ -200,9 +205,11 @@ models and reports a mix of both. Always use a fresh `--name`, or pass
 
 ```
 models/<modelname>/
-├── folds_sx.csv            ← the number: sensitivity_mean, and what it rests on
-├── folds_summary.csv       ← per fold: epochs, val loss, frame counts, sens@fpr
-└── folds/<fold>/sx.csv     ← the same read, one fold at a time
+├── folds_sx.csv                 ← everything: a row per fold, then a `total` row
+└── folds/<fold>/
+    ├── predictions.csv          ← every held-out frame; all of the above derives from it
+    ├── summary.json             ← epochs, val_loss, frame counts, sens-monitor peaks
+    └── sens_curves.svg          ← sens@fpr per epoch vs the epoch that got restored
 ```
 
 `folds_sx.csv` is written by a training run, and can be rebuilt for a model
@@ -213,8 +220,8 @@ conda run -n buzzdetect-train python 03_train/resummarize.py <modelname>
 ```
 
 **Compare paired, per fold.** Both configs ran on the same folds, so the useful
-comparison is the per-fold difference — join the two `folds_summary.csv` files
-on `fold` and look at the deltas and how many folds moved which way. Comparing
+comparison is the per-fold difference — join the two `folds_sx.csv` files on
+`fold` and look at the deltas and how many folds moved which way. Comparing
 two scalars throws that pairing away, and a headline gap that vanishes under
 pairing was never a capability gap.
 
@@ -223,7 +230,7 @@ python tools/compare_folds.py <baseline model dir> <exp model dir>
 ```
 
 Does the join above and prints the per-fold delta table, the up/down count,
-and the two headline `sensitivity_mean` numbers from `folds_sx.csv`. Either model
+and the two headline mean sensitivities from `folds_sx.csv`'s `total` rows. Either model
 argument can be a bare name under `models/` or a path — an experiment's model
 usually lives in its worktree's own (unsymlinked) `models/` dir, so pass
 `.local/worktrees/<slug>/models/<modelname>` directly for that side.
@@ -236,8 +243,8 @@ Two cautions from the README, both of which apply to every conclusion you write:
   across folds and treat it the way the old log treated its across-runs CI.
 - **Per-fold sensitivity is unreliable where there's little buzz.** In the
   quietest deployments it's ±0.25 or worse. A fold that swings hard may just be
-  a fold with forty seconds of buzz in it. Check `frames_val` in
-  `folds_summary.csv` before believing a per-fold delta.
+  a fold with forty seconds of buzz in it. Check `buzz_frames` in
+  `folds_sx.csv` before believing a per-fold delta.
 
 There is no seed control anywhere in the pipeline, so run-to-run variation from
 TF's nondeterministic init and shuffling is unmeasured. A true noise floor needs
@@ -257,7 +264,7 @@ touching code; fill in the rest after. Commit it.
 ## Results
 | fold | baseline sens@fpr0.005 | this exp | delta | val frames |
 |---|---|---|---|---|
-- sensitivity_mean @ fpr0.005: baseline <val> → this <val>
+- mean sens@fpr0.005: baseline <val> → this <val>
 <interpretation: how many folds moved which way? are the movers folds with
 enough buzz to trust? did any fold fail to reach the target FPR?>
 ## Conclusion
@@ -299,8 +306,8 @@ while a long CV run is in flight (it did for `class-weight-fix`). Run
 `git rev-parse --short HEAD` in the main checkout right before you commit the
 log entry, not in the worktree.
 
-`tools/log_entry.py` builds this line for you — it reads `sensitivity_mean`
-straight from each model's `folds_sx.csv` (no copying numbers by hand) and
+`tools/log_entry.py` builds this line for you — it reads the `total` row's
+sensitivity straight from each model's `folds_sx.csv` (no copying numbers by hand) and
 fills in `branch`/`date`/`main_commit` by the convention above:
 
 ```bash

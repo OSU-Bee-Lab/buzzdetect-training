@@ -73,7 +73,7 @@ def main() -> None:
         ident = Path(row['ident'])
         if str(ident) != current_ident:
             current_ident = str(ident)
-            print(ident)
+            print(f'starting {ident}')
         out_path = DIR_OUTPUT / ident.parent / f"{ident.name}_s{int(row['start_filetime'])}.flac"
         if out_path.exists() and not args.overwrite:
             if args.verbose:
