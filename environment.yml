@@ -6,7 +6,7 @@ dependencies:
   - pip
   - pip:
     - tensorflow>=2.16,<2.17  # tensorflow-metal 1.2.0 (latest on PyPI) only loads against this ABI
-    - tensorflow-metal
+    - tensorflow-metal; sys_platform == "darwin"  # macOS GPU plugin; no Linux/Windows wheels exist
     - librosa
     - soundfile
     - numpy<2
