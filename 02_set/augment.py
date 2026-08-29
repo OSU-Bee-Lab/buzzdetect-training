@@ -120,10 +120,13 @@ def _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite
     audio_key = embedder.audio_cache_key()
     dir_audio_fold = os.path.join(cfg.dir_audio(setname), audio_key, 'raw', fold)
 
+    # Label the combined frames with class_source only. The mixed-in augment
+    # audio is acoustic texture, not a target — and a category like "ambient"
+    # has no translation row, so "source+augment" would surface as untranslated.
     path_embed_out = os.path.join(
         cfg.dir_embeddings_augment(setname, embeddername, spec_dirname(spec)),
         fold,
-        f'{spec.class_source}+{spec.class_augment}.pickle'
+        f'{spec.class_source}.pickle'
     )
 
     if not overwrite and os.path.exists(path_embed_out):
@@ -132,8 +135,13 @@ def _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite
         return
 
     def collect_frames(label):
+        # Prefix match: `ins_buzz` collects every `ins_buzz_*`, `ambient` every
+        # `ambient_*`. Exact-only matching missed almost all buzz, since raw
+        # buzz labels are `ins_buzz_medium/low/high/...`, not bare `ins_buzz`.
+        def has(labels):
+            return any(l == label or l.startswith(label + '_') for l in labels)
         paths = [p for p in glob.glob(os.path.join(dir_audio_fold, '**', '*.pickle'), recursive=True)
-                 if label in _labels_from_path(p)]
+                 if has(_labels_from_path(p))]
         frames = []
         for p in paths:
             frames.extend(read_pickle_exhaustive(p))
@@ -142,10 +150,10 @@ def _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite
     frames_source = collect_frames(spec.class_source)
     frames_aug = collect_frames(spec.class_augment)
 
-    if not frames_source:
-        raise ValueError(f'no source frames for {spec.class_source} in {dir_audio_fold}')
-    if not frames_aug:
-        raise ValueError(f'no augment frames for {spec.class_augment} in {dir_audio_fold}')
+    if not frames_source or not frames_aug:
+        print(f'{time.time()-t0:.1f}s - AUGMENT: skip {fold} — '
+              f'{len(frames_source)} {spec.class_source} / {len(frames_aug)} {spec.class_augment} frame(s)')
+        return
 
     print(f'{time.time()-t0:.1f}s - AUGMENT: combining {spec.class_source}+{spec.class_augment}')
     frames_combined = _combine_frames(frames_source, frames_aug, spec.prop, spec.limit)
@@ -153,18 +161,27 @@ def _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite
     print(f'{time.time()-t0:.1f}s - AUGMENT: {spec.class_source}+{spec.class_augment}: {len(frames_combined)} frames combined')
 
 
-def augment_set(setname, embeddername, specs, fold='train', overwrite=False, verbose=False):
+def augment_set(setname, embeddername, specs, folds=('train',), overwrite=False, verbose=False):
+    """Build augmented embeddings for each spec, once per fold in `folds`.
+
+    Under the CV layout every non-excluded fold can appear in some rotation's
+    training pool, so the caller usually passes them all (see `--all-folds`).
+    The pre-CV single 'train' fold no longer exists.
+    """
+    if isinstance(folds, str):
+        folds = [folds]
     t0 = time.time()
     embedder = load_embedder(embeddername, framehop_prop=1, initialize=True)
 
-    for spec in specs:
-        print(f'{time.time()-t0:.1f}s - AUGMENT: {spec}')
-        if isinstance(spec, (NoiseSpec, VolumeSpec)):
-            _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=verbose)
-        elif isinstance(spec, CombineSpec):
-            _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=verbose)
-        else:
-            raise ValueError(f'unknown spec type {type(spec)}')
+    for i, fold in enumerate(folds, 1):
+        for spec in specs:
+            print(f'{time.time()-t0:.1f}s - AUGMENT [{i}/{len(folds)}] {fold}: {spec}')
+            if isinstance(spec, (NoiseSpec, VolumeSpec)):
+                _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=verbose)
+            elif isinstance(spec, CombineSpec):
+                _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=verbose)
+            else:
+                raise ValueError(f'unknown spec type {type(spec)}')
 
     print(f'{time.time()-t0:.1f}s - AUGMENT: complete')
 
@@ -183,28 +200,44 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--set', required=True, dest='setname')
     parser.add_argument('--embedder', required=True)
-    parser.add_argument('--fold', default='train')
+    parser.add_argument('--fold', default='train', help='single fold id; ignored if --all-folds')
+    parser.add_argument('--all-folds', action='store_true',
+                        help='augment every non-excluded fold in the set (CV layout)')
     parser.add_argument('--overwrite', action='store_true')
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--noise', nargs='+', type=float, metavar='PROP',
                         help='noise augmentation prop values (default set used if neither --noise nor --volume given)')
     parser.add_argument('--volume', nargs='+', type=float, metavar='PROP',
                         help='volume augmentation prop values')
+    parser.add_argument('--combine', nargs=3, action='append', metavar=('SRC', 'AUG', 'PROP'),
+                        help='combine augmentation: mix SRC-class frames with AUG-class frames '
+                             'at proportion PROP (repeatable). Labels output with SRC only.')
     args = parser.parse_args()
 
-    if args.noise is not None or args.volume is not None:
+    if args.noise is not None or args.volume is not None or args.combine is not None:
         specs = (
             [NoiseSpec(prop=p) for p in (args.noise or [])] +
-            [VolumeSpec(prop=p) for p in (args.volume or [])]
+            [VolumeSpec(prop=p) for p in (args.volume or [])] +
+            [CombineSpec(class_source=s, class_augment=a, prop=float(p), limit=2) for s, a, p in (args.combine or [])]
         )
     else:
         specs = DEFAULT_SPECS
+
+    if args.all_folds:
+        # Read folds.csv directly (stdlib csv, not pandas) to stay clear of the
+        # tensorflow-before-pandas import-order invariant.
+        import csv
+        with open(os.path.join(cfg.dir_set(args.setname), 'folds.csv'), newline='') as fh:
+            rows = list(csv.DictReader(fh))
+        folds = sorted({r['fold'] for r in rows if (r.get('role') or '').strip() != 'exclude'})
+    else:
+        folds = [args.fold]
 
     augment_set(
         setname=args.setname,
         embeddername=args.embedder,
         specs=specs,
-        fold=args.fold,
+        folds=folds,
         overwrite=args.overwrite,
         verbose=args.verbose,
     )

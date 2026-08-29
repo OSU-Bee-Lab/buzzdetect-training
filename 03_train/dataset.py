@@ -145,11 +145,28 @@ def load_augmented(setname, embeddername, aug_dirnames, translation, train_folds
     """
     data = []
     for aug_dirname in aug_dirnames:
+        dir_aug = cfg.dir_embeddings_augment(setname, embeddername, aug_dirname)
+        if not os.path.isdir(dir_aug):
+            raise FileNotFoundError(
+                f'augmented embeddings not found: {aug_dirname} (expected {dir_aug}) '
+                f'— run 02_set/augment.py for this set/embedder first'
+            )
+        n_folds_present = 0
         for fold in train_folds:
-            dir_embed = os.path.join(cfg.dir_embeddings_augment(setname, embeddername, aug_dirname), fold)
+            dir_embed = os.path.join(dir_aug, fold)
             if not os.path.isdir(dir_embed):
-                raise FileNotFoundError(f'augmented embeddings not found: {aug_dirname} fold {fold} (expected {dir_embed})')
+                # Label- or class-selective augmentation (e.g. a CombineSpec on
+                # ins_buzz+ambient) only produces output for folds that had the
+                # source and augment classes both present — a missing per-fold
+                # dir is expected, not an error.
+                continue
+            n_folds_present += 1
             data += build_fold_dataset(dir_embed, translation)
+        if n_folds_present == 0:
+            raise FileNotFoundError(
+                f'augmented embeddings dir {aug_dirname} exists but has no entry for '
+                f'any of the {len(train_folds)} training folds'
+            )
     return data
 
 
