@@ -12,6 +12,7 @@ import warnings
 # root holds config.py and the package dirs this module imports from.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import multiprocessing
 import librosa
@@ -362,7 +363,7 @@ def _sync_snips_ident(ident: str, annotations_sub: pd.DataFrame, path_audio: str
     return status, n_written, n_deleted
 
 
-def extract_snips(setname: str, verbose=False):
+def extract_snips(setname: str, verbose=False, n_workers=4):
     """Extract raw audio snips for all idents in a set.
 
     Run this before extract_set. Safe and cheap to re-run: an ident whose
@@ -370,6 +371,11 @@ def extract_snips(setname: str, verbose=False):
     whose annotations moved has only the superseded snips deleted and only the
     missing ranges read. Returns {ident: 'unchanged' | 'updated' | 'missing_audio'}
     so callers can invalidate what an 'updated' ident already had extracted.
+
+    Idents are synced concurrently over `n_workers` threads. Each ident's snip
+    directory is independent and libsndfile releases the GIL for the read/encode,
+    so the pool overlaps the source-drive latency that otherwise dominates this
+    phase. `n_workers <= 1` runs it serially.
 
     Snips are stored as:
         02_set/sets/<setname>/audio/snips/<ident>/snip_<start>_<end>.flac
@@ -387,13 +393,16 @@ def extract_snips(setname: str, verbose=False):
     dir_snips_base = cfg.dir_snips(setname)
 
     idents = annotations['ident'].unique()
+    # Slice once in the main thread — concurrent boolean-mask reads of the shared
+    # frame are best avoided, and this is O(n) per ident otherwise.
+    groups = {ident: sub for ident, sub in annotations.groupby('ident', sort=False)}
     status_by_ident = {}
     n_written = n_deleted = 0
     n_done = 0
     t0 = time.time()
 
-    for ident in idents:
-        annotations_sub = annotations[annotations['ident'] == ident]
+    def _sync_one(ident):
+        annotations_sub = groups[ident]
         dir_out = os.path.join(dir_snips_base, ident)
 
         path_audio = get_ident_audio_path(ident)
@@ -402,17 +411,28 @@ def extract_snips(setname: str, verbose=False):
             # ident doesn't care that the source drive is unplugged.
             manifest = _read_json(os.path.join(dir_out, FNAME_SNIP_MANIFEST))
             if manifest is not None and manifest.get('fingerprint') == _fingerprint_annotations(annotations_sub):
-                status_by_ident[ident] = 'unchanged'
-                continue
+                return ident, 'unchanged', 0, 0
             warnings.warn(f'extract_snips: no audio file for {ident}; skipping')
-            status_by_ident[ident] = 'missing_audio'
-            continue
+            return ident, 'missing_audio', 0, 0
 
         if verbose:
-            print(f'{time.time()-t0:.1f}s - extract_snips: [{n_done+1}/{len(idents)}] {ident} — '
+            print(f'{time.time()-t0:.1f}s - extract_snips: {ident} — '
                   f'starting ({len(annotations_sub)} annotations)', flush=True)
         status, written, deleted = _sync_snips_ident(
             ident, annotations_sub, path_audio, dir_out, verbose=verbose, t0=t0)
+        return ident, status, written, deleted
+
+    n_threads = max(1, min(n_workers, len(idents)))
+    if n_threads <= 1:
+        results = (_sync_one(ident) for ident in idents)
+    else:
+        pool = ThreadPoolExecutor(max_workers=n_threads)
+        try:
+            results = list(pool.map(_sync_one, idents))
+        finally:
+            pool.shutdown()
+
+    for ident, status, written, deleted in results:
         status_by_ident[ident] = status
         n_written += written
         n_deleted += deleted
@@ -861,7 +881,8 @@ def run_worker(config_extract: ConfigExtract, annotations: pd.DataFrame, folds: 
         raise
 
 
-def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=None, n_workers=4, verbose=False):
+def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=None,
+                n_workers=4, snip_workers=4, verbose=False):
     t0 = time.time()
     dir_set = cfg.dir_set(setname)
     path_config = os.path.join(dir_set, 'config_extract.json')
@@ -914,7 +935,9 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
     # Always sync: annotation efforts are ongoing, and an ident whose annotations moved
     # needs its superseded snips replaced before anything is extracted from them. Idents
     # that didn't move cost a manifest read each.
-    snip_status = extract_snips(setname, verbose=verbose)
+    # Snip sync is pure I/O off the source drive — no GPU, no fork — so it gets
+    # its own thread count, independent of the embedding worker/VRAM budget.
+    snip_status = extract_snips(setname, verbose=verbose, n_workers=snip_workers)
     idents_forced = {i for i, s in snip_status.items() if s == 'updated'}
 
     # Pre-filter: determine which idents actually need work before spawning workers
@@ -1010,6 +1033,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Sync raw audio snips for a set to its annotations (no embedder required).')
     parser.add_argument('--set', required=True, dest='setname')
+    parser.add_argument('--workers', type=int, default=4,
+                        help='threads for concurrent per-ident snip sync (I/O-bound); 1 = serial')
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
-    extract_snips(args.setname, verbose=args.verbose)
+    extract_snips(args.setname, verbose=args.verbose, n_workers=args.workers)

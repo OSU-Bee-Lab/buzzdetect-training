@@ -37,7 +37,7 @@ def load_stage(path, module_name):
     return mod
 
 def main(modelname, setname, embeddername, name_translation, epochs_max, clear,
-         aug_dirnames=None, verbose=False, n_workers=2, patience=50,
+         aug_dirnames=None, verbose=False, n_workers=2, snip_workers=4, patience=50,
          overlap_event_prop=None, framehop_prop=None, assume_yes=False):
     model_dir = os.path.join(config.DIR_MODELS, modelname)
 
@@ -54,6 +54,7 @@ def main(modelname, setname, embeddername, name_translation, epochs_max, clear,
         overlap_event_prop=overlap_event_prop,
         framehop_prop=framehop_prop,
         n_workers=n_workers,
+        snip_workers=snip_workers,
         verbose=verbose,
     )
 
@@ -83,7 +84,9 @@ if __name__ == '__main__':
     parser.add_argument('--patience', type=int, default=50,
                         help='EarlyStopping patience for the per-fold submodels')
     parser.add_argument('--workers', type=int, default=2, dest='n_workers',
-                        help='extraction workers; 0 runs in-process')
+                        help='framing+embedding workers; 0 runs in-process')
+    parser.add_argument('--snip-workers', type=int, default=4, dest='snip_workers',
+                        help='threads for the snip-sync phase (source-drive I/O); 1 = serial')
     # Only consulted when the set has no config_extract.json yet; see 02_set/main.py.
     parser.add_argument('--overlap-event-prop', type=float, default=None, dest='overlap_event_prop')
     parser.add_argument('--framehop-prop', type=float, default=None, dest='framehop_prop')
@@ -109,6 +112,7 @@ if __name__ == '__main__':
         aug_dirnames=args.aug_dirnames,
         verbose=args.verbose,
         n_workers=args.n_workers,
+        snip_workers=args.snip_workers,
         patience=args.patience,
         overlap_event_prop=args.overlap_event_prop,
         framehop_prop=args.framehop_prop,

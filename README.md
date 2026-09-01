@@ -188,7 +188,8 @@ conda run -n buzzdetect-train python 02_set/main.py \
 |---|---|
 | `--set` | set name under `02_set/sets/` |
 | `--embedder` | directory name under `embedders/` — `yamnet`, `yamnet_bandpass`, `yamnet_doublerate`, `yamnet_combined`, `yamnet_copy` |
-| `--workers` | parallel extraction processes; **`0` runs in-process** |
+| `--workers` | processes for the framing + embedding phase; **`0` runs in-process** |
+| `--snip-workers` | threads for the snip-sync phase (source-drive I/O, no GPU); default 4, `1` = serial |
 | `--overlap-event-prop` | annotation overlap needed to label a frame, as a fraction of frame length |
 | `--framehop-prop` | frame hop as a fraction of frame length; `1` = no overlap |
 | `--verbose` | one line per ident |
@@ -198,7 +199,9 @@ Extraction runs in three layers, each cached and each skippable on re-run:
 1. **Snips** — `audio/snips/<ident>/snip_<start>_<end>.flac`. One file per
    cluster of annotations, padded 30 s each side, at the source sample rate.
    Embedder-independent, so every embedder reuses them. Can be synced alone:
-   `python 02_set/extract.py --set <set>`.
+   `python 02_set/extract.py --set <set> [--workers <n>]`. Idents are synced
+   concurrently (a thread pool — the read/encode is I/O-bound and releases the
+   GIL); `--workers 1` forces serial.
 2. **Framed-audio cache** — `audio/sr<rate>_fl<len>/raw/<fold>/<ident>/<labels>.pickle`.
    Frames grouped by their collapsed label string (`ins_buzz+ambient_noise`),
    resampled for the embedder. Keyed by sample rate and frame length, so

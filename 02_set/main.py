@@ -21,7 +21,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--set', required=True, dest='setname')
     parser.add_argument('--embedder', required=True)
-    parser.add_argument('--workers', type=int, required=True)
+    parser.add_argument('--workers', type=int, required=True,
+                        help='processes for the framing+embedding phase (VRAM-bound)')
+    parser.add_argument('--snip-workers', type=int, default=4, dest='snip_workers',
+                        help='threads for the snip-sync phase (source-drive I/O; no GPU); '
+                             '1 = serial')
     # Only consulted when the set has no config_extract.json yet — a set that
     # already has one keeps it, and these are ignored with a warning. Changing
     # a set's extraction params means deleting that file and re-extracting.
@@ -44,5 +48,6 @@ if __name__ == '__main__':
         overlap_event_prop=args.overlap_event_prop,
         framehop_prop=args.framehop_prop,
         n_workers=args.workers,
+        snip_workers=args.snip_workers,
         verbose=args.verbose,
     )
