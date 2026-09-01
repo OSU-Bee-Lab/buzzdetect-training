@@ -77,7 +77,7 @@ until `folds_sx.csv` existed.
 | **`trunk_frozen`** (control: same trunk pipeline, 13-14 frozen) | 0 | **0.216** | — | +0.017 |
 | **`trunk_ft_1e5`** (unfreeze 13-14) | 1e-5 | **0.262** | **+0.046** | +0.063 |
 | **`trunk_ft_5e5`** | 5e-5 | **0.257** | +0.041 | +0.058 |
-| `trunk_ft_1e5_aug` (+ within-fold noise 0.05) | 1e-5 | _see below_ | | |
+| `trunk_ft_1e5_aug` (+ within-fold noise 0.05) | 1e-5 | negative (5/11 folds, −0.060 paired) | | |
 
 Also run on `lite` as a smoke test only (not comparable): frozen 0.166,
 uniform-lr-2e-4 fine-tune 0.150 (shipped best_epoch 6 — uniform 2e-4 on the
@@ -140,12 +140,26 @@ all 11 rotating folds through `yamnet_trunk` and loaded per training fold
 always-train idents were not augmented; still strictly within-fold). Config
 otherwise identical to `trunk_ft_1e5`.
 
-_[Result: see `models/trunk_ft_1e5_aug/folds_sx.csv` and
-`tools/compare_folds.py models/trunk_ft_1e5 models/trunk_ft_1e5_aug`. This CV
-was launched last and may not have finished within the session; the aug pool
-~doubles the training frames so each fold is ~2x slower. If incomplete,
-`03_train/resummarize.py trunk_ft_1e5_aug` rebuilds the summary from whatever
-folds completed, or re-run `cv.sh` — it resumes.]_
+**Result: negative, stopped at 5/11 folds** (each fold ~2x slower with the
+doubled pool; the direction was already clear). Paired vs `trunk_ft_1e5` on the
+5 completed folds (`compare_folds.py models/trunk_ft_1e5 models/trunk_ft_1e5_aug`):
+
+| fold | ft_1e5 | +aug | Δ | best_epoch (+aug) |
+|---|---|---|---|---|
+| JamesU - MustardBumbler/1_29 | 0.469 | 0.484 | +0.015 | 7 |
+| Lily - Fit+Fast/…/53 | 0.432 | 0.424 | −0.008 | 31 |
+| Lily Adam …/willard/…/1_11 | 0.318 | 0.108 | **−0.210** | **1** |
+| Lily Adam …/wooster/…/1_143 | 0.337 | 0.289 | −0.048 | 11 |
+| Luke - Diel Drivers/2026-04-08/1_150 | 0.068 | 0.021 | −0.047 | 1 |
+
+**4/5 down, mean Δ −0.060.** willard collapses (−0.21) and two folds restore
+epoch 1 — the additive-noise aug spikes val_loss immediately and the
+early-stopping monitor locks a near-random snapshot. Consistent with LOOP.md's
+standing "augmentation has hurt" and the `augmentation-frozen-probe` note:
+unfreezing the backbone did **not** turn waveform aug into a win here. A gentler
+aug (smaller prop, or holding aug out of the val monitor) might behave
+differently, but plain `NoiseSpec(0.05)` on top of the fine-tune is a clear
+negative. `trunk_ft_1e5_aug` left partial in `models/` (resumable via `cv.sh`).
 
 ## Conclusion
 
@@ -155,10 +169,19 @@ Unfreezing YAMNet's last two blocks at a differential rate (backbone 1e-5, head
 inverts the pre-rework `yamnet-ft` verdict (−8.3pp), as `temporal-context` did
 before it — the old negative was the retired corpus / fixed split, not the
 mechanism. Uniform-rate fine-tuning still overfits (lite), so the differential
-rate matters; `trunk_ft_5e5` probes whether a faster backbone rate helps or
-tips over. Worth following: a proper LR/patience sweep on this structure (the
-early-epoch restores say the stopping rule is not tuned for batch 1024), then
-augmentation on top, then unfreezing more/fewer blocks.
+rate matters (`trunk_ft_5e5` = `trunk_ft_1e5`, so the gain is robust across
+1e-5..5e-5). Additive-noise augmentation on top is a **clear negative** (−0.060
+paired over 5 folds, willard −0.21) — unfreezing the backbone did not rescue
+waveform aug.
 
-Trust: **caveated** — direction clean and strong, size softened by the
-early-stop restores and the frozen-vs-baseline pipeline offset.
+Worth following, in order: (1) an LR/patience sweep tuned for the batch-1024
+regime — the early-epoch restores (best 1/2/5/9/10 on several folds) say the
+`min_delta=0.002` stopping rule is mis-scaled here, and both arms share it so
+the +0.046 is real but the per-fold numbers are shaky; (2) unfreezing one block
+(just 14) or three (12-14); (3) a proper shipped-model path (currently saved
+`include_optimizer=False`); (4) if augmentation is revisited, keep it out of the
+val monitor and use a much smaller prop.
+
+Trust: **caveated** — direction clean and strong (9/11 folds, several > 0.05),
+size softened by the early-stop restores and the +0.017 frozen-vs-baseline
+pipeline offset.
