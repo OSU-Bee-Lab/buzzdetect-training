@@ -54,26 +54,74 @@ class TrainingData:
 
 
 def _to_tf(data, size_batch, size_shuffle):
+    total = sum(s.frames for s in data)
+    first = next((s for s in data if s.frames), None)
+    half = first is not None and np.asarray(first.embeddings[0]).dtype == np.float16
+
+    if half:
+        # yamnet_trunk caches 12288-d activations float16. The `large` pool
+        # (framehop 0.2, ~5x medium's frames -> ~9 GB float16 once loaded) can't
+        # afford a second full copy: the old path's list -> np.asarray ->
+        # fancy-index-shuffle -> from_tensor_slices tensor copy peaked well past
+        # a 23 GB box and got OOM-killed. So keep the one loaded copy, stack each
+        # sample's frames into a contiguous 2-D array in place, and stream
+        # float32 batches gathered from those with a fresh per-epoch shuffle —
+        # nothing but a batch is ever materialised on top of the pool.
+        dim = int(np.asarray(first.embeddings[0]).shape[0])
+        n_cls = len(first.target_array)
+        samples = [s for s in data if s.frames]
+        for s in samples:
+            s.embeddings = np.asarray(s.embeddings, dtype=np.float16)  # (frames, dim)
+
+        # (sample idx, frame idx) for every frame; ~3 MB for the large pool
+        flat = np.empty((total, 2), dtype=np.int32)
+        r = 0
+        for si, s in enumerate(samples):
+            flat[r:r + s.frames, 0] = si
+            flat[r:r + s.frames, 1] = np.arange(s.frames)
+            r += s.frames
+
+        tgt = np.stack([s.target_array for s in samples]).astype(np.float32)
+        rng = np.random.default_rng()
+
+        def _gen():
+            order = rng.permutation(total)
+            for j in range(0, total, size_batch):
+                rows = flat[order[j:j + size_batch]]
+                xb = np.empty((len(rows), dim), dtype=np.float32)
+                for b, (si, fi) in enumerate(rows):
+                    xb[b] = samples[si].embeddings[fi]
+                yield xb, tgt[rows[:, 0]]
+
+        n_batches = -(-total // size_batch)  # ceil; _gen yields exactly this many
+        return (
+            tf.data.Dataset.from_generator(
+                _gen,
+                output_signature=(
+                    tf.TensorSpec(shape=(None, dim), dtype=tf.float32),
+                    tf.TensorSpec(shape=(None, n_cls), dtype=tf.float32),
+                ),
+            )
+            # from_generator has unknown cardinality, so Keras can't tell the
+            # generator finishing an epoch from it breaking mid-stream and warns
+            # "your input ran out of data" every epoch. Declaring the count says
+            # the epoch boundary is expected.
+            .apply(tf.data.experimental.assert_cardinality(n_batches))
+            .prefetch(2)  # bounded: AUTOTUNE can queue many 50 MB batches
+        )
+
     embeddings, targets = [], []
     for s in data:
         embeddings.extend(s.embeddings)
         targets.extend([s.target_array] * s.frames)
     idx = np.random.permutation(len(embeddings))
-    # yamnet_trunk's 12288-d activations are cached float16: kept float16 in
-    # memory (~1.7 GB for the medium pool vs ~3.4 GB float32, and .cache()
-    # would hold a second copy) and cast to float32 one batch at a time.
-    half = len(embeddings) > 0 and np.asarray(embeddings[0]).dtype == np.float16
-    emb_np = np.asarray(embeddings, dtype=np.float16 if half else np.float32)[idx]
+    emb_np = np.asarray(embeddings, dtype=np.float32)[idx]
     tgt_np = np.asarray(targets, dtype=np.float32)[idx]
     del embeddings, targets
-    ds = tf.data.Dataset.from_tensor_slices((emb_np, tgt_np))
-    if not half:
-        ds = ds.cache()
-    ds = ds.shuffle(size_shuffle).batch(size_batch)
-    if half:
-        ds = ds.map(lambda x, y: (tf.cast(x, tf.float32), y),
-                    num_parallel_calls=tf.data.AUTOTUNE)
-    return ds.prefetch(tf.data.AUTOTUNE)
+    return (
+        tf.data.Dataset.from_tensor_slices((emb_np, tgt_np))
+        .cache().shuffle(size_shuffle).batch(size_batch).prefetch(tf.data.AUTOTUNE)
+    )
 
 
 def _eval_arrays(samples, classes):
@@ -290,7 +338,9 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         # from the median best epoch across the rotations.
         history = model.fit(
             data.train_tf, epochs=epochs_fixed, class_weight=data.weight_dict,
-            verbose=2 if verbose else 0,  # 2 = one line per epoch, no progress bar
+            # --verbose is for a human watching: 1 = live progress bar. Agents
+            # leave the flag off (0) so per-epoch lines don't fill their context.
+            verbose=1 if verbose else 0,
         )
         best_epoch = epochs_fixed - 1
         result = {
@@ -315,7 +365,9 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             validation_data=data.val_tf,
             callbacks=[sens_callback, callback],
             class_weight=data.weight_dict,
-            verbose=2 if verbose else 0,  # 2 = one line per epoch, no progress bar
+            # --verbose is for a human watching: 1 = live progress bar. Agents
+            # leave the flag off (0) so per-epoch lines don't fill their context.
+            verbose=1 if verbose else 0,
         )
 
         best_epoch = callback.best_epoch
