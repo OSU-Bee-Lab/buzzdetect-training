@@ -161,6 +161,49 @@ aug (smaller prop, or holding aug out of the val monitor) might behave
 differently, but plain `NoiseSpec(0.05)` on top of the fine-tune is a clear
 negative. `trunk_ft_1e5_aug` left partial in `models/` (resumable via `cv.sh`).
 
+### stopping-rule sweep (follow-up #1)
+
+`--min-delta` and `--only-folds` added to `03_train`. `--only-folds` scores just
+the named rotating folds (still trains on the full pool each rotation, skips the
+shipped model) — a diagnostic harness, `folds_sx.csv` over a subset is not
+comparable to a full CV.
+
+Diagnostic on 3 folds (JamesU 2144 buzz, Lily FitFast 1031, Diel/2026-04-08 146
+buzz — the fold `trunk_ft_1e5` restored at epoch 2), backbone 1e-5, batch 1024:
+
+| config | JamesU | LilyFF | Diel0408 | 3-fold mean | best_epochs |
+|---|---|---|---|---|---|
+| `trunk_ft_1e5` (original run) | 0.469 | 0.432 | 0.068 | 0.323 | 9 / 94 / 2 |
+| same config, **fresh run** (`s0`) | 0.487 | 0.447 | 0.089 | **0.341** | 27 / 46 / 3 |
+| min_delta 1e-4, patience 50 (`s1`) | 0.510 | 0.429 | 0.130 | **0.356** | 25 / 92 / 6 |
+
+**A same-config rerun moved the 3-fold mean +0.018 and swung `best_epoch` by
+15-50** (`std-convergence` all over again — no seed control anywhere). The
+min_delta 0.002 → 1e-4 change (`s0` → `s1`) moved it +0.015, i.e. the same
+order as the run noise. So min_delta is **not** a lever that clears the noise
+floor, and `trunk_ft_1e5`'s early `best_epoch` values (2, 5, 9) were
+val_loss-trajectory noise, not a systematic min_delta failure — the fresh run
+of the identical config landed 27 / 46 / 3. The earlier `sens@best` vs
+`sens@peak` gaps reflect the sens@fpr *monitor's* own noise (each fold's
+threshold rests on ~20 negative frames), not recoverable headroom.
+
+The one semi-consistent thread: **Diel/2026-04-08** (thin, 146 buzz) climbs
+0.068 → 0.089 → 0.130 as stopping loosens (`best_epoch` 2 → 3 → 6). Its
+val_loss minimum genuinely is very early while sens keeps rising — looser
+stopping helps that *kind* of fold modestly. On the strength of that a full CV
+at **min_delta 1e-4, patience 50** (`trunk_ft_md1e4`) was run:
+
+**Result (stopped at 3/11 folds — min_delta 1e-4 runs each fold 2-3x longer,
+willard alone took 225 epochs):** paired vs `trunk_ft_1e5` — JamesU +0.015,
+Lily FitFast +0.032, willard −0.020. **Mean Δ +0.009, 2 up / 1 down — inside
+the ±0.018 same-config rerun noise, folds split.** min_delta is confirmed a
+**non-lever**. `trunk_ft_1e5`'s config (min_delta 0.002, patience 50) stands.
+
+The real blocker for any finer tuning here is the missing noise floor:
+`noise-floor-cv` in IDEAS (repeat a full CV under a fresh `--name` and read the
+per-fold spread) is the prerequisite — every per-fold delta in this whole
+investigation is being read against an unquantified ~±0.02.
+
 ## Conclusion
 
 Unfreezing YAMNet's last two blocks at a differential rate (backbone 1e-5, head
@@ -174,13 +217,14 @@ rate matters (`trunk_ft_5e5` = `trunk_ft_1e5`, so the gain is robust across
 paired over 5 folds, willard −0.21) — unfreezing the backbone did not rescue
 waveform aug.
 
-Worth following, in order: (1) an LR/patience sweep tuned for the batch-1024
-regime — the early-epoch restores (best 1/2/5/9/10 on several folds) say the
-`min_delta=0.002` stopping rule is mis-scaled here, and both arms share it so
-the +0.046 is real but the per-fold numbers are shaky; (2) unfreezing one block
-(just 14) or three (12-14); (3) a proper shipped-model path (currently saved
-`include_optimizer=False`); (4) if augmentation is revisited, keep it out of the
-val monitor and use a much smaller prop.
+The stopping-rule sweep (above) came back a non-lever — the early-epoch
+restores in `trunk_ft_1e5` were val_loss-trajectory noise, not a fixable
+min_delta problem. So worth following, in order: (1) **`noise-floor-cv`** —
+repeat a CV under a fresh name to quantify the ~±0.02 denominator every delta
+here rests on; (2) unfreezing one block (just 14) or three (12-14), and a
+head-LR sweep (2e-4 → 5e-4) — both untried; (3) a proper shipped-model path
+(currently saved `include_optimizer=False`); (4) if augmentation is revisited,
+keep it out of the val monitor and use a much smaller prop.
 
 Trust: **caveated** — direction clean and strong (9/11 folds, several > 0.05),
 size softened by the early-stop restores and the +0.017 frozen-vs-baseline

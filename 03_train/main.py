@@ -38,6 +38,15 @@ if __name__ == '__main__':
     parser.add_argument('--lr-head', type=float, default=None, dest='lr_head',
                         help='learning rate for the head (yamnet_trunk only); '
                              'defaults to the embedder head default')
+    parser.add_argument('--min-delta', type=float, default=0.002, dest='min_delta',
+                        help='EarlyStopping min_delta on val_loss (default 0.002, '
+                             'tuned for the full-batch linear probe)')
+    parser.add_argument('--only-folds', nargs='+', default=None, dest='only_folds',
+                        metavar='FOLD',
+                        help='diagnostic: hold out & score only these rotating '
+                             'folds (still trains on the full pool); skips the '
+                             'shipped model. folds_sx.csv is then a subset, not '
+                             'comparable to a full CV.')
     args = parser.parse_args()
 
     train_set(
@@ -53,4 +62,6 @@ if __name__ == '__main__':
         size_batch=args.size_batch,
         lr_backbone=args.lr_backbone,
         lr_head=args.lr_head,
+        min_delta=args.min_delta,
+        only_folds=args.only_folds,
     )

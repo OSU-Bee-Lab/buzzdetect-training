@@ -244,7 +244,7 @@ def _collect_fold_results(dir_folds, folds_rotate):
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs_max, aug_dirnames, verbose,
                held_out_fold, save_binary, epochs_fixed=None, patience=50,
-               lr_backbone=0.0, lr_head=None):
+               lr_backbone=0.0, lr_head=None, min_delta=0.002):
     """Train one model. Returns (result_row, model); (None, None) if the model
     directory is already populated."""
     if not can_write(dir_model):
@@ -300,7 +300,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         }
     else:
         callback = tf.keras.callbacks.EarlyStopping(
-            monitor='val_loss', patience=patience, min_delta=0.002, restore_best_weights=True,
+            monitor='val_loss', patience=patience, min_delta=min_delta, restore_best_weights=True,
         )
         # Reporting only, and listed first so its keys are in `logs` before
         # EarlyStopping and History see them. Stopping still happens on
@@ -361,6 +361,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         'val_fold': data.val_fold,
         'epochs_fixed': epochs_fixed,
         'patience': patience,
+        'min_delta': min_delta,
         'lr_backbone': lr_backbone,
         'lr_head': lr_head,
     }
@@ -436,11 +437,28 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
 
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
-              assume_yes=False, size_batch=65568, lr_backbone=0.0, lr_head=None):
+              assume_yes=False, size_batch=65568, lr_backbone=0.0, lr_head=None,
+              min_delta=0.002, only_folds=None):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
     folds_holdout = folds_by_role(roles, ROLE_HOLDOUT)
+
+    # Which rotating folds actually take a turn as held-out/scored. Normally
+    # all of them; --only-folds narrows it for stopping-rule / LR probes. The
+    # training pool for each rotation is still "every other rotate fold + all
+    # train folds", so a probe run trains on the same data a real rotation
+    # would -- only the CV coverage shrinks. folds_sx.csv over a subset is NOT
+    # comparable to the full CV and the shipped model is skipped.
+    folds_scored = folds_rotate
+    if only_folds:
+        keep = set(only_folds)
+        missing = keep - set(folds_rotate)
+        if missing:
+            raise ValueError(f'--only-folds not in the rotate set: {sorted(missing)}')
+        folds_scored = [f for f in folds_rotate if f in keep]
+        print(f'[{name}] --only-folds: scoring {len(folds_scored)} of '
+              f'{len(folds_rotate)} rotating folds; shipped model skipped')
 
     if len(folds_rotate) < 2:
         raise ValueError(
@@ -466,11 +484,11 @@ def train_set(name, embeddername, setname, name_translation,
     # into the stopping signal, and dedicating a second fold to it would cost
     # another deployment. Fold model binaries are not kept, only their scores
     # and training artifacts, archived under dir_folds.
-    for i, held_out in enumerate(folds_rotate, 1):
+    for i, held_out in enumerate(folds_scored, 1):
         folds_train = [f for f in folds_rotate if f != held_out] + folds_train_always
         dir_model = os.path.join(dir_folds, str(held_out))
         modelname = f'{name}_fold{held_out}'
-        tag = f'[{i}/{len(folds_rotate)}] {held_out}'
+        tag = f'[{i}/{len(folds_scored)}] {held_out}'
 
         if not can_write(dir_model):
             print(f'{tag}: already trained; skipping')
@@ -489,7 +507,7 @@ def train_set(name, embeddername, setname, name_translation,
             dir_model, modelname, embeddername, setname, name_translation,
             data, epochs_max, aug_dirnames, verbose,
             held_out, save_binary=False, patience=patience,
-            lr_backbone=lr_backbone, lr_head=lr_head,
+            lr_backbone=lr_backbone, lr_head=lr_head, min_delta=min_delta,
         )
         if result is None:
             continue
@@ -511,7 +529,7 @@ def train_set(name, embeddername, setname, name_translation,
               f"{data.frames_train}/{data.frames_val} frames train/val, "
               f"{_format_sens(sens)}", flush=True)
 
-    summary_rows, predictions_pooled = _collect_fold_results(dir_folds, folds_rotate)
+    summary_rows, predictions_pooled = _collect_fold_results(dir_folds, folds_scored)
 
     if summary_rows:
         os.makedirs(dir_model_full, exist_ok=True)
@@ -525,6 +543,10 @@ def train_set(name, embeddername, setname, name_translation,
         sx = summarize_folds(pooled, facts)
         sx.to_csv(os.path.join(dir_model_full, FNAME_SX_SUMMARY), index=False)
         print(format_sx_report(name, sx))
+
+    if only_folds:
+        print(f'[{name}] --only-folds: probe run, shipped model skipped')
+        return
 
     # Shipped model: trains on every fold except 'holdout'. No fold is held
     # out, so there is nothing clean left to monitor — the epoch count comes
@@ -544,7 +566,7 @@ def train_set(name, embeddername, setname, name_translation,
         dir_model_full, name, embeddername, setname, name_translation,
         data, epochs_max, aug_dirnames, verbose,
         None, save_binary=True, epochs_fixed=epochs_fixed, patience=patience,
-        lr_backbone=lr_backbone, lr_head=lr_head,
+        lr_backbone=lr_backbone, lr_head=lr_head, min_delta=min_delta,
     )
 
     if result is None:
