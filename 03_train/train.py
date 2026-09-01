@@ -53,7 +53,7 @@ class TrainingData:
     val_eval: tuple = None
 
 
-def _to_tf(data, size_batch, size_shuffle):
+def _to_tf(data, size_batch, size_shuffle, mixup_alpha=0.0):
     embeddings, targets = [], []
     for s in data:
         embeddings.extend(s.embeddings)
@@ -61,6 +61,18 @@ def _to_tf(data, size_batch, size_shuffle):
     idx = np.random.permutation(len(embeddings))
     emb_np = np.array(embeddings, dtype=np.float32)[idx]
     tgt_np = np.array(targets, dtype=np.float32)[idx]
+
+    if mixup_alpha > 0:
+        # Embedding-space mixup: convex-combine each frame with another random
+        # training frame, targets combined the same way. Both parents come from
+        # this permutation of the training pool, so no fold boundary is crossed
+        # and the val fold / stopping signal stay clean (caller passes
+        # mixup_alpha=0 for val_tf). See notes.md.
+        partner = np.random.permutation(len(emb_np))
+        lam = np.random.beta(mixup_alpha, mixup_alpha, size=len(emb_np)).astype(np.float32)
+        emb_np = lam[:, None] * emb_np + (1.0 - lam[:, None]) * emb_np[partner]
+        tgt_np = lam[:, None] * tgt_np + (1.0 - lam[:, None]) * tgt_np[partner]
+
     return (
         tf.data.Dataset.from_tensor_slices((emb_np, tgt_np))
         .cache().shuffle(size_shuffle).batch(size_batch).prefetch(tf.data.AUTOTUNE)
@@ -129,8 +141,10 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     size_batch = 65568
     size_shuffle = 10 * size_batch
 
+    mixup_alpha = 0.2
+
     return TrainingData(
-        train_tf=_to_tf(data_train, size_batch, size_shuffle),
+        train_tf=_to_tf(data_train, size_batch, size_shuffle, mixup_alpha=mixup_alpha),
         val_tf=_to_tf(data_val, size_batch, size_shuffle) if data_val is not None else None,
         classes=classes,
         weight_dict=weight_dict,

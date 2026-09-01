@@ -1,0 +1,85 @@
+2026-08-31 21:58:34.349750: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2026-08-31 21:58:34.374009: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2026-08-31 21:58:34.374059: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2026-08-31 21:58:35.281278: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+2026-08-31 21:58:37.777686: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-08-31 21:58:37.818738: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-08-31 21:58:37.821458: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-08-31 21:58:37.824572: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-08-31 21:58:37.827532: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-08-31 21:58:37.829849: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-08-31 21:58:37.992927: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-08-31 21:58:37.994065: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-08-31 21:58:37.995095: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-08-31 21:58:37.996069: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1928] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 2380 MB memory:  -> device: 0, name: NVIDIA GeForce GTX 1650, pci bus id: 0000:01:00.0, compute capability: 7.5
+/home/luke/projects/buzzdetect-training/.local/worktrees/embed-mixup/03_train/dataset.py:130: UserWarning: all 1 embedding file(s) under /home/luke/projects/buzzdetect-training/.local/worktrees/embed-mixup/02_set/sets/medium/embeddings/yamnet/raw/Luke - External Data Sources/InsectSound1000/Coccinella_septempunctata/2023419-16-19/000020 were dropped by the translation; raw label(s) present: ['EXCLUDE']
+  warnings.warn(
+/home/luke/projects/buzzdetect-training/.local/worktrees/embed-mixup/03_train/dataset.py:130: UserWarning: all 1 embedding file(s) under /home/luke/projects/buzzdetect-training/.local/worktrees/embed-mixup/02_set/sets/medium/embeddings/yamnet/raw/Luke - External Data Sources/InsectSound1000/Nezara_viridula/2022511-18-10/000018 were dropped by the translation; raw label(s) present: ['EXCLUDE']
+  warnings.warn(
+/home/luke/projects/buzzdetect-training/.local/worktrees/embed-mixup/03_train/dataset.py:130: UserWarning: all 2 embedding file(s) under /home/luke/projects/buzzdetect-training/.local/worktrees/embed-mixup/02_set/sets/medium/embeddings/yamnet/raw/Luke - External Data Sources/InsectSound1000/Nezara_viridula/2022511-18-10/000025 were dropped by the translation; raw label(s) present: ['EXCLUDE']
+  warnings.warn(
+/home/luke/projects/buzzdetect-training/.local/worktrees/embed-mixup/03_train/dataset.py:130: UserWarning: all 1 embedding file(s) under /home/luke/projects/buzzdetect-training/.local/worktrees/embed-mixup/02_set/sets/medium/embeddings/yamnet/raw/Luke - External Data Sources/InsectSound1000/Nezara_viridula/2022511-18-10/000032 were dropped by the translation; raw label(s) present: ['EXCLUDE']
+  warnings.warn(
+/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/trainers/epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1788227936.439370  526084 service.cc:145] XLA service 0x7b9721008750 initialized for platform CUDA (this does not guarantee that XLA will be used). Devices:
+I0000 00:00:1788227936.439435  526084 service.cc:153]   StreamExecutor device (0): NVIDIA GeForce GTX 1650, Compute Capability 7.5
+2026-08-31 21:58:56.461121: I tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.cc:268] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+2026-08-31 21:58:56.557363: I external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:465] Loaded cuDNN version 8907
+I0000 00:00:1788227938.612652  526084 device_compiler.h:188] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/trainers/epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/trainers/epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/trainers/epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/trainers/epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/trainers/epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/trainers/epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/trainers/epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/trainers/epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/trainers/epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/trainers/epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/trainers/epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+
+[yamnet_medium_general_mixup02] set medium, embedder yamnet, translation general: 11 rotating fold(s), 311 train-only, 0 holdout
+[1/11] JamesU - MustardBumbler/1_29: 91 epochs (best 41), val_loss 0.4246, 66811/6984 frames train/val, sens@fpr0.5%=0.423
+[2/11] Lily - Fit+Fast/2023_R3_Marysville/53: 143 epochs (best 93), val_loss 0.4063, 69083/4712 frames train/val, sens@fpr0.5%=0.359
+[3/11] Lily Adam - One Hive/recorders/willard/2024-08-07/1_11: 85 epochs (best 35), val_loss 0.4206, 69065/4730 frames train/val, sens@fpr0.5%=0.151
+[4/11] Lily Adam - One Hive/recorders/wooster/2024-07-26/1_143: 117 epochs (best 67), val_loss 0.4039, 69087/4708 frames train/val, sens@fpr0.5%=0.221
+[5/11] Luke - Diel Drivers/2026-04-08/1_150: 65 epochs (best 15), val_loss 0.4134, 68848/4947 frames train/val, sens@fpr0.5%=0.034
+[6/11] Luke - Diel Drivers/2026-05-06/1_95: 159 epochs (best 109), val_loss 0.4269, 67167/6628 frames train/val, sens@fpr0.5%=0.030
+[7/11] Luke - Various Opportunistic Recordings/2025-06-23/1_23: 150 epochs (best 100), val_loss 0.4229, 73480/315 frames train/val, sens@fpr0.5%=0.326
+[8/11] Luke - Various Opportunistic Recordings/2025-07-03/1_37: 119 epochs (best 69), val_loss 0.3983, 69080/4715 frames train/val, sens@fpr0.5%=0.244
+[9/11] Luke - Various Opportunistic Recordings/2025-08-05/31: 78 epochs (best 28), val_loss 0.4505, 72853/942 frames train/val, sens@fpr0.5%=0.128
+[10/11] Luke - Various Opportunistic Recordings/2025-08-12/1_114: 180 epochs (best 130), val_loss 0.4546, 70027/3768 frames train/val, sens@fpr0.5%=0.166
+[11/11] Luke - Various Opportunistic Recordings/2025-08-27/48: 117 epochs (best 67), val_loss 0.4323, 72224/1571 frames train/val, sens@fpr0.5%=0.028
+
+[yamnet_medium_general_mixup02] sens@fpr0.5% per deployment: 0.192
+  mean over 11/11 held-out fold(s), each tuned to 0.5% FPR on its own audio (~22 negative frames set each threshold)
+  threshold: mean -0.536 — what each fold's own audio set, not one number to ship
+    JamesU - MustardBumbler/1_29: threshold -0.990, sensitivity 0.423 (~24 negative frames)
+    Lily - Fit+Fast/2023_R3_Marysville/53: threshold -0.992, sensitivity 0.359 (~18 negative frames)
+    Lily Adam - One Hive/recorders/willard/2024-08-07/1_11: threshold -1.170, sensitivity 0.151 (~22 negative frames)
+    Lily Adam - One Hive/recorders/wooster/2024-07-26/1_143: threshold -1.112, sensitivity 0.221 (~22 negative frames)
+    Luke - Diel Drivers/2026-04-08/1_150: threshold -1.306, sensitivity 0.034 (~24 negative frames)
+    Luke - Diel Drivers/2026-05-06/1_95: threshold 0.394, sensitivity 0.030 (~30 negative frames)
+    Luke - Various Opportunistic Recordings/2025-06-23/1_23: threshold -0.798, sensitivity 0.326 (~1 negative frames)
+    Luke - Various Opportunistic Recordings/2025-07-03/1_37: threshold -1.095, sensitivity 0.244 (~22 negative frames)
+    Luke - Various Opportunistic Recordings/2025-08-05/31: threshold 2.026, sensitivity 0.128 (~2 negative frames)
+    Luke - Various Opportunistic Recordings/2025-08-12/1_114: threshold -0.186, sensitivity 0.166 (~17 negative frames)
+    Luke - Various Opportunistic Recordings/2025-08-27/48: threshold -0.662, sensitivity 0.028 (~6 negative frames)
+  an oracle: each threshold is placed using that fold's labels, so read this as the ceiling on operator tuning
+  per-fold spread understates uncertainty about a new deployment (training pools overlap heavily)
+
+[shipped] yamnet_medium_general_mixup02: 67 fixed epochs on 322 fold(s), 73795 frames → /home/luke/projects/buzzdetect-training/.local/worktrees/embed-mixup/models/yamnet_medium_general_mixup02
+
