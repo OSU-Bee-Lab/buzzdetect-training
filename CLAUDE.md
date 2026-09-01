@@ -45,6 +45,30 @@ Environment: `conda run -n buzzdetect-train python <script>`.
 
 - `models/model_general_v3/` predates the CV rework and is kept only as an artifact.
 
+## Running long jobs
+
+- **Don't launch stage-2 extraction (`02_set/main.py`) through Claude Code's
+  `run_in_background`** — it gets SIGKILLed within ~15–60 s, no OOM, no
+  traceback (observed 3/3 on 2026-09-01; a stage-3 training run survived it once,
+  so the effect is at least workload-specific). Run it detached from the shell
+  instead and poll a log file:
+
+  ```
+  nohup env PYTHONUNBUFFERED=1 CUDA_VISIBLE_DEVICES="" BUZZDETECT_CHUNK_FRAMES=48 \
+    MALLOC_ARENA_MAX=2 \
+    /home/luke/anaconda3/envs/buzzdetect-train/bin/python -u \
+    02_set/main.py --set <set> --embedder <emb> --workers <n> --verbose \
+    > extract_<set>.log 2>&1 &
+  disown
+  ```
+
+  Direct env-python (not `conda run`) so there's no wrapper process. No
+  completion notification comes back — poll the log. Prefer the same pattern for
+  stage-3 training on this machine.
+- `--workers` only parallelises the framing+embedding phase. `extract_snips`
+  (reading source audio off the slow HDD) is always serial — a large set's snip
+  sync is a fixed up-front cost no worker count changes.
+
 ## Testing
 For testing code, debugging, etc., you may do the following:
 
