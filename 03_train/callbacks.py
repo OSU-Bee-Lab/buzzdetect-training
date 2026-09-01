@@ -28,7 +28,7 @@ class SensAtFPR(tf.keras.callbacks.Callback):
     separately would pair each activation with the wrong label.
 
     Writes `val_sens_fpr<target>` into `logs`, which puts it in History (and in
-    the per-epoch line at verbose=2). Keras runs callbacks in list order, so
+    the per-epoch output when --verbose is set). Keras runs callbacks in list order, so
     this must be listed before EarlyStopping for those keys to exist by the
     time anything downstream reads `logs`.
     """

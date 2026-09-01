@@ -262,7 +262,9 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         # from the median best epoch across the rotations.
         history = model.fit(
             data.train_tf, epochs=epochs_fixed, class_weight=data.weight_dict,
-            verbose=2 if verbose else 0,  # 2 = one line per epoch, no progress bar
+            # --verbose is for a human watching: 1 = live progress bar. Agents
+            # leave the flag off (0) so per-epoch lines don't fill their context.
+            verbose=1 if verbose else 0,
         )
         best_epoch = epochs_fixed - 1
         result = {
@@ -287,7 +289,9 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             validation_data=data.val_tf,
             callbacks=[sens_callback, callback],
             class_weight=data.weight_dict,
-            verbose=2 if verbose else 0,  # 2 = one line per epoch, no progress bar
+            # --verbose is for a human watching: 1 = live progress bar. Agents
+            # leave the flag off (0) so per-epoch lines don't fill their context.
+            verbose=1 if verbose else 0,
         )
 
         best_epoch = callback.best_epoch
