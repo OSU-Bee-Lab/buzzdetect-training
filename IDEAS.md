@@ -173,10 +173,17 @@ plus head, improve embedding quality with far less overfitting risk than full
 fine-tuning.
 
 **Caveats:** LoRA is a transformer technique; inserting it into YAMNet's conv
-layers is non-standard. Best first target is a transformer embedder. Note that
-straightforward backbone fine-tuning already failed badly on the old data
-(`yamnet-ft`, -8.3pp) — that verdict is from the bad-data era and may not hold,
-but the overfitting mechanism it described is plausible either way.
+layers is non-standard. Best first target is a transformer embedder.
+
+**Update (2026-09-01):** straightforward differential-rate fine-tuning of
+YAMNet layers 13-14 (`exp/trunk-ft`, `trunk-ft-1e5`) is **+0.046 vs a matched
+frozen control** under CV — the pre-rework `yamnet-ft` -8.3pp verdict inverted,
+like `temporal-context` did. So the "backbone fine-tuning overfits" premise no
+longer holds on the current set, and LoRA's motivation (fine-tune with less
+overfit risk) is weaker than it was — though a cleaner low-rank adapter could
+still beat plain FT. See `exp/trunk-ft` notes. Open follow-ups there: LR/patience
+sweep tuned for the batch-1024 regime, unfreezing more/fewer blocks, and
+augmentation on top of the fine-tune.
 
 ---
 
