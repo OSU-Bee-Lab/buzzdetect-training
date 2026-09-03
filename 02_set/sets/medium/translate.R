@@ -31,13 +31,29 @@ write.csv(
   row.names=F
 )
 
+translation_raw <- translation_blank %>% 
+  mutate(to=from)
+
+
+write.csv(
+  translation_raw,
+  file.path(dir_translations, 'raw.csv'),
+  row.names=F
+)
+
+
 translation_general <- translation_blank %>% 
   mutate(
     to = case_when(
       # Background sounds
-      from %in% c('ambient_wind') ~ 'ambient_background',
+      from %in% c('ambient_wind') ~ 'ambient_noise',
 
       str_detect(from, 'music') ~ 'ambient_music',
+
+      # this is somewhere between wind chimes and construction backup beeps...not really sure.
+      # Or maybe the high-pitch resonsance of machinery? It's close enough to windchimes I'm folding
+      # it into music
+      from == 'ambient_ringing' ~ 'ambient_music',
 
       from %in% c(
         'ambient_bang',
@@ -65,12 +81,13 @@ translation_general <- translation_blank %>%
       # Weird hums; mostly these appear to be from traffic road noise - not for anything that's hummy
       from %in% c('mech_hum', 'mech_hum_auto', 'ambient_hum_traffic', 'mech_hum_RECLASSIFY', 'mech_hum_traffic') ~ 'mech_hum',
 
-      # Loud droning power tools
-      from %in% c('mech_chainsaw', 'mech_weedwhacker', 'mech_lawnmower') ~ 'mech_tool',
+      # Loud droning power tools; mech_ac is an outlier that I don't love
+      from %in% c('mech_chainsaw', 'mech_weedwhacker', 'mech_lawnmower', 'mech_ac') ~ 'mech_tool',
 
       # TODO: double check if mech_drone == quad copter
       from == 'mech_drone' ~ 'ignore',
       from == 'unknown' ~ 'ignore',
+      from == 'mech_hum_construction' ~ 'ignore',
 
       T ~ from
     )
