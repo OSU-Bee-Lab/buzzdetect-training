@@ -281,7 +281,7 @@ conda run -n buzzdetect-train python 03_train/main.py \
 | `--name` | required | output directory under `models/` |
 | `--set` | `medium` | set to train on |
 | `--embedder` | `yamnet` | must already be extracted for this set |
-| `--translation` | `general` | CSV under `translations/` |
+| `--translation` | `general` | CSV under the set's `translations/`, falling back to the project-wide `translations/` |
 | `--epochs` | `400` | max epochs per fold model |
 | `--patience` | `50` | `EarlyStopping` patience (`min_delta` 0.002) |
 | `--stop-tol` | `0.01` | shipped-model epoch count: stop this fraction short of the consensus val_loss floor (larger = fewer epochs) |
@@ -292,8 +292,9 @@ conda run -n buzzdetect-train python 03_train/main.py \
 
 ### Translations
 
-`translations/<name>.csv` maps raw labels (`from`) to model classes (`to`). The
-classes are the sorted unique `to` values, minus the two keywords:
+`02_set/sets/<set>/translations/<name>.csv` maps raw labels (`from`) to model
+classes (`to`). The classes are the sorted unique `to` values, minus the two
+keywords:
 
 - `ignore` — the label produces no target. A frame labelled *only* with ignored
   labels is dropped.
@@ -304,20 +305,26 @@ classes are the sorted unique `to` values, minus the two keywords:
   epoch the run surveys the extracted labels, lists any with no row, and asks
   for confirmation. Non-interactive runs refuse unless given `-y`.
 
-`general.csv` is the working translation; `specific.csv` keeps finer classes;
-`binary.csv` is buzz vs. everything; `blank.csv` is a scaffold of every observed
-label with empty `to` values.
+`general.csv` is the working translation; `binary.csv` is buzz vs. everything;
+`blank.csv` is a scaffold of every observed label with empty `to` values.
+
+Translations belong to the set, and are written by the set's own `build.R` from
+exactly the labels that set's annotations carry — so every label in the set has a
+row, and no row exists for a label the set never sees. The mapping rules live in
+that `build.R`, not in the CSVs; hand-edits to the written files are overwritten.
 
 ```bash
-Rscript translations/build.R     # regenerates blank.csv and general.csv
+cd 02_set/sets/<set> && Rscript build.R   # rebuilds the set, translations included
 ```
 
-The rebuild is **additive**: it surveys every effort's raw labels, keeps every
-existing row as-is, and appends any label it hasn't seen before, printing what
-it added. It will never drop a curated row — a label can vanish from the current
-annotations while embeddings named after it are still on disk in some set.
-Retiring a mapping means editing the rules in `build.R` *and* deleting the stale
-row by hand.
+The rebuild is **wholesale**, not additive: a label the set no longer emits loses
+its row entirely, even if embeddings named after it are still on disk. Such a
+label then has no row at all, which the run reports before the first epoch.
+
+The project-wide `translations/` directory is the legacy layout, and is still
+used as a fallback by sets whose `build.R` predates the move — `lite` and `tiny`.
+`medium` owns the rules; `large` is the same set at a finer framehop and sources
+medium's build steps, so the two always agree.
 
 Any new label that no rule matches falls through to itself, i.e. becomes its own
 class. Check what the rebuild reports and add rules for anything that shouldn't
