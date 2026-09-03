@@ -47,6 +47,11 @@ data/
 audio/
 embeddings/
 
+# public-release bundles of annotation efforts — bulk copies distributed
+# outside git, gigabytes each
+01_annotate/*Public/
+01_annotate/*Public.zip
+
 # local execution scratch dirs
 .local*/
 02_set/sets/.archive
