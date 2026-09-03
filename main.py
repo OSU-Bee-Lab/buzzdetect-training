@@ -11,9 +11,11 @@ replaced; a CV run scores every held-out fold and writes folds_sx.csv itself.
 # shared lib that loads first wins abseil's weak synchronization symbols
 # process-wide. If libarrow wins, TF's in-graph FFT (ducc0) threadpool ends up
 # waiting on libarrow's incompatible semaphore impl and deadlocks — YAMNet
-# extraction freezes mid-run. Keep this import first, ahead of the stage
-# modules (which pull in pandas).
-import tensorflow  # noqa: F401  -- imported for load-order side effect only
+# extraction freezes mid-run. The import therefore has to happen before
+# load_stage() pulls in any stage module (all of which import pandas) — but it
+# does NOT need to be at module scope, so it lives at the top of main() instead.
+# That keeps `--help` and argparse errors instant (a cold `import tensorflow` is
+# tens of seconds) without weakening the ordering guarantee.
 
 import argparse
 import importlib.util
@@ -40,6 +42,8 @@ def main(modelname, setname, embeddername, name_translation, epochs_max, clear,
          aug_dirnames=None, verbose=False, n_workers=2, snip_workers=4, patience=50,
          overlap_event_prop=None, framehop_prop=None, assume_yes=False,
          stop_tol=0.01, skip_cv=False, surprisal=True):
+    import tensorflow  # noqa: F401  -- load-order side effect; see header comment
+
     model_dir = os.path.join(config.DIR_MODELS, modelname)
 
     if clear and os.path.exists(model_dir):
