@@ -22,7 +22,7 @@ from embedders.embedding import load_embedder
 from plot_history import plot_history, plot_sens_history
 from write_model_py import write_model_py
 
-from callbacks import SensAtFPR
+from callbacks import SensAtFPR, RestoreBestSens, _trailing_smoothed
 
 from sx import summarize_folds, format_sx_report, _fold_sens, FPR_TARGETS, FNAME_SX_SUMMARY
 from surprisal import write_fold_surprisal
@@ -223,33 +223,40 @@ def _collect_fold_results(dir_folds, folds_rotate):
     return summary_rows, predictions
 
 
-def _consensus_epoch(summary_rows, tol):
-    """Shipped-model epoch count, read off the pooled per-fold val_loss curves.
+def _consensus_epoch(summary_rows, tol, curve_key='val_sens_fpr0.005_curve'):
+    """Shipped-model epoch count, read off the pooled per-fold rotation curves.
 
-    Each rotation early-stops at its own val_loss argmin, but on a frozen-
-    embedding probe that basin is very flat — the per-fold argmins scatter by
-    100+ epochs and their median lurches with fold composition. Instead:
+    The shipped model has no held-out fold, so it can't early-stop — it trains a
+    fixed number of epochs, and this is where that number comes from. Each
+    rotation restores at its own argmax of a smoothed sens@FPR curve, but on a
+    frozen-embedding-ish probe that basin is flat and the per-fold argmins
+    scatter by 100+ epochs. Instead, pool the "best so far" traces:
 
-      1. extend every fold's curve to the longest length, holding its own min
-         past its natural end (EarlyStopping restores best weights, so the
-         effective loss is frozen there);
-      2. take the running min of each — the "best so far" trace;
-      3. min-max normalise each to [0, 1];
-      4. average them, weighted by validation-frame count — a 300-frame val
-         fold's curve is mostly noise and should not swing the result;
-      5. return the earliest epoch within `tol` of the averaged curve's floor.
+      1. extend every fold's curve to the longest length, holding its own best
+         value past its natural end (the rotation's weights are frozen there);
+      2. take the running best of each — running max for sens, running min for
+         a loss curve;
+      3. min-max normalise each to [0, 1] with 1 = best;
+      4. average, weighted by validation-frame count — a 300-frame val fold's
+         curve is mostly noise and shouldn't swing the result;
+      5. return the earliest epoch within `tol` of the averaged curve's best.
 
-    `tol` is a fraction of the averaged curve's own span (epoch-1 value down to
-    its floor): tol=0.01 means "all but the last 1% of the improvement the
-    consensus curve ever makes". It is the pooled-curve analogue of
-    EarlyStopping's min_delta — larger tol stops earlier. Tune it by eye
-    against the per-fold loss_curves.svg plots.
+    `curve_key` picks which per-fold trace to pool: the smoothed sens curve
+    (default, matches what the rotations restored on), or 'val_loss_curve' for
+    the pre-exp/restore-on-sens behaviour. sens curves are smoothed here the
+    same way RestoreBestSens smooths them (trailing window 5) before the running
+    max, so the consensus epoch is on the same footing as the per-fold picks.
 
-    Returns None if no fold carries a curve (an old run resumed from summaries
-    written before this field existed); the caller falls back to the median.
+    `tol` is a fraction of the averaged curve's own span: tol=0.01 means "all
+    but the last 1% of the improvement the consensus curve ever makes". Larger
+    tol stops earlier. Tune by eye against the per-fold *_curves.svg plots.
+
+    Returns None if no fold carries the curve (an old run resumed from summaries
+    written before this field existed); the caller falls back.
     """
-    curves = [(r['val_loss_curve'], r.get('frames_val', 1))
-              for r in summary_rows if r.get('val_loss_curve')]
+    is_loss = curve_key == 'val_loss_curve'
+    curves = [(r[curve_key], r.get('frames_val', 1))
+              for r in summary_rows if r.get(curve_key)]
     if not curves:
         return None
 
@@ -257,15 +264,28 @@ def _consensus_epoch(summary_rows, tol):
     stack, weights = [], []
     for curve, frames in curves:
         arr = np.asarray(curve, dtype=float)
-        arr = np.concatenate([arr, np.full(length - len(arr), arr.min())])
-        arr = np.minimum.accumulate(arr)
+        if not is_loss:
+            arr = _trailing_smoothed(arr, 5)
+            # a fold that never reached the FPR is all-NaN; its curve carries no
+            # information about when sens plateaus, so drop it
+            if np.isnan(arr).all():
+                continue
+            fill = np.nanmax(arr)
+        else:
+            fill = np.nanmin(arr)
+        arr = np.where(np.isnan(arr), fill, arr)
+        arr = np.concatenate([arr, np.full(length - len(arr), fill)])
+        arr = np.minimum.accumulate(arr) if is_loss else np.maximum.accumulate(arr)
         span = arr.max() - arr.min()
-        stack.append((arr - arr.min()) / span if span else np.zeros(length))
+        norm = (arr - arr.min()) / span if span else np.zeros(length)
+        stack.append(1 - norm if is_loss else norm)  # 1 = best in both cases
         weights.append(max(frames, 1))
 
+    if not stack:
+        return None
     mean = np.average(stack, axis=0, weights=weights)
-    threshold = mean.min() + tol * (mean.max() - mean.min())
-    return int(np.argmax(mean <= threshold)) + 1
+    threshold = mean.max() - tol * (mean.max() - mean.min())
+    return int(np.argmax(mean >= threshold)) + 1
 
 
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
@@ -323,21 +343,26 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             'frames_train': data.frames_train,
         }
     else:
+        # Stopping only — restore is RestoreBestSens's job now, so
+        # restore_best_weights is off here. See callbacks.py for why the split.
         callback = tf.keras.callbacks.EarlyStopping(
-            monitor='val_loss', patience=patience, min_delta=0.002, restore_best_weights=True,
+            monitor='val_loss', patience=patience, min_delta=0.002, restore_best_weights=False,
         )
-        # Reporting only, and listed first so its keys are in `logs` before
-        # EarlyStopping and History see them. Stopping still happens on
-        # val_loss; these curves are the evidence for whether it should.
+        # Listed first so its `logs` key exists before the callbacks that read
+        # it. Reporting only.
         sens_callback = SensAtFPR(
             *data.val_eval, data.classes.index('ins_buzz'), FPR_TARGETS,
             batch_size=data.size_batch,
         )
+        # Picks which epoch's weights ship: smoothed-sens argmax, val_loss argmin
+        # only as a fallback for a fold that never reaches the target FPR. Listed
+        # after EarlyStopping so its on_train_end restore runs after the stop.
+        restore_callback = RestoreBestSens(SensAtFPR.key(FPR_TARGETS[0]))
         history = model.fit(
             data.train_tf,
             epochs=epochs_max,
             validation_data=data.val_tf,
-            callbacks=[sens_callback, callback],
+            callbacks=[sens_callback, callback, restore_callback],
             class_weight=data.weight_dict,
             shuffle=False,  # _to_tf already shuffles; see the fixed-epochs fit above
             # --verbose is for a human watching: 1 = live progress bar. Agents
@@ -345,18 +370,26 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             verbose=1 if verbose else 0,
         )
 
-        best_epoch = callback.best_epoch
-        best_val_loss = float(callback.best)
+        val_loss_curve = [float(x) for x in history.history['val_loss']]
+        best_epoch = restore_callback.best_epoch      # smoothed-sens argmax (or fallback)
+        loss_argmin = int(np.argmin(val_loss_curve))  # what the old rule would have shipped
+        best_val_loss = val_loss_curve[loss_argmin]
         result = {
-            'n_epochs': len(history.history['val_loss']),
+            'n_epochs': len(val_loss_curve),
             'best_epoch': best_epoch + 1,
+            'restored_on': restore_callback.restored_on,
+            'loss_argmin_epoch': loss_argmin + 1,
             'best_val_loss': best_val_loss,
             'frames_train': data.frames_train,
             'frames_val': data.frames_val,
-            # The whole val_loss trace, not just its argmin: the shipped-model
-            # epoch count is read off the pooled curve (_consensus_epoch), and
-            # per-fold argmins are too jumpy in this flat basin to median.
-            'val_loss_curve': [float(x) for x in history.history['val_loss']],
+            # Both full traces. val_loss_curve feeds the shipped-model epoch
+            # count via _consensus_epoch (now in sens mode); the sens curve is
+            # both the consensus input and the gap diagnostic. Per-fold argmins
+            # are too jumpy in this flat basin to median.
+            'val_loss_curve': val_loss_curve,
+            'val_sens_fpr%g_curve' % FPR_TARGETS[0]: [
+                float(x) for x in history.history[SensAtFPR.key(FPR_TARGETS[0])]
+            ],
             **_sens_history_summary(history.history, best_epoch),
         }
 
@@ -569,18 +602,25 @@ def train_set(name, embeddername, setname, name_translation,
         sx.to_csv(os.path.join(dir_model_full, FNAME_SX_SUMMARY), index=False)
         print(format_sx_report(name, sx))
 
-    # Shipped model: trains on every fold except 'holdout'. No fold is held
-    # out, so there is nothing clean left to monitor — the epoch count is read
-    # off the pooled rotation val_loss curves (_consensus_epoch), falling back
-    # to the median per-fold best epoch. Only model saved with a binary.
+    # Shipped model: trains on every fold except 'holdout'. No fold is held out,
+    # so nothing to monitor — the epoch count is the consensus of the rotations'
+    # smoothed sens@FPR curves (matching what each rotation restored on), then
+    # the val_loss consensus, then the median per-fold best epoch. Only model
+    # saved with a binary.
+    sens_key = 'val_sens_fpr%g_curve' % FPR_TARGETS[0]
     epochs_fixed = epochs_max
     if summary_rows:
-        n_curves = sum(1 for r in summary_rows if r.get('val_loss_curve'))
-        epochs_fixed = _consensus_epoch(summary_rows, stop_tol)
+        n_curves = sum(1 for r in summary_rows if r.get(sens_key))
+        epochs_fixed = _consensus_epoch(summary_rows, stop_tol, curve_key=sens_key)
         if epochs_fixed is not None:
             print(f'[{name}] shipped epoch count {epochs_fixed} '
-                  f'(consensus val_loss curve over {n_curves}/{len(folds_rotate)} '
-                  f'rotate folds, stop_tol={stop_tol})')
+                  f'(consensus smoothed sens@fpr{FPR_TARGETS[0]:g} curve over '
+                  f'{n_curves}/{len(folds_rotate)} rotate folds, stop_tol={stop_tol})')
+        elif (epochs_fixed := _consensus_epoch(summary_rows, stop_tol,
+                                               curve_key='val_loss_curve')) is not None:
+            print(f'[{name}] shipped epoch count {epochs_fixed} '
+                  f'(no sens curves; fell back to val_loss consensus over '
+                  f'{len(folds_rotate)} rotate folds, stop_tol={stop_tol})')
         else:
             epochs_fixed = int(round(np.median([r['best_epoch'] for r in summary_rows])))
             print(f'[{name}] shipped epoch count {epochs_fixed} '
