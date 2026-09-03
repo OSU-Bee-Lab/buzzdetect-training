@@ -152,6 +152,7 @@ def get_ident_audio_path(ident):
 
 FNAME_SNIP_MANIFEST = 'manifest.json'
 FNAME_FINGERPRINT = 'annotations.fingerprint'
+FNAME_FRAMETIMES = 'frametimes.csv'
 
 
 def _fingerprint_annotations(annotations_sub: pd.DataFrame) -> str:
@@ -617,6 +618,14 @@ class WorkerExtract:
 
         for path_audio in paths_audio:
             process_extracted_audio(path_audio)
+        # Forward the durable frame-time map from the audio cache (see
+        # extract_ident_both). Absent for idents whose audio was cached before
+        # frametimes.csv existed; surprisal skips those with a warning.
+        path_frametimes = os.path.join(a_ident.dir_out_audio, FNAME_FRAMETIMES)
+        if os.path.exists(path_frametimes):
+            shutil.copyfile(
+                path_frametimes,
+                os.path.join(a_ident.dir_out_embeddings, FNAME_FRAMETIMES))
         if a_ident.fingerprint is not None:
             _write_fingerprint(a_ident.dir_out_embeddings, a_ident.fingerprint)
         return f'{len(paths_audio)} cached label file(s) → embeddings'
@@ -631,6 +640,12 @@ class WorkerExtract:
             )
 
         frames_by_label = {}
+        # Parallel to frames_by_label: the source-coordinate start time of every
+        # frame, in the same append order. Persisted as frametimes.csv so stage 3
+        # can map an embedding row back to a timestamp in the original audio
+        # (frame->time is otherwise unrecoverable -- the embedding pickles are
+        # keyed by collapsed label with no per-frame offset).
+        starts_by_label = {}
 
         for i, snip_path in enumerate(snip_paths):
             snip_start, _ = _parse_snip_bounds(snip_path)
@@ -720,6 +735,7 @@ class WorkerExtract:
                                 )
                             continue
                         frames_by_label.setdefault(labels_collapse, []).append(frame)
+                        starts_by_label.setdefault(labels_collapse, []).append(frame_range[0])
 
                 # Rescue annotations the frame grid missed. Frames are cut on a grid anchored
                 # at each chunk's start, and with framehop_prop=1 they do not overlap each
@@ -765,6 +781,7 @@ class WorkerExtract:
                         )
 
                     frames_by_label.setdefault(labels_collapse, []).append(audio_data)
+                    starts_by_label.setdefault(labels_collapse, []).append(frame_range[0])
                     frames_rel.append(frame_range_rel)
 
                     if self.verbose:
@@ -790,6 +807,22 @@ class WorkerExtract:
                     chunk = samples_flat[start: start + self.chunklength_samples]
                     for e in self.embedder.embed(chunk):
                         pickle.dump(e, file)
+
+        # frametimes.csv: one row per emitted frame -- (label, row, start) where
+        # `label` is the collapsed-label pickle stem, `row` is the frame's 0-based
+        # index within that pickle (embedding row i <-> frame i; the re-chunking
+        # above preserves order), and `start` is the frame start in source-file
+        # seconds. The only record tying an embedding row to a timestamp. Written
+        # to both layers like the fingerprint: the audio cache is the durable copy
+        # extract_ident_embeddings forwards when it rebuilds embeddings alone.
+        frametime_rows = [
+            (label, row, start)
+            for label, starts in starts_by_label.items()
+            for row, start in enumerate(starts)
+        ]
+        frametimes = pd.DataFrame(frametime_rows, columns=['label', 'row', 'start'])
+        frametimes.to_csv(os.path.join(a_ident.dir_out_audio, FNAME_FRAMETIMES), index=False)
+        frametimes.to_csv(os.path.join(a_ident.dir_out_embeddings, FNAME_FRAMETIMES), index=False)
 
         # Stamped last: a fingerprint means the directory's whole contents were built
         # from these annotations, so a crash mid-write must not leave one behind.

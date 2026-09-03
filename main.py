@@ -39,7 +39,7 @@ def load_stage(path, module_name):
 def main(modelname, setname, embeddername, name_translation, epochs_max, clear,
          aug_dirnames=None, verbose=False, n_workers=2, snip_workers=4, patience=50,
          overlap_event_prop=None, framehop_prop=None, assume_yes=False,
-         stop_tol=0.01, skip_cv=False):
+         stop_tol=0.01, skip_cv=False, surprisal=True):
     model_dir = os.path.join(config.DIR_MODELS, modelname)
 
     if clear and os.path.exists(model_dir):
@@ -73,6 +73,7 @@ def main(modelname, setname, embeddername, name_translation, epochs_max, clear,
         assume_yes=assume_yes,
         stop_tol=stop_tol,
         skip_cv=skip_cv,
+        surprisal=surprisal,
     )
 
 
@@ -110,6 +111,9 @@ if __name__ == '__main__':
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
     parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--no-surprisal', action='store_false', dest='surprisal',
+                        help='skip the per-frame surprisal CSVs under '
+                             '<model>/surprisal/ (written by default)')
     args = parser.parse_args()
 
     main(
@@ -126,6 +130,7 @@ if __name__ == '__main__':
         patience=args.patience,
         stop_tol=args.stop_tol,
         skip_cv=args.skip_cv,
+        surprisal=args.surprisal,
         overlap_event_prop=args.overlap_event_prop,
         framehop_prop=args.framehop_prop,
         assume_yes=args.assume_yes,

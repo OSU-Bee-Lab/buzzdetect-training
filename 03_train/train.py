@@ -25,6 +25,7 @@ from write_model_py import write_model_py
 from callbacks import SensAtFPR
 
 from sx import summarize_folds, format_sx_report, _fold_sens, FPR_TARGETS, FNAME_SX_SUMMARY
+from surprisal import write_fold_surprisal
 
 FNAME_PREDICTIONS = 'predictions.csv'
 FNAME_FOLD_SUMMARY = 'summary.json'
@@ -461,7 +462,7 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
 
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
-              assume_yes=False, stop_tol=0.01, skip_cv=False):
+              assume_yes=False, stop_tol=0.01, skip_cv=False, surprisal=True):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -530,6 +531,11 @@ def train_set(name, embeddername, setname, name_translation,
             dir_model, model, setname, embeddername, held_out,
             data.translation, data.classes,
         )
+        if surprisal:
+            write_fold_surprisal(
+                dir_model_full, model, setname, embeddername, held_out,
+                data.translation, data.classes,
+            )
         # Training-side facts only. The scores are not duplicated here: they
         # are recomputed from predictions.csv into folds_sx.csv, so a resumed
         # run and a fresh one cannot disagree about them.
@@ -616,3 +622,8 @@ def train_set(name, embeddername, setname, name_translation,
             print(f'[holdout] {fold}: no usable frames under this translation; not scored')
         else:
             print(f'[holdout] {fold}: {_format_sens(sens)}')
+        if surprisal:
+            write_fold_surprisal(
+                dir_model_full, model, setname, embeddername, fold,
+                data.translation, data.classes,
+            )

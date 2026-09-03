@@ -207,7 +207,10 @@ Extraction runs in three layers, each cached and each skippable on re-run:
    resampled for the embedder. Keyed by sample rate and frame length, so
    embedders sharing those share this cache too.
 3. **Embeddings** — `embeddings/<embedder>/raw/<fold>/<ident>/<labels>.pickle`.
-   One pickled embedding per frame.
+   One pickled embedding per frame. Each ident directory (layers 2 and 3) also
+   carries `frametimes.csv` — `label,row,start` — mapping every embedding row
+   back to its start in source-file seconds. It is the only record of that
+   mapping; stage 3's `surprisal/` output depends on it.
 
 Re-running skips any ident that already has both audio and embeddings; an ident
 with cached audio but no embeddings re-embeds without touching disk audio. The
@@ -374,6 +377,7 @@ models/<name>/
 │   ├── predictions.csv        every held-out frame's activation and label
 │   ├── summary.json           epochs, val_loss, frame counts, sens-monitor peaks
 │   ├── config_model.json, loss_curves.svg, sens_curves.svg
+├── surprisal/<ident>_surprisal.csv   per-frame label surprisal (see below)
 └── holdout/<fold>/            shipped model scored on each holdout fold
 ```
 
@@ -394,6 +398,25 @@ survived. `predictions.csv` is the source everything is derived from —
 `03_train/resummarize.py` rebuilds `folds_sx.csv` from it without TensorFlow,
 and a pooled ROC or a `metrics_at_precision` read is `read_fold_predictions()`
 plus `metrics_by_group()` away.
+
+**`surprisal/` finds bad annotations.** Written by default (one call per
+held-out fold, right after `predictions.csv`; `--no-surprisal` turns it off),
+one CSV per source-audio ident, mirroring the ident's path under `surprisal/`
+with `_surprisal.csv` appended to the leaf. Columns: `start` (seconds into the
+original audio file), `label` (one row per class the frame's annotation
+asserts, so a multi-label frame contributes several rows), `surprisal`
+(`-log(sigmoid(logit_label))` in nats — the negative log-likelihood the
+out-of-fold model assigns to the annotated class), and `top_class` (the model's
+argmax over all classes for that frame). A genuinely mislabelled annotation
+tends to score high *and* show a consistent `top_class` that disagrees with
+`label`; a hard-but-correct frame scores high with a diffuse or matching
+`top_class`. Aggregate `surprisal` however suits the review — mean per
+annotation, per label, per ident. Frame timestamps come from the
+`frametimes.csv` the extractor writes beside each ident's embedding pickles; a
+set extracted before that file existed has its idents skipped with a warning
+(re-extract to include them). The scoring model is each fold's own out-of-fold
+submodel during CV, or the shipped model for a holdout fold — it never trained
+on the frames it scores.
 
 `sens_curves.svg` plots sens@fpr0.005 on the held-out fold per epoch, with
 val_loss on a twin axis and a line at the epoch EarlyStopping restored to. It's

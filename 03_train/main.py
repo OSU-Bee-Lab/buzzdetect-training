@@ -37,6 +37,10 @@ if __name__ == '__main__':
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
     parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--no-surprisal', action='store_false', dest='surprisal',
+                        help='skip the per-frame surprisal CSVs under '
+                             '<model>/surprisal/ (written by default, one file '
+                             'per source ident, for finding bad annotations)')
     args = parser.parse_args()
 
     train_set(
@@ -51,4 +55,5 @@ if __name__ == '__main__':
         assume_yes=args.assume_yes,
         stop_tol=args.stop_tol,
         skip_cv=args.skip_cv,
+        surprisal=args.surprisal,
     )
