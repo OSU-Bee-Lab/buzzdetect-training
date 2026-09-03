@@ -123,13 +123,22 @@ def build_fold_dataset(dir_samples, translation, labels_keep_raw=None, exclusive
     # whether a fold with no usable frames is fatal for what it's doing.
     if len(samples_out) == 0 and dir_samples not in _warned_empty_dirs:
         _warned_empty_dirs.add(dir_samples)
+        labels_raw = sorted({l for s in samples for l in s.labels_raw})
+        translated = translate_labels(labels_raw, translation_dict)
+        deliberate = all(
+            isinstance(l, str) and l.strip().lower() in ('exclude', 'ignore')
+            for l in translated
+        )
         if not samples:
             warnings.warn(f'no embedding files under {dir_samples}')
-        else:
-            labels = sorted({l for s in samples for l in s.labels_raw})
+        elif not deliberate:
+            # A directory whose labels all translate to exclude/ignore is
+            # dropped by design — no warning. Warn only when the drop is
+            # unexplained (a label with no row, caught again by
+            # survey_untranslated at train time).
             warnings.warn(
                 f'all {len(samples)} embedding file(s) under {dir_samples} were '
-                f'dropped by the translation; raw label(s) present: {labels}'
+                f'dropped by the translation; raw label(s) present: {labels_raw}'
             )
     return samples_out
 
