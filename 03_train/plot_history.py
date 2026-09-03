@@ -1,3 +1,6 @@
+import math
+import warnings
+
 from matplotlib import pyplot as plt
 
 
@@ -11,7 +14,13 @@ def plot_history(history, modelname, best_epoch, path_out):
     # ~90% of the height here -- label_smoothing=0.2 keeps BCE well above 0, so
     # a [0, max] axis squashes every curve into a flat sliver at the top and
     # clips whichever series max() didn't see. Pad 5% of the spread each way.
-    series = list(train_losses) + list(val_losses or [])
+    series = [x for x in list(train_losses) + list(val_losses or []) if math.isfinite(x)]
+    if not series:
+        # A diverged run (NaN/Inf loss) has no plottable axis. Skip the figure
+        # rather than crash the whole CV loop on set_ylim; the caller still
+        # raises on the NaN itself.
+        warnings.warn(f'plot_history: {modelname} has no finite loss values; skipping loss_curves.svg')
+        return
     lo, hi = min(series), max(series)
     pad = (hi - lo) * 0.05 or 0.01
 

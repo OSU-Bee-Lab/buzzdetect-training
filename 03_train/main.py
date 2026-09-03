@@ -10,6 +10,13 @@ import argparse
 import os
 import sys
 
+# tensorflow-metal (Apple GPU) produces non-finite training loss within a few
+# epochs on this data; CPU does not, and is ~GPU speed for the 1024-d probe.
+# CUDA_VISIBLE_DEVICES does not touch the Metal pluggable device, so hide the
+# GPU explicitly. Opt-in via BUZZDETECT_NO_GPU=1.
+if os.environ.get('BUZZDETECT_NO_GPU'):
+    tensorflow.config.set_visible_devices([], 'GPU')
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 

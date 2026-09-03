@@ -1,5 +1,6 @@
 # TensorFlow imported first — see 03_train/main.py for rationale.
 import json
+import math
 import os
 import pickle
 import re
@@ -309,6 +310,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         # from the median best epoch across the rotations.
         history = model.fit(
             data.train_tf, epochs=epochs_fixed, class_weight=data.weight_dict,
+            callbacks=[tf.keras.callbacks.TerminateOnNaN()],
             # _to_tf already applies .shuffle(); say so, or Keras warns that it's
             # ignoring shuffle=True on a Dataset input every run.
             shuffle=False,
@@ -337,7 +339,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             data.train_tf,
             epochs=epochs_max,
             validation_data=data.val_tf,
-            callbacks=[sens_callback, callback],
+            callbacks=[sens_callback, callback, tf.keras.callbacks.TerminateOnNaN()],
             class_weight=data.weight_dict,
             shuffle=False,  # _to_tf already shuffles; see the fixed-epochs fit above
             # --verbose is for a human watching: 1 = live progress bar. Agents
@@ -359,6 +361,17 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             'val_loss_curve': [float(x) for x in history.history['val_loss']],
             **_sens_history_summary(history.history, best_epoch),
         }
+
+    if any(not math.isfinite(x) for x in history.history['loss']):
+        raise RuntimeError(
+            f'[{modelname}] training loss went non-finite (NaN/Inf) at epoch '
+            f'{next(i for i, x in enumerate(history.history["loss"], 1) if not math.isfinite(x))}. '
+            f'The tensorflow-metal (Apple GPU) backend produces this within a few '
+            f'epochs on this data; CPU does not. Re-run with BUZZDETECT_NO_GPU=1 '
+            f'(CUDA_VISIBLE_DEVICES does not affect the Metal device). CPU is ~GPU '
+            f'speed for the 1024-d probe. Completed rotations are kept and skipped '
+            f'on the re-run.'
+        )
 
     if save_binary:
         model.save(os.path.join(dir_model, 'model.keras'), include_optimizer=True)

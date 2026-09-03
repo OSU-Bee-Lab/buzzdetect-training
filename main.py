@@ -44,6 +44,13 @@ def main(modelname, setname, embeddername, name_translation, epochs_max, clear,
          stop_tol=0.01, skip_cv=False, surprisal=True):
     import tensorflow  # noqa: F401  -- load-order side effect; see header comment
 
+    # tensorflow-metal (Apple GPU) produces non-finite training loss within a
+    # few epochs on this data; CPU does not, and is ~GPU speed for the 1024-d
+    # probe. CUDA_VISIBLE_DEVICES does not touch the Metal pluggable device, so
+    # hide the GPU explicitly. Opt-in via BUZZDETECT_NO_GPU=1.
+    if os.environ.get('BUZZDETECT_NO_GPU'):
+        tensorflow.config.set_visible_devices([], 'GPU')
+
     model_dir = os.path.join(config.DIR_MODELS, modelname)
 
     if clear and os.path.exists(model_dir):
