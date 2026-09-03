@@ -69,14 +69,26 @@ translate_annotation <- function(path_in){
 
 annotations_combined <- paths_annotations %>% 
   lapply(translate_annotation) %>% 
-  bind_rows() %>% 
+  bind_rows()
+
+
+
+annotations_combined <- annotations_combined %>% 
   mutate(
     label = str_trim(label),
+
+    # for now, let's just ignore the volume tags
+    label = str_remove(label, '_faint$'),
+    label = str_remove(label, '_quiet$'),
+
     label = case_when(
       str_detect(label, 'ins_buzz_pollination') ~ 'ins_buzz_pollination',
       str_detect(label, 'ins_buzz_medium') ~ 'ins_buzz_medium',
       str_detect(label, 'ins_buzz_high') ~ 'ins_buzz_high',
       str_detect(label, 'ins_buzz_low') ~ 'ins_buzz_low',
+
+      # remove, e.g., 'ambient_music_windchime'
+      str_detect(label, 'ambient_music') ~ 'ambient_music',
 
       str_detect(label, 'ins_trill') ~ 'ins_trill',
 
@@ -84,6 +96,10 @@ annotations_combined <- paths_annotations %>%
       label == 'mech_farm' ~ '',
       label == 'happy 4th :)' ~ '', # :)
       label == 'unknown_rasp' ~ '',
+
+      #  ??
+      label == 'mech_hum_contruction' ~ '',
+      label == 'unknown' ~ '',
 
       T ~ label
     )
@@ -101,11 +117,23 @@ write.csv(
 
 # Assign folds ----
 #
+annotation_counts <- paths_annotations %>% 
+  stringr::str_remove_all('_s\\d+\\.txt$') %>% 
+  data.frame(ident=.) %>% 
+  group_by(ident) %>% 
+  summarize(snips_annotated=n())
+
 folds <- annotations_combined %>% 
   mutate(fold = dirname(ident)) %>% 
   select(ident, fold) %>% 
   unique() %>% 
-  mutate(role='rotate')
+  left_join(annotation_counts) %>% 
+  mutate(
+    role = case_when(
+      snips_annotated == 24 ~ 'rotate',
+      T ~ 'train'
+    )
+  )
 
 write.csv(
   folds,
