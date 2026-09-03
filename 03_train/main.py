@@ -24,6 +24,15 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=400)
     parser.add_argument('--patience', type=int, default=50,
                         help='EarlyStopping patience for the per-fold submodels')
+    parser.add_argument('--stop-tol', type=float, default=0.01, dest='stop_tol',
+                        help='shipped-model epoch count: fraction of the consensus '
+                             'val_loss curve span to stop short of its floor '
+                             '(default 0.01). Larger = fewer epochs. See '
+                             'train._consensus_epoch.')
+    parser.add_argument('--skip-cv', action='store_true', dest='skip_cv',
+                        help='train no rotations; go straight to the shipped model, '
+                             'taking its epoch count from the fold results already '
+                             'on disk. Errors if there are none.')
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
@@ -40,4 +49,6 @@ if __name__ == '__main__':
         verbose=args.verbose,
         patience=args.patience,
         assume_yes=args.assume_yes,
+        stop_tol=args.stop_tol,
+        skip_cv=args.skip_cv,
     )

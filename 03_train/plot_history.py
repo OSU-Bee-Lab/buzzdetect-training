@@ -1,5 +1,3 @@
-import os
-
 from matplotlib import pyplot as plt
 
 
@@ -8,27 +6,32 @@ def plot_history(history, modelname, best_epoch, path_out):
     # monitor, so it has no val_loss to plot
     val_losses = history.history.get('val_loss')
     train_losses = history.history['loss']
-    loss_max = max(val_losses if val_losses is not None else train_losses)
 
-    plt.plot()
-    ax = plt.gca()
-    ax.set_ylim([0, loss_max])
-    plt.title(f'training loss curves for model {modelname}')
-    plt.ylabel('loss')
-    plt.xlabel('epoch')
-    plt.plot(train_losses)
-    legend = ['training']
+    # Fit the y-axis to the data, both series together. Anchoring at 0 wastes
+    # ~90% of the height here -- label_smoothing=0.2 keeps BCE well above 0, so
+    # a [0, max] axis squashes every curve into a flat sliver at the top and
+    # clips whichever series max() didn't see. Pad 5% of the spread each way.
+    series = list(train_losses) + list(val_losses or [])
+    lo, hi = min(series), max(series)
+    pad = (hi - lo) * 0.05 or 0.01
+
+    fig, ax = plt.subplots()
+    ax.set_ylim([lo - pad, hi + pad])
+    ax.set_title(f'training loss curves for model {modelname}')
+    ax.set_ylabel('loss')
+    ax.set_xlabel('epoch')
+    ax.plot(train_losses, label='training')
     if val_losses is not None:
-        plt.plot(val_losses)
-        legend.append('validation')
-        plt.annotate(f'stopped at epoch {best_epoch} with val_loss: {round(val_losses[best_epoch], 3)}', (0, 0.05))
+        ax.plot(val_losses, label='validation')
+        note = f'stopped at epoch {best_epoch} with val_loss: {round(val_losses[best_epoch], 3)}'
     else:
-        plt.annotate(f'trained {best_epoch + 1} fixed epochs (median across folds)', (0, 0.05))
-    plt.legend(legend, loc='upper left')
-    plt.vlines(x=best_epoch, ymin=0, ymax=loss_max)
+        note = f'trained {best_epoch + 1} fixed epochs (consensus across folds)'
+    ax.axvline(x=best_epoch, color='k', linewidth=1)
+    ax.annotate(note, (0.02, 0.02), xycoords='axes fraction')
+    ax.legend(loc='upper left')
 
-    plt.savefig(path_out)
-    plt.close()
+    fig.savefig(path_out)
+    plt.close(fig)
 
 
 def plot_sens_history(history, modelname, best_epoch, fprs, key, path_out):
@@ -57,7 +60,10 @@ def plot_sens_history(history, modelname, best_epoch, fprs, key, path_out):
         ax_loss = ax.twinx()
         ax_loss.plot(val_losses, color='0.6', linestyle=':', label='val_loss')
         ax_loss.set_ylabel('val_loss')
-        ax_loss.set_ylim([0, max(val_losses)])
+        # fit to the data, not [0, max] -- see plot_history
+        lo, hi = min(val_losses), max(val_losses)
+        pad = (hi - lo) * 0.05 or 0.01
+        ax_loss.set_ylim([lo - pad, hi + pad])
         ax_loss.legend(loc='lower right')
 
     # where EarlyStopping actually restored to, for comparison against the peaks

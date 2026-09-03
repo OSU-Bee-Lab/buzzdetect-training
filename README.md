@@ -270,7 +270,7 @@ default.
 ```bash
 conda run -n buzzdetect-train python 03_train/main.py \
   --name <name> --set <set> --embedder <emb> --translation <t> \
-  [--epochs 400] [--patience 50] [--augment <aug_dir> ...] [-y] [--verbose]
+  [--epochs 400] [--patience 50] [--stop-tol 0.01] [--skip-cv] [--augment <aug_dir> ...] [-y] [--verbose]
 ```
 
 | flag | default | meaning |
@@ -281,6 +281,8 @@ conda run -n buzzdetect-train python 03_train/main.py \
 | `--translation` | `general` | CSV under `translations/` |
 | `--epochs` | `400` | max epochs per fold model |
 | `--patience` | `50` | `EarlyStopping` patience (`min_delta` 0.002) |
+| `--stop-tol` | `0.01` | shipped-model epoch count: stop this fraction short of the consensus val_loss floor (larger = fewer epochs) |
+| `--skip-cv` | — | train no rotations; build only the shipped model, epoch count from the fold results already on disk |
 | `--augment` | — | augmentation subdirectory names to include |
 | `-y` / `--yes` | — | accept untranslated labels without prompting |
 | `--verbose` | — | per-epoch output and per-fold detail |
@@ -330,9 +332,22 @@ plus all `train` folds, early-stop on the held-out fold, then score it. Fold
 model binaries are not kept — only their scores and training artifacts.
 
 Then the **shipped model** trains on `rotate` + `train` pooled. Nothing is held
-out, so there's nothing clean to monitor: it runs for a fixed
-`median(best_epoch)` across the rotations. It's the only model saved with a
-binary, and it gets scored on each `holdout` fold.
+out, so there's nothing clean to monitor: it runs for a fixed epoch count read
+off the rotations' pooled `val_loss` curves (`train._consensus_epoch`) — each
+fold's "best so far" trace, min-max normalised, averaged with weight by
+validation-frame count, stopped `--stop-tol` short of the averaged floor. On a
+frozen-embedding probe the per-fold `val_loss` argmins scatter by 100+ epochs
+in a flat basin, so their `median` lurches with fold composition; the pooled
+curve is steadier. Falls back to `median(best_epoch)` for a model resumed from
+summaries written before the curves were stored. It's the only model saved with
+a binary, and it gets scored on each `holdout` fold.
+
+The CV loop resumes — folds with a `config_model.json` are skipped — so a
+re-run after an interruption only trains what's missing, then the shipped
+model. `--skip-cv` goes further: it trains *no* rotations and builds only the
+shipped model, taking the epoch count from whatever fold results are already on
+disk (`folds_sx.csv` is then a partial CV). Use it to get a deployable model
+out of a CV you don't intend to finish; it errors if no fold has run yet.
 
 Class weights are inverse-frequency over the training pool. Loss is
 `BinaryCrossentropy(from_logits=True, label_smoothing=0.2)`; the architecture is
@@ -580,8 +595,14 @@ quoted number never saw the fold it's scored on. The probe is small enough
 
 Empirically this is close to moot — the loss curves are flat. On
 `yamnet_medium_v2`, every held-out fold plateaus and none turn back up, with a
-constant train/val gap of ~0.055. Early stopping is barely doing anything, which
-is also why the shipped model's fixed epoch count is safe.
+constant train/val gap of ~0.055. Early stopping is barely doing anything.
+
+That same flatness is why the shipped model's epoch count is taken from the
+*pooled* rotation curves rather than `median(best_epoch)`: in a basin this flat
+the per-fold argmins are almost arbitrary (on medium they span 27–153), and
+their median swings with which folds are in the pool, while the averaged curve
+elbows in a stable place. `--stop-tol` sets how far short of that elbow to stop;
+tune it against the per-fold `loss_curves.svg`.
 
 ---
 
