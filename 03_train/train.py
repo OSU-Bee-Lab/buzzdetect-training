@@ -93,7 +93,7 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
 
     Augmented embeddings go to training only.
     """
-    translation = pd.read_csv(os.path.join(cfg.DIR_TRANSLATIONS, name_translation + '.csv'))
+    translation = pd.read_csv(cfg.path_translation(setname, name_translation))
     classes = build_classes(translation)
 
     data_train = []
@@ -434,14 +434,15 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
     the frames simply never contribute — so this is a gate before the first
     epoch rather than a warning after the fact. Returns True to proceed.
     """
-    translation = pd.read_csv(os.path.join(cfg.DIR_TRANSLATIONS, name_translation + '.csv'))
+    translation = pd.read_csv(cfg.path_translation(setname, name_translation))
     unknown = survey_untranslated(setname, embeddername, folds, translation)
     if not unknown:
         return True
 
     n_files = sum(unknown.values())
+    path = os.path.relpath(cfg.path_translation(setname, name_translation), cfg.ROOT)
     print(f'\n{len(unknown)} raw label(s) across {n_files} embedding file(s) have no '
-          f'row in translations/{name_translation}.csv:')
+          f'row in {path}:')
     for label, n in unknown.items():
         print(f'    {label}  ({n} file(s))')
     print('  Frames carrying only these labels will not train. Add a "from" row '
