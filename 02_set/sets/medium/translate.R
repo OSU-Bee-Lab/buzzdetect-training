@@ -32,7 +32,12 @@ write.csv(
 )
 
 translation_raw <- translation_blank %>% 
-  mutate(to=from)
+  mutate(
+    to = case_when(
+      str_detect(from, 'buzz') ~ 'ins_buzz',
+      T ~ 'nonbuzz'
+    )
+  )
 
 
 write.csv(
