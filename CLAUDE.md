@@ -47,24 +47,54 @@ Environment: `conda run -n buzzdetect-train python <script>`.
 
 ## Running long jobs
 
-- **Don't launch stage-2 extraction (`02_set/main.py`) through Claude Code's
-  `run_in_background`** — it gets SIGKILLed within ~15–60 s, no OOM, no
-  traceback (observed 3/3 on 2026-09-01; a stage-3 training run survived it once,
-  so the effect is at least workload-specific). Run it detached from the shell
-  instead and poll a log file:
+Stage 2 (`02_set/main.py`) and stage 3 (`03_train/main.py`) both run far longer
+than a foreground command should block, and **Claude Code's `run_in_background`
+does not work for either of them.** This has cost every LOOP agent a rediscovery
+— follow the recipe below and don't re-derive it.
 
-  ```
-  nohup env PYTHONUNBUFFERED=1 CUDA_VISIBLE_DEVICES="" BUZZDETECT_CHUNK_FRAMES=48 \
-    MALLOC_ARENA_MAX=2 \
-    /home/luke/anaconda3/envs/buzzdetect-train/bin/python -u \
-    02_set/main.py --set <set> --embedder <emb> --workers <n> --verbose \
-    > extract_<set>.log 2>&1 &
-  disown
-  ```
+- A `run_in_background` job running the pipeline itself gets **SIGKILLed** within
+  ~15–60 s — no OOM, no traceback (stage 2: observed ~4/4 across 2026-09-01/02;
+  stage 3 survived it once, not reliably).
+- A `run_in_background` job that only *waits* on a detached run (an
+  `until grep …; do sleep …; done` loop) is **also killed**, within a minute or
+  two (observed 2026-09-02).
+- A leading `sleep` in a Bash call is blocked by the harness outright.
 
-  Direct env-python (not `conda run`) so there's no wrapper process. No
-  completion notification comes back — poll the log. Prefer the same pattern for
-  stage-3 training on this machine.
+### What works
+
+**1. Launch the job itself detached from the shell** — direct env-python (no
+`conda run` wrapper process), unbuffered, logging to a file in the worktree:
+
+```
+nohup env PYTHONUNBUFFERED=1 CUDA_VISIBLE_DEVICES="" MALLOC_ARENA_MAX=2 \
+  BUZZDETECT_CHUNK_FRAMES=48 \
+  /home/luke/anaconda3/envs/buzzdetect-train/bin/python -u \
+  02_set/main.py --set <set> --embedder <emb> --workers <n> --verbose \
+  > extract_<set>.log 2>&1 &
+disown
+```
+
+For stage 3 drop `BUZZDETECT_CHUNK_FRAMES`; keep `CUDA_VISIBLE_DEVICES=""` (the
+12288-d trunk embedders OOM the 4 GB GPU, and CPU ≈ GPU on this box for the
+1024-d probe anyway).
+
+**2. Await completion with a `Monitor` until-loop** — not `run_in_background`.
+Exit on a completion marker *or* on the process disappearing, and print the
+outcome so a crash isn't silent:
+
+```
+Monitor, timeout_ms 3600000:
+  until <done?> || ! pgrep -f "<job pattern>" >/dev/null; do sleep 60; done
+  <then echo COMPLETE + the result, or echo DIED + tail the log>
+```
+
+Completion markers:
+- **stage 2** — the line `all extractions complete` in `extract_<set>.log`
+- **stage 3** — the file `models/<name>/folds_sx.csv` appears
+
+An 11-fold CPU CV can exceed the 1 h Monitor cap — just re-arm if it times out.
+A single `tail`/`ls` poll between turns is fine; a Bash sleep-loop is not.
+
 - `--workers` only parallelises the framing+embedding phase. `extract_snips`
   (reading source audio off the slow HDD) is always serial — a large set's snip
   sync is a fixed up-front cost no worker count changes.

@@ -174,23 +174,25 @@ full CV.
 From the worktree, using the path `setup_worktree.sh` printed:
 
 ```bash
-WT=/Users/luke/Documents/bioacoustics/buzzdetect-training/.local/worktrees/<slug>
+WT=/home/luke/projects/buzzdetect-training/.local/worktrees/<slug>
 cd $WT
 
 # Stage 2 — only if the embedder or extraction changed
-conda run -n buzzdetect-train python 02_set/main.py --set medium --embedder yamnet --workers 2
-
 # Stage 3 — the whole CV: one model per rotating fold, then the shipped model
-conda run -n buzzdetect-train python 03_train/main.py \
-  --name <modelname> --set medium --embedder yamnet --translation general -y
+#   02_set/main.py  --set medium --embedder yamnet --workers 2 --verbose
+#   03_train/main.py --name <modelname> --set medium --embedder yamnet --translation general -y
+# Launch each DETACHED, not in the foreground and not via run_in_background —
+# see "Running long jobs" in CLAUDE.md for the exact nohup + Monitor recipe.
 ```
 
-Both stages run far longer than a foreground command should block for. Launch
-each with `run_in_background: true` and then stop — do not sleep-loop, do not
-`cat` the task's output file, do not spin up a `Monitor`. A backgrounded
-command already delivers a completion notification on its own; that
-notification *is* the wait. `Monitor` is for streaming an ongoing process's
-events, not for a one-shot "tell me when this exits."
+Both stages run far longer than a foreground command should block for, and
+Claude Code's `run_in_background` gets SIGKILLed running them (and also killed
+*waiting* on them). **See "Running long jobs" in `CLAUDE.md` for the pattern that
+works** — launch the job detached with `nohup … & disown` (direct env-python,
+not `conda run`), then await it with a `Monitor` until-loop keyed on the
+completion marker (stage 2: `all extractions complete` in the log; stage 3:
+`models/<name>/folds_sx.csv` appears). Do not sleep-loop in Bash and do not
+repeatedly `cat` a running log.
 
 There is no `--runs` and no stage 4. One training call *is* the experiment: it
 trains one model per rotating fold and the shipped model, and prints the pooled
