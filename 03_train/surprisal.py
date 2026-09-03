@@ -1,24 +1,35 @@
-"""Per-frame surprisal over held-out folds, for finding bad annotations.
+"""Per-frame class activations and loss over held-out folds, for finding bad
+annotations and hard negatives.
 
-For every held-out frame this records -log(sigmoid(logit_k)) for each class k
-the frame's annotation actually asserts -- the negative log-likelihood the
-model assigns to the annotated label. A genuinely mislabelled annotation should
-sit near the top: the model, trained on the other folds, disagrees with the
-label. Genuinely hard-but-correct cases (faint buzzes, rare classes) also score
-high, so `top_class` -- the model's argmax for the frame -- is written
-alongside as a first cut at "and here is what it thinks it should be".
+For every held-out frame this records the model's sigmoid activation for each
+class and the multi-label loss of the frame against its annotation. The model
+was trained on the other folds, so a frame where it confidently disagrees with
+the label -- in either direction -- is a candidate mislabel or a hard case:
+
+    - high activation on a class the frame does not assert -> a missing
+      annotation, or a hard negative the model wants to call positive
+    - low activation on a class the frame does assert -> a faint/hard positive,
+      or an annotation span drawn wider than the sound it covers
+
+`loss` is the mean over all classes of the per-class binary cross-entropy
+against hard 0/1 targets (not the label-smoothed targets training uses -- this
+is a labeling audit, so it scores disagreement with the annotation as written).
+Multi-label frames fall out for free: every asserted class contributes a y=1
+term and every other class a y=0 term. Sort by `loss` to rank frames; read the
+`activation_*` columns to see which class drove it and which way.
 
 Written during training, one call per held-out fold right after
 predictions.csv, and on by default: train_set(..., surprisal=False) or
 --no-surprisal turns it off.
 
 Output: <model>/surprisal/<ident>_surprisal.csv, one file per source-audio
-ident, columns:
-    start       frame start, seconds into the original audio file
-    label       the annotated class this row scores (one row per class the
-                frame asserts, so a multi-label frame contributes several rows)
-    surprisal   -log(sigmoid(logit_label)), nats
-    top_class   argmax class over all logits for this frame
+ident, one row per held-out frame, ordered by `start`:
+    start               frame start, seconds into the original audio file
+    label               the classes the frame asserts, ';'-joined
+    activation_<class>  sigmoid activation, one column per class (the class set
+                        varies between models, so the columns are built from
+                        the model's own class list)
+    loss                mean per-class BCE of the frame against its annotation
 
 Frame -> timestamp comes from the frametimes.csv the extractor writes beside
 each ident's embedding pickles (02_set/extract.py). A set extracted before that
@@ -54,8 +65,8 @@ def _frametimes_by_stem(dir_pickle):
 
 def write_fold_surprisal(dir_model_full, model, setname, embeddername, fold,
                          translation, classes):
-    """Score `fold` with `model` and write its per-ident surprisal CSVs under
-    <dir_model_full>/surprisal/. Returns the number of idents written.
+    """Score `fold` with `model` and write its per-ident activation/loss CSVs
+    under <dir_model_full>/surprisal/. Returns the number of idents written.
 
     `model` is the fold's own out-of-fold submodel during CV, or the shipped
     model for a holdout fold -- either way it never trained on `fold`.
@@ -65,7 +76,7 @@ def write_fold_surprisal(dir_model_full, model, setname, embeddername, fold,
     if not samples:
         return 0
 
-    classes_arr = np.asarray(classes)
+    act_cols = [f'activation_{c}' for c in classes]
     rows_by_ident = {}
     idents_no_frametimes = set()
 
@@ -82,17 +93,21 @@ def write_fold_surprisal(dir_model_full, model, setname, embeddername, fold,
 
         logits = model(np.asarray(s.embeddings, dtype=np.float32), training=False).numpy()
         probs = 1.0 / (1.0 + np.exp(-logits))
-        top_class = classes_arr[logits.argmax(axis=1)]
+        probs_c = np.clip(probs, 1e-12, 1.0 - 1e-12)
 
-        for j in [k for k in range(len(classes)) if s.target_array[k]]:
-            d = -np.log(np.clip(probs[:, j], 1e-12, None))
-            for i in range(s.frames):
-                rows_by_ident.setdefault(ident, []).append(
-                    (float(starts[i]), classes[j], float(d[i]), str(top_class[i]))
-                )
+        target = np.asarray(s.target_array, dtype=np.float64)
+        bce = -(target * np.log(probs_c) + (1.0 - target) * np.log(1.0 - probs_c))
+        loss = bce.mean(axis=1)
+
+        label = ';'.join(classes[k] for k in range(len(classes)) if s.target_array[k])
+
+        for i in range(s.frames):
+            rows_by_ident.setdefault(ident, []).append(
+                (float(starts[i]), label, *probs[i].tolist(), float(loss[i]))
+            )
 
     for ident, rows in rows_by_ident.items():
-        df = pd.DataFrame(rows, columns=['start', 'label', 'surprisal', 'top_class'])
+        df = pd.DataFrame(rows, columns=['start', 'label', *act_cols, 'loss'])
         df = df.sort_values(['start', 'label']).reset_index(drop=True)
         path_out = os.path.join(dir_model_full, SUBDIR_SURPRISAL, ident + '_surprisal.csv')
         os.makedirs(os.path.dirname(path_out), exist_ok=True)

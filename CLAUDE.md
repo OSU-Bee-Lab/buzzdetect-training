@@ -36,7 +36,7 @@ Environment: `conda run -n buzzdetect-train python <script>`.
 - Fold roles, CV loop, shipped-model epoch count — `03_train/train.py`, `03_train/dataset.py`
 - Three-layer extraction (snips → framed-audio cache → embeddings), worker fan-out — `02_set/extract.py`
 - Frame → source-timestamp map (`frametimes.csv`, written per ident in layers 2+3; embedding row i ↔ frame i) — `02_set/extract.py::extract_ident_both`
-- Per-frame label surprisal `<model>/surprisal/<ident>_surprisal.csv` for finding bad annotations, on by default (`--no-surprisal`) — `03_train/surprisal.py`
+- Per-frame class activations + multi-label loss `<model>/surprisal/<ident>_surprisal.csv` for finding bad annotations and hard negatives, on by default (`--no-surprisal`) — `03_train/surprisal.py`
 - Embedder interface — `embedders/embedding.py`; model loader — `models/models.py`
 - Threshold sweeps (`metrics_by_group`, `metrics_at_fpr`, `metrics_at_precision`) — `03_train/metrics.py`
 - What the headline sens@FPR number means, and the two readings deliberately not reported — `03_train/sx.py`; its module docstring is the argument, README's "Reading the results" is the operator-facing version. `03_train/resummarize.py` rebuilds `folds_sx.csv` for an already-trained model, no TensorFlow

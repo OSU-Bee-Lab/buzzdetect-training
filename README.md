@@ -384,7 +384,7 @@ models/<name>/
 │   ├── predictions.csv        every held-out frame's activation and label
 │   ├── summary.json           epochs, val_loss, frame counts, sens-monitor peaks
 │   ├── config_model.json, loss_curves.svg, sens_curves.svg
-├── surprisal/<ident>_surprisal.csv   per-frame label surprisal (see below)
+├── surprisal/<ident>_surprisal.csv   per-frame class activations + loss (see below)
 └── holdout/<fold>/            shipped model scored on each holdout fold
 ```
 
@@ -406,19 +406,23 @@ survived. `predictions.csv` is the source everything is derived from —
 and a pooled ROC or a `metrics_at_precision` read is `read_fold_predictions()`
 plus `metrics_by_group()` away.
 
-**`surprisal/` finds bad annotations.** Written by default (one call per
-held-out fold, right after `predictions.csv`; `--no-surprisal` turns it off),
-one CSV per source-audio ident, mirroring the ident's path under `surprisal/`
-with `_surprisal.csv` appended to the leaf. Columns: `start` (seconds into the
-original audio file), `label` (one row per class the frame's annotation
-asserts, so a multi-label frame contributes several rows), `surprisal`
-(`-log(sigmoid(logit_label))` in nats — the negative log-likelihood the
-out-of-fold model assigns to the annotated class), and `top_class` (the model's
-argmax over all classes for that frame). A genuinely mislabelled annotation
-tends to score high *and* show a consistent `top_class` that disagrees with
-`label`; a hard-but-correct frame scores high with a diffuse or matching
-`top_class`. Aggregate `surprisal` however suits the review — mean per
-annotation, per label, per ident. Frame timestamps come from the
+**`surprisal/` finds bad annotations and hard negatives.** Written by default
+(one call per held-out fold, right after `predictions.csv`; `--no-surprisal`
+turns it off), one CSV per source-audio ident, mirroring the ident's path under
+`surprisal/` with `_surprisal.csv` appended to the leaf. One row per held-out
+frame, ordered by `start`. Columns: `start` (seconds into the original audio
+file), `label` (the classes the frame's annotation asserts, `;`-joined),
+`activation_<class>` (the model's sigmoid activation, one column per class — the
+class set varies between models, so the columns follow the model's own class
+list), and `loss` (mean over all classes of the per-class binary cross-entropy
+against hard 0/1 targets — not the label-smoothed targets training uses, since
+this is a labeling audit). Sort by `loss` to rank frames; read the
+`activation_*` columns to see which class drove it and which way — a high
+activation on a class the frame doesn't assert points at a missing annotation
+or a hard negative, a low activation on a class it does assert points at a
+faint positive or an over-wide annotation span. Multi-label frames need no
+special handling: every asserted class contributes a y=1 term to `loss` and
+every other class a y=0 term. Frame timestamps come from the
 `frametimes.csv` the extractor writes beside each ident's embedding pickles; a
 set extracted before that file existed has its idents skipped with a warning
 (re-extract to include them). The scoring model is each fold's own out-of-fold
