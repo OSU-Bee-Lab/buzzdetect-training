@@ -98,7 +98,7 @@ annotations_combined <- annotations_combined %>%
       label == 'unknown_rasp' ~ '',
 
       #  ??
-      label == 'mech_hum_contruction' ~ '',
+      label == 'mech_hum_construction' ~ '',
       label == 'unknown' ~ '',
 
       T ~ label

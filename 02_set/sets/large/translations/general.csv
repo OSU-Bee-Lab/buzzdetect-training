@@ -46,7 +46,6 @@
 "mech_combine","mech_auto"
 "mech_drone","ignore"
 "mech_hum_RECLASSIFY","mech_hum"
-"mech_hum_construction","ignore"
 "mech_hum_traffic","mech_hum"
 "mech_lawnmower","mech_tool"
 "mech_plane_helicopter","mech_auto"
