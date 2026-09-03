@@ -42,4 +42,4 @@ yamnet_combined/weights_keras2/
 yamnet_doublerate/*.pb
 yamnet_doublerate/*.keras
 yamnet_doublerate/variables/
-yamnet_doublerate/weights_keras2/
+yamnet_doublerate/weights_keras2/!yamnet_trunk11
