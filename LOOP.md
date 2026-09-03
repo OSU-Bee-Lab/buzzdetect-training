@@ -185,14 +185,16 @@ cd $WT
 # see "Running long jobs" in CLAUDE.md for the exact nohup + Monitor recipe.
 ```
 
-Both stages run far longer than a foreground command should block for, and
-Claude Code's `run_in_background` gets SIGKILLed running them (and also killed
-*waiting* on them). **See "Running long jobs" in `CLAUDE.md` for the pattern that
-works** — launch the job detached with `nohup … & disown` (direct env-python,
-not `conda run`), then await it with a `Monitor` until-loop keyed on the
-completion marker (stage 2: `all extractions complete` in the log; stage 3:
-`models/<name>/folds_sx.csv` appears). Do not sleep-loop in Bash and do not
-repeatedly `cat` a running log.
+Both stages run far longer than a foreground command should block for (a CPU CV
+is ~40 h), and Claude Code's `run_in_background` gets SIGKILLed running them (and
+also killed *waiting* on them). **See "Running long jobs" in `CLAUDE.md` for the
+pattern that works** — launch the job detached with `nohup … & disown` (direct
+env-python, not `conda run`; capture `$!`), then await it with **one
+`persistent` `Monitor`** whose loop wakes only on real events (each fold done,
+run ended) and exits on completion (`models/<name>/folds_sx.csv` appears; stage
+2: `all extractions complete` in the log) or process death. Non-persistent
+Monitors cap at 1 h and every re-arm wakes you for nothing. Don't sleep-loop in
+Bash, don't `cat` a running log on a timer, don't run a second watcher.
 
 There is no `--runs` and no stage 4. One training call *is* the experiment: it
 trains one model per rotating fold and the shipped model, and prints the pooled

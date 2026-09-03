@@ -63,7 +63,10 @@ does not work for either of them.** This has cost every LOOP agent a rediscovery
 ### What works
 
 **1. Launch the job itself detached from the shell** — direct env-python (no
-`conda run` wrapper process), unbuffered, logging to a file in the worktree:
+`conda run` wrapper process), unbuffered, logging to a file in the worktree.
+**Capture its PID** (`echo $!`) — you need it for step 2, and a `pgrep -f`
+pattern is unreliable here (it self-matches the Monitor's own command line; a
+`pkill -f` on the job name once killed the shell running it).
 
 ```
 nohup env PYTHONUNBUFFERED=1 CUDA_VISIBLE_DEVICES="" MALLOC_ARENA_MAX=2 \
@@ -71,29 +74,42 @@ nohup env PYTHONUNBUFFERED=1 CUDA_VISIBLE_DEVICES="" MALLOC_ARENA_MAX=2 \
   /home/luke/anaconda3/envs/buzzdetect-train/bin/python -u \
   02_set/main.py --set <set> --embedder <emb> --workers <n> --verbose \
   > extract_<set>.log 2>&1 &
-disown
+disown; echo "pid $!"
 ```
 
 For stage 3 drop `BUZZDETECT_CHUNK_FRAMES`; keep `CUDA_VISIBLE_DEVICES=""` (the
 12288-d trunk embedders OOM the 4 GB GPU, and CPU ≈ GPU on this box for the
-1024-d probe anyway).
+1024-d probe anyway). Pass `--verbose` to stage 3 or it trains silently with no
+per-epoch line in the log.
 
-**2. Await completion with a `Monitor` until-loop** — not `run_in_background`.
-Exit on a completion marker *or* on the process disappearing, and print the
-outcome so a crash isn't silent:
+**2. Await it with ONE `persistent` `Monitor`** — not `run_in_background`, not a
+non-persistent Monitor. A non-persistent Monitor caps at 1 h, and every wake
+(including a bare "timed out, re-arm") burns tokens and likely drops the prompt
+cache. A stage-3 CV runs ~40 h on CPU, so you want to wake **only on real
+events**: each fold finishing, and the run ending. The command is a `while` loop
+that emits a line *only* on a state change and exits (ending the watch) on
+completion or death:
 
 ```
-Monitor, timeout_ms 3600000:
-  until <done?> || ! pgrep -f "<job pattern>" >/dev/null; do sleep 60; done
-  <then echo COMPLETE + the result, or echo DIED + tail the log>
+Monitor, persistent: true —
+  PID=<pid from step 1>
+  prev=$(find models/<name>/folds -name summary.json 2>/dev/null | wc -l)
+  while kill -0 $PID 2>/dev/null && [ ! -f models/<name>/folds_sx.csv ]; do
+    n=$(find models/<name>/folds -name summary.json 2>/dev/null | wc -l)
+    [ "$n" -gt "$prev" ] && { echo "fold $n/11 done"; prev=$n; }
+    sleep 180
+  done
+  [ -f models/<name>/folds_sx.csv ] \
+    && { echo "=== CV COMPLETE ==="; column -s, -t models/<name>/folds_sx.csv | tail -3; } \
+    || { echo "=== DIED ==="; grep -aE "Traceback|Error|Killed|MemoryError|Exception" <log> | tail -8; }
 ```
 
-Completion markers:
-- **stage 2** — the line `all extractions complete` in `extract_<set>.log`
-- **stage 3** — the file `models/<name>/folds_sx.csv` appears
+For stage 2 the loop condition is just `kill -0 $PID` and the exit marker is the
+line `all extractions complete` in `extract_<set>.log` (no per-fold tick).
 
-An 11-fold CPU CV can exceed the 1 h Monitor cap — just re-arm if it times out.
-A single `tail`/`ls` poll between turns is fine; a Bash sleep-loop is not.
+Don't run a second Monitor for the same job, and don't poll it yourself between
+turns — the persistent Monitor is the whole wait. `TaskStop` it only when you're
+abandoning the run.
 
 - `--workers` only parallelises the framing+embedding phase. `extract_snips`
   (reading source audio off the slow HDD) is always serial — a large set's snip
