@@ -22,7 +22,7 @@ from embedders.embedding import load_embedder
 from plot_history import plot_history, plot_sens_history
 from write_model_py import write_model_py
 
-from callbacks import SensAtFPR
+from callbacks import SensAtFPR, RestoreBestSens
 
 from sx import summarize_folds, format_sx_report, _fold_sens, FPR_TARGETS, FNAME_SX_SUMMARY
 
@@ -299,33 +299,46 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             'frames_train': data.frames_train,
         }
     else:
+        # Stopping only — restore is RestoreBestSens's job now, so
+        # restore_best_weights is off here. See callbacks.py for why the split.
         callback = tf.keras.callbacks.EarlyStopping(
-            monitor='val_loss', patience=patience, min_delta=min_delta, restore_best_weights=True,
+            monitor='val_loss', patience=patience, min_delta=min_delta, restore_best_weights=False,
         )
-        # Reporting only, and listed first so its keys are in `logs` before
-        # EarlyStopping and History see them. Stopping still happens on
-        # val_loss; these curves are the evidence for whether it should.
+        # Listed first so its `logs` key exists before the callbacks that read
+        # it. Reporting only.
         sens_callback = SensAtFPR(
             *data.val_eval, data.classes.index('ins_buzz'), FPR_TARGETS,
             batch_size=data.size_batch,
         )
+        # Picks which epoch's weights ship: smoothed-sens argmax, val_loss argmin
+        # only as a fallback for a fold that never reaches the target FPR. Listed
+        # after EarlyStopping so its on_train_end restore runs after the stop.
+        restore_callback = RestoreBestSens(SensAtFPR.key(FPR_TARGETS[0]))
         history = model.fit(
             data.train_tf,
             epochs=epochs_max,
             validation_data=data.val_tf,
-            callbacks=[sens_callback, callback],
+            callbacks=[sens_callback, callback, restore_callback],
             class_weight=data.weight_dict,
             verbose=2 if verbose else 0,  # 2 = one line per epoch, no progress bar
         )
 
-        best_epoch = callback.best_epoch
-        best_val_loss = float(callback.best)
+        val_loss_curve = [float(x) for x in history.history['val_loss']]
+        best_epoch = restore_callback.best_epoch      # smoothed-sens argmax (or fallback)
+        loss_argmin = int(np.argmin(val_loss_curve))  # what the old rule would have shipped
+        best_val_loss = val_loss_curve[loss_argmin]
         result = {
-            'n_epochs': len(history.history['val_loss']),
+            'n_epochs': len(val_loss_curve),
             'best_epoch': best_epoch + 1,
+            'restored_on': restore_callback.restored_on,
+            'loss_argmin_epoch': loss_argmin + 1,
             'best_val_loss': best_val_loss,
             'frames_train': data.frames_train,
             'frames_val': data.frames_val,
+            'val_loss_curve': val_loss_curve,
+            'val_sens_fpr%g_curve' % FPR_TARGETS[0]: [
+                float(x) for x in history.history[SensAtFPR.key(FPR_TARGETS[0])]
+            ],
             **_sens_history_summary(history.history, best_epoch),
         }
 

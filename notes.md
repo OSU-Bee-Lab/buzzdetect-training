@@ -1,231 +1,76 @@
-# trunk-ft
-
-A multi-run investigation (LOOP.md sanctioned by the user for one session):
-does unfreezing YAMNet's last blocks help on the CV metric, does augmentation
-help once it's unfrozen, and is any further variant worth it.
+# trunk-ft-restore-sens
 
 ## Hypothesis
 
-The probe sits on a frozen AudioSet backbone whose last blocks separate 521
-everyday sound classes, none an insect. Letting YAMNet's last two separable-conv
-blocks (layers 13-14, ~1.6M params) move should let those filters specialise
-toward buzz. `yamnet-ft` tried this pre-rework (layers 13-14, lr 1e-5) and lost
-8.3pp with a clear overfit signature (train 78% / val 59%); the user reports a
-later, unlogged CV-era attempt was "mildly beneficial". `temporal-context`
-already inverted a pre-rework verdict under CV, and the current set is larger,
-so the old negative is a lead, not a wall.
+`exp/restore-on-sens` changed *which epoch's weights get kept*: stop on
+`val_loss` + patience as before, but restore the epoch that maximised a
+smoothed (trailing rolling mean, w=5) `val_sens_fpr0.005` curve rather than the
+`val_loss` argmin. On the frozen probe it gained **+0.014** (9 up / 0 down /
+2 flat, no fold harmed) — but its own decomposition found that most of that was
+not the effect it was testing:
 
-Prediction: if the old result was a data/eval artifact, buzz-specialised filters
-win and most folds move up vs the frozen control. If it was real, the
-fine-tuned folds overfit and val_loss turns up early — visible in per-fold
-`best_epoch`.
+| step | sens@fpr0.005 |
+|---|---|
+| old `EarlyStopping` restore (`min_delta=0.002` slack) | 0.205 |
+| true `val_loss` argmin | 0.213 |
+| smoothed-sens argmax | 0.219 |
 
-## Design
+So ~+0.008 was just restoring at the real `val_loss` minimum instead of the last
+`min_delta` improvement — a different lever (`stopping-rule-scale`) — and only
+~**+0.006** was the sens/loss divergence the rule actually targets. On a frozen
+probe that is inside the noise floor (`noise-floor-cv`: ~0.017 median per-fold,
+~0.014 headline).
 
-Training on cached 1024-d GAP embeddings cannot fine-tune anything — the cache
-*is* the backbone output. So the cut moves one block earlier.
+**The divergence that motivated the rule was never a frozen-probe observation.**
+It was seen on `unfreeze_more_1e5` — a *fine-tuned trunk*, where sens@fpr kept
+climbing 0.03–0.05 past the val_loss minimum. The mechanism is specific to a
+moving backbone: `BinaryCrossentropy(label_smoothing=0.2)` is calibration-
+sensitive and penalises the growing confidence of a backbone that is still
+specialising, while sens@fpr is a rank statistic with the threshold re-derived
+each epoch, so it is calibration-invariant. A frozen 1024-d probe barely moves
+its calibration, so the two curves stay locked together and there is nothing for
+the new rule to recover. Both the `restore-on-sens` log entry and the trail in
+`IDEAS.md` say the same thing: the real test is a trunk-ft rerun.
 
-- **`embedders/yamnet_trunk/`** — caches `layer12_pointwise_conv_relu`, (6,4,512)
-  flattened to 12288, float16. Same YAMNet weights, same framing; reuses the
-  existing `sr16000_fl0.96` framed-audio cache (identical `audio_cache_key`), so
-  no re-framing.
-- **`build_head(n_classes, lr_backbone, lr_head)`** lifts layers 13-14 + GAP out
-  of the loaded `yamnet.keras` (real layer objects, real weights) and stacks
-  Dropout(0.2) → Dense. `lr_backbone == 0` freezes 13-14 → numerically the stock
-  linear probe (verified: max abs diff 1.06e-3 vs the `yamnet` embedder, all
-  float16 cache quantisation). `lr_backbone > 0` makes their conv kernels
-  trainable; **BatchNorm in 13-14 stays frozen either way** (moving stats are
-  AudioSet's; letting a small set rewrite them cost -5.8pp pre-rework).
-- **`03_train`** — `_train_one` asks the embedder for a head if it has one;
-  `_to_tf` keeps float16 in the pipeline and casts per batch (float32 the medium
-  pool is ~3.4 GB and `.cache()` would double it); `--batch`, `--lr-backbone`,
-  `--lr-head` are new CLI flags. Optimizer is a single Adam + `clipnorm=1.0`
-  (NaN insurance; this pipeline is NaN-prone per std-convergence).
+**Prediction:** on `trunk_ft_1e5`'s config the paired gain should be clearly
+larger than the frozen probe's ~+0.006 sens/loss component — the kind of move
+most folds make in the same direction. If it comes back flat, the rule is
+cosmetic on this pipeline and should be logged as a non-lever, alongside
+`trunk-ft-stop-sweep`'s `min_delta` finding.
 
-### The forced confound and the control
+## Changes
 
-12288-d cannot train at the default full batch (65568) in 2.4 GB of VRAM. All
-arms run `--batch 4096` (~16 steps/epoch vs baseline's ~2), which changes the
-update regime and, per `stopping-rule-scale`, the early-stopping rule is
-sensitive to exactly that. So the comparison that matters is **not** vs
-`cv-baseline`:
+Branched from `exp/trunk-ft` (**not** main) so the comparator's code is
+identical: main has since gained `shuffle=False` in `model.fit`, a rewritten
+shipped-epoch consensus, and the surprisal writer, none of which should sit
+inside this comparison.
 
-| run | `--lr-backbone` | `--lr-head` | note |
-|---|---|---|---|
-| `trunk-frozen`  | 0    | 2e-4 | control — linear probe through the same pipeline/batch/LR |
-| `trunk-ft`      | 2e-4 | 2e-4 | treatment — 13-14 trainable, uniform LR |
+One change, ported from `exp/restore-on-sens`:
 
-`trunk-frozen` vs `cv-baseline` separately measures what the batch+LR+float16
-change alone cost. `trunk-ft` vs `trunk-frozen` is the effect of unfreezing,
-one thing changed.
+- `03_train/callbacks.py` — taken wholesale from that branch (its `SensAtFPR`
+  differs from this base by a comment only). Adds `_trailing_smoothed` and
+  `RestoreBestSens`.
+- `03_train/train.py` — `EarlyStopping(restore_best_weights=False)` (it still
+  owns *stopping*), `RestoreBestSens` appended after it in the callback list so
+  its `on_train_end` runs after the stop decision, `best_epoch` now the
+  smoothed-sens argmax, and `val_loss_curve` / `val_sens_fpr0.005_curve` /
+  `restored_on` / `loss_argmin_epoch` recorded in `summary.json`.
 
-Uniform LR (not the 200x-slower-backbone of the old run) keeps it a single
-plain Adam and a fully serialisable functional model. A genuinely differential
-rate is a later variant if the uniform one shows signal.
+Deliberately **not** ported: that branch's `_consensus_epoch` rewrite. It only
+sets the shipped model's fixed epoch count, which no rotating fold and therefore
+no cell of `folds_sx.csv` depends on; this base still takes the median
+`best_epoch`, which now means the median smoothed-sens argmax. Keeping it out
+holds the diff to the one thing being tested.
 
-## Runs
+Everything else matches `trunk_ft_1e5` exactly: `yamnet_trunk` embedder
+(layer-12 cache, symlinked from the `trunk-ft` worktree — no re-extraction),
+`medium`, `general`, `--batch 1024 --lr-backbone 1e-5 --lr-head 2e-4`,
+patience 50, `min_delta` 0.002, epochs cap 400.
 
-All on `medium`, 11 rotating folds, `general` translation, `--batch 1024`
-(12288-d cannot fit a larger batch in 2.4 GB VRAM), `--lr-head 2e-4`,
-`clipnorm 1.0`, patience 50, epochs cap 400. Per-fold OOM between rotations was
-routine on this GPU; a wrapper restarted `main.py` (which resumes from disk)
-until `folds_sx.csv` existed.
+## Results
 
-| run | lr_backbone | total sens@fpr0.005 | vs frozen | vs cv-baseline |
-|---|---|---|---|---|
-| `cv-baseline` (`yamnet_medium_general`, cached GAP, full-batch, lr 2e-3) | — frozen | 0.199 | — | — |
-| **`trunk_frozen`** (control: same trunk pipeline, 13-14 frozen) | 0 | **0.216** | — | +0.017 |
-| **`trunk_ft_1e5`** (unfreeze 13-14) | 1e-5 | **0.262** | **+0.046** | +0.063 |
-| **`trunk_ft_5e5`** | 5e-5 | **0.257** | +0.041 | +0.058 |
-| `trunk_ft_1e5_aug` (+ within-fold noise 0.05) | 1e-5 | negative (5/11 folds, −0.060 paired) | | |
-
-Also run on `lite` as a smoke test only (not comparable): frozen 0.166,
-uniform-lr-2e-4 fine-tune 0.150 (shipped best_epoch 6 — uniform 2e-4 on the
-backbone overfits hard, which is why the medium runs use a differential rate).
-
-### trunk_frozen vs cv-baseline
-
-Per fold the two track each other closely (|Δ| < 0.02 on 6/11); trunk_frozen
-nudges up on ~7/11 for +0.017 overall. Batch 1024 + lr 2e-4 vs full-batch +
-lr 2e-3, plus the float16 trunk cache — within seed noise (std-convergence put
-same-config rerun noise at 0.013-0.022). Frozen trunk+tail reproduces the stock
-`yamnet` embedding to 1.06e-3 (float16 quantisation), so this is a
-pipeline/regime difference, not a representation one. **This is why the
-fine-tune comparator is `trunk_frozen`, not `cv-baseline`.**
-
-### trunk_ft_1e5 vs trunk_frozen  (the effect of unfreezing)
-
-`tools/compare_folds.py models/trunk_frozen models/trunk_ft_1e5`:
-
-| fold | frozen | ft_1e5 | Δ | best_epoch (f/ft) |
-|---|---|---|---|---|
-| JamesU - MustardBumbler/1_29 | 0.441 | 0.469 | +0.028 | 42 / 9 |
-| Lily - Fit+Fast/…/53 | 0.370 | 0.432 | +0.062 | 55 / 94 |
-| Lily Adam - One Hive/…/willard/…/1_11 | 0.204 | 0.318 | +0.114 | 32 / 45 |
-| Lily Adam - One Hive/…/wooster/…/1_143 | 0.284 | 0.337 | +0.053 | 27 / 35 |
-| Luke - Diel Drivers/2026-04-08/1_150 | 0.048 | 0.068 | +0.020 | 10 / 2 |
-| Luke - Diel Drivers/2026-05-06/1_95 | 0.035 | 0.048 | +0.013 | 36 / 62 |
-| Luke - Various Opp…/2025-06-23/1_23 | 0.337 | 0.400 | +0.063 | 88 / 124 |
-| Luke - Various Opp…/2025-07-03/1_37 | 0.303 | 0.293 | −0.010 | 55 / 89 |
-| Luke - Various Opp…/2025-08-05/31 | 0.135 | 0.185 | +0.050 | 10 / 9 |
-| Luke - Various Opp…/2025-08-12/1_114 | 0.194 | 0.316 | +0.122 | 68 / 10 |
-| Luke - Various Opp…/2025-08-27/48 | 0.027 | 0.020 | −0.007 | 20 / 5 |
-
-**9 up, 2 down (both < 0.011). Mean Δ +0.046.** vs cv-baseline: 10 up, 1 down,
-+0.063. val_loss is lower for ft on nearly every fold too. The two down folds
-are small/quiet (299 and 307 buzz frames, thresholds resting on 6 and 22 neg
-frames). The big movers include willard — the deployment temporal context
-*regressed* on (`willard-regression` in IDEAS) — and Opp/2025-08-12.
-
-Direction is not a noise artifact: most folds move the same way and several by
-> 0.05, which is the bar LOOP.md sets. Size is caveated: (1) several folds
-restore very early epochs (best 2, 5, 9, 10) — the small-batch noisy-val_loss /
-`stopping-rule-scale` problem — though `trunk_frozen` runs the identical
-stopping regime so the *paired* delta absorbs most of it; (2) `trunk_frozen`
-itself sits +0.017 over `cv-baseline`, so the honest "unfreezing" number is the
-+0.046 vs frozen, not +0.063 vs baseline; (3) no seed control anywhere.
-
-### trunk_ft_5e5  (backbone LR sensitivity)
-
-0.257, +0.041 vs frozen, 9/11 up — effectively tied with `trunk_ft_1e5`. The
-gain is robust to backbone LR across 1e-5..5e-5. `best_epoch` restores are even
-earlier at 5e-5 (4, 1, 6, 11 on several folds) — it overfits slightly more —
-so 1e-5 is the pick.
-
-### trunk_ft_1e5_aug  (augmentation on top)
-
-Within-fold additive noise (`NoiseSpec(prop=0.05)`, `augment.py`) generated for
-all 11 rotating folds through `yamnet_trunk` and loaded per training fold
-(`load_augmented` relaxed to skip folds with no augment dir — the 311 tiny
-always-train idents were not augmented; still strictly within-fold). Config
-otherwise identical to `trunk_ft_1e5`.
-
-**Result: negative, stopped at 5/11 folds** (each fold ~2x slower with the
-doubled pool; the direction was already clear). Paired vs `trunk_ft_1e5` on the
-5 completed folds (`compare_folds.py models/trunk_ft_1e5 models/trunk_ft_1e5_aug`):
-
-| fold | ft_1e5 | +aug | Δ | best_epoch (+aug) |
-|---|---|---|---|---|
-| JamesU - MustardBumbler/1_29 | 0.469 | 0.484 | +0.015 | 7 |
-| Lily - Fit+Fast/…/53 | 0.432 | 0.424 | −0.008 | 31 |
-| Lily Adam …/willard/…/1_11 | 0.318 | 0.108 | **−0.210** | **1** |
-| Lily Adam …/wooster/…/1_143 | 0.337 | 0.289 | −0.048 | 11 |
-| Luke - Diel Drivers/2026-04-08/1_150 | 0.068 | 0.021 | −0.047 | 1 |
-
-**4/5 down, mean Δ −0.060.** willard collapses (−0.21) and two folds restore
-epoch 1 — the additive-noise aug spikes val_loss immediately and the
-early-stopping monitor locks a near-random snapshot. Consistent with LOOP.md's
-standing "augmentation has hurt" and the `augmentation-frozen-probe` note:
-unfreezing the backbone did **not** turn waveform aug into a win here. A gentler
-aug (smaller prop, or holding aug out of the val monitor) might behave
-differently, but plain `NoiseSpec(0.05)` on top of the fine-tune is a clear
-negative. `trunk_ft_1e5_aug` left partial in `models/` (resumable via `cv.sh`).
-
-### stopping-rule sweep (follow-up #1)
-
-`--min-delta` and `--only-folds` added to `03_train`. `--only-folds` scores just
-the named rotating folds (still trains on the full pool each rotation, skips the
-shipped model) — a diagnostic harness, `folds_sx.csv` over a subset is not
-comparable to a full CV.
-
-Diagnostic on 3 folds (JamesU 2144 buzz, Lily FitFast 1031, Diel/2026-04-08 146
-buzz — the fold `trunk_ft_1e5` restored at epoch 2), backbone 1e-5, batch 1024:
-
-| config | JamesU | LilyFF | Diel0408 | 3-fold mean | best_epochs |
-|---|---|---|---|---|---|
-| `trunk_ft_1e5` (original run) | 0.469 | 0.432 | 0.068 | 0.323 | 9 / 94 / 2 |
-| same config, **fresh run** (`s0`) | 0.487 | 0.447 | 0.089 | **0.341** | 27 / 46 / 3 |
-| min_delta 1e-4, patience 50 (`s1`) | 0.510 | 0.429 | 0.130 | **0.356** | 25 / 92 / 6 |
-
-**A same-config rerun moved the 3-fold mean +0.018 and swung `best_epoch` by
-15-50** (`std-convergence` all over again — no seed control anywhere). The
-min_delta 0.002 → 1e-4 change (`s0` → `s1`) moved it +0.015, i.e. the same
-order as the run noise. So min_delta is **not** a lever that clears the noise
-floor, and `trunk_ft_1e5`'s early `best_epoch` values (2, 5, 9) were
-val_loss-trajectory noise, not a systematic min_delta failure — the fresh run
-of the identical config landed 27 / 46 / 3. The earlier `sens@best` vs
-`sens@peak` gaps reflect the sens@fpr *monitor's* own noise (each fold's
-threshold rests on ~20 negative frames), not recoverable headroom.
-
-The one semi-consistent thread: **Diel/2026-04-08** (thin, 146 buzz) climbs
-0.068 → 0.089 → 0.130 as stopping loosens (`best_epoch` 2 → 3 → 6). Its
-val_loss minimum genuinely is very early while sens keeps rising — looser
-stopping helps that *kind* of fold modestly. On the strength of that a full CV
-at **min_delta 1e-4, patience 50** (`trunk_ft_md1e4`) was run:
-
-**Result (stopped at 3/11 folds — min_delta 1e-4 runs each fold 2-3x longer,
-willard alone took 225 epochs):** paired vs `trunk_ft_1e5` — JamesU +0.015,
-Lily FitFast +0.032, willard −0.020. **Mean Δ +0.009, 2 up / 1 down — inside
-the ±0.018 same-config rerun noise, folds split.** min_delta is confirmed a
-**non-lever**. `trunk_ft_1e5`'s config (min_delta 0.002, patience 50) stands.
-
-The real blocker for any finer tuning here is the missing noise floor:
-`noise-floor-cv` in IDEAS (repeat a full CV under a fresh `--name` and read the
-per-fold spread) is the prerequisite — every per-fold delta in this whole
-investigation is being read against an unquantified ~±0.02.
+(pending — see HANDOFF_trunk-ft-restore-sens.md)
 
 ## Conclusion
 
-Unfreezing YAMNet's last two blocks at a differential rate (backbone 1e-5, head
-2e-4) lifts held-out sens@fpr0.005 by **+0.046 vs a matched frozen control**
-(9/11 folds up), the largest structural gain in the CV log. This directly
-inverts the pre-rework `yamnet-ft` verdict (−8.3pp), as `temporal-context` did
-before it — the old negative was the retired corpus / fixed split, not the
-mechanism. Uniform-rate fine-tuning still overfits (lite), so the differential
-rate matters (`trunk_ft_5e5` = `trunk_ft_1e5`, so the gain is robust across
-1e-5..5e-5). Additive-noise augmentation on top is a **clear negative** (−0.060
-paired over 5 folds, willard −0.21) — unfreezing the backbone did not rescue
-waveform aug.
-
-The stopping-rule sweep (above) came back a non-lever — the early-epoch
-restores in `trunk_ft_1e5` were val_loss-trajectory noise, not a fixable
-min_delta problem. So worth following, in order: (1) **`noise-floor-cv`** —
-repeat a CV under a fresh name to quantify the ~±0.02 denominator every delta
-here rests on; (2) unfreezing one block (just 14) or three (12-14), and a
-head-LR sweep (2e-4 → 5e-4) — both untried; (3) a proper shipped-model path
-(currently saved `include_optimizer=False`); (4) if augmentation is revisited,
-keep it out of the val monitor and use a much smaller prop.
-
-Trust: **caveated** — direction clean and strong (9/11 folds, several > 0.05),
-size softened by the early-stop restores and the +0.017 frozen-vs-baseline
-pipeline offset.
+(pending)
