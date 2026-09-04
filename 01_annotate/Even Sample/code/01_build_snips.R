@@ -1,7 +1,13 @@
 library(dplyr)
+source(here::here('config.R'))
 
-
-dir_audio <- '/Volumes/Expansion/audio_bee_detection/experiments'
+# per-machine (external drive); set audio_sources."Even Sample" in
+# paths.local.json (see paths.local.example.json)
+dir_audio <- path_local('audio_sources.Even Sample')
+if (is.null(dir_audio)) {
+  stop('audio_sources."Even Sample" not set in paths.local.json ',
+       '(see paths.local.example.json)')
+}
 idents <- read.csv('data/raw/idents.csv') %>% 
   filter(ident_recorder != '')
 

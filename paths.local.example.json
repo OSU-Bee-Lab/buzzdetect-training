@@ -1,0 +1,10 @@
+{
+  "_comment": "Copy this file to paths.local.json (gitignored) and fill in the paths for this machine. Keys are looked up by config.py's local() / config.R's path_local(); a missing key or missing file just means the caller falls back to its own default or errors asking you to set it.",
+
+  "buzzdetect_dest": "/path/to/buzzdetect/engine/models",
+
+  "audio_sources": {
+    "_comment": "Raw source-audio directories that live outside this repo, keyed by the 01_annotate effort directory name that needs them.",
+    "Even Sample": "/path/to/audio_bee_detection/experiments"
+  }
+}

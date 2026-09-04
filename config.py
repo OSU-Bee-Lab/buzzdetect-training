@@ -1,3 +1,4 @@
+import json
 import os
 
 # All paths are absolute, anchored to the project root (this file's directory).
@@ -6,6 +7,31 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 
 def _p(*parts):
     return os.path.join(ROOT, *parts)
+
+# Per-machine paths (buzzdetect export destination, external audio drives, ...)
+# that don't belong in a tracked file: they differ machine to machine and mean
+# nothing to anyone else's checkout. Lives at paths.local.json (gitignored);
+# paths.local.example.json documents the shape. Missing file or missing key
+# both just mean "unset" -- callers decide whether that's a fallback or a
+# SystemExit telling the operator to set it.
+_LOCAL_PATH = _p('paths.local.json')
+
+def _load_local():
+    if not os.path.isfile(_LOCAL_PATH):
+        return {}
+    with open(_LOCAL_PATH) as f:
+        return json.load(f)
+
+_LOCAL = _load_local()
+
+def local(key, default=None):
+    """Look up a dotted key (e.g. 'audio_sources.Even Sample') in paths.local.json."""
+    node = _LOCAL
+    for part in key.split('.'):
+        if not isinstance(node, dict) or part not in node:
+            return default
+        node = node[part]
+    return node
 
 DIR_EMBEDDERS = _p('embedders')
 DIR_MODELS = _p('models')

@@ -58,3 +58,7 @@ embeddings/
 
 # claude code local settings
 .claude/
+
+# per-machine paths (buzzdetect export dest, external audio drives, ...);
+# see paths.local.example.json for the shape
+paths.local.json

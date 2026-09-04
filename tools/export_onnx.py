@@ -51,7 +51,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config as cfg  # noqa: E402
 from tools.onnx_passes import count_fusable, optimize  # noqa: E402
 
-DEST_DEFAULT = '/Users/luke/Documents/bioacoustics/buzzdetect/engine/models'
+# Per-machine -- buzzdetect's checkout lives wherever this box put it. Set
+# "buzzdetect_dest" in paths.local.json (gitignored; see
+# paths.local.example.json) rather than hardcoding it here.
+DEST_DEFAULT = cfg.local('buzzdetect_dest')
 
 # Five minutes of field audio from Lily - Fit+Fast/2023_R3_Marysville/53. Real
 # audio matters here: the synthetic lengths below run on gaussian noise, which
@@ -506,7 +509,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('modelname', help='model directory name under models/')
     parser.add_argument('--dest', default=DEST_DEFAULT,
-                        help=f'engine model directory (default: {DEST_DEFAULT})')
+                        help='engine model directory (default: buzzdetect_dest '
+                             f'in paths.local.json, currently {DEST_DEFAULT})')
     parser.add_argument('--force', action='store_true',
                         help='overwrite an existing export')
     parser.add_argument('--from', dest='dir_src', default=None, metavar='DIR',
@@ -526,6 +530,9 @@ def main():
                         help='check on synthetic lengths only')
     args = parser.parse_args()
 
+    if args.dest is None:
+        raise SystemExit('no destination: pass --dest, or set "buzzdetect_dest" '
+                          'in paths.local.json (see paths.local.example.json)')
     if not os.path.isdir(args.dest):
         raise SystemExit(f'destination does not exist: {args.dest}')
     # Checked up front: the export is a slow way to discover a typo.
