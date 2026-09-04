@@ -182,8 +182,14 @@ like `temporal-context` did. So the "backbone fine-tuning overfits" premise no
 longer holds on the current set, and LoRA's motivation (fine-tune with less
 overfit risk) is weaker than it was — though a cleaner low-rank adapter could
 still beat plain FT. See `exp/trunk-ft` notes. Open follow-ups there: LR/patience
-sweep tuned for the batch-1024 regime, unfreezing more/fewer blocks, and
-augmentation on top of the fine-tune.
+sweep tuned for the batch-1024 regime and augmentation on top of the
+fine-tune.
+
+**Depth is settled on `medium` (2026-09-04):** `exp/unfreeze-more` took the
+unfreeze one block deeper (layers 12-14) and the dose-response turns over —
+frozen 0.216 → 13-14 **0.262** → 12-14 0.229, with median `best_epoch`
+falling 35 → 25. 13-14 is the operating point; deeper only overfits. Still
+open on the denser `large` set, where the extra capacity might be fed.
 
 ---
 
