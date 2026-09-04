@@ -153,7 +153,22 @@ def build_combined(modelname, dir_src, embeddername):
             f'({type(trunk).__name__}), so it cannot be exported to ONNX here.')
 
     head = load_head(dir_src, embedder.n_embeddings)
-    predictions = head(trunk.output)
+
+    # A trunk-fine-tune embedder (yamnet_trunk, yamnet_trunk11, ...) hands back
+    # its frozen layers' raw spatial map -- e.g. (None, 6, 4, 512) -- because
+    # that's the Keras graph; flattening to n_embeddings only happens in the
+    # embedder's *numpy* embed() path used at extraction time. The head was
+    # trained on that flat vector (it Reshapes back internally), so match it
+    # here with the same row-major Flatten numpy's reshape(n, -1) used.
+    trunk_out = trunk.output
+    if len(trunk_out.shape) > 2:
+        trunk_out = keras.layers.Flatten()(trunk_out)
+    if trunk_out.shape[-1] != embedder.n_embeddings:
+        raise SystemExit(
+            f"embedder '{embeddername}' trunk output flattens to "
+            f'{trunk_out.shape[-1]}, but n_embeddings is {embedder.n_embeddings}')
+
+    predictions = head(trunk_out)
     # A SavedModel hands its outputs back in a dict keyed by layer name.
     if isinstance(predictions, dict):
         (predictions,) = predictions.values()
