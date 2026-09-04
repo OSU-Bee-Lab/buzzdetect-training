@@ -182,19 +182,19 @@ cd $WT
 #   02_set/main.py  --set medium --embedder yamnet --workers 2 --verbose
 #   03_train/main.py --name <modelname> --set medium --embedder yamnet --translation general -y
 # Launch each DETACHED, not in the foreground and not via run_in_background —
-# see "Running long jobs" in CLAUDE.md for the exact nohup + Monitor recipe.
+# see "Running long jobs" in CLAUDE.md for the exact nohup recipe.
 ```
 
 Both stages run far longer than a foreground command should block for (a CPU CV
 is ~40 h), and Claude Code's `run_in_background` gets SIGKILLed running them (and
 also killed *waiting* on them). **See "Running long jobs" in `CLAUDE.md` for the
 pattern that works** — launch the job detached with `nohup … & disown` (direct
-env-python, not `conda run`; capture `$!`), then await it with **one
-`persistent` `Monitor`** whose loop wakes only on real events (each fold done,
-run ended) and exits on completion (`models/<name>/folds_sx.csv` appears; stage
-2: `all extractions complete` in the log) or process death. Non-persistent
-Monitors cap at 1 h and every re-arm wakes you for nothing. Don't sleep-loop in
-Bash, don't `cat` a running log on a timer, don't run a second watcher.
+env-python, not `conda run`; capture `$!`).
+
+Then **hand off rather than wait** — see "If the run will outlast you" below.
+Don't sleep-loop in Bash, don't `cat` a running log on a timer, and don't hold a `Monitor` open across a
+multi-hour run: waking to watch a job you can't hurry costs uncached tokens for
+no information.
 
 There is no `--runs` and no stage 4. One training call *is* the experiment: it
 trains one model per rotating fold and the shipped model, and prints the pooled
@@ -204,6 +204,27 @@ and unweighted numbers when it finishes.
 `config_model.json` is skipped, so re-running after a code change reuses the old
 models and reports a mix of both. Always use a fresh `--name`, or pass
 `--clear` via the root `main.py`, or delete `models/<name>/` by hand.
+
+**If the run will outlast you, write a handoff doc.** Any job you expect to take
+more than about an hour will outlive your context — waiting on it burns uncached
+tokens for nothing. Launch it detached, commit a `HANDOFF_<slug>.md` in the
+worktree, and end your turn. Keep it short; it needs four things:
+
+1. **The one-command progress check** — is it running, and how many of 11 folds
+   are done (`pgrep -f 03_train/main.py`, `find models/<name>/folds -name
+   summary.json | wc -l`, `tail -3 <log>`).
+2. **"If it's still running, STOP."** Say it explicitly: report `fold N/11` and
+   quit. No tailing the log on a timer, no Monitor, no reading the rest of the
+   repo — everything read while waiting is paid for twice.
+3. **What to do when it finishes** — which model is the comparator (rarely
+   `cv-baseline`; usually the matched control), which folds are too thin to
+   trust, then notes.md → `log.jsonl` → commit.
+4. **What to do if it died** — how to tell a self-healing restart from a real
+   crash, and the exact relaunch command.
+
+Also note anything a fresh agent would get wrong: symlinked caches it must not
+delete, why the branch is based where it is. Don't name it plain `HANDOFF.md` —
+that's taken by the machine-setup doc.
 
 ### 4. Read the results
 
