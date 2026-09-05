@@ -31,6 +31,16 @@ _TRUNK_SHAPE = (6, 4, 512)
 _TRUNK_LAYER = 'layer12_pointwise_conv_relu'
 _GAP_LAYER = 'global_average_pooling2d'
 _TAIL_NAME = 'yamnet_tail_l13_14'
+# Which of the tail's YAMNet blocks actually train when lr_backbone > 0.
+# '13,14' (the default) is exp/trunk-ft's behaviour unchanged; '14' unfreezes
+# only the last block, the shallow end of the depth dose-response. Blocks not
+# listed stay frozen but remain in the graph, computed from the same layer-12
+# cache -- so changing this never needs a re-extraction.
+_FT_BLOCKS = tuple(
+    'layer' + b.strip()
+    for b in os.environ.get('BUZZDETECT_TRUNK_FT_BLOCKS', '13,14').split(',')
+    if b.strip()
+)
 # backbone-tail trainable variables are named 'layer13_*' / 'layer14_*';
 # the head weight is 'dense/*'. The optimizer scales anything matching these.
 _TAG = ('layer13', 'layer14')
@@ -156,7 +166,12 @@ class EmbedderYamnetTrunk(BaseEmbedder):
             if isinstance(layer, keras.layers.BatchNormalization):
                 layer.trainable = False          # keep AudioSet moving stats
             else:
-                layer.trainable = train_backbone
+                layer.trainable = (train_backbone
+                                   and layer.name.startswith(_FT_BLOCKS))
+        if train_backbone:
+            print(f'  [yamnet_trunk] fine-tuning blocks {_FT_BLOCKS}: '
+                  f'{len(tail.trainable_variables)} trainable tail tensors',
+                  flush=True)
 
         inp = keras.layers.Input(shape=(self.n_embeddings,), dtype=tf.float32, name='input')
         x = keras.layers.Reshape(_TRUNK_SHAPE)(inp)
