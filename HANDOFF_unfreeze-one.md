@@ -2,7 +2,9 @@
 
 A full 11-fold CV was launched **2026-09-05 00:00** in this worktree
 (`/home/luke/projects/buzzdetect-training/.local/worktrees/unfreeze-one`).
-Expect **~40 h on CPU**. Read `notes.md` for the hypothesis.
+Expect **~24 h on CPU** (measured 2026-09-05: 79-80 s/epoch, and the comparator
+`trunk_ft_1e5` ran 1034 fold-epochs total, 52-174 per fold). The 40 h in
+CLAUDE.md is the generic figure; it is an upper bound here. Read `notes.md` for the hypothesis.
 
 ## 1. One-command progress check
 

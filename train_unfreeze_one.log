@@ -25,3 +25,23 @@ GCC version:  gcc version 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1)
   self.data_adapter = data_adapters.get_data_adapter(
 Epoch 1/400
 2026-09-05 00:01:03.406984: W external/local_tsl/tsl/framework/cpu_allocator_impl.cc:83] Allocation of 1641947136 exceeds 10% of free system memory.
+66/66 - 82s - 1s/step - accuracy: 0.0710 - loss: 0.6037 - val_accuracy: 0.0563 - val_loss: 0.4693 - val_sens_fpr0.005: 0.0117
+Epoch 2/400
+66/66 - 80s - 1s/step - accuracy: 0.2105 - loss: 0.4417 - val_accuracy: 0.4036 - val_loss: 0.4316 - val_sens_fpr0.005: 0.3649
+Epoch 3/400
+66/66 - 79s - 1s/step - accuracy: 0.3298 - loss: 0.4169 - val_accuracy: 0.4825 - val_loss: 0.4263 - val_sens_fpr0.005: 0.4206
+Epoch 4/400
+66/66 - 79s - 1s/step - accuracy: 0.4039 - loss: 0.4071 - val_accuracy: 0.4979 - val_loss: 0.4248 - val_sens_fpr0.005: 0.4337
+Epoch 5/400
+66/66 - 80s - 1s/step - accuracy: 0.4437 - loss: 0.4024 - val_accuracy: 0.4957 - val_loss: 0.4257 - val_sens_fpr0.005: 0.4351
+Epoch 6/400
+66/66 - 80s - 1s/step - accuracy: 0.4687 - loss: 0.3993 - val_accuracy: 0.5117 - val_loss: 0.4220 - val_sens_fpr0.005: 0.4381
+Epoch 7/400
+66/66 - 80s - 1s/step - accuracy: 0.4901 - loss: 0.3970 - val_accuracy: 0.5110 - val_loss: 0.4223 - val_sens_fpr0.005: 0.4390
+Epoch 8/400
+66/66 - 79s - 1s/step - accuracy: 0.5076 - loss: 0.3950 - val_accuracy: 0.5129 - val_loss: 0.4225 - val_sens_fpr0.005: 0.4507
+Epoch 9/400
+66/66 - 79s - 1s/step - accuracy: 0.5211 - loss: 0.3934 - val_accuracy: 0.5183 - val_loss: 0.4216 - val_sens_fpr0.005: 0.4566
+Epoch 10/400
+66/66 - 79s - 1s/step - accuracy: 0.5315 - loss: 0.3922 - val_accuracy: 0.5150 - val_loss: 0.4230 - val_sens_fpr0.005: 0.4657
+Epoch 11/400
