@@ -223,7 +223,7 @@ sens@fpr0.005 gives a per-fold sampling SD of **0.02-0.03** on the eight normal
 folds, and **0.092** on `2025-06-23/1_23` (whose threshold rests on a single
 negative frame) and 0.025 on `2025-08-05/31` (two). Propagated to the
 eleven-fold mean, that is **0.012 of headline SD from the evaluation sample
-alone** (`trunk_ft_1e5`; 0.011 for `cv-baseline`).
+alone** (`trunk_ft_1e5`; 0.010 for `cv-baseline`).
 
 `noise-floor-cv` measured total run-to-run noise at ~0.017 median per-fold and
 0.014 on the headline. So **roughly half the noise floor is eval-set sampling,
