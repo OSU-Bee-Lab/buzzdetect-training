@@ -89,6 +89,23 @@ why the endpoint is per-deployment rather than pooled.
   `log.jsonl` the way the pre-CV log was archived and rerun whichever
   experiments are worth keeping under the new set, rather than mixing fold
   counts silently in one log.
+- **Translation: pass `--translation general_v1`, not `general`.** `general`
+  moved on 2026-09-03 (`0a2ef2a`, `b49cdaa`): 17 classes became 14, and
+  `mech_plane` — 9,773 frames, the fourth-largest class — was folded into
+  `mech_auto`, taking it from 9,466 to 19,239. The `ins_buzz` target is
+  untouched (8,431 frames either way) and total frames move by 0.26%, so this
+  is not a data change; it is a change to the auxiliary supervision, applied at
+  *train* time, with no re-extraction to make it visible. Nothing in
+  `log.jsonl` used it — every logged run resolved to the project-wide
+  `translations/general.csv` because its worktree predated per-set tables — but
+  a worktree cut from current main gets the new one silently.
+  `02_set/sets/medium/translations/general_v1.csv` is a frozen byte-copy of the
+  table those runs used (verified to emit the identical 17 classes and
+  frame counts). Use it so a new experiment stays comparable to its comparator,
+  and keep using it until the annotations settle; at that point archive
+  `log.jsonl` as the pre-CV log was archived and re-run under `general`.
+  It is deliberately **not** produced by `translate.R` — that is what makes it
+  frozen. Don't regenerate it, and don't hand-edit it.
 - Augmentation: has hurt training so far — avoid without strong reason.
 - Err against hyperparameter tuning, unless you have a strong reason. We're
   looking for structural gains; hyperparameters can be tuned in one large sweep
@@ -180,7 +197,7 @@ cd $WT
 # Stage 2 — only if the embedder or extraction changed
 # Stage 3 — the whole CV: one model per rotating fold, then the shipped model
 #   02_set/main.py  --set medium --embedder yamnet --workers 2 --verbose
-#   03_train/main.py --name <modelname> --set medium --embedder yamnet --translation general -y
+#   03_train/main.py --name <modelname> --set medium --embedder yamnet --translation general_v1 -y
 # Launch each DETACHED, not in the foreground and not via run_in_background —
 # see "Running long jobs" in CLAUDE.md for the exact nohup recipe.
 ```
