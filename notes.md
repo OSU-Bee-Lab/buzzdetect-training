@@ -69,8 +69,80 @@ patience 50, `min_delta` 0.002, epochs cap 400.
 
 ## Results
 
-(pending — see HANDOFF_trunk-ft-restore-sens.md)
+CV completed 2026-09-04 19:04 (11/11 folds, wrapper needed 11 attempts — the
+per-fold CUDA OOM/restart churn the handoff predicted; all self-healing).
+
+Paired against `trunk_ft_1e5` (`tools/compare_folds.py`), sens@fpr0.005:
+
+| fold | trunk_ft_1e5 | this exp | delta | val frames | neg frames |
+|---|---|---|---|---|---|
+| Luke - Various Opportunistic/2025-08-12/1_114 | 0.316 | 0.283 | -0.033 | 3768 | 17 |
+| Luke - Various Opportunistic/2025-06-23/1_23 | 0.400 | 0.383 | -0.017 | 315 | **1** |
+| Luke - Various Opportunistic/2025-08-05/31 | 0.185 | 0.171 | -0.014 | 942 | **2** |
+| Lily Adam - One Hive/willard/2024-08-07/1_11 | 0.318 | 0.308 | -0.010 | 4730 | 22 |
+| Luke - Diel Drivers/2026-05-06/1_95 | 0.048 | 0.048 | 0.000 | 6628 | 30 |
+| Lily Adam - One Hive/wooster/2024-07-26/1_143 | 0.337 | 0.358 | +0.021 | 4708 | 22 |
+| Luke - Various Opportunistic/2025-07-03/1_37 | 0.293 | 0.326 | +0.033 | 4715 | 22 |
+| JamesU - MustardBumbler/1_29 | 0.469 | 0.506 | +0.037 | 6984 | 24 |
+| Lily - Fit+Fast/2023_R3_Marysville/53 | 0.432 | 0.475 | +0.043 | 4712 | 18 |
+| Luke - Diel Drivers/2026-04-08/1_150 | 0.068 | 0.171 | +0.103 | 4947 | 24 |
+| Luke - Various Opportunistic/2025-08-27/48 | 0.020 | 0.244 | **+0.224** | 1571 | **6** |
+
+- mean sens@fpr0.005: `trunk_ft_1e5` 0.262 → this 0.298 (**+0.036**)
+- 6 folds up, 4 down, 1 flat.
+
+**The headline is one fold.** `2025-08-27/48` contributes +0.224 of the +0.036
+mean on 6 negative frames, and it is exactly the fold where the new rule made
+the most extreme choice: it shipped **epoch 2** where `val_loss` argmin was
+epoch 58. A 0.5% FPR threshold placed with 6 negatives is not a measurement.
+Dropping the three thin folds (1, 2, 6 negatives) leaves **+0.024 over 8 folds,
+5 up / 2 down / 1 flat** — above the ~0.017 median per-fold noise floor, but
+only just, and with no seed control.
+
+### The within-run comparison (the informative part)
+
+`best_epoch` (shipped, smoothed-sens argmax) vs `loss_argmin_epoch`:
+
+| fold | shipped | val_loss argmin |
+|---|---|---|
+| JamesU - MustardBumbler/1_29 | 25 | 13 |
+| Lily Adam - willard/2024-08-07/1_11 | 38 | 3 |
+| Lily Adam - wooster/2024-07-26/1_143 | 109 | 65 |
+| Lily - Fit+Fast/2023_R3_Marysville/53 | 96 | 86 |
+| Luke - Diel Drivers/2026-04-08/1_150 | 30 | 3 |
+| Luke - Diel Drivers/2026-05-06/1_95 | 133 | 96 |
+| Luke - Various Opportunistic/2025-06-23/1_23 | 108 | 135 |
+| Luke - Various Opportunistic/2025-07-03/1_37 | 96 | 90 |
+| Luke - Various Opportunistic/2025-08-05/31 | 10 | 47 |
+| Luke - Various Opportunistic/2025-08-12/1_114 | 44 | 63 |
+| Luke - Various Opportunistic/2025-08-27/48 | 2 | 58 |
+
+**The two curves diverge on all 11 folds, often by tens of epochs** — the
+opposite of the frozen probe, where they stayed locked together and the rule had
+nothing to recover. So the mechanism in the hypothesis is confirmed: on a moving
+backbone, label-smoothed BCE and rank-based sens@fpr genuinely disagree about
+which epoch is best. 8 of 11 folds ship a *later* epoch than the loss argmin,
+which is the predicted "sens keeps climbing past the val_loss minimum" shape.
+
+What does not follow is a reliable gain. The rule picks a materially different
+model everywhere, yet only 6/11 folds improve, and the mean is carried by the
+fold where it made the wildest choice (epoch 2 of 58+). The divergence is real;
+the smoothed-sens argmax is a **noisy** estimator of which side of it is better.
 
 ## Conclusion
 
-(pending)
+Mechanism confirmed, payoff not. Restoring on smoothed sens@fpr instead of the
+`val_loss` argmin selects a genuinely different epoch on every trunk-fine-tuned
+fold — validating why `restore-on-sens` measured almost nothing on a frozen
+probe — but the held-out result is +0.036 headline / +0.024 excluding the three
+folds whose 0.5% FPR threshold rests on 1-6 negative frames, at 6 up / 4 down /
+1 flat. That is a hair over the noise floor with no seed control, so the size
+should not be trusted and the direction is only weakly supported.
+
+Read as a lever: **worth keeping on the shortlist, not worth adopting on this
+evidence.** The clearest next step is not another restore-rule variant but
+better validation-fold negatives — three of eleven folds cannot resolve a 0.5%
+FPR at all, and they are the ones that decide this comparison. Any rule that
+selects an epoch by a per-fold sens@fpr curve is being steered by those same
+thin negatives at *training* time too, which is the most likely reason a real
+divergence turns into a noisy selection.
