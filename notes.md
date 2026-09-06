@@ -74,8 +74,39 @@ wrong call, reverted before any fold finished. Backbone is frozen here.)
 
 ## Results
 
-(fill in when the CV finishes — see HANDOFF_subframe-head.md)
+| fold | trunk_frozen sens@fpr0.005 | subframe_head | delta | val frames |
+|---|---|---|---|---|
+| Various Opportunistic/2025-08-05/31 | 0.135 | 0.060 | -0.075 | 942 |
+| Various Opportunistic/2025-07-03/1_37 | 0.303 | 0.277 | -0.026 | 4715 |
+| Diel Drivers/2026-04-08/1_150 | 0.048 | 0.034 | -0.014 | 4947 |
+| wooster/2024-07-26/1_143 | 0.284 | 0.276 | -0.008 | 4708 |
+| Diel Drivers/2026-05-06/1_95 | 0.035 | 0.028 | -0.007 | 6628 |
+| Fit+Fast/2023_R3_Marysville/53 | 0.370 | 0.367 | -0.003 | 4712 |
+| Various Opportunistic/2025-06-23/1_23 | 0.337 | 0.343 | +0.006 | 315 |
+| JamesU - MustardBumbler/1_29 | 0.441 | 0.449 | +0.008 | 6984 |
+| Various Opportunistic/2025-08-12/1_114 | 0.194 | 0.202 | +0.008 | 3768 |
+| willard/2024-08-07/1_11 | 0.204 | 0.214 | +0.010 | 4730 |
+| Various Opportunistic/2025-08-27/48 | 0.027 | 0.047 | +0.020 | 1571 |
+
+- mean sens@fpr0.005: `trunk_frozen` 0.216 -> `subframe_head` 0.209 (delta -0.007)
+- 5 folds up, 6 down — split, and the mean delta (-0.007) sits inside the
+  noise floor (~0.014 headline, ~0.017 median per-fold; `noise-floor-cv`).
+- `willard` — the named test case for this mechanism (highest fraction of
+  short/isolated buzz events) — moved up, but only +0.010, well inside noise
+  and not the standout mover the hypothesis predicted. The two biggest movers
+  (`Various Opportunistic/31` at -0.075, `.../48` at +0.020) are both thin
+  folds (942 and 1571 val frames) known to swing hard on their own, not
+  folds this mechanism targets.
+- `best_epoch` stayed in `trunk_frozen`'s range (10-88 per fold), no
+  systematic early/late shift, so the pooling change isn't obviously
+  reshaping the loss landscape — it's just not helping.
 
 ## Conclusion
 
-(fill in when the CV finishes)
+Time-max/freq-mean pooling over the trunk's (6,4,1024) tail does not clear
+the noise floor against `trunk_frozen`, and the fold that motivated the
+hypothesis (`willard`) didn't move meaningfully. Negative/inconclusive:
+mean-pool GAP evidence-dilution is not the bottleneck, at least not one this
+pooling swap recovers. Not worth re-testing stacked on the fine-tune per the
+hypothesis's own stopping condition ("if this wins clearly frozen, *then*
+retest on the fine-tune") — it did not win clearly frozen.
