@@ -1,0 +1,26 @@
+2026-09-06 03:24:18.052284: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2026-09-06 03:24:18.078929: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2026-09-06 03:24:18.078986: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2026-09-06 03:24:19.001401: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[subframe_head] set medium, embedder yamnet_trunk, translation general: 11 rotating fold(s), 311 train-only, 0 holdout
+/home/luke/projects/buzzdetect-training/.local/worktrees/subframe-head/03_train/dataset.py:130: UserWarning: all 1 embedding file(s) under /home/luke/projects/buzzdetect-training/.local/worktrees/subframe-head/02_set/sets/medium/embeddings/yamnet_trunk/raw/Luke - External Data Sources/InsectSound1000/Coccinella_septempunctata/2023419-16-19/000020 were dropped by the translation; raw label(s) present: ['EXCLUDE']
+  warnings.warn(
+/home/luke/projects/buzzdetect-training/.local/worktrees/subframe-head/03_train/dataset.py:130: UserWarning: all 1 embedding file(s) under /home/luke/projects/buzzdetect-training/.local/worktrees/subframe-head/02_set/sets/medium/embeddings/yamnet_trunk/raw/Luke - External Data Sources/InsectSound1000/Nezara_viridula/2022511-18-10/000018 were dropped by the translation; raw label(s) present: ['EXCLUDE']
+  warnings.warn(
+/home/luke/projects/buzzdetect-training/.local/worktrees/subframe-head/03_train/dataset.py:130: UserWarning: all 2 embedding file(s) under /home/luke/projects/buzzdetect-training/.local/worktrees/subframe-head/02_set/sets/medium/embeddings/yamnet_trunk/raw/Luke - External Data Sources/InsectSound1000/Nezara_viridula/2022511-18-10/000025 were dropped by the translation; raw label(s) present: ['EXCLUDE']
+  warnings.warn(
+/home/luke/projects/buzzdetect-training/.local/worktrees/subframe-head/03_train/dataset.py:130: UserWarning: all 1 embedding file(s) under /home/luke/projects/buzzdetect-training/.local/worktrees/subframe-head/02_set/sets/medium/embeddings/yamnet_trunk/raw/Luke - External Data Sources/InsectSound1000/Nezara_viridula/2022511-18-10/000032 were dropped by the translation; raw label(s) present: ['EXCLUDE']
+  warnings.warn(
+2026-09-06 03:24:29.598597: E external/local_xla/xla/stream_executor/cuda/cuda_driver.cc:282] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+2026-09-06 03:24:29.598642: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:134] retrieving CUDA diagnostic information for host: beelab-files
+2026-09-06 03:24:29.598651: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:141] hostname: beelab-files
+2026-09-06 03:24:29.598780: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:165] libcuda reported version is: 580.173.2
+2026-09-06 03:24:29.598808: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:169] kernel reported version is: NOT_FOUND: could not find kernel module information in driver version file contents: "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.173.02  Release Build  (dvs-builder@U22-I3-AK02-24-4)  Tue Jun 23 08:17:01 UTC 2026
+GCC version:  gcc version 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 
+"
+2026-09-06 03:24:29.600068: W external/local_tsl/tsl/framework/cpu_allocator_impl.cc:83] Allocation of 1641947136 exceeds 10% of free system memory.
+[subframe_head_foldJamesU - MustardBumbler/1_29] training on 321 fold(s), 66811 frames; early stopping on JamesU - MustardBumbler/1_29 (6984 frames)...
+/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/trainers/epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+Epoch 1/400
+2026-09-06 03:24:31.555779: W external/local_tsl/tsl/framework/cpu_allocator_impl.cc:83] Allocation of 1641947136 exceeds 10% of free system memory.

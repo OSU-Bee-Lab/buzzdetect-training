@@ -80,6 +80,35 @@ def _make_adam_multilr(lr_head, backbone_mult, backbone_ids):
                              backbone_mult=backbone_mult, backbone_ids=backbone_ids)
 
 
+_TIME_MAX_FREQ_MEAN_CLS = None
+
+
+def _make_time_max_freq_mean():
+    """(batch, time, freq, channels) -> (batch, channels): max over time,
+    mean over frequency. Replaces GlobalAveragePooling2D so a short buzz's
+    evidence isn't divided across silent time steps -- see build_head.
+
+    A plain Lambda(lambda t: ...) here fails keras' safe deserialization at
+    inference load time (write_model_py.py's load(compile=False) path);
+    a registered Layer subclass round-trips through model.save()/load_model()
+    without needing safe_mode=False. Built lazily, like AdamMultiLR above, so
+    importing this module doesn't force keras/TF to load out of order.
+    """
+    global _TIME_MAX_FREQ_MEAN_CLS
+    import keras
+    if _TIME_MAX_FREQ_MEAN_CLS is None:
+        @keras.saving.register_keras_serializable(package='buzzdetect')
+        class TimeMaxFreqMean(keras.layers.Layer):
+            def call(self, inputs):
+                import tensorflow as tf
+                return tf.reduce_mean(tf.reduce_max(inputs, axis=1), axis=1)
+
+            def compute_output_shape(self, input_shape):
+                return (input_shape[0], input_shape[3])
+        _TIME_MAX_FREQ_MEAN_CLS = TimeMaxFreqMean
+    return _TIME_MAX_FREQ_MEAN_CLS()
+
+
 class EmbedderYamnetTrunk(BaseEmbedder):
     embeddername = "yamnet_trunk"
     framelength_s = 0.96
@@ -145,9 +174,17 @@ class EmbedderYamnetTrunk(BaseEmbedder):
         import tensorflow as tf
 
         full = self._load_full()
+        # subframe-head: GAP averages away the (3, 2, 1024) time x frequency
+        # map layers 13-14 leave behind, dividing a short buzz's evidence by
+        # up to 6x and mixing in whichever neighbouring positions are silent.
+        # Cut the tail before GAP and pool it ourselves: max over the time
+        # axis (a buzz needs to win only one of its 3 time steps), mean over
+        # the frequency axis (buzz is narrowband but YAMNet's 2 remaining
+        # bands at this depth are coarse, so max there would be noisier).
+        pre_gap = full.get_layer(_GAP_LAYER).input
         tail = keras.Model(
             inputs=full.get_layer(_TRUNK_LAYER).output,
-            outputs=full.get_layer(_GAP_LAYER).output,
+            outputs=pre_gap,
             name=_TAIL_NAME,
         )
 
@@ -160,7 +197,8 @@ class EmbedderYamnetTrunk(BaseEmbedder):
 
         inp = keras.layers.Input(shape=(self.n_embeddings,), dtype=tf.float32, name='input')
         x = keras.layers.Reshape(_TRUNK_SHAPE)(inp)
-        x = tail(x)
+        x = tail(x)                              # (batch, time=3, freq=2, 1024)
+        x = _make_time_max_freq_mean()(x)        # (batch, 1024)
         x = keras.layers.Dropout(dropout)(x)
         out = keras.layers.Dense(n_classes)(x)
         model = keras.Model(inp, out, name=name)
