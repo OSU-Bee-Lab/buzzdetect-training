@@ -67,9 +67,9 @@ does not work for either of them.** This has cost every LOOP agent a rediscovery
 
 **1. Launch the job itself detached from the shell** — direct env-python (no
 `conda run` wrapper process), unbuffered, logging to a file in the worktree.
-**Capture its PID** (`echo $!`) — you need it for step 2, and a `pgrep -f`
-pattern is unreliable here (it self-matches the Monitor's own command line; a
-`pkill -f` on the job name once killed the shell running it).
+**Capture its PID** (`echo $!`) — you need it for the status check below,
+and a `pkill -f` on the job name has previously killed the shell running it,
+so prefer `pgrep -af` (read-only) over anything that kills by pattern.
 
 ```
 nohup env PYTHONUNBUFFERED=1 CUDA_VISIBLE_DEVICES="" MALLOC_ARENA_MAX=2 \
@@ -85,34 +85,37 @@ For stage 3 drop `BUZZDETECT_CHUNK_FRAMES`; keep `CUDA_VISIBLE_DEVICES=""` (the
 1024-d probe anyway). Pass `--verbose` to stage 3 or it trains silently with no
 per-epoch line in the log.
 
-**2. Await it with ONE `persistent` `Monitor`** — not `run_in_background`, not a
-non-persistent Monitor. A non-persistent Monitor caps at 1 h, and every wake
-(including a bare "timed out, re-arm") burns tokens and likely drops the prompt
-cache. A stage-3 CV runs ~40 h on CPU, so you want to wake **only on real
-events**: each fold finishing, and the run ending. The command is a `while` loop
-that emits a line *only* on a state change and exits (ending the watch) on
-completion or death:
+**2. Do not `Monitor` a job whose next real event is more than ~1 h away —
+neither persistent nor non-persistent.** A non-persistent Monitor's problem is
+obvious (caps at 1 h, forced re-arm every timeout). A *persistent* Monitor
+looks like the fix — it only emits a line on a real state change (a fold
+finishing, the run ending), so it doesn't force periodic re-arms — but that
+doesn't save the token cost: Anthropic's prompt cache has its own ~1 h TTL
+independent of Monitor's timeout, and a persistent Monitor still blocks this
+session on a wake. If real events are sparser than ~1 h apart (any stage-3 CV;
+most stage-2 extractions), the session's cache goes cold in the gap regardless
+of which Monitor mode is used, and the eventual wake pays full uncached-context
+price — for a ~40 h CV that's not one cold wake, it's several. Do not spend a
+persistent Monitor's wake budget assuming it avoids this; it doesn't.
+
+**What actually works: launch detached (step 1) and end the turn.** Don't wait
+in-session at all. Come back on your own schedule (a new message, `/loop` with
+a real interval, or a subsequent turn) and re-check with the one-command
+status check below — cheap, and it doesn't hold this session's cache hostage
+to the job's pace:
 
 ```
-Monitor, persistent: true —
-  PID=<pid from step 1>
-  prev=$(find models/<name>/folds -name summary.json 2>/dev/null | wc -l)
-  while kill -0 $PID 2>/dev/null && [ ! -f models/<name>/folds_sx.csv ]; do
-    n=$(find models/<name>/folds -name summary.json 2>/dev/null | wc -l)
-    [ "$n" -gt "$prev" ] && { echo "fold $n/11 done"; prev=$n; }
-    sleep 180
-  done
-  [ -f models/<name>/folds_sx.csv ] \
-    && { echo "=== CV COMPLETE ==="; column -s, -t models/<name>/folds_sx.csv | tail -3; } \
-    || { echo "=== DIED ==="; grep -aE "Traceback|Error|Killed|MemoryError|Exception" <log> | tail -8; }
+pgrep -af 03_train/main.py   # or 02_set/main.py
+find models/<name>/folds -name summary.json | wc -l   # of 11, stage 3
+tail -5 <log>
 ```
 
-For stage 2 the loop condition is just `kill -0 $PID` and the exit marker is the
-line `all extractions complete` in `extract_<set>.log` (no per-fold tick).
-
-Don't run a second Monitor for the same job, and don't poll it yourself between
-turns — the persistent Monitor is the whole wait. `TaskStop` it only when you're
-abandoning the run.
+If you must be notified rather than check back yourself, that has to happen
+**outside this session** — e.g. a plain `nohup`-detached shell loop (launched
+the same way as the job itself, not via `run_in_background`) that polls for
+the completion marker and then invokes a fresh `claude` CLI call. A Monitor
+tied to this session's context is the wrong tool for a wait longer than the
+cache TTL, full stop.
 
 - `--workers` only parallelises the framing+embedding phase. `extract_snips`
   (reading source audio off the slow HDD) is always serial — a large set's snip

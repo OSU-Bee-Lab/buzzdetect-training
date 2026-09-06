@@ -38,9 +38,11 @@ result in `log.jsonl`. That changes what an experiment is worth:
   which is the live bottleneck. `prediction-provenance`, `trill-vs-buzz` and
   `eval-sampling-floor` are all of this kind.
 
-A reasonable split for the next several loops: one exploit run (`large`), one
-instrumentation run, and the rest on the structural ideas that need no
-re-extraction (`subframe-head`, `lab-positives-ablation`).
+A reasonable split for the next several loops: one instrumentation run and the
+rest on the structural ideas that need no re-extraction (`subframe-head`,
+`lab-positives-ablation`). The `large` exploit run (below) is not part of this
+rotation — it happens once, at Luke's request, after the structural search
+concludes; see the note on `large-set-confirmation`.
 
 ---
 
@@ -243,14 +245,24 @@ it compounds across every future experiment.
 
 ### large-set-confirmation
 
-**The one exploit item.** `trunk-ft-1e5` is +0.046 at 9/11 folds and is the only
-result in the log clearly outside the noise floor, but it has only ever been
-measured at `framehop_prop 1`. `large` is the same annotations and folds at
-`framehop_prop 0.2` (5x frame density), and the working assumption on this
-project is that a change can look modest on `medium` and be strong on `large`.
+**Not a loop experiment. Training on `large` is forbidden without Luke asking
+for it explicitly**, no matter how ready it looks (extraction already
+finished, a promising structural diff pending). `large` is a one-time final
+confirmation to run *after* the structural search on `medium` concludes, not
+another set to rotate experiments through — see the `Set:` constraint in
+`LOOP.md`. An agent must never launch it on its own initiative.
 
-`.local/worktrees/large-trunk-ft/` already exists with extraction started and
-`notes.md` written; check whether the extraction finished before relaunching.
+**The idea, for when Luke does ask for it:** `trunk-ft-1e5` is +0.046 at 9/11
+folds and is the only result in the log clearly outside the noise floor, but it
+has only ever been measured at `framehop_prop 1`. `large` is the same
+annotations and folds at `framehop_prop 0.2` (5x frame density), and the
+working assumption on this project is that a change can look modest on
+`medium` and be strong on `large`.
+
+`.local/worktrees/large-trunk-ft/` already exists; extraction there finished
+(2026-09-02, `extract_large.log` ends `all extractions complete`), but the only
+training done there is a one-fold smoke probe (`large_trunk_ft_1e5`,
+1/11 folds) — not a real CV.
 
 **Read it carefully:** `large`'s `folds_sx.csv` is **not comparable to any
 `log.jsonl` entry** — changing frame density moves the negative population the

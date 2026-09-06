@@ -89,6 +89,13 @@ why the endpoint is per-deployment rather than pooled.
   `log.jsonl` the way the pre-CV log was archived and rerun whichever
   experiments are worth keeping under the new set, rather than mixing fold
   counts silently in one log.
+  **Training or CV runs on `large` are forbidden as a loop experiment,
+  regardless of how ready it looks (extraction finished, a promising diff
+  pending).** `large` is not an alternative set to iterate structure on — same
+  annotations and folds as `medium` at 5x frame density, kept only for a single
+  final-confirmation pass *after* the structural search on `medium` concludes,
+  and only when Luke asks for it. An agent must never launch it on its own
+  initiative.
 - **Translation: pass `--translation general_v1`, not `general`.** `general`
   moved on 2026-09-03 (`0a2ef2a`, `b49cdaa`): 17 classes became 14, and
   `mech_plane` — 9,773 frames, the fourth-largest class — was folded into
