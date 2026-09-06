@@ -1,7 +1,7 @@
-2026-09-06 03:24:18.052284: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
-2026-09-06 03:24:18.078929: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
-2026-09-06 03:24:18.078986: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
-2026-09-06 03:24:19.001401: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+2026-09-06 03:29:21.337623: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2026-09-06 03:29:21.363288: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2026-09-06 03:29:21.363335: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2026-09-06 03:29:22.251932: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
 [subframe_head] set medium, embedder yamnet_trunk, translation general: 11 rotating fold(s), 311 train-only, 0 holdout
 /home/luke/projects/buzzdetect-training/.local/worktrees/subframe-head/03_train/dataset.py:130: UserWarning: all 1 embedding file(s) under /home/luke/projects/buzzdetect-training/.local/worktrees/subframe-head/02_set/sets/medium/embeddings/yamnet_trunk/raw/Luke - External Data Sources/InsectSound1000/Coccinella_septempunctata/2023419-16-19/000020 were dropped by the translation; raw label(s) present: ['EXCLUDE']
   warnings.warn(
@@ -11,16 +11,38 @@
   warnings.warn(
 /home/luke/projects/buzzdetect-training/.local/worktrees/subframe-head/03_train/dataset.py:130: UserWarning: all 1 embedding file(s) under /home/luke/projects/buzzdetect-training/.local/worktrees/subframe-head/02_set/sets/medium/embeddings/yamnet_trunk/raw/Luke - External Data Sources/InsectSound1000/Nezara_viridula/2022511-18-10/000032 were dropped by the translation; raw label(s) present: ['EXCLUDE']
   warnings.warn(
-2026-09-06 03:24:29.598597: E external/local_xla/xla/stream_executor/cuda/cuda_driver.cc:282] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
-2026-09-06 03:24:29.598642: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:134] retrieving CUDA diagnostic information for host: beelab-files
-2026-09-06 03:24:29.598651: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:141] hostname: beelab-files
-2026-09-06 03:24:29.598780: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:165] libcuda reported version is: 580.173.2
-2026-09-06 03:24:29.598808: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:169] kernel reported version is: NOT_FOUND: could not find kernel module information in driver version file contents: "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.173.02  Release Build  (dvs-builder@U22-I3-AK02-24-4)  Tue Jun 23 08:17:01 UTC 2026
+2026-09-06 03:29:32.495851: E external/local_xla/xla/stream_executor/cuda/cuda_driver.cc:282] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+2026-09-06 03:29:32.495892: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:134] retrieving CUDA diagnostic information for host: beelab-files
+2026-09-06 03:29:32.495900: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:141] hostname: beelab-files
+2026-09-06 03:29:32.495976: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:165] libcuda reported version is: 580.173.2
+2026-09-06 03:29:32.496001: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:169] kernel reported version is: NOT_FOUND: could not find kernel module information in driver version file contents: "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.173.02  Release Build  (dvs-builder@U22-I3-AK02-24-4)  Tue Jun 23 08:17:01 UTC 2026
 GCC version:  gcc version 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 
 "
-2026-09-06 03:24:29.600068: W external/local_tsl/tsl/framework/cpu_allocator_impl.cc:83] Allocation of 1641947136 exceeds 10% of free system memory.
+2026-09-06 03:29:32.497254: W external/local_tsl/tsl/framework/cpu_allocator_impl.cc:83] Allocation of 1641947136 exceeds 10% of free system memory.
 [subframe_head_foldJamesU - MustardBumbler/1_29] training on 321 fold(s), 66811 frames; early stopping on JamesU - MustardBumbler/1_29 (6984 frames)...
 /home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/trainers/epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
   self.data_adapter = data_adapters.get_data_adapter(
 Epoch 1/400
-2026-09-06 03:24:31.555779: W external/local_tsl/tsl/framework/cpu_allocator_impl.cc:83] Allocation of 1641947136 exceeds 10% of free system memory.
+2026-09-06 03:29:34.404739: W external/local_tsl/tsl/framework/cpu_allocator_impl.cc:83] Allocation of 1641947136 exceeds 10% of free system memory.
+66/66 - 21s - 315ms/step - accuracy: 0.0178 - loss: 0.6460 - val_accuracy: 0.0112 - val_loss: 0.5321 - val_sens_fpr0.005: 0.0000e+00
+Epoch 2/400
+66/66 - 19s - 288ms/step - accuracy: 0.0427 - loss: 0.5123 - val_accuracy: 0.0574 - val_loss: 0.4718 - val_sens_fpr0.005: 0.0000e+00
+Epoch 3/400
+66/66 - 20s - 298ms/step - accuracy: 0.1178 - loss: 0.4655 - val_accuracy: 0.2228 - val_loss: 0.4518 - val_sens_fpr0.005: 0.0033
+Epoch 4/400
+66/66 - 19s - 285ms/step - accuracy: 0.1987 - loss: 0.4462 - val_accuracy: 0.3013 - val_loss: 0.4429 - val_sens_fpr0.005: 0.0756
+Epoch 5/400
+66/66 - 19s - 291ms/step - accuracy: 0.2534 - loss: 0.4365 - val_accuracy: 0.3558 - val_loss: 0.4371 - val_sens_fpr0.005: 0.2141
+Epoch 6/400
+66/66 - 19s - 285ms/step - accuracy: 0.2859 - loss: 0.4304 - val_accuracy: 0.3804 - val_loss: 0.4340 - val_sens_fpr0.005: 0.2785
+Epoch 7/400
+66/66 - 19s - 287ms/step - accuracy: 0.3105 - loss: 0.4260 - val_accuracy: 0.4012 - val_loss: 0.4316 - val_sens_fpr0.005: 0.3200
+Epoch 8/400
+66/66 - 19s - 294ms/step - accuracy: 0.3273 - loss: 0.4225 - val_accuracy: 0.4149 - val_loss: 0.4300 - val_sens_fpr0.005: 0.3378
+Epoch 9/400
+66/66 - 20s - 296ms/step - accuracy: 0.3417 - loss: 0.4201 - val_accuracy: 0.4263 - val_loss: 0.4288 - val_sens_fpr0.005: 0.3594
+Epoch 10/400
+66/66 - 19s - 283ms/step - accuracy: 0.3527 - loss: 0.4178 - val_accuracy: 0.4344 - val_loss: 0.4279 - val_sens_fpr0.005: 0.3783
+Epoch 11/400
+66/66 - 21s - 321ms/step - accuracy: 0.3626 - loss: 0.4159 - val_accuracy: 0.4429 - val_loss: 0.4270 - val_sens_fpr0.005: 0.3852
+Epoch 12/400

@@ -15,14 +15,24 @@ remaining frequency bands even though buzz is narrowband.
 
 Replacing GAP with **max over the time axis, then mean over the frequency
 axis** (IDEAS.md's `subframe-head`, option 1) should recover some of that
-evidence without changing the frame population, the unfreeze depth, or the
-head's output width (still 1024-d, so nothing downstream moves). Comparator is
-`trunk_ft_1e5` (0.262), not `cv-baseline` — same embedder family, same
-unfreeze depth (13-14), same LRs/batch; the only change is what feeds the
-Dropout->Dense head.
+evidence without changing the frame population or the head's output width
+(still 1024-d, so nothing downstream moves).
+
+**Backbone stays frozen (`lr_backbone=0`) — layers 13-14 are not
+fine-tuned here.** The only trainable weights are the usual Dropout->Dense
+head; pooling itself has no parameters. This is deliberately not stacked on
+top of the fine-tune: keeping the backbone frozen makes each pooling variant a
+cheap, fast-iterating CV (same regime as `trunk_frozen`), so several pooling
+options (this one, log-sum-exp, keep-frequency) can be tried in sequence
+before spending a slow fine-tuned run on whichever wins. Comparator is
+`trunk_frozen` (0.216), not `trunk_ft_1e5` and not `cv-baseline` — same trunk
+pipeline, same frozen 13-14, same LR/batch regime; the only change is what
+feeds the head.
 
 Prediction: most folds move up, `willard` (highest fraction of short/isolated
-buzz events, the fold this mechanism is explicitly aimed at) moves most.
+buzz events, the fold this mechanism is explicitly aimed at) moves most. If
+this wins clearly frozen, *then* it's worth re-testing stacked on the
+fine-tune (against `trunk_ft_1e5`).
 
 ## Changes
 
@@ -51,13 +61,16 @@ launching the CV).
 
 ```
 CUDA_VISIBLE_DEVICES="" 03_train/main.py --name subframe_head --set medium \
-  --embedder yamnet_trunk --translation general --lr-backbone 1e-5 \
+  --embedder yamnet_trunk --translation general --lr-backbone 0 \
   --lr-head 2e-4 --batch 1024 --verbose -y
 ```
 
-Matches `trunk_ft_1e5` exactly except the pooling change above: min_delta
+Matches `trunk_frozen` exactly except the pooling change above: min_delta
 0.002, patience 50, epochs_max 400, `general` translation (this branch
 predates the `general_v1` freeze), CPU-only.
+
+(A first launch used `--lr-backbone 1e-5`, i.e. stacked on the fine-tune —
+wrong call, reverted before any fold finished. Backbone is frozen here.)
 
 ## Results
 
