@@ -50,6 +50,18 @@ concludes; see the note on `large-set-confirmation`.
 
 ### subframe-head
 
+**Option 1 tested (`exp/subframe-head`, 2026-09-06): negative.** Time-max/
+freq-mean pooling, run frozen (not stacked on the fine-tune — see notes.md on
+that branch for why) against `trunk_frozen` (0.216): 0.209, mean delta -0.007,
+5/11 folds up vs 6/11 down — inside the ~0.014 noise floor. `willard`, the
+named test case for this exact mechanism, moved only +0.010. `best_epoch`
+stayed in `trunk_frozen`'s range, so no sign of a collapsed/noisy gradient
+either. Per the branch's own stopping condition ("if this wins clearly frozen,
+*then* retest on the fine-tune"), it didn't win frozen, so it was not
+retested stacked on the fine-tune, and options 2/3 below were not run. Mean
+pooling's evidence dilution is not the bottleneck here, at least not one this
+swap recovers — don't rerun option 1 as stated.
+
 **Hypothesis:** `yamnet_trunk` caches `layer12_pointwise_conv_relu` at shape
 **(6, 4, 512)** — 6 time steps and 4 frequency bands inside each 0.96 s frame.
 Layers 13-14 stride that to (3, 2, 1024) and then
