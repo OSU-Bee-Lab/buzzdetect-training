@@ -58,8 +58,40 @@ Everything else matches `trunk-ft-1e5`: min_delta 0.002, patience 50, epochs 400
 
 ## Results
 
-_pending_
+11-fold CV complete (2026-09-05/06, ~26h CPU). Headline vs `trunk-ft-1e5`
+(`tools/compare_folds.py`):
+
+| unfroze | experiment | sens@fpr0.005 | median best_epoch |
+|---|---|---|---|
+| nothing (frozen control) | `trunk-frozen` | 0.216 | — |
+| **layer 14 only** | **`unfreeze-one`** | **0.234** | **48** |
+| layers 13-14 | `trunk-ft-1e5` | 0.262 | 35 |
+| layers 12-14 | `unfreeze-more` | 0.229 | 25 |
+
+4/11 folds up, 6 down, 1 flat vs `trunk-ft-1e5`; mean delta -0.028 (above the
+~0.014 headline noise floor). The two largest drops are on folds with solid
+frame counts, not thin-fold artifacts: `willard/1_11` -0.193 (4730 val
+frames), `Various Opportunistic/1_114` -0.124 (3768 val frames). One thin fold
+(`Various Opportunistic/48`, 6 negative frames) swung +0.079 in 14-only's
+favor and should be discounted, per the standing thin-fold caveat — it doesn't
+change the overall read since the real-frame-count folds already carry the
+result.
+
+Median `best_epoch` (48) is *higher* than 13-14's (35), extending the
+monotonic decline with capacity (frozen: no epoch-limited run at all → 13-14:
+35 → 12-14: 25 is the overfit-signature direction; 14-only's 48 sits on the
+low-capacity side of 13-14, consistent with needing more epochs to fit before
+early stopping, not overfitting).
 
 ## Conclusion
 
-_pending_
+Prediction falsified: 14-only (0.234) lands strictly between frozen (0.216)
+and 13-14 (0.262), not at or above 13-14. The depth dose-response is not
+monotonically capacity-limited-by-overfitting in the shallow direction —
+it peaks at 13-14 with real headroom on both sides (frozen and 14-only both
+underperform it, 12-14 also underperforms it). **13-14 remains the settled
+optimum on `medium`.** The 12-14 turnover is overfitting (as before), but the
+13-14 optimum is not "the shallowest point before overfitting sets in" — it's
+a true interior maximum, so there's no reason to expect a shallower point to
+recover the loss. This experiment is a completed negative result, not a
+regression to chase further on this axis.
