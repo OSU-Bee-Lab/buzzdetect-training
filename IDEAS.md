@@ -343,11 +343,14 @@ a backbone that already works, and for free, do that one first.
 YAMNet layers 13-14 (`exp/trunk-ft`, `trunk-ft-1e5`) is **+0.046 vs a matched
 frozen control**, inverting the pre-rework `yamnet-ft` verdict, so LoRA's
 motivation (fine-tune with less overfit risk) is much weaker than it was. Depth
-is settled on `medium` by `exp/unfreeze-more`: frozen 0.216 → 13-14 **0.262** →
-12-14 0.229, with median `best_epoch` falling 35 → 25. 13-14 is the operating
-point; deeper only overfits. A cleaner low-rank adapter could still beat plain
-FT, but it is a transformer technique and inserting it into YAMNet's conv layers
-is non-standard — it is now a low-priority idea, not a promising one.
+is settled on `medium` by `exp/unfreeze-more` and `exp/unfreeze-one`: frozen
+0.216 → **layer 14 only 0.234** → 13-14 **0.262** → 12-14 0.229, median
+`best_epoch` 48 → 35 → 25. 13-14 is a true interior optimum, not the edge of
+an overfitting cliff — both the shallower (14-only) and deeper (12-14) points
+underperform it, so there's no shallower point left to try. A cleaner
+low-rank adapter could still beat plain FT, but it is a transformer technique
+and inserting it into YAMNet's conv layers is non-standard — it is now a
+low-priority idea, not a promising one.
 
 ### stopping-rule-scale
 
