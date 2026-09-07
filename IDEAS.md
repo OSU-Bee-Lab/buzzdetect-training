@@ -143,36 +143,29 @@ volume is wanted.
   a much weaker one than usual since night labels are true by time of day, not
   by the model's judgement.
 
-### prediction-provenance
+### prediction-provenance-followups
 
-*(Supersedes the old `event-level-metric` idea, which is the same file change
-for a narrower purpose.)*
+**Landed 2026-09-07** (`exp/prediction-provenance`, no CV — code change only):
+`predictions.csv` now carries `path` (join key, one event per pickle),
+`frame_index` and `labels_raw` alongside `activation_ins_buzz`/`correct`.
+`03_train/sx.py::read_fold_predictions_events` collapses to one row per
+event. `trill-vs-buzz`'s diagnostic step 1 is now a query on any model
+trained from here on, not a separate run.
 
-**Problem:** `folds/<fold>/predictions.csv` has exactly two columns,
-`activation_ins_buzz` and `correct` — and `correct` is a misnomer, it is the
-ground-truth buzz label, not whether the prediction was right
-(`03_train/train.py:80`). There is no ident, no frame index, no timestamp and no
-raw label. Consequences:
+**Left undone, on purpose (both need a run to close, unlike the above):**
 
-- You cannot ask **"what are the ~22 negative frames above threshold?"** — the
-  frames that literally define the operating point of every number in the log.
-- You cannot ask **"which kind of buzz do we miss?"** (`ins_buzz_low` vs
-  `medium` vs `pollination`).
-- You cannot ask **"did any frame overlapping this event fire?"**, so every
-  comparison is locked to a per-frame rate and any experiment that changes frame
-  density (hop, framelength, rescue policy) is uninterpretable — this is
-  precisely what sank `framehop-overlap`.
-
-**What to do:** carry `ident`, frame index (join key to the existing per-ident
-`frametimes.csv`) and the raw label list into `predictions.csv`, and add an
-event-level read alongside the frame-level one. Note this changes what a model
-*directory contains*, not the metric, so it does not run afoul of the
-`03_train/metrics.py` rule, and `03_train/resummarize.py` means the new columns
-can be backfilled for old models without retraining.
-
-**Payoff is retroactive and permanent.** Every future experiment gets a
-failure-mode breakdown for free, and the two diagnostics below become one-line
-queries instead of their own runs.
+- **Timestamp join.** `frametimes.csv` (per-ident, written by
+  `02_set/extract.py`) isn't actually on disk for any current ident in
+  `medium`/`lite` — it was added to the extractor after these were last
+  extracted, and the annotation fingerprint hasn't changed since, so nothing
+  re-triggered it. `frame_index` joins to it once a fold re-extracts for
+  some other reason; don't force a re-extraction just for this.
+- **Backfilling old models.** `resummarize.py` only rebuilds `folds_sx.csv`
+  from an existing `predictions.csv` — it never re-scores, so it can't add
+  columns a training run didn't write. Old models (everything in
+  `log.jsonl` so far) keep two-column `predictions.csv` unless a small
+  rescore-from-`model.keras` script gets written. Not worth it unless a
+  specific old model's provenance is actually needed.
 
 ### trill-vs-buzz
 
@@ -191,9 +184,11 @@ story and is worth understanding either way — it may be that trill-rich folds
 are simply insect-rich folds.
 
 **What to do:**
-1. Diagnostic first, and free once `prediction-provenance` lands: tabulate the
-   raw labels of the negatives above each fold's threshold. If trill dominates,
-   the whole research program narrows.
+1. Diagnostic first, now free (`prediction-provenance` landed, `labels_raw`
+   is on `predictions.csv`): tabulate the raw labels of the negatives above
+   each fold's threshold. Needs a model trained after 2026-09-07; nothing in
+   `log.jsonl` yet has the column. If trill dominates, the whole research
+   program narrows.
 2. If it does: the `general` translation already keeps `ins_trill` as its own
    class, so the probe *has* the auxiliary supervision. The next lever is a
    pairwise margin — an explicit ranking term on buzz-vs-trill pairs only —
