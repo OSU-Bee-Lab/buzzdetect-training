@@ -183,3 +183,26 @@ def read_fold_predictions(dir_folds):
         df['fold'] = os.path.relpath(os.path.dirname(path), dir_folds)
         frames.append(df)
     return pd.concat(frames, ignore_index=True) if frames else None
+
+
+def read_fold_predictions_events(dir_folds):
+    """Frame-level predictions collapsed to one row per (fold, event) —
+    'event' being one extracted pickle, an annotated span of one label
+    combination. Requires predictions.csv's provenance columns (path,
+    labels_raw; see train.py::_score_fold), so this is None for models
+    trained before that landed.
+
+    activation_ins_buzz is the event's max (did any frame overlapping this
+    event fire), n_frames its frame count. Use this to ask "which raw label
+    combination do we miss" without the frame-count of a long event
+    outweighing a short one the way the frame-level table would.
+    """
+    predictions = read_fold_predictions(dir_folds)
+    if predictions is None or 'path' not in predictions.columns:
+        return None
+    return predictions.groupby(['fold', 'path'], as_index=False).agg(
+        activation_ins_buzz=('activation_ins_buzz', 'max'),
+        correct=('correct', 'first'),
+        labels_raw=('labels_raw', 'first'),
+        n_frames=('activation_ins_buzz', 'size'),
+    )
