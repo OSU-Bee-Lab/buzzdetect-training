@@ -151,10 +151,21 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
 def _score_fold(model, setname, embeddername, fold, translation, classes):
     """Score a trained model on a fold it never saw, ins_buzz only.
 
-    Returns the frame-level (activation, correct) table, or None if the fold
-    has no usable frames. Every reported number is derived from this: it is the
-    only per-fold result kept on disk, and sx.py and resummarize.py rebuild the
-    sweeps from it on demand.
+    Returns the frame-level (activation, correct, ...) table, or None if the
+    fold has no usable frames. Every reported number is derived from this: it
+    is the only per-fold result kept on disk, and sx.py and resummarize.py
+    rebuild the sweeps from it on demand.
+
+    path/frame_index/labels_raw carry provenance for the frames that set
+    every reported number: which event a frame came from (path — one pickle
+    per event, of no fixed depth, so this is the join key rather than a
+    parsed-out ident), which frame within that event's frame sequence, and
+    the raw label combination the event was annotated with (unaffected by
+    translation, unlike `correct`). frametimes.csv would add an absolute
+    timestamp on top of frame_index, but it isn't written for every ident
+    already on disk (only extractions since it was added) — join it in
+    yourself where it exists rather than expecting this table to always have
+    a time column.
     """
     samples = build_fold_dataset(
         cfg.dir_embeddings_fold(setname, embeddername, fold), translation,
@@ -164,8 +175,19 @@ def _score_fold(model, setname, embeddername, fold, translation, classes):
 
     embeddings, correct = _eval_arrays(samples, classes)
     activation = model(embeddings, training=False)[:, classes.index('ins_buzz')].numpy()
+    path = np.concatenate([np.full(s.frames, s.path, dtype=object) for s in samples])
+    frame_index = np.concatenate([np.arange(s.frames) for s in samples])
+    labels_raw = np.concatenate(
+        [np.full(s.frames, '+'.join(s.labels_raw), dtype=object) for s in samples]
+    )
 
-    return pd.DataFrame({'activation_ins_buzz': activation, 'correct': correct})
+    return pd.DataFrame({
+        'activation_ins_buzz': activation,
+        'correct': correct,
+        'path': path,
+        'frame_index': frame_index,
+        'labels_raw': labels_raw,
+    })
 
 
 def _format_sens(sens):
