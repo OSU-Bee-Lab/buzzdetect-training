@@ -48,6 +48,25 @@ if __name__ == '__main__':
                         help='skip the per-frame surprisal CSVs under '
                              '<model>/surprisal/ (written by default, one file '
                              'per source ident, for finding bad annotations)')
+    parser.add_argument('--batch', type=int, default=65568, dest='size_batch',
+                        help='training batch size; the default exceeds the training '
+                             'pool, i.e. full-batch. Lower it for wide inputs '
+                             '(yamnet_trunk) that cannot fit a full batch in VRAM.')
+    parser.add_argument('--lr-backbone', type=float, default=0.0, dest='lr_backbone',
+                        help='learning rate for backbone layers carried in the head '
+                             '(yamnet_trunk only); 0 freezes them')
+    parser.add_argument('--lr-head', type=float, default=None, dest='lr_head',
+                        help='learning rate for the head (yamnet_trunk only); '
+                             'defaults to the embedder head default')
+    parser.add_argument('--min-delta', type=float, default=0.002, dest='min_delta',
+                        help='EarlyStopping min_delta on val_loss (default 0.002, '
+                             'tuned for the full-batch linear probe)')
+    parser.add_argument('--only-folds', nargs='+', default=None, dest='only_folds',
+                        metavar='FOLD',
+                        help='diagnostic: hold out & score only these rotating '
+                             'folds (still trains on the full pool); skips the '
+                             'shipped model. folds_sx.csv is then a subset, not '
+                             'comparable to a full CV.')
     args = parser.parse_args()
 
     train_set(
@@ -63,4 +82,9 @@ if __name__ == '__main__':
         stop_tol=args.stop_tol,
         skip_cv=args.skip_cv,
         surprisal=args.surprisal,
+        size_batch=args.size_batch,
+        lr_backbone=args.lr_backbone,
+        lr_head=args.lr_head,
+        min_delta=args.min_delta,
+        only_folds=args.only_folds,
     )

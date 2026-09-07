@@ -61,12 +61,21 @@ def _to_tf(data, size_batch, size_shuffle):
         embeddings.extend(s.embeddings)
         targets.extend([s.target_array] * s.frames)
     idx = np.random.permutation(len(embeddings))
-    emb_np = np.array(embeddings, dtype=np.float32)[idx]
-    tgt_np = np.array(targets, dtype=np.float32)[idx]
-    return (
-        tf.data.Dataset.from_tensor_slices((emb_np, tgt_np))
-        .cache().shuffle(size_shuffle).batch(size_batch).prefetch(tf.data.AUTOTUNE)
-    )
+    # yamnet_trunk's 12288-d activations are cached float16: kept float16 in
+    # memory (~1.7 GB for the medium pool vs ~3.4 GB float32, and .cache()
+    # would hold a second copy) and cast to float32 one batch at a time.
+    half = len(embeddings) > 0 and np.asarray(embeddings[0]).dtype == np.float16
+    emb_np = np.asarray(embeddings, dtype=np.float16 if half else np.float32)[idx]
+    tgt_np = np.asarray(targets, dtype=np.float32)[idx]
+    del embeddings, targets
+    ds = tf.data.Dataset.from_tensor_slices((emb_np, tgt_np))
+    if not half:
+        ds = ds.cache()
+    ds = ds.shuffle(size_shuffle).batch(size_batch)
+    if half:
+        ds = ds.map(lambda x, y: (tf.cast(x, tf.float32), y),
+                    num_parallel_calls=tf.data.AUTOTUNE)
+    return ds.prefetch(tf.data.AUTOTUNE)
 
 
 def _eval_arrays(samples, classes):
@@ -82,7 +91,7 @@ def _eval_arrays(samples, classes):
 
 
 def _load_data(setname, embeddername, folds_train, name_translation, aug_dirnames,
-               val_fold=None):
+               val_fold=None, size_batch=65568):
     """Pool folds_train for training; val_fold, if given, is a whole separate
     deployment used as the early-stopping monitor.
 
@@ -128,7 +137,6 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     weights = build_weights(data_train, classes)
     weight_dict = {i: w for i, w in enumerate(weights['weight'])}
 
-    size_batch = 65568
     size_shuffle = 10 * size_batch
 
     return TrainingData(
@@ -151,10 +159,21 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
 def _score_fold(model, setname, embeddername, fold, translation, classes):
     """Score a trained model on a fold it never saw, ins_buzz only.
 
-    Returns the frame-level (activation, correct) table, or None if the fold
-    has no usable frames. Every reported number is derived from this: it is the
-    only per-fold result kept on disk, and sx.py and resummarize.py rebuild the
-    sweeps from it on demand.
+    Returns the frame-level (activation, correct, ...) table, or None if the
+    fold has no usable frames. Every reported number is derived from this: it
+    is the only per-fold result kept on disk, and sx.py and resummarize.py
+    rebuild the sweeps from it on demand.
+
+    path/frame_index/labels_raw carry provenance for the frames that set
+    every reported number: which event a frame came from (path — one pickle
+    per event, of no fixed depth, so this is the join key rather than a
+    parsed-out ident), which frame within that event's frame sequence, and
+    the raw label combination the event was annotated with (unaffected by
+    translation, unlike `correct`). frametimes.csv would add an absolute
+    timestamp on top of frame_index, but it isn't written for every ident
+    already on disk (only extractions since it was added) — join it in
+    yourself where it exists rather than expecting this table to always have
+    a time column.
     """
     samples = build_fold_dataset(
         cfg.dir_embeddings_fold(setname, embeddername, fold), translation,
@@ -163,9 +182,31 @@ def _score_fold(model, setname, embeddername, fold, translation, classes):
         return None
 
     embeddings, correct = _eval_arrays(samples, classes)
-    activation = model(embeddings, training=False)[:, classes.index('ins_buzz')].numpy()
+    activation = _predict_buzz(model, embeddings, classes.index('ins_buzz'))
+    path = np.concatenate([np.full(s.frames, s.path, dtype=object) for s in samples])
+    frame_index = np.concatenate([np.arange(s.frames) for s in samples])
+    labels_raw = np.concatenate(
+        [np.full(s.frames, '+'.join(s.labels_raw), dtype=object) for s in samples]
+    )
 
-    return pd.DataFrame({'activation_ins_buzz': activation, 'correct': correct})
+    return pd.DataFrame({
+        'activation_ins_buzz': activation,
+        'correct': correct,
+        'path': path,
+        'frame_index': frame_index,
+        'labels_raw': labels_raw,
+    })
+
+
+def _predict_buzz(model, embeddings, buzz_index, batch=512):
+    """Forward pass in batches. yamnet_trunk's head carries YAMNet conv blocks;
+    scoring a whole fold's frames (thousands x 12288) in one call exhausts a
+    small GPU inside the tail's BatchNorm."""
+    out = [
+        model(embeddings[i:i + batch], training=False)[:, buzz_index].numpy()
+        for i in range(0, len(embeddings), batch)
+    ]
+    return np.concatenate(out) if out else np.array([])
 
 
 def _format_sens(sens):
@@ -272,7 +313,7 @@ def _consensus_epoch(summary_rows, tol):
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs_max, aug_dirnames, verbose,
                held_out_fold, save_binary, epochs_fixed=None, patience=50,
-               stop_tol=None):
+               stop_tol=None, lr_backbone=0.0, lr_head=None, min_delta=0.002):
     """Train one model. Returns (result_row, model); (None, None) if the model
     directory is already populated."""
     if not can_write(dir_model):
@@ -293,16 +334,24 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     # Keras rejects '/' in layer/model names outright; fold ids are paths, so
     # strip separators here rather than relying on the caller's naming.
     tf_name = re.sub(r'[^A-Za-z0-9_.>-]', '_', modelname)
-    model = tf.keras.Sequential(name=tf_name)
-    model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
-    model.add(tf.keras.layers.Dropout(0.2))
-    model.add(tf.keras.layers.Dense(len(data.classes)))
+    if hasattr(embedder, 'build_head'):
+        # The embedder owns the head: yamnet_trunk's carries YAMNet's last two
+        # blocks and has to build them from the backbone's own weights.
+        head_kwargs = {'lr_backbone': lr_backbone}
+        if lr_head is not None:
+            head_kwargs['lr_head'] = lr_head
+        model = embedder.build_head(len(data.classes), name=tf_name, **head_kwargs)
+    else:
+        model = tf.keras.Sequential(name=tf_name)
+        model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
+        model.add(tf.keras.layers.Dropout(0.2))
+        model.add(tf.keras.layers.Dense(len(data.classes)))
 
-    model.compile(
-        loss=tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.2),
-        optimizer=tf.keras.optimizers.Adam(learning_rate=0.002),
-        metrics=['accuracy'],
-    )
+        model.compile(
+            loss=tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.2),
+            optimizer=tf.keras.optimizers.Adam(learning_rate=0.002),
+            metrics=['accuracy'],
+        )
 
     if data.val_tf is None:
         # Shipped model: no fold is held out, so there's nothing clean to
@@ -326,7 +375,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         }
     else:
         callback = tf.keras.callbacks.EarlyStopping(
-            monitor='val_loss', patience=patience, min_delta=0.002, restore_best_weights=True,
+            monitor='val_loss', patience=patience, min_delta=min_delta, restore_best_weights=True,
         )
         # Reporting only, and listed first so its keys are in `logs` before
         # EarlyStopping and History see them. Stopping still happens on
@@ -374,7 +423,11 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         )
 
     if save_binary:
-        model.save(os.path.join(dir_model, 'model.keras'), include_optimizer=True)
+        # include_optimizer=False for a build_head model: its optimizer may be a
+        # custom AdamMultiLR that isn't registered for deserialization, and the
+        # shipped model is terminal (inference loads with compile=False anyway).
+        model.save(os.path.join(dir_model, 'model.keras'),
+                   include_optimizer=not hasattr(embedder, 'build_head'))
 
     if save_binary:
         # Provenance for the model that ships. The rotations' copies were
@@ -402,6 +455,9 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         'epochs_fixed': epochs_fixed,
         'patience': patience,
         'stop_tol': stop_tol,
+        'min_delta': min_delta,
+        'lr_backbone': lr_backbone,
+        'lr_head': lr_head,
     }
     # 'w' for the same reason as write_model_py's — can_write() is the gate
     with open(os.path.join(dir_model, 'config_model.json'), 'w') as f:
@@ -476,11 +532,29 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
 
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
-              assume_yes=False, stop_tol=0.01, skip_cv=False, surprisal=True):
+              assume_yes=False, stop_tol=0.01, skip_cv=False, surprisal=True,
+              size_batch=65568, lr_backbone=0.0, lr_head=None,
+              min_delta=0.002, only_folds=None):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
     folds_holdout = folds_by_role(roles, ROLE_HOLDOUT)
+
+    # Which rotating folds actually take a turn as held-out/scored. Normally
+    # all of them; --only-folds narrows it for stopping-rule / LR probes. The
+    # training pool for each rotation is still "every other rotate fold + all
+    # train folds", so a probe run trains on the same data a real rotation
+    # would -- only the CV coverage shrinks. folds_sx.csv over a subset is NOT
+    # comparable to the full CV and the shipped model is skipped.
+    folds_scored = folds_rotate
+    if only_folds:
+        keep = set(only_folds)
+        missing = keep - set(folds_rotate)
+        if missing:
+            raise ValueError(f'--only-folds not in the rotate set: {sorted(missing)}')
+        folds_scored = [f for f in folds_rotate if f in keep]
+        print(f'[{name}] --only-folds: scoring {len(folds_scored)} of '
+              f'{len(folds_rotate)} rotating folds; shipped model skipped')
 
     if len(folds_rotate) < 2:
         raise ValueError(
@@ -514,18 +588,18 @@ def train_set(name, embeddername, setname, name_translation,
     if skip_cv:
         print(f'[{name}] --skip-cv: no rotations trained; shipped epoch count '
               f'comes from existing fold results only')
-    for i, held_out in enumerate([] if skip_cv else folds_rotate, 1):
+    for i, held_out in enumerate([] if skip_cv else folds_scored, 1):
         folds_train = [f for f in folds_rotate if f != held_out] + folds_train_always
         dir_model = os.path.join(dir_folds, str(held_out))
         modelname = f'{name}_fold{held_out}'
-        tag = f'[{i}/{len(folds_rotate)}] {held_out}'
+        tag = f'[{i}/{len(folds_scored)}] {held_out}'
 
         if not can_write(dir_model):
             print(f'{tag}: already trained; skipping')
             continue
 
         data = _load_data(setname, embeddername, folds_train, name_translation,
-                          aug_dirnames, val_fold=held_out)
+                          aug_dirnames, val_fold=held_out, size_batch=size_batch)
         if data.frames_val == 0:
             # Nothing to early-stop on or score against — a legitimate state if
             # every label in this deployment is ignored or excluded, but it
@@ -537,6 +611,7 @@ def train_set(name, embeddername, setname, name_translation,
             dir_model, modelname, embeddername, setname, name_translation,
             data, epochs_max, aug_dirnames, verbose,
             held_out, save_binary=False, patience=patience,
+            lr_backbone=lr_backbone, lr_head=lr_head, min_delta=min_delta,
         )
         if result is None:
             continue
@@ -563,7 +638,7 @@ def train_set(name, embeddername, setname, name_translation,
               f"{data.frames_train}/{data.frames_val} frames train/val, "
               f"{_format_sens(sens)}", flush=True)
 
-    summary_rows, predictions_pooled = _collect_fold_results(dir_folds, folds_rotate)
+    summary_rows, predictions_pooled = _collect_fold_results(dir_folds, folds_scored)
 
     if skip_cv and not summary_rows:
         raise ValueError(
@@ -582,6 +657,10 @@ def train_set(name, embeddername, setname, name_translation,
         sx = summarize_folds(pooled, facts)
         sx.to_csv(os.path.join(dir_model_full, FNAME_SX_SUMMARY), index=False)
         print(format_sx_report(name, sx))
+
+    if only_folds:
+        print(f'[{name}] --only-folds: probe run, shipped model skipped')
+        return
 
     # Shipped model: trains on every fold except 'holdout'. No fold is held
     # out, so there is nothing clean left to monitor — the epoch count is read
@@ -606,12 +685,13 @@ def train_set(name, embeddername, setname, name_translation,
 
     folds_shipped = folds_rotate + folds_train_always
     data = _load_data(setname, embeddername, folds_shipped, name_translation,
-                      aug_dirnames, val_fold=None)
+                      aug_dirnames, val_fold=None, size_batch=size_batch)
     result, model = _train_one(
         dir_model_full, name, embeddername, setname, name_translation,
         data, epochs_max, aug_dirnames, verbose,
         None, save_binary=True, epochs_fixed=epochs_fixed, patience=patience,
         stop_tol=stop_tol,
+        lr_backbone=lr_backbone, lr_head=lr_head, min_delta=min_delta,
     )
 
     if result is None:

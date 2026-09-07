@@ -154,11 +154,22 @@ def load_augmented(setname, embeddername, aug_dirnames, translation, train_folds
     """
     data = []
     for aug_dirname in aug_dirnames:
+        found_any = False
         for fold in train_folds:
             dir_embed = os.path.join(cfg.dir_embeddings_augment(setname, embeddername, aug_dirname), fold)
             if not os.path.isdir(dir_embed):
-                raise FileNotFoundError(f'augmented embeddings not found: {aug_dirname} fold {fold} (expected {dir_embed})')
+                # A fold with no augment dir is tolerated: augmentation may be
+                # generated for only some folds (e.g. the rotating ones, not the
+                # many tiny always-train idents). It stays within-fold either
+                # way. A totally-absent aug_dirname is still an error.
+                continue
+            found_any = True
             data += build_fold_dataset(dir_embed, translation)
+        if not found_any:
+            raise FileNotFoundError(
+                f'augmented embeddings not found for {aug_dirname!r} in any of '
+                f'{len(train_folds)} training fold(s)'
+            )
     return data
 
 
