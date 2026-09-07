@@ -143,34 +143,6 @@ volume is wanted.
   a much weaker one than usual since night labels are true by time of day, not
   by the model's judgement.
 
-### lab-positives-ablation
-
-**Hypothesis:** the `train`-role pool is **605 InsectSound1000 idents** plus 70
-from the original annotations — lab recordings of insects, a completely
-different acoustic condition from a field recorder. They supply roughly
-2,700 of the buzz frames a fold trains on, against ~4,700 field frames from the
-other ten rotating folds. **Nobody has ever tested whether they help.**
-
-**Why now, and why it is not just an ablation:** on a *frozen* probe, mismatched
-positives cost little — the backbone is fixed, and extra positives mostly
-regularise a linear head. On a *fine-tuned trunk*, gradient flows into layers
-13-14, so the backbone itself is being pulled toward lab acoustics by a third of
-its positive signal. **Unfreezing changes what the lab data is worth**, in a
-direction nobody has measured. If it's a drag, the current best result is
-carrying a handicap; if it's a crutch, that is important to know before the
-field annotation grows and dilutes it.
-
-**What to do:** set `role` to `exclude` for the InsectSound1000 source and run
-one CV against `trunk_ft_1e5`. **This is free** — roles are training-time policy
-only and `02_set` embeds every fold regardless, so no re-extraction. Run it on
-the fine-tune, not the frozen probe; if it moves there, a matched frozen run
-tells you whether the effect is the domain gap or just the frame count.
-
-**Caveats:** dropping ~33% of positive frames also shrinks the training pool, so
-a decline is confounded with plain data volume. Control for it by instead
-*downweighting* the lab positives (or subsampling the field positives to match)
-in a follow-up before concluding.
-
 ### prediction-provenance
 
 *(Supersedes the old `event-level-metric` idea, which is the same file change
