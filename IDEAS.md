@@ -13,37 +13,26 @@ targets, and re-establish anything you intend to build on.
 
 ---
 
-## Revalidate the two clean embedder wins
+## Revalidate `yamnet-combined`
 
-**The highest-value next runs, and the reason the baseline doesn't already
-include them.** Both are `clean`-trust, above the old noise floor, and ship
-properly — but both change the embedder and cost a re-extraction, and neither
-was ever tested in combination with the other. Folding them into the baseline
-would have bundled three changes into one undecomposable reference point.
+`context-embedder` **ran 2026-09-08 and revalidated: +0.040, `clean`** (0.218 →
+0.258, the largest live result in this era). `yamnet-combined` is the other
+archived clean embedder win and is still untested on this data.
 
 | | old delta | folds up | cost |
 |---|---|---|---|
-| `context-embedder` — [prev, curr, next] concatenated **inside** the embedder, 3072-d | +0.022 | 7/11 | re-extraction |
 | `yamnet-combined` — YAMNet embeddings + the 521 AudioSet sigmoid scores, 1545-d | +0.016 | 7/11 | re-extraction |
 
-`context-embedder` is the honest version of `context-stack` (+0.050, logged
-`artifact`): stacking at train time let the eval see same-label neighbours that
-continuous audio never gives you, and the gap between 0.050 and 0.022 is roughly
-that artifact. `model.py` sizes its input from `n_embeddings`, so inference
-follows automatically.
+`embedders/yamnet_combined/` is in main and needs only a re-extraction. Run it
+against `cv_baseline` **alone** first — only then ask whether it composes with
+`context-embedder`. Its own note warns the sigmoid block is ~10x smaller in scale
+than the embedding block with nothing normalizing the two (see
+**standardization** below), and that caution now matters more, since composing
+would stack it on a 3072-d input.
 
-`embedders/yamnet_combined/` is in main and needs only a re-extraction.
-`yamnet_context` is **not** — that branch was deleted and survives only as
-`refs/archive/context-embedder`; recover it with
-
-```bash
-git show refs/archive/context-embedder:embedders/yamnet_context/embedder.py
-```
-
-Run them one at a time against `cv_baseline`, `context-embedder` first. If both
-hold up, *then* ask whether they compose — `yamnet-combined`'s own note warns
-that its sigmoid block is ~10x smaller in scale than the embedding block and
-nothing normalizes the two (see **standardization** below).
+Extraction cost, measured for `context-embedder` on 2026-09-08: ~11 min for
+`medium` at `--workers 2` on CPU, 982 MB. A 3072-d CV was ~19 min, ~2x the
+frozen-probe baseline. Neither needs the detached-job machinery.
 
 ## near-chance-deployments
 
@@ -59,13 +48,45 @@ r = 0.013 against per-fold sensitivity, and the worst folds are 100% plain
 `ins_buzz_medium` with >6,000 frames of exactly that elsewhere. Whatever is
 wrong is acoustic or site-level.
 
-**What to do — listen to the frames.** This diagnostic has now deferred four
-times. `2026-04-08` had a threshold of -1.401: its buzz frames score *below
-almost every negative in the fold*, which is stronger than "hard" and says
-something about the recording puts buzz on the wrong side of the distribution
-entirely. `03_train/surprisal.py` is on by default and has never been pointed
-at these folds. Is the buzz audible? Is the annotation right? Is recorder gain
-or placement different?
+The concept-coverage ruling was **re-confirmed 2026-09-08**. A rerun appeared to
+overturn it (1_95 looking 89% starved) but had filtered support to `role=='rotate'`
+only; against the real training pool, which includes `train`-role idents, every
+fold is at 0% thin — 1_95's `ins_buzz_low` has 957 s of support and
+`ins_buzz_pollination` 300 s (two "Various Opportunistic Recordings" idents).
+Check roles before reviving this.
+
+**The two folds fail in opposite ways** (measured 2026-09-08 from `cv_baseline`'s
+surprisal CSVs, no training):
+
+| | 1_150 (0.021) | 1_95 (0.037) |
+|---|---|---|
+| negatives, p99.5 | 0.139 — normal | **0.391 — ~3x every other fold** |
+| buzz frames, mean/median | **0.071 / 0.064 — ≈ its own background** | 0.102 / 0.068 |
+| frames setting the threshold | diffuse ambient (11 bg, 6 mech_auto) | **32 of 35 `mech_auto`** |
+| fold threshold | -1.819 | **+0.173** (the only positive one) |
+
+So they need different fixes and should stop being treated as one item:
+
+- **1_95 is a false-positive problem** — vehicle noise, not trill, sets its
+  threshold, which is why the threshold goes positive while every other fold sits
+  near -1.7. Its buzz is 242 s of 328 s `ins_buzz_low`, and low buzz vs engine
+  drone is an acoustically plausible confusion. This is the fold **night-negatives**
+  would help most; a buzz-vs-`mech_auto` margin is the other candidate.
+- **1_150 is a positives problem** — its negatives are unremarkable and its buzz
+  frames are simply indistinguishable from its own background, despite being 88 s
+  of plain `ins_buzz_medium` with 6503 s of support. Nothing structural explains it.
+
+**What to do — listen to the frames, and only 1_150 now.** Deferred five times.
+It is a narrow target: **88 seconds of audio.** Is the buzz audible? Is the
+annotation right? Is recorder gain or placement different? Note `context-embedder`
+pushed its threshold further down (-1.819 → -2.107), so a better representation
+does not touch it.
+
+**Caveat on the folds it is measured against:** seven `ins_buzz` annotations
+spanning a whole 300 s file supply **63%** of mustard's and **52%** of Fit+Fast's
+buzz seconds (none in the other three folds). Those two folds carry the top of the
+headline, their `buzz_frames` counts overstate their independent sample size, and
+part of what the metric rewards is detecting a continuous drone.
 
 ## night-negatives
 
@@ -106,16 +127,20 @@ worst (0.046, 0.068) and the fold with the most was the best (0.469). Worth
 understanding either way — it may just be that trill-rich folds are insect-rich
 folds. Recount on the current 5 folds before theorising; the roster changed.
 
-**Step 1 is now a query, not a run.** `prediction-provenance` landed 2026-09-07,
-so `predictions.csv` carries `labels_raw`: tabulate the raw labels of negatives
-above each fold's threshold. `cv_baseline` has the column. If trill dominates,
-the research program narrows sharply.
+**ANSWERED 2026-09-08, and the hypothesis does not hold.** Raw labels of the
+negatives above each fold's own fpr0.005 threshold in `cv_baseline`, pooled by
+component label: **`mech_auto` 75, `ambient_background` 46, `ins_trill` 43**,
+everything else ≤8. Trill is about a third, not a majority, and it is
+fold-dependent — trill leads at willard, vehicles lead at 1_95 (32 of 35) and
+mustard. (Read it off the `surprisal/` CSVs, which carry `start`, `label` and
+per-class activations and reproduce `folds_sx.csv` exactly;
+`cv_baseline/predictions.csv` turned out to hold only
+`activation_ins_buzz,correct`, no `labels_raw`.)
 
-**If it does:** `general` already keeps `ins_trill` as its own class, so the
-probe has the auxiliary supervision; the next lever is a pairwise margin — an
-explicit ranking term on buzz-vs-trill pairs only — not another representation
-change. Smoke-test any custom loss with `tools/smoke_model.py` first;
-`tail-loss` is the cautionary tale.
+**So the pairwise buzz-vs-trill margin this idea recommends would be aimed at the
+wrong class.** If a margin term is worth trying, make it buzz-vs-`mech_auto`.
+Smoke-test any custom loss with `tools/smoke_model.py` first; `tail-loss` is the
+cautionary tale.
 
 ## eval-sampling-floor → annotation guidance
 
@@ -143,11 +168,17 @@ with context width (0.177 → 0.118 at k=1 → 0.066 at k=2).
 of short (<1 s: 68%) and isolated (>5 s gap: 68%) buzz events of any fold:
 stacking dilutes a brief isolated buzz with silent neighbours.
 
-Check it when **revalidate-clean-embedder-wins** runs `context-embedder`, which
-lost on willard too (-0.059) — so the regression is a property of the
-deployment, not the cached-eval bug. If the dilution story is right, the fix is
-better time resolution *inside* the frame rather than adaptive context width —
-see `subframe-head`.
+**Did not reproduce (2026-09-08).** `context-embedder` on the revised data
+**gained** 0.037 at willard, and frame sensitivity bucketed by the span of the
+annotation each buzz frame falls under runs the wrong way for dilution: <1 s
+**+0.046**, 1-2 s +0.058, 2-5 s +0.039, >5 s **+0.026**, with clustered +0.042 vs
+isolated +0.034. Short and isolated buzz gains *more* than long and clustered.
+
+Treat the dilution story as unsupported on live data rather than as a standing
+caution — it was measured on the pre-revision annotations, and willard is thin
+(305 buzz frames), so the original -0.074/-0.059 may always have been fold
+variance. Note the >5 s bucket above is mostly the file-spanning drone
+annotations (see **near-chance-deployments**), not long buzz events.
 
 ## subframe-head (options 2 and 3 only)
 
