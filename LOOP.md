@@ -174,15 +174,40 @@ Confirm the sanity check passes. Uncommitted changes to tracked files won't
 appear in the worktree — commit or stash first if they matter.
 
 The script symlinks `embedders/*` and each set's `audio/`+`embeddings/` back to
-main, so extraction is shared. To modify an embedder you must first break its
-symlink, or you'll be editing main's copy:
+main, so extraction is shared. **Keep it that way.** Embedders and embedding
+caches are meant to be shared across runs: a cache written through the symlink
+survives the worktree pruning at step 6 and is there for the next experiment,
+where a worktree-local copy dies with the worktree and costs the next agent a
+re-extraction. Adding a *new* embedder directory, and extracting under a *new*
+`--embedder` name, both write somewhere nothing else claims — do them straight
+into the shared tree.
 
-```bash
-cp -rL embedders/yamnet embedders/yamnet_real && rm embedders/yamnet && mv embedders/yamnet_real embedders/yamnet
-```
+Break a symlink only when your run would write over something that is already
+there under the same name. The cache is keyed by `(set, embeddername)` and the
+staleness fingerprint covers **annotations, not code** (`CLAUDE.md`), so nothing
+detects a directory rebuilt by unmerged experiment code — it just becomes what
+every later run in main reads. Concretely, break it when you are:
 
-Do the same for a set's `embeddings/` before re-extracting under a changed
-embedder or changed extraction code — otherwise you overwrite main's cache.
+- **modifying an existing embedder in place** (`embedders/yamnet/embedder.py`) —
+  otherwise you are editing main's copy, not a worktree copy:
+
+  ```bash
+  cp -rL embedders/yamnet embedders/yamnet_real && rm embedders/yamnet && mv embedders/yamnet_real embedders/yamnet
+  ```
+
+- **changing what extraction produces for an embedder name already on disk** —
+  then break that set's `embeddings/`, or, better, give the experiment a new
+  embedder name so the question doesn't arise. Breaking `embeddings/` need not
+  copy anything: replace the symlink with a real directory and symlink the
+  subdirectories you are *not* rebuilding back to main.
+
+A change gated so that existing embedders take a byte-identical path (a new
+`context_frames`-style flag defaulting to 0) is not a reason to break anything.
+
+An extraction killed part-way is safe to relaunch: the ident directory it was
+writing carries an `extraction.incomplete` marker until its fingerprint is
+stamped, so the next run treats it as stale and rebuilds it rather than reading
+a truncated product.
 
 All code changes go in the worktree. Do not touch main's tracked files.
 
