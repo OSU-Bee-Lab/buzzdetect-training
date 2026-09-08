@@ -1,0 +1,3 @@
+1.406800	105.861665	mech_hum_traffic
+126.450464	174.549096	mech_hum_traffic
+252.485923	299.563894	mech_plane_prop

@@ -16,15 +16,18 @@ environment/
 .idea/
 condaenv.l8rr463d.requirements.txt
 
-# annotation data (audio, raw annotations, extracted data, local scratch)
+# annotation data (audio, extracted intermediates, local scratch). Raw
+# annotation files under 01_annotate/<effort>/annotations/ ARE tracked now, so
+# code and annotations move together on one pull — except efforts with their
+# own data repo (see 01_annotate/data_sources.json).
 01_annotate/.deprecated/
 01_annotate/**/audio*/
-01_annotate/**/annotations/
 01_annotate/**/data/
 01_annotate/**/local/
 01_annotate/**/seenote/
+01_annotate/Even Sample/annotations/
 
-# generated outputs. Rebuilt on every run — medium's from the (already ignored)
+# generated outputs. Rebuilt on every run — medium's from the (now tracked)
 # raw annotations, the other sets' from a built medium — and they churn each
 # time. The build.R / step scripts and translations/ are the tracked record.
 01_annotate/**/annotations_combined.csv

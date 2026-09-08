@@ -1,0 +1,4 @@
+0.000000	299.864037	ambient_day
+89.693363	103.844825	mech_hum_traffic
+118.177949	119.026620	ambient_squeak
+123.717490	159.267408	mech_hum_traffic

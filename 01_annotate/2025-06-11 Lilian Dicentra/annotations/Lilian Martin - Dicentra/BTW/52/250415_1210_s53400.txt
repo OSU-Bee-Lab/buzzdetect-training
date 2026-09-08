@@ -1,0 +1,2 @@
+8.909811	9.089203	ambient_scraping
+95.526327	96.004706	ambient_rustle

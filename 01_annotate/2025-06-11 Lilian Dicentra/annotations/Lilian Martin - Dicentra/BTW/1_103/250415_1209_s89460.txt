@@ -1,0 +1,10 @@
+0.000000	300.000000	ambient_day
+37.650628	54.451715	mech_plane_prop
+67.305558	69.835842	ambient_squeak
+70.645533	72.669760	ambient_squeak
+75.807313	79.956979	ambient_squeak
+123.182139	124.311732	ambient_rustle
+181.186750	191.804926	mech_plane_prop
+209.313620	209.765458	ambient_squeak
+229.420379	238.287686	mech_plane_prop
+242.518625	274.773021	mech_hum_traffic

@@ -1,0 +1,3 @@
+80.539273	85.111372	ambient_night
+108.323564	117.819461	ambient_night
+149.120750	157.088310	mech_auto_truck

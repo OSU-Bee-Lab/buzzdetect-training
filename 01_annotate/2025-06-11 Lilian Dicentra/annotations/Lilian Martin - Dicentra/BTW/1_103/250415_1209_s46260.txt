@@ -1,0 +1,3 @@
+0.000000	52.821212	mech_plane_prop
+167.162633	254.573821	mech_plane_prop
+288.066424	300.000000	mech_plane_prop

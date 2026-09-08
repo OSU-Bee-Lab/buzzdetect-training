@@ -1,0 +1,3 @@
+0.000000	299.881316	ambient_day
+0.000000	164.315757	mech_hum_traffic
+257.936786	299.881316	mech_hum_traffic

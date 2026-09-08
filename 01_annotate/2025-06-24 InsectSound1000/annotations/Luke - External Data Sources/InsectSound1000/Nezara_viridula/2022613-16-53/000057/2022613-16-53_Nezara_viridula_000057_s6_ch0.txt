@@ -1,0 +1,2 @@
+0.8348	0.9059	ambient_bang
+1.7496	1.9361	ambient_bang

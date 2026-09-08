@@ -1,0 +1,10 @@
+2.110199	94.607268	mech_hum_traffic
+97.621592	97.744164	ambient_scraping
+101.012744	103.505036	ambient_day
+144.574142	144.643676	ambient_scraping
+146.131694	146.242947	ambient_scraping
+148.287234	213.675342	mech_hum_traffic
+192.329780	192.399313	ambient_scraping
+203.540621	203.814304	ambient_day
+250.884385	251.003378	ambient_scraping
+284.154767	289.902119	mech_hum_traffic

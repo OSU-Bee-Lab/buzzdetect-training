@@ -1,0 +1,2 @@
+101.289566	197.655334	mech_hum_traffic
+219.812427	239.859320	mech_hum_traffic

@@ -1,0 +1,23 @@
+{
+  "_comment": "Where each annotation effort's raw annotation files come from. Efforts not listed here keep their raw annotations tracked in this repo, under <effort>/annotations/, so a single pull gives code and annotations at one consistent version. The efforts below carry their own git history and remote and are cloned separately; after cloning this repo, clone each into the path shown and check it is not behind its remote before running MAKE.R.",
+  "external_repos": [
+    {
+      "effort": "Even Sample",
+      "path": "01_annotate/Even Sample/data",
+      "repo": "https://github.com/OSU-Bee-Lab/annotations-even.git",
+      "note": "Active annotation repo with real history. combine.R reads its annotations/ subtree."
+    },
+    {
+      "effort": "Even Sample - Public",
+      "path": "01_annotate/Even Sample - Public",
+      "repo": "https://github.com/OSU-Bee-Lab/annotations-public.git",
+      "note": "Public-release bundle (annotations + example audio), gigabytes; distributed outside this repo."
+    }
+  ],
+  "not_reproducible_from_clone": [
+    {
+      "effort": "2026-05-26 Automatic Annotations",
+      "reason": "combine.R reads data/02_auto_beehive.csv and data/02_auto_night.csv, machine-generated detection candidates (~5.6 MB) that live under the ignored data/ and are not tracked anywhere. Machine-labeled training ballast, never scored."
+    }
+  ]
+}

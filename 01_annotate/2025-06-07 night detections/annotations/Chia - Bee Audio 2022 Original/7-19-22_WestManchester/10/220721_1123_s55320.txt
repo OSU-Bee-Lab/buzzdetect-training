@@ -1,0 +1,6 @@
+0.000000	102.048000	"mech_hum_traffic"
+109.386000	113.733000	"mech_hum_traffic"
+126.107000	127.071000	"ambient_rustle"
+132.145000	133.058000	"ambient_rustle"
+134.022000	135.138000	"ambient_rustle"
+136.681000	312.466000	"mech_hum_traffic"

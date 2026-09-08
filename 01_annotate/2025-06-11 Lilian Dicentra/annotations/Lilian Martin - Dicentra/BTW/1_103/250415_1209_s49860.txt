@@ -1,0 +1,2 @@
+1.767677	146.606076	mech_plane_prop
+67.092301	67.582623	ambient_squeak

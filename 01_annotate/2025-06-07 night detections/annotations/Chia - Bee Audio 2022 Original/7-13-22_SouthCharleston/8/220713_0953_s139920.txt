@@ -1,0 +1,4 @@
+0.000000	97.113800	"mech_hum_traffic"
+130.221000	197.114000	"mech_auto_car"
+198.472000	256.537000	"ambient_background"
+264.177000	289.813000	"ambient_background"

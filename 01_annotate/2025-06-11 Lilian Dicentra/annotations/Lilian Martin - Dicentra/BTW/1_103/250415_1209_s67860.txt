@@ -1,0 +1,2 @@
+164.521974	300.000000	ambient_day
+172.665938	173.799864	ambient_scraping

@@ -1,0 +1,5 @@
+64.846203	69.052521	ambient_night
+103.272371	115.746281	ambient_night
+136.197692	140.694101	ambient_rustle
+147.656284	152.442784	mech_hum_traffic
+206.689788	228.881744	mech_hum_traffic

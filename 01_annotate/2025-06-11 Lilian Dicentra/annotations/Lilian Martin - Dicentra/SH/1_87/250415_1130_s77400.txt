@@ -1,0 +1,3 @@
+0.000000	300.000744	ambient_day
+39.128490	39.797931	ambient_squeak
+198.191806	200.717824	ambient_rustle

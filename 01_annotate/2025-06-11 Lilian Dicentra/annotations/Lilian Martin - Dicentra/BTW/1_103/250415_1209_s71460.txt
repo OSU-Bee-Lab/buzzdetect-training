@@ -1,0 +1,6 @@
+1.980383	5.941149	ambient_rustle
+26.559932	294.713094	ambient_day
+70.579169	71.168968	ambient_rustle
+93.777894	117.697482	mech_hum_traffic
+263.705272	272.748843	mech_hum_traffic
+279.367688	289.066589	mech_plane_prop
