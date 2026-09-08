@@ -69,7 +69,8 @@ translate_annotation <- function(path_in){
 
 annotations_combined <- paths_annotations %>% 
   lapply(translate_annotation) %>% 
-  bind_rows()
+  bind_rows() %>% 
+  mutate(label=tolower(label))
 
 
 
@@ -130,7 +131,7 @@ folds <- annotations_combined %>%
   left_join(annotation_counts) %>% 
   mutate(
     role = case_when(
-      snips_annotated == 24 ~ 'rotate',
+      snips_annotated >= 16 ~ 'rotate',
       T ~ 'train'
     )
   )

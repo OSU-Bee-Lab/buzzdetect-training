@@ -9,8 +9,8 @@ dir_sources <- '../../../01_annotate'
 
 sources <- c(
   'Even Sample',
-  '2025-06-04 original annotations',
-  '2025-06-24 InsectSound1000'
+  '2025-06-04 original annotations'
+  # '2025-06-24 InsectSound1000'
 )
 
 message(
