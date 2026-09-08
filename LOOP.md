@@ -210,9 +210,18 @@ cd $WT
 # see "Running long jobs" in CLAUDE.md for the exact nohup recipe.
 ```
 
-Both stages run far longer than a foreground command should block for (a CPU CV
-is ~40 h), and Claude Code's `run_in_background` gets SIGKILLed running them (and
-also killed *waiting* on them). **See "Running long jobs" in `CLAUDE.md` for the
+Stage 2 always runs far longer than a foreground command should block for.
+Stage 3's cost depends entirely on what is being trained, and the two ends are
+orders of magnitude apart — **measure before assuming**:
+
+| config | per epoch | one CV |
+|---|---|---|
+| frozen probe, 1024-d YAMNet (the baseline) | ~1 s | **~9 min** for 5 folds, 651 epochs (measured 2026-09-08) |
+| trunk fine-tune, 12288-d + unfrozen layers | ~80 s | **~24 h** for 11 folds (measured 2026-09-05, `unfreeze-one`) |
+
+A frozen-probe CV is a foreground-scale job; only a trunk fine-tune needs the
+detached-and-hand-off treatment. Claude Code's `run_in_background` gets
+SIGKILLed running either stage (and also killed *waiting* on them). **See "Running long jobs" in `CLAUDE.md` for the
 pattern that works** — launch the job detached with `nohup … & disown` (direct
 env-python, not `conda run`; capture `$!`).
 

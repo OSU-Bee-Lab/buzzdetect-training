@@ -430,6 +430,13 @@ def _sens_history_summary(hist, best_epoch):
             continue
         arr = np.array(curve, dtype=float)
         out[f'val_sens_fpr{fpr:g}_at_best'] = arr[best_epoch]
+        # The whole curve, not just the restored point. val_loss_curve is kept
+        # for the same reason: together they let a stopping rule be re-scored
+        # offline -- "what would patience=N have shipped, and what did it cost
+        # on the metric" -- instead of costing a CV to ask. NaN is JSON-illegal,
+        # so blank out the epochs that never reached the target FPR.
+        out[f'val_sens_fpr{fpr:g}_curve'] = [
+            None if np.isnan(x) else float(x) for x in arr]
         if np.isnan(arr).all():
             # Fold never reaches this FPR at any epoch -- too few negative
             # frames for the target, most likely. sx.py's _fold_sens says more.

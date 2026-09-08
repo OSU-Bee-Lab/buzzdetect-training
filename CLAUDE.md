@@ -100,7 +100,10 @@ not. A persistent Monitor looks like the fix, since it only wakes on a real
 state change, but the prompt cache has its own ~1 h TTL independent of
 Monitor's: when events are sparser than that (any stage-3 CV, most stage-2
 extractions) the cache goes cold in the gap either way, and every wake pays
-full uncached-context price. For a ~40 h CV that is several cold wakes.
+full uncached-context price. For a ~24 h trunk-fine-tune CV that is several
+cold wakes. (A frozen-probe CV is ~9 min and needs none of this — see LOOP.md
+step 3 for the measured costs; don't apply the long-job machinery to a job that
+finishes while you wait.)
 
 Come back on your own schedule instead and re-check — cheap, and it doesn't
 hold the session's cache hostage to the job's pace:
