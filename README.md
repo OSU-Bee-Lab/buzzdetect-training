@@ -550,14 +550,15 @@ wanted again.
 
 There is no stage 4. It scored a fixed model against a hand-curated corpus and
 expected the pre-CV repeated-run layout; a CV run scores every held-out fold
-itself. The code is gone (recoverable from git); the corpus is at
-`.local/archive/04_test-corpus/`.
+itself. The code is recoverable from git; **the corpus is gone** — it was left
+in a gitignored directory and lost. `archive/` exists so that does not happen
+again.
 
 ---
 
 `LOOP.md` is the experiment protocol — one worktree per hypothesis, results in
-`log.jsonl`, candidate ideas in `IDEAS.md`. `log.jsonl` holds CV-era runs only;
-the 29 experiments that predate the rework are archived under `.local/` and
+`log.jsonl`, candidate ideas in `IDEAS.md`. `log.jsonl` holds the current era
+only; the 59 runs before it are in `archive/`, one directory per era, and are
 distilled into `IDEAS.md`, where they are marked as leads rather than verdicts.
 
 ---

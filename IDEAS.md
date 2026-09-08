@@ -3,9 +3,10 @@
 Check this file and `log.jsonl` before proposing an experiment, then take it
 through the lifecycle in `LOOP.md`.
 
-`log.jsonl` holds CV-era runs only — measured by leave-one-fold-out on day-long
-annotated recordings, against mean per-fold sens@fpr0.005. Those numbers are comparable to
-each other and are the ones to beat.
+`log.jsonl` holds the current era only, and is **empty** — the training data was
+revised on 2026-09-08 and no baseline has been rerun yet. Every number quoted
+below comes from `archive/`, was measured on different data, and is a lead
+rather than a target.
 
 Everything under [Tried before the rework](#tried-before-the-rework) comes from
 an era with a different metric, a different eval corpus, and a training set that
@@ -375,8 +376,9 @@ change, rerun as `exp/context-stack` on the current set and metric, is the
 largest gain yet (+0.050).** A verdict inverted. Assume any of the below could
 do the same, and rerun rather than defer to it.
 
-Full entries: `.local/archive/log_precv.jsonl`. Working trees and notes:
-`.local/worktrees-fixed-test/`.
+Full entries: `archive/2026-06_fixed-test/log.jsonl`; notes for 19 of the 29 in
+`notes/` beside it, and that era's README explains why the other ten are
+discarded outright.
 
 One has already been retested under CV: the fixed-test entry `combined-embedder`
 was about validation scope, but the `yamnet_combined` *embedder* it left behind

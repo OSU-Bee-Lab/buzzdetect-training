@@ -1,17 +1,19 @@
 # Autoresearch Loop
 
-> **The slate was cleared in 2026-08.** `log.jsonl` holds CV-era runs only —
-> leave-one-fold-out on day-long annotated recordings, scored on mean per-fold
-> sens@fpr0.005.
-> Those are comparable to each other and are what you beat.
+> **The slate was cleared on 2026-09-08, when the training data was revised.**
+> `log.jsonl` is empty. The 59 runs before it are in `archive/`, one directory
+> per era, each with a README stating what made its numbers comparable and what
+> ended that. Nothing in there is a number you can beat — a data change moves
+> every float in both logs.
 >
-> The 29 experiments before that ran on a fixed train/validate split against a
-> retired corpus, with a training set of mixed provenance. They are archived at
-> `.local/archive/log_precv.jsonl` and `.local/worktrees-fixed-test/`, and
-> distilled into `IDEAS.md`. **Their verdicts are leads, not settled answers** —
-> `temporal-context` was logged there as a clear negative and, rerun on the
-> current set as `exp/context-stack`, is the largest gain yet. Read `IDEAS.md`
-> rather than the archive; rerun rather than defer.
+> **There is no baseline right now. Establishing one is the next run** — see
+> [Baseline](#baseline).
+>
+> **Old verdicts are leads, not settled answers.** `temporal-context` was logged
+> as a clear negative in the first era and, rerun as `context-stack` in the
+> second, was the largest gain in the log. A verdict inverted on an eval change
+> alone; this cutover changes the data as well. Read `IDEAS.md` for the distilled
+> version, and rerun rather than defer.
 
 Read `README.md` first — [Reading the results](README.md#reading-the-results)
 is where the metric choices below come from.
@@ -59,19 +61,24 @@ a different base rate; it is not a target on this metric.
 
 ## Baseline
 
-`cv-baseline` in `log.jsonl`: main's default config — a linear probe on frozen
-YAMNet with `Dropout(0.2)`, `BinaryCrossentropy(label_smoothing=0.2)`, Adam at
-0.002, under the `general` translation on the `medium` set.
+**There isn't one. The first run of this era rebuilds it**, and until it lands
+there is nothing to compare an experiment against.
 
-**mean sensitivity @ fpr0.005 = 0.206**, over 11 rotating folds. The model is
-kept at `models/yamnet_medium_general/`; its per-fold numbers are in
-`folds_sx.csv` there, which is what you join against for a paired comparison.
-It was trained before the summary files were unified, so run
-`03_train/resummarize.py` on it once to get the current layout.
+Same config as the last two eras opened with — a linear probe on frozen YAMNet,
+`Dropout(0.2)`, `BinaryCrossentropy(label_smoothing=0.2)`, Adam 0.002, on
+`medium` — but under `general`, not `general_v1` (see Constraints). Log it as
+`cv-baseline`, and it becomes the `--baseline-model` every later entry joins
+against.
 
-`models/yamnet_medium_binary/` is the same config under the `binary`
-translation, at 0.203 — logged as `binary-translation-cv`. Keep it: the pair is
-why the endpoint is per-deployment rather than pooled.
+`models/yamnet_medium_general/` is the **previous** era's baseline, 0.206 under
+`general_v1` on the pre-revision annotations. It is an artifact now: keep it for
+reference, never as a comparator. A paired per-fold join against it is invalid —
+the folds no longer hold the same audio.
+
+Worth rerunning early alongside it: the `binary` translation control. The
+`general` / `binary` pair at 0.206 / 0.203 is why the endpoint is per-deployment
+rather than pooled, and that argument should be re-established on live numbers
+rather than inherited from the archive.
 
 ## Constraints
 
@@ -81,14 +88,13 @@ why the endpoint is per-deployment rather than pooled.
 - Set: `medium` — day-long annotated recordings across a diversity of
   environments, 11 rotating folds. `lite` is kept for troubleshooting and
   `tiny` for smoke-testing the pipeline; neither is a place to draw conclusions.
-  Annotation is still in progress, so folds will gain data over time and old
-  numbers will drift; say which commit of the set a run used if it matters.
-  Every entry in `log.jsonl` is implicitly on `medium` at 11 folds — that's
-  fixed for as long as the log exists, so neither is logged per entry. If the
-  fold roster itself ever changes (a deployment added or dropped), archive
-  `log.jsonl` the way the pre-CV log was archived and rerun whichever
-  experiments are worth keeping under the new set, rather than mixing fold
-  counts silently in one log.
+  Annotation is ongoing, so folds gain data and old numbers drift; say which
+  commit of the set a run used if it matters. Every entry in `log.jsonl` is
+  implicitly on `medium` at its current fold roster, so neither is logged per
+  entry — which is exactly why a roster change (a deployment added or dropped)
+  or a data revision **ends the era**. When that happens, archive `log.jsonl`
+  per `archive/README.md` and start a fresh one, rather than mixing incomparable
+  numbers silently in one file.
   **Training or CV runs on `large` are forbidden as a loop experiment,
   regardless of how ready it looks (extraction finished, a promising diff
   pending).** `large` is not an alternative set to iterate structure on — same
@@ -96,23 +102,14 @@ why the endpoint is per-deployment rather than pooled.
   final-confirmation pass *after* the structural search on `medium` concludes,
   and only when Luke asks for it. An agent must never launch it on its own
   initiative.
-- **Translation: pass `--translation general_v1`, not `general`.** `general`
-  moved on 2026-09-03 (`0a2ef2a`, `b49cdaa`): 17 classes became 14, and
-  `mech_plane` — 9,773 frames, the fourth-largest class — was folded into
-  `mech_auto`, taking it from 9,466 to 19,239. The `ins_buzz` target is
-  untouched (8,431 frames either way) and total frames move by 0.26%, so this
-  is not a data change; it is a change to the auxiliary supervision, applied at
-  *train* time, with no re-extraction to make it visible. Nothing in
-  `log.jsonl` used it — every logged run resolved to the project-wide
-  `translations/general.csv` because its worktree predated per-set tables — but
-  a worktree cut from current main gets the new one silently.
-  `02_set/sets/medium/translations/general_v1.csv` is a frozen byte-copy of the
-  table those runs used (verified to emit the identical 17 classes and
-  frame counts). Use it so a new experiment stays comparable to its comparator,
-  and keep using it until the annotations settle; at that point archive
-  `log.jsonl` as the pre-CV log was archived and re-run under `general`.
-  It is deliberately **not** produced by `translate.R` — that is what makes it
-  frozen. Don't regenerate it, and don't hand-edit it.
+- **Translation: pass `--translation general`.** This flipped at the 2026-09-08
+  cutover. `general_v1` was a frozen copy of the pre-2026-09-03 table (17
+  classes, before `mech_plane` folded into `mech_auto`), kept only so runs
+  during the last era stayed comparable to comparators trained before the table
+  moved. That era is closed, so the freeze has no one left to protect.
+  `general_v1.csv` stays on disk — the archived log was trained under it and
+  `archive/2026-08_cv-medium-v1/set/translations/` holds a copy — but a new
+  experiment that passes it is comparing against nothing.
 - Augmentation: has hurt training so far — avoid without strong reason.
 - Err against hyperparameter tuning, unless you have a strong reason. We're
   looking for structural gains; hyperparameters can be tuned in one large sweep
@@ -134,17 +131,19 @@ why the endpoint is per-deployment rather than pooled.
 ### 0. Orient and hypothesize
 
 ```bash
-cat log.jsonl
-cat IDEAS.md
+cat log.jsonl          # this era — empty until the baseline lands
+cat IDEAS.md           # candidates, with prior verdicts marked as leads
+ls archive/            # the 59 runs before this era
 ```
 
-Propose a hypothesis. Check both files first — most obvious ideas have been
-tried, and the pre-CV conclusions about *dead ends* (bandpass, mel masking,
-backbone fine-tuning, MLP heads, L2, handcrafted frequency features) still
-stand; only the numbers are incomparable.
+Propose a hypothesis. Check all three — most obvious ideas have been tried, and
+the conclusions about *dead ends* (bandpass, mel masking, MLP heads, L2,
+handcrafted frequency features) are the part likeliest to still hold; it is the
+positive results that a data change invalidates.
 
-Every entry in `log.jsonl` carries a `main_commit` and a `branch`; read
-`notes.md` on that `exp/<slug>` branch for the detail behind any of them.
+For detail behind any archived run: `archive/<era>/notes/<slug>.md`, which is
+complete for both eras. The code is on `exp/<slug>` where the branch survives,
+and at `refs/archive/<slug>` where it doesn't — see `archive/README.md`.
 
 If you use an IDEA, remove it from `IDEAS.md` after testing.
 
@@ -204,7 +203,7 @@ cd $WT
 # Stage 2 — only if the embedder or extraction changed
 # Stage 3 — the whole CV: one model per rotating fold, then the shipped model
 #   02_set/main.py  --set medium --embedder yamnet --workers 2 --verbose
-#   03_train/main.py --name <modelname> --set medium --embedder yamnet --translation general_v1 -y
+#   03_train/main.py --name <modelname> --set medium --embedder yamnet --translation general -y
 # Launch each DETACHED, not in the foreground and not via run_in_background —
 # see "Running long jobs" in CLAUDE.md for the exact nohup recipe.
 ```
@@ -320,8 +319,9 @@ enough buzz to trust? did any fold fail to reach the target FPR?>
 ```
 
 Append one line to `log.jsonl` in **main** and commit it. Be very brief; the log
-only guides later agents toward where to dig. The `"method": "cv"` field is what
-separates these entries from the pre-rework ones — always include it.
+only guides later agents toward where to dig. Keep `"method": "cv"` — it is what
+distinguishes an entry from the first era's fixed-split ones if the logs are ever
+read together.
 
 Every entry also needs a `trust` judgment, kept separate from the delta itself.
 This is not a statistical significance test — there's no seed control to build
@@ -363,7 +363,7 @@ fills in `branch`/`date`/`main_commit` by the convention above:
 python tools/log_entry.py \
   --name <slug> \
   --model <experiment model dir, e.g. .local/worktrees/<slug>/models/<modelname>> \
-  --baseline-model models/yamnet_medium_general \
+  --baseline-model models/<this era's cv-baseline> \
   --hypothesis "..." --trust clean --conclusion "..." \
   --write   # omit to preview without appending
 ```
@@ -372,16 +372,35 @@ python tools/log_entry.py \
 
 ```bash
 git add -A && git commit -m "exp/<slug>: <what was tried and outcome>"
+git push origin exp/<slug>
 ```
 
-Then stop. Do not merge into main. Do not delete the worktree or branch. Do not
-proceed to another experiment. You're done! Thank you!
+**Push it.** The branch is the only durable copy of your `notes.md` — the
+worktree is disposable and this machine's disk is not backed up. Thirty-one
+branches from the last two eras were deleted with their notes still only local,
+and were recovered from dangling commits by luck.
+
+Then prune the worktree — the branch keeps everything that matters, and a
+worktree that re-extracted embeddings can be holding several GB:
+
+```bash
+git worktree remove --force .local/worktrees/<slug>
+```
+
+Keep it only if the run is unfinished and resumable. **Check
+`git status` before pruning** — uncommitted work in a worktree dies with it.
+
+Then stop. Do not merge into main. Do not proceed to another experiment.
+You're done! Thank you!
 
 ## Restoring a worktree
 
 ```bash
 git worktree add .local/worktrees/<slug> exp/<slug>
 ```
+
+Its symlinked caches are not restored with it — rerun `setup_worktree.sh`'s
+linking, or the run will re-extract from scratch.
 
 ## Prohibited
 

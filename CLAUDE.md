@@ -27,7 +27,7 @@ Environment: `conda run -n buzzdetect-train python <script>`.
 - **Validation is always a whole fold, never a split within one.** A within-fold split leaks site identity into the early-stopping signal. There is no snip-level splitter and there should not be one; README explains why.
 - **No augmentation may cross a fold boundary.** Every augmented frame must be derivable from the source fold's audio alone: noise/volume transforms of one fold's frames, or mixes of two frames *from the same fold*. A `CombineSpec` / mixup that pairs a source frame with a background or partner frame drawn from another fold — or from a whole-pool shuffle — is forbidden, however tempting the "buzz over a different site's background" framing is. `load_augmented` loads augment dirs per training fold, so a cross-fold-paired frame carries an out-of-fold recording's embedding signature into the training pool, and when that other fold rotates in as validation the early-stopping signal and the held-out metrics are both contaminated. This inflates the reported number purely through leakage (the models here are extremely sensitive to it) and is not a real gain. The same rule bars any augmentation whose parameters (noise floor, SNR target, mix ratio, class balance) are fit on statistics pooled across folds rather than computed within the fold being augmented. If you catch a leak like this in existing code, stop and flag it rather than "fixing" it into a better score.
 - **An annotation effort is a directory under `01_annotate/` holding a `combine.R`** — that file is the whole contract, and it must write both `annotations_combined.csv` and `folds.csv` (fold assignment included). `MAKE.R` discovers efforts by that file, not by `.Rproj`, which is gitignored.
-- **Translations are per-set**, at `02_set/sets/<set>/translations/<name>.csv`, written by the set's own `translate.R` from that set's `annotations.csv`. `config.py::path_translation` resolves a name against the set first and falls back to the project-wide `translations/` for sets not yet moved (`lite`, `tiny`). The mapping rules live in `translate.R`, not in the CSVs, and regeneration is **wholesale, not additive** — a label the set no longer emits loses its row, even though embeddings named after it may still be on disk. Such a label then has no row at all, which `translate_labels` leaves unchanged and `survey_untranslated` reports at train time. Edit the rules and rerun `build.R`; hand-edits to `general.csv` / `binary.csv` are overwritten. The one exception is `medium/translations/general_v1.csv`, a frozen byte-copy of the `general` table every entry in `log.jsonl` was trained under, kept so CV-era runs stay comparable after `general` was revised on 2026-09-03 (17 classes -> 14, `mech_plane` folded into `mech_auto`; the `ins_buzz` target unchanged at 8,431 frames). `translate.R` only writes the files it names and never deletes others, so `general_v1.csv` survives a rebuild — that is the point. Experiments pass `--translation general_v1`; see LOOP.md's Constraints.
+- **Translations are per-set**, at `02_set/sets/<set>/translations/<name>.csv`, written by the set's own `translate.R` from that set's `annotations.csv`. `config.py::path_translation` resolves a name against the set first and falls back to the project-wide `translations/` for sets not yet moved (`lite`, `tiny`). The mapping rules live in `translate.R`, not in the CSVs, and regeneration is **wholesale, not additive** — a label the set no longer emits loses its row, even though embeddings named after it may still be on disk. Such a label then has no row at all, which `translate_labels` leaves unchanged and `survey_untranslated` reports at train time. Edit the rules and rerun `build.R`; hand-edits to `general.csv` / `binary.csv` are overwritten. The one exception is `medium/translations/general_v1.csv`, a frozen byte-copy of the pre-2026-09-03 `general` table (17 classes -> 14, `mech_plane` folded into `mech_auto`). `translate.R` only writes the files it names and never deletes others, so it survives a rebuild — that is the point. It is **historical** since the 2026-09-08 cutover: the log it protected is in `archive/`, and current experiments pass `--translation general`. Don't hand-edit or regenerate it.
 - **A set's `build.R` is a driver, not the build.** It holds only `dir_sources`/`sources` and sources the steps — `combine.R` → `annotations.csv`, `folds.R` → `folds.csv`, `summarize.R` → the `summary_*.csv`, `translate.R` → `translations/`. Each step reads its inputs off disk and writes relative to the working directory, which is what lets `large/build.R` source medium's steps: `large` is medium at a finer framehop, differing only in `config_extract.json`, so its outputs are byte-identical by construction. Changing a rule for both sets means editing it in `medium/` only.
 - **Reruns resume.** `train_utils.can_write()` skips any model directory that already holds a `config_model.json`, and the CV summary is reassembled from disk so skipped folds still contribute.
 
@@ -46,7 +46,16 @@ Environment: `conda run -n buzzdetect-train python <script>`.
 
 ## Known stale
 
-- `models/model_general_v3/` predates the CV rework and is kept only as an artifact.
+Kept as artifacts, never as comparators:
+
+- `models/model_general_v3/` — predates the CV rework.
+- `models/yamnet_medium_general/` — the 2026-08 era's `cv-baseline` (0.206). Trained under `general_v1` on the pre-2026-09-08 annotations, so a paired per-fold join against it is invalid: its folds no longer hold the same audio.
+
+## Experiment history
+
+`log.jsonl` holds the current era only. Closed eras live in `archive/<first-date>_<slug>/` — log, README, `notes/`, and a snapshot of the set that produced the numbers. `archive/README.md` covers the layout, how to add an era at the next cutover, and how to reach experiments whose branches were deleted (`refs/archive/<slug>`).
+
+Do not archive to `.local/` or any gitignored path. That was tried in 2026-08; the files evaporated and three docs went on citing them for a month.
 
 ## Running long jobs
 
@@ -85,24 +94,16 @@ For stage 3 drop `BUZZDETECT_CHUNK_FRAMES`; keep `CUDA_VISIBLE_DEVICES=""` (the
 1024-d probe anyway). Pass `--verbose` to stage 3 or it trains silently with no
 per-epoch line in the log.
 
-**2. Do not `Monitor` a job whose next real event is more than ~1 h away —
-neither persistent nor non-persistent.** A non-persistent Monitor's problem is
-obvious (caps at 1 h, forced re-arm every timeout). A *persistent* Monitor
-looks like the fix — it only emits a line on a real state change (a fold
-finishing, the run ending), so it doesn't force periodic re-arms — but that
-doesn't save the token cost: Anthropic's prompt cache has its own ~1 h TTL
-independent of Monitor's timeout, and a persistent Monitor still blocks this
-session on a wake. If real events are sparser than ~1 h apart (any stage-3 CV;
-most stage-2 extractions), the session's cache goes cold in the gap regardless
-of which Monitor mode is used, and the eventual wake pays full uncached-context
-price — for a ~40 h CV that's not one cold wake, it's several. Do not spend a
-persistent Monitor's wake budget assuming it avoids this; it doesn't.
+**2. Launch it, then end the turn.** Do not wait in-session, and do not
+`Monitor` a job whose next real event is more than ~1 h away — persistent or
+not. A persistent Monitor looks like the fix, since it only wakes on a real
+state change, but the prompt cache has its own ~1 h TTL independent of
+Monitor's: when events are sparser than that (any stage-3 CV, most stage-2
+extractions) the cache goes cold in the gap either way, and every wake pays
+full uncached-context price. For a ~40 h CV that is several cold wakes.
 
-**What actually works: launch detached (step 1) and end the turn.** Don't wait
-in-session at all. Come back on your own schedule (a new message, `/loop` with
-a real interval, or a subsequent turn) and re-check with the one-command
-status check below — cheap, and it doesn't hold this session's cache hostage
-to the job's pace:
+Come back on your own schedule instead and re-check — cheap, and it doesn't
+hold the session's cache hostage to the job's pace:
 
 ```
 pgrep -af 03_train/main.py   # or 02_set/main.py
@@ -110,12 +111,10 @@ find models/<name>/folds -name summary.json | wc -l   # of 11, stage 3
 tail -5 <log>
 ```
 
-If you must be notified rather than check back yourself, that has to happen
-**outside this session** — e.g. a plain `nohup`-detached shell loop (launched
-the same way as the job itself, not via `run_in_background`) that polls for
-the completion marker and then invokes a fresh `claude` CLI call. A Monitor
-tied to this session's context is the wrong tool for a wait longer than the
-cache TTL, full stop.
+To be *notified* rather than check back, it must happen outside this session —
+a `nohup`-detached shell loop (launched like the job itself, not via
+`run_in_background`) that polls for the completion marker and then invokes a
+fresh `claude` CLI call.
 
 - `--workers` only parallelises the framing+embedding phase. `extract_snips`
   (reading source audio off the slow HDD) is always serial — a large set's snip
