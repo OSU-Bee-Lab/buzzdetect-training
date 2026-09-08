@@ -489,7 +489,7 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
 
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
-              assume_yes=False, stop_tol=0.01, skip_cv=False, skip_shipped=False,
+              assume_yes=False, stop_tol=0.01, skip_cv=False, train_shipped=False,
               only_folds=None, surprisal=True):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
@@ -611,18 +611,19 @@ def train_set(name, embeddername, setname, name_translation,
         sx.to_csv(os.path.join(dir_model_full, FNAME_SX_SUMMARY), index=False)
         print(format_sx_report(name, sx))
 
-    if skip_shipped or only_folds:
-        # The shipped model is a deliverable, not a measurement: folds_sx.csv is
-        # built entirely from the rotations above, so nothing an experiment is
-        # judged on depends on it. Its epoch count comes from the fold curves
-        # (_consensus_epoch), which are on disk now, so it can be trained later
-        # against this same model dir with --skip-cv and get an identical
-        # result. Skipping it saves ~8% of a frozen-probe run and more of a
-        # trunk fine-tune, where it trains for tens of 80 s epochs on the full
-        # pool -- more frames than any single rotation sees.
-        why = '--only-folds' if only_folds else '--skip-shipped'
-        print(f'[{name}] {why}: rotations only, shipped model not trained. '
-              f'Train it later with the same --name plus --skip-cv.')
+    # The shipped model is a deliverable, not a measurement: folds_sx.csv is
+    # built entirely from the rotations above, so nothing an experiment is judged
+    # on depends on it. Default is therefore rotations-only -- the experiment
+    # path -- and training it is the opt-in. Its epoch count comes from the fold
+    # curves (_consensus_epoch), which are on disk by now, so a later run with
+    # the same --name plus --skip-cv produces the same model.
+    if only_folds:
+        print(f'[{name}] --only-folds: a fold subset cannot stand in for the '
+              f'full CV the shipped epoch count is read from; not training it.')
+        return
+    if not train_shipped:
+        print(f'[{name}] rotations done; shipped model not trained (default). '
+              f'Pass --train-shipped, or run --skip-cv later with this --name.')
         return
 
     # Shipped model: trains on every fold except 'holdout'. No fold is held

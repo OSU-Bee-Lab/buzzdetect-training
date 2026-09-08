@@ -39,19 +39,21 @@ if __name__ == '__main__':
     parser.add_argument('--skip-cv', action='store_true', dest='skip_cv',
                         help='train no rotations; go straight to the shipped model, '
                              'taking its epoch count from the fold results already '
-                             'on disk. Errors if there are none.')
+                             'on disk. Errors if there are none. Implies '
+                             '--train-shipped; the inverse of the default.')
     parser.add_argument('--only-folds', nargs='+', default=None, dest='only_folds',
                         metavar='FOLD',
                         help='diagnostic: hold out & score only these rotating '
-                             'folds (still trains on the full pool); implies '
-                             '--skip-shipped. folds_sx.csv is then a subset, not '
-                             'comparable to a full CV.')
-    parser.add_argument('--skip-shipped', action='store_true', dest='skip_shipped',
-                        help='train the rotations and stop, skipping the shipped '
-                             'model. It contributes nothing to folds_sx.csv, so an '
-                             'experiment does not need it; train it later with the '
-                             'same --name plus --skip-cv. The exact inverse of '
-                             '--skip-cv.')
+                             'folds (still trains on the full pool). folds_sx.csv '
+                             'is then a subset, not comparable to a full CV, and '
+                             'cannot supply a shipped epoch count.')
+    parser.add_argument('--train-shipped', action='store_true', dest='train_shipped',
+                        help='also train the shipped model after the rotations. '
+                             'Off by default: it contributes nothing to '
+                             'folds_sx.csv, so an experiment never needs it. Its '
+                             'epoch count is read from the fold curves on disk, so '
+                             'a later run with the same --name plus --skip-cv '
+                             'produces the same model. Implied by --skip-cv.')
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
@@ -74,7 +76,8 @@ if __name__ == '__main__':
         assume_yes=args.assume_yes,
         stop_tol=args.stop_tol,
         skip_cv=args.skip_cv,
-        skip_shipped=args.skip_shipped,
+        # --skip-cv means 'shipped model only', so it has to turn it on.
+        train_shipped=args.train_shipped or args.skip_cv,
         only_folds=args.only_folds,
         surprisal=args.surprisal,
     )

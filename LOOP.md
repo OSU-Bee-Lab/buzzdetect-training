@@ -218,7 +218,7 @@ WT=/home/luke/projects/buzzdetect-training/.local/worktrees/<slug>
 cd $WT
 
 # Stage 2 — only if the embedder or extraction changed
-# Stage 3 — the whole CV: one model per rotating fold, then the shipped model
+# Stage 3 — the whole CV: one model per rotating fold (shipped model is opt-in)
 #   02_set/main.py  --set medium --embedder yamnet --workers 2 --verbose
 #   03_train/main.py --name <modelname> --set medium --embedder yamnet --translation general -y
 # Launch each DETACHED, not in the foreground and not via run_in_background —
@@ -246,23 +246,24 @@ multi-hour run: waking to watch a job you can't hurry costs uncached tokens for
 no information.
 
 There is no `--runs` and no stage 4. One training call *is* the experiment: it
-trains one model per rotating fold, then the shipped model, and prints the
-numbers when it finishes.
+trains one model per rotating fold and prints the numbers when it finishes.
 
-**Pass `--skip-shipped` for an experiment.** `folds_sx.csv` — the number you are
-judged on — is built entirely from the rotations; the shipped model contributes
-nothing to it. It is a deliverable, and it belongs at the end of the search, not
-in every run of it. Its epoch count is derived from the fold curves left on
-disk, so training it later with the same `--name` plus `--skip-cv` gives an
-identical model:
+**The shipped model is not trained by default**, and an experiment should leave
+it that way. `folds_sx.csv` — the number you are judged on — is built entirely
+from the rotations; the shipped model contributes nothing to it. It is a
+deliverable, and it belongs at the end of the search rather than in every run of
+it. Its epoch count is derived from the fold curves left on disk, so training it
+later with the same `--name` gives an identical model:
 
 ```bash
-03_train/main.py --name <exp> ... --skip-shipped   # the experiment
+03_train/main.py --name <exp> ...                  # the experiment (default)
 03_train/main.py --name <exp> ... --skip-cv        # later, once <exp> wins
 ```
 
-It is ~8% of a frozen-probe run, and more of a trunk fine-tune, where it trains
-tens of 80 s epochs on the full pool — more frames than any single rotation.
+`--train-shipped` opts in during the same run; `--skip-cv` implies it. Deferring
+costs nothing and saves ~8% of a frozen-probe run, more of a trunk fine-tune,
+where it trains tens of 80 s epochs on the full pool — more frames than any
+single rotation sees.
 
 **Reruns resume, silently.** Any fold directory already holding a
 `config_model.json` is skipped, so re-running after a code change reuses the old

@@ -357,7 +357,13 @@ Per rotation: hold out one `rotate` fold, train on every other `rotate` fold
 plus all `train` folds, early-stop on the held-out fold, then score it. Fold
 model binaries are not kept — only their scores and training artifacts.
 
-Then the **shipped model** trains on `rotate` + `train` pooled. Nothing is held
+The **shipped model** is a separate, opt-in step: `--train-shipped` during the
+run, or a later run with `--skip-cv`. It is off by default because `folds_sx.csv`
+is built entirely from the rotations, so nothing an experiment is measured on
+depends on it — it is a deliverable, wanted once at the end of a search rather
+than in every run of one.
+
+When it does run it trains on `rotate` + `train` pooled. Nothing is held
 out, so there's nothing clean to monitor: it runs for a fixed epoch count read
 off the rotations' pooled `val_loss` curves (`train._consensus_epoch`) — each
 fold's "best so far" trace, min-max normalised, averaged with weight by
@@ -369,11 +375,14 @@ summaries written before the curves were stored. It's the only model saved with
 a binary, and it gets scored on each `holdout` fold.
 
 The CV loop resumes — folds with a `config_model.json` are skipped — so a
-re-run after an interruption only trains what's missing, then the shipped
-model. `--skip-cv` goes further: it trains *no* rotations and builds only the
-shipped model, taking the epoch count from whatever fold results are already on
-disk (`folds_sx.csv` is then a partial CV). Use it to get a deployable model
-out of a CV you don't intend to finish; it errors if no fold has run yet.
+re-run after an interruption only trains what's missing. `--skip-cv` is the
+other half of that: it trains *no* rotations and builds only the shipped model,
+taking the epoch count from whatever fold results are already on disk, and
+implies `--train-shipped`. Because the epoch count comes off those saved curves,
+deferring the shipped model costs nothing — the same `--name` later produces the
+same model. It errors if no fold has run yet, and `folds_sx.csv` from a partial
+CV is a partial CV. `--only-folds` scores a named subset of rotations and cannot
+supply a shipped epoch count at all.
 
 Class weights are inverse-frequency over the training pool. Loss is
 `BinaryCrossentropy(from_logits=True, label_smoothing=0.2)`; the architecture is
