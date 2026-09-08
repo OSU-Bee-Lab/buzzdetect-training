@@ -289,10 +289,55 @@ def _collect_fold_results(dir_folds, folds_rotate):
     return summary_rows, predictions
 
 
+def _consensus_epoch(summary_rows, tol):
+    """Shipped-model epoch count, read off the pooled per-fold val_loss curves.
+
+    Each rotation early-stops at its own val_loss argmin, but on a frozen-
+    embedding probe that basin is very flat — the per-fold argmins scatter by
+    100+ epochs and their median lurches with fold composition. Instead:
+
+      1. extend every fold's curve to the longest length, holding its own min
+         past its natural end (EarlyStopping restores best weights, so the
+         effective loss is frozen there);
+      2. take the running min of each — the "best so far" trace;
+      3. min-max normalise each to [0, 1];
+      4. average them, weighted by validation-frame count — a 300-frame val
+         fold's curve is mostly noise and should not swing the result;
+      5. return the earliest epoch within `tol` of the averaged curve's floor.
+
+    `tol` is a fraction of the averaged curve's own span (epoch-1 value down to
+    its floor): tol=0.01 means "all but the last 1% of the improvement the
+    consensus curve ever makes". It is the pooled-curve analogue of
+    EarlyStopping's min_delta — larger tol stops earlier. Tune it by eye
+    against the per-fold loss_curves.svg plots.
+
+    Returns None if no fold carries a curve (an old run resumed from summaries
+    written before this field existed); the caller falls back to the median.
+    """
+    curves = [(r['val_loss_curve'], r.get('frames_val', 1))
+              for r in summary_rows if r.get('val_loss_curve')]
+    if not curves:
+        return None
+
+    length = max(len(c) for c, _ in curves)
+    stack, weights = [], []
+    for curve, frames in curves:
+        arr = np.asarray(curve, dtype=float)
+        arr = np.concatenate([arr, np.full(length - len(arr), arr.min())])
+        arr = np.minimum.accumulate(arr)
+        span = arr.max() - arr.min()
+        stack.append((arr - arr.min()) / span if span else np.zeros(length))
+        weights.append(max(frames, 1))
+
+    mean = np.average(stack, axis=0, weights=weights)
+    threshold = mean.min() + tol * (mean.max() - mean.min())
+    return int(np.argmax(mean <= threshold)) + 1
+
+
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs_max, aug_dirnames, verbose,
                held_out_fold, save_binary, epochs_fixed=None, patience=50,
-               lr_backbone=0.0, lr_head=None, min_delta=0.002):
+               lr_backbone=0.0, lr_head=None, min_delta=0.002, stop_tol=None):
     """Train one model. Returns (result_row, model); (None, None) if the model
     directory is already populated."""
     if not can_write(dir_model):
@@ -378,6 +423,10 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             'best_val_loss': best_val_loss,
             'frames_train': data.frames_train,
             'frames_val': data.frames_val,
+            # The whole val_loss trace, not just its argmin: the shipped-model
+            # epoch count is read off the pooled curve (_consensus_epoch), and
+            # per-fold argmins are too jumpy in this flat basin to median.
+            'val_loss_curve': [float(x) for x in history.history['val_loss']],
             **_sens_history_summary(history.history, best_epoch),
         }
 
@@ -413,6 +462,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         'val_fold': data.val_fold,
         'epochs_fixed': epochs_fixed,
         'patience': patience,
+        'stop_tol': stop_tol,
         'min_delta': min_delta,
         'lr_backbone': lr_backbone,
         'lr_head': lr_head,
@@ -490,7 +540,7 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
               assume_yes=False, size_batch=65568, lr_backbone=0.0, lr_head=None,
-              min_delta=0.002, only_folds=None):
+              min_delta=0.002, only_folds=None, stop_tol=0.01, skip_cv=False):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -511,6 +561,9 @@ def train_set(name, embeddername, setname, name_translation,
         folds_scored = [f for f in folds_rotate if f in keep]
         print(f'[{name}] --only-folds: scoring {len(folds_scored)} of '
               f'{len(folds_rotate)} rotating folds; shipped model skipped')
+        if skip_cv:
+            raise ValueError('--skip-cv and --only-folds are mutually exclusive: '
+                             'one skips the shipped model, the other jumps to it')
 
     if len(folds_rotate) < 2:
         raise ValueError(
@@ -536,7 +589,15 @@ def train_set(name, embeddername, setname, name_translation,
     # into the stopping signal, and dedicating a second fold to it would cost
     # another deployment. Fold model binaries are not kept, only their scores
     # and training artifacts, archived under dir_folds.
-    for i, held_out in enumerate(folds_scored, 1):
+    #
+    # --skip-cv trains no rotations at all: it goes straight to the shipped
+    # model, taking its epoch count from whatever fold summaries are already on
+    # disk. For picking up a shipped model after an interrupted CV without
+    # paying to finish every remaining fold; folds_sx.csv is then a partial CV.
+    if skip_cv:
+        print(f'[{name}] --skip-cv: no rotations trained; shipped epoch count '
+              f'comes from existing fold results only')
+    for i, held_out in enumerate([] if skip_cv else folds_scored, 1):
         folds_train = [f for f in folds_rotate if f != held_out] + folds_train_always
         dir_model = os.path.join(dir_folds, str(held_out))
         modelname = f'{name}_fold{held_out}'
@@ -583,6 +644,11 @@ def train_set(name, embeddername, setname, name_translation,
 
     summary_rows, predictions_pooled = _collect_fold_results(dir_folds, folds_scored)
 
+    if skip_cv and not summary_rows:
+        raise ValueError(
+            f'--skip-cv: no fold results under {dir_folds} to take an epoch '
+            f'count from. Run at least one rotation first.')
+
     if summary_rows:
         os.makedirs(dir_model_full, exist_ok=True)
 
@@ -601,14 +667,24 @@ def train_set(name, embeddername, setname, name_translation,
         return
 
     # Shipped model: trains on every fold except 'holdout'. No fold is held
-    # out, so there is nothing clean left to monitor — the epoch count comes
-    # from the median best epoch across the rotations. Only model saved with a
-    # binary.
+    # out, so there is nothing clean left to monitor — the epoch count is read
+    # off the pooled rotation val_loss curves (_consensus_epoch), falling back
+    # to the median per-fold best epoch. Only model saved with a binary.
     epochs_fixed = epochs_max
     if summary_rows:
-        epochs_fixed = int(round(np.median([r['best_epoch'] for r in summary_rows])))
+        n_curves = sum(1 for r in summary_rows if r.get('val_loss_curve'))
+        epochs_fixed = _consensus_epoch(summary_rows, stop_tol)
+        if epochs_fixed is not None:
+            print(f'[{name}] shipped epoch count {epochs_fixed} '
+                  f'(consensus val_loss curve over {n_curves}/{len(folds_rotate)} '
+                  f'rotate folds, stop_tol={stop_tol})')
+        else:
+            epochs_fixed = int(round(np.median([r['best_epoch'] for r in summary_rows])))
+            print(f'[{name}] shipped epoch count {epochs_fixed} '
+                  f'(median per-fold best epoch over {len(summary_rows)}/'
+                  f'{len(folds_rotate)} rotate folds; no curves on disk)')
     else:
-        print(f'[{name}] no fold results to take a median epoch from; '
+        print(f'[{name}] no fold results to take an epoch count from; '
               f'training the shipped model for the full {epochs_max} epochs')
 
     folds_shipped = folds_rotate + folds_train_always
@@ -619,6 +695,7 @@ def train_set(name, embeddername, setname, name_translation,
         data, epochs_max, aug_dirnames, verbose,
         None, save_binary=True, epochs_fixed=epochs_fixed, patience=patience,
         lr_backbone=lr_backbone, lr_head=lr_head, min_delta=min_delta,
+        stop_tol=stop_tol,
     )
 
     if result is None:

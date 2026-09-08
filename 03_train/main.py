@@ -41,6 +41,16 @@ if __name__ == '__main__':
     parser.add_argument('--min-delta', type=float, default=0.002, dest='min_delta',
                         help='EarlyStopping min_delta on val_loss (default 0.002, '
                              'tuned for the full-batch linear probe)')
+    parser.add_argument('--stop-tol', type=float, default=0.01, dest='stop_tol',
+                        help='shipped-model epoch count: fraction of the consensus '
+                             'val_loss curve span to stop short of its floor '
+                             '(default 0.01). Larger = fewer epochs. See '
+                             'train._consensus_epoch.')
+    parser.add_argument('--skip-cv', action='store_true', dest='skip_cv',
+                        help='train no rotations; go straight to the shipped model, '
+                             'taking its epoch count from the fold results already '
+                             'on disk. Errors if there are none. Incompatible with '
+                             '--only-folds.')
     parser.add_argument('--only-folds', nargs='+', default=None, dest='only_folds',
                         metavar='FOLD',
                         help='diagnostic: hold out & score only these rotating '
@@ -64,4 +74,6 @@ if __name__ == '__main__':
         lr_head=args.lr_head,
         min_delta=args.min_delta,
         only_folds=args.only_folds,
+        stop_tol=args.stop_tol,
+        skip_cv=args.skip_cv,
     )

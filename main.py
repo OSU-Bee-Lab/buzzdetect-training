@@ -38,7 +38,8 @@ def load_stage(path, module_name):
 
 def main(modelname, setname, embeddername, name_translation, epochs_max, clear,
          aug_dirnames=None, verbose=False, n_workers=2, patience=50,
-         overlap_event_prop=None, framehop_prop=None, assume_yes=False):
+         overlap_event_prop=None, framehop_prop=None, assume_yes=False,
+         stop_tol=0.01, skip_cv=False):
     model_dir = os.path.join(config.DIR_MODELS, modelname)
 
     if clear and os.path.exists(model_dir):
@@ -69,6 +70,8 @@ def main(modelname, setname, embeddername, name_translation, epochs_max, clear,
         verbose=verbose,
         patience=patience,
         assume_yes=assume_yes,
+        stop_tol=stop_tol,
+        skip_cv=skip_cv,
     )
 
 
@@ -82,6 +85,13 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=400)
     parser.add_argument('--patience', type=int, default=50,
                         help='EarlyStopping patience for the per-fold submodels')
+    parser.add_argument('--stop-tol', type=float, default=0.01, dest='stop_tol',
+                        help='shipped-model epoch count: fraction of the consensus '
+                             'val_loss curve span to stop short of its floor '
+                             '(default 0.01). Larger = fewer epochs.')
+    parser.add_argument('--skip-cv', action='store_true', dest='skip_cv',
+                        help='train no rotations; go straight to the shipped model '
+                             'using the fold results already on disk')
     parser.add_argument('--workers', type=int, default=2, dest='n_workers',
                         help='extraction workers; 0 runs in-process')
     # Only consulted when the set has no config_extract.json yet; see 02_set/main.py.
@@ -110,6 +120,8 @@ if __name__ == '__main__':
         verbose=args.verbose,
         n_workers=args.n_workers,
         patience=args.patience,
+        stop_tol=args.stop_tol,
+        skip_cv=args.skip_cv,
         overlap_event_prop=args.overlap_event_prop,
         framehop_prop=args.framehop_prop,
         assume_yes=args.assume_yes,
