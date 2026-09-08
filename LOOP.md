@@ -61,14 +61,22 @@ a different base rate; it is not a target on this metric.
 
 ## Baseline
 
-**There isn't one. The first run of this era rebuilds it**, and until it lands
-there is nothing to compare an experiment against.
+`cv-baseline` in `log.jsonl`, model at `models/cv_baseline/`:
+**0.218 mean sens@fpr0.005** over 5 rotating folds. Join against its
+`folds_sx.csv` for a paired per-fold comparison.
 
-Same config as the last two eras opened with — a linear probe on frozen YAMNet,
-`Dropout(0.2)`, `BinaryCrossentropy(label_smoothing=0.2)`, Adam 0.002, on
-`medium` — but under `general`, not `general_v1` (see Constraints). Log it as
-`cv-baseline`, and it becomes the `--baseline-model` every later entry joins
-against.
+Config: a linear probe on frozen YAMNet, `Dropout(0.2)`, label smoothing 0.2,
+Adam 0.002, `medium`, `general` — plus the two correctness fixes carried over
+from the archive: per-class weights inside the loss (`weighted_bce_loss`, since
+Keras' `fit(class_weight=)` collapses a multi-hot target to `argmax`) and
+restoring the true `val_loss` argmin (`RestoreTrueBest`).
+
+**Those two fixes measured -0.006 here, folds 1 up / 2 down / 2 flat** — inside
+the noise floor, and opposite in sign to the +0.013 and +0.008 the archive
+recorded for them on the pre-revision 11-fold set. They are kept because both
+are correctness fixes independent of the metric, not because they helped. The
+pre-fix control is `models/yamnet_medium_general_v2/` (0.224, same data and
+folds) if anyone wants to revisit that call.
 
 `models/yamnet_medium_general/` is the **previous** era's baseline, 0.206 under
 `general_v1` on the pre-revision annotations. It is an artifact now: keep it for
