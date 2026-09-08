@@ -18,12 +18,13 @@ from dataset import (
     build_fold_dataset, load_augmented, read_fold_roles, folds_by_role,
     survey_untranslated, ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT,
 )
-from train_utils import build_weights, build_classes, can_write, Sample
+from train_utils import (build_weights, build_classes, can_write,
+                         weighted_bce_loss, Sample)
 from embedders.embedding import load_embedder
 from plot_history import plot_history, plot_sens_history
 from write_model_py import write_model_py
 
-from callbacks import SensAtFPR
+from callbacks import SensAtFPR, RestoreTrueBest
 
 from sx import summarize_folds, format_sx_report, _fold_sens, FPR_TARGETS, FNAME_SX_SUMMARY
 from surprisal import write_fold_surprisal
@@ -298,8 +299,14 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.Dense(len(data.classes)))
 
+    # Per-class weights go in the loss, not in fit(class_weight=). Keras'
+    # class_weight= assumes single-label targets: for a multi-hot y it collapses
+    # each sample to argmax(y) and scales the whole sample by that one scalar, so
+    # a buzz frame co-occurring with an earlier-indexed class never gets
+    # ins_buzz's weight at all. See train_utils.weighted_bce_loss.
+    weights_ordered = [data.weight_dict[i] for i in range(len(data.classes))]
     model.compile(
-        loss=tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.2),
+        loss=weighted_bce_loss(weights_ordered, label_smoothing=0.2),
         optimizer=tf.keras.optimizers.Adam(learning_rate=0.002),
         metrics=['accuracy'],
     )
@@ -309,7 +316,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         # monitor. Train a fixed number of epochs instead, set by the caller
         # from the median best epoch across the rotations.
         history = model.fit(
-            data.train_tf, epochs=epochs_fixed, class_weight=data.weight_dict,
+            data.train_tf, epochs=epochs_fixed,
             callbacks=[tf.keras.callbacks.TerminateOnNaN()],
             # _to_tf already applies .shuffle(); say so, or Keras warns that it's
             # ignoring shuffle=True on a Dataset input every run.
@@ -325,7 +332,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             'frames_train': data.frames_train,
         }
     else:
-        callback = tf.keras.callbacks.EarlyStopping(
+        callback = RestoreTrueBest(
             monitor='val_loss', patience=patience, min_delta=0.002, restore_best_weights=True,
         )
         # Reporting only, and listed first so its keys are in `logs` before
@@ -340,7 +347,6 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             epochs=epochs_max,
             validation_data=data.val_tf,
             callbacks=[sens_callback, callback, tf.keras.callbacks.TerminateOnNaN()],
-            class_weight=data.weight_dict,
             shuffle=False,  # _to_tf already shuffles; see the fixed-epochs fit above
             # --verbose is for a human watching: 1 = live progress bar. Agents
             # leave the flag off (0) so per-epoch lines don't fill their context.

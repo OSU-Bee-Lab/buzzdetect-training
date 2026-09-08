@@ -3,6 +3,7 @@ import re
 from dataclasses import dataclass
 
 import numpy as np
+import tensorflow as tf
 import pandas as pd
 
 import config as cfg
@@ -55,6 +56,44 @@ def build_weights(data_train: list[Sample], classes):
     weights['weight'] = [weighter(f) for f in weights['samples']]
 
     return weights
+
+
+def weighted_bce_loss(weights, label_smoothing=0.2):
+    """Per-class weighted binary crossentropy for a multi-hot, multi-label
+    target — the loss `class_weight=` was meant to express, applied correctly.
+
+    Keras' `class_weight=` argument to `model.fit()` assumes single-label
+    targets: for a multi-hot `y` it collapses each sample to one class via
+    `argmax(y, axis=-1)` and scales that sample's entire loss by one scalar,
+    picked by class *index* order. Any sample where the true buzz label
+    co-occurs with an earlier-sorted class (e.g. `ambient_background`) never
+    gets `ins_buzz`'s weight applied at all, and no class ever gets weighted
+    per-neuron. `weighted_cross_entropy_with_logits` reweights only the
+    positive-target term of each neuron independently via `pos_weight`, which
+    is what per-class inverse-frequency weighting is supposed to mean for a
+    multi-label target: negative supervision is untouched, so a rare class's
+    boost doesn't also mute the negative signal on every other neuron in the
+    same frame.
+
+    Args:
+        weights: per-class weight, ordered by class index (e.g. `build_weights`'s
+            'weight' column).
+        label_smoothing: applied to targets before the loss, matching
+            `tf.keras.losses.BinaryCrossentropy`'s `label_smoothing` formula.
+    """
+    weight_tensor = tf.constant(weights, dtype=tf.float32)
+
+    def loss(y_true, y_pred):
+        y_true = tf.cast(y_true, y_pred.dtype)
+        if label_smoothing:
+            y_true = y_true * (1.0 - label_smoothing) + 0.5 * label_smoothing
+
+        per_neuron = tf.nn.weighted_cross_entropy_with_logits(
+            labels=y_true, logits=y_pred, pos_weight=weight_tensor,
+        )
+        return tf.reduce_mean(per_neuron, axis=-1)
+
+    return loss
 
 
 def labels_from_path(path_in):
