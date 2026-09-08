@@ -379,8 +379,16 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             f'on the re-run.'
         )
 
-    if save_binary:
-        model.save(os.path.join(dir_model, 'model.keras'), include_optimizer=True)
+    # Every model gets its weights written, rotations included. A probe is
+    # ~80 KB without optimizer state (~19k params), so all five rotations cost
+    # under half a megabyte -- and without them a finished rotation can only
+    # ever be re-read through predictions.csv, which holds activations but not
+    # the model. Asking what the probe actually *learned* (which input dims
+    # carry weight, how a new feature block was used) then needs a full
+    # retrain, and a retrain is not the same model: there is no seed control in
+    # this pipeline. Optimizer state stays shipped-only -- a rotation is never
+    # resumed or fine-tuned, and it doubles the file.
+    model.save(os.path.join(dir_model, 'model.keras'), include_optimizer=save_binary)
 
     if save_binary:
         # Provenance for the model that ships. The rotations' copies were
