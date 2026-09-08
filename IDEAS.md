@@ -72,6 +72,12 @@ So they need different fixes and should stop being treated as one item:
   near -1.7. Its buzz is 242 s of 328 s `ins_buzz_low`, and low buzz vs engine
   drone is an acoustically plausible confusion. This is the fold **night-negatives**
   would help most; a buzz-vs-`mech_auto` margin is the other candidate.
+- `1_95` was the explicit target of `harmonic-comb` (2026-09-08) and **did not
+  move**: +0.002 in each of two runs, and the only fold byte-stable across two
+  nondeterministic runs, i.e. its failure is structural rather than stochastic.
+  An explicit f0 channel that cleanly separates a 90 Hz engine comb from a
+  220 Hz wingbeat comb on synthetic tones does nothing on this fold's real
+  audio. A buzz-vs-`mech_auto` margin is now the remaining candidate.
 - **1_150 is a positives problem** — its negatives are unremarkable and its buzz
   frames are simply indistinguishable from its own background, despite being 88 s
   of plain `ins_buzz_medium` with 6503 s of support. Nothing structural explains it.
@@ -115,6 +121,21 @@ mislabelling trill as background would be actively harmful — consider a distin
 `auto_night_negative` with its own translation row. **How much?** A dose-response
 (0x / 1x / 4x the fold's existing negatives) is the experiment, not one volume.
 
+## Closed: handcrafted frequency features
+
+`harmonic-comb` (2026-09-08) tested the strongest form — 40 f0 candidates over
+70-450 Hz with harmonic reinforcement and off-comb subtraction, plus modulation
+and band contrast, gain-invariant, no fitted statistics — and it did not move
+the metric beyond the repeat-run spread. Crucially the block was **not
+ignored**: the saved fold weights put **1.29x** the per-dim `|w|` of a YAMNet
+dim on the comb block in all 5 folds, and **1.64x** on the 40-d comb profile.
+Used, preferentially weighted, no effect => the f0 information is **redundant**
+with what YAMNet's 1024-d already encodes. That is a much stronger closure than
+`supp-freq-v2`'s, which rested on four unresolved global scalars under the
+retired metric. Don't rerun the fixed version. A *learnable* filterbank is the
+only untried variant and the redundancy finding argues against it — the probe
+is not starved of this information.
+
 ## trill-vs-buzz
 
 **Hypothesis:** the false positives that set the threshold are mostly
@@ -152,6 +173,15 @@ propagating to ~0.012 of headline SD from the evaluation sample alone.
 half the noise floor is eval-set sampling, not training stochasticity.** Seed
 control would not fix it, and a partial-AUC estimator was tried and tracks
 sens@0.005 almost exactly without cutting SD much.
+
+**Independently confirmed 2026-09-08 by direct repetition** (`harmonic-comb`).
+Two CVs of one identical config gave 0.223 and 0.239 — **0.016 headline apart,
+3 folds up / 1 down / 1 flat**, from TF nondeterminism alone. That is the whole
+run-to-run distribution, measured on the current 5-fold roster rather than
+inferred. The fold structure matches this section's bootstrap: the two folds
+with >1000 buzz frames moved 0.019 and 0.013, while `1_150` (146 buzz frames)
+moved **0.055** — 0.007 to 0.062 on the same config. Read any result in this era
+under ~0.02 headline, or any result resting on `1_150`, against that.
 
 **The only thing that shrinks it is more annotated non-buzz frames in the thin
 folds.** That buys more measurement precision per hour than anything the loop
