@@ -54,6 +54,12 @@ class TrainingData:
     # (embeddings, is_buzz) for the validation fold, unshuffled and paired,
     # for the per-epoch sens@FPR monitor. None when there is no val fold.
     val_eval: tuple = None
+    # Per-dim (mean, variance) of the *training* pool, for the input
+    # standardization layer. Fit inside the fold, never on the held-out one —
+    # see _input_stats. None when --standardize is off.
+    norm_stats: tuple = None
+    # How many dims _input_stats declined to scale (see VAR_FLOOR).
+    n_dims_passthrough: int = 0
 
 
 def _to_tf(data, size_batch, size_shuffle):
@@ -70,6 +76,47 @@ def _to_tf(data, size_batch, size_shuffle):
     )
 
 
+# A dim whose training-pool variance is below this is passed through
+# unchanged (mean 0, variance 1) instead of being scaled. Keras' Normalization
+# divides by sqrt(var + 1e-7), so a dim that never varies — for yamnet_combined
+# these are AudioSet classes that never fire on this corpus — would be
+# amplified by ~1e4 into pure noise, which is the NaN blowup the archived
+# attempt at this hit. Floor chosen an order of magnitude above the epsilon.
+VAR_FLOOR = 1e-6
+
+
+def _input_stats(samples):
+    """Per-dim (mean, variance) of a training pool, plus a pass-through mask.
+
+    Fold safety: the caller passes the *training* samples only. Nothing here
+    ever sees the held-out fold, so the standardization applied at validation
+    and scoring time is a transform fit strictly inside the training pool —
+    the same rule CLAUDE.md states for augmentation, for the same reason.
+
+    Streams in float64 over samples rather than materialising the pool a
+    second time (_to_tf already holds one copy).
+    """
+    n = 0
+    total = None
+    total_sq = None
+    for s in samples:
+        arr = np.asarray(s.embeddings, dtype=np.float64)
+        if total is None:
+            total = np.zeros(arr.shape[1], dtype=np.float64)
+            total_sq = np.zeros(arr.shape[1], dtype=np.float64)
+        n += arr.shape[0]
+        total += arr.sum(axis=0)
+        total_sq += np.square(arr).sum(axis=0)
+
+    mean = total / n
+    var = np.maximum(total_sq / n - np.square(mean), 0.0)
+
+    passthrough = var < VAR_FLOOR
+    mean[passthrough] = 0.0
+    var[passthrough] = 1.0
+    return mean.astype(np.float32), var.astype(np.float32), int(passthrough.sum())
+
+
 def _eval_arrays(samples, classes):
     """Frame-level (embeddings, is_buzz) for a fold, in sample order.
 
@@ -83,7 +130,7 @@ def _eval_arrays(samples, classes):
 
 
 def _load_data(setname, embeddername, folds_train, name_translation, aug_dirnames,
-               val_fold=None):
+               val_fold=None, standardize=False):
     """Pool folds_train for training; val_fold, if given, is a whole separate
     deployment used as the early-stopping monitor.
 
@@ -126,6 +173,14 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
             f'was ignored or excluded'
         )
 
+    norm_stats = None
+    n_passthrough = 0
+    if standardize:
+        # After the augmented frames are folded in: the statistics describe the
+        # pool the model actually trains on.
+        mean, var, n_passthrough = _input_stats(data_train)
+        norm_stats = (mean, var)
+
     weights = build_weights(data_train, classes)
     weight_dict = {i: w for i, w in enumerate(weights['weight'])}
 
@@ -146,6 +201,8 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
         frames_val=frames_val,
         val_fold=val_fold,
         val_eval=val_eval,
+        norm_stats=norm_stats,
+        n_dims_passthrough=n_passthrough,
     )
 
 
@@ -296,6 +353,16 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     tf_name = re.sub(r'[^A-Za-z0-9_.>-]', '_', modelname)
     model = tf.keras.Sequential(name=tf_name)
     model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
+    if data.norm_stats is not None:
+        # Per-dim standardization of the input, as the first layer of the model
+        # rather than a preprocessing step, so scoring and the shipped
+        # inference path apply the identical transform without knowing about
+        # it. mean/variance are fixed at construction from the training pool
+        # (see _input_stats) — adapt() is never called, so the layer cannot
+        # pick anything up from validation data.
+        mean, var = data.norm_stats
+        model.add(tf.keras.layers.Normalization(
+            axis=-1, mean=mean, variance=var, name='standardize'))
     model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.Dense(len(data.classes)))
 
@@ -367,6 +434,9 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             'val_loss_curve': [float(x) for x in history.history['val_loss']],
             **_sens_history_summary(history.history, best_epoch),
         }
+        if data.norm_stats is not None:
+            result['standardized'] = True
+            result['n_dims_passthrough'] = data.n_dims_passthrough
 
     if any(not math.isfinite(x) for x in history.history['loss']):
         raise RuntimeError(
@@ -408,6 +478,8 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         'epochs_fixed': epochs_fixed,
         'patience': patience,
         'stop_tol': stop_tol,
+        'standardize': data.norm_stats is not None,
+        'n_dims_passthrough': data.n_dims_passthrough,
     }
     # 'w' for the same reason as write_model_py's — can_write() is the gate
     with open(os.path.join(dir_model, 'config_model.json'), 'w') as f:
@@ -490,7 +562,7 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
               assume_yes=False, stop_tol=0.01, skip_cv=False, train_shipped=False,
-              only_folds=None, surprisal=True):
+              only_folds=None, surprisal=True, standardize=False):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -553,7 +625,7 @@ def train_set(name, embeddername, setname, name_translation,
             continue
 
         data = _load_data(setname, embeddername, folds_train, name_translation,
-                          aug_dirnames, val_fold=held_out)
+                          aug_dirnames, val_fold=held_out, standardize=standardize)
         if data.frames_val == 0:
             # Nothing to early-stop on or score against — a legitimate state if
             # every label in this deployment is ignored or excluded, but it

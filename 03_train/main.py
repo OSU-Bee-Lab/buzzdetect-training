@@ -57,6 +57,12 @@ if __name__ == '__main__':
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
+    parser.add_argument('--standardize', action='store_true',
+                        help='per-dim standardization of the embedding input, '
+                             'as a Normalization layer fit on each fold\'s own '
+                             'training pool. Off by default: it changes the '
+                             'effective learning rate, so it is an experiment, '
+                             'not a default.')
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--no-surprisal', action='store_false', dest='surprisal',
                         help='skip the per-frame surprisal CSVs under '
@@ -80,4 +86,5 @@ if __name__ == '__main__':
         train_shipped=args.train_shipped or args.skip_cv,
         only_folds=args.only_folds,
         surprisal=args.surprisal,
+        standardize=args.standardize,
     )
