@@ -145,31 +145,40 @@ fold must agree on its role — `03_train` errors otherwise.
 
 ### 2a. Build the set
 
-A **set** is a named selection of annotation efforts plus any relabelling on top
-of them. Sets live in `02_set/sets/<name>/`, each defined by a `build.R`:
+A **set** is a named selection of annotations plus any relabelling on top of
+them. Sets live in `02_set/sets/<name>/`, each defined by a `build.R`:
 
 ```bash
-cd 02_set/sets/lite && Rscript build.R
+cd 02_set/sets/medium && Rscript build.R   # then large / tiny / lite as needed
 ```
 
+`medium` is the base set and the only one built from `01_annotate`: its
 `build.R` concatenates the chosen efforts' `annotations_combined.csv` and
-`folds.csv`, applies set-specific label collapsing (e.g. every `ins_buzz*`
-variant → `ins_buzz`), checks that no ident lands in two folds, and writes:
+`folds.csv`, applies label collapsing (e.g. every `ins_buzz*` variant →
+`ins_buzz`), checks that no ident lands in two folds, and writes:
 
 - `annotations.csv` — `source, ident, start, end, label, duration, item`
 - `folds.csv` — `source, ident, fold, role`
-- `summary_per_fold.csv`, `summary_per_class.csv` — annotated seconds by fold, and by fold × class
+- `summary_per_fold.csv`, `summary_per_role.csv`, `summary_per_class.csv`
+- `translations/<name>.csv` — per-label relabel maps for train time
 
-Roles pass through unchanged, so a set picks roles by choosing its sources.
-Overriding one means editing that set's `build.R`.
+Every other set derives from an **already-built `medium`** and never touches
+`01_annotate`. `large` copies medium's files unchanged; `tiny` and `lite` write
+a subset of `medium/annotations.csv` and then `source('../_derive.R')`, which
+rebuilds `folds.csv`, the summaries, and `translations/` for that subset. Only
+the annotation-level files are derived — each set still extracts its own snips
+and embeddings under `--set <name>`. Roles pass through unchanged.
+
+So: rebuild `medium` first, then rebuild any derived set that needs to track it.
 
 Checked-in sets:
 
-| set | sources | scale |
+| set | derivation | scale |
 |---|---|---|
-| `medium` | Even Sample + 2025-06-04 original annotations | ~9.6k annotations, 79 folds |
-| `lite` | same, Even Sample only in practice | ~325 annotations, 11 rotate folds, ~2.8 h |
-| `tiny` | same, two annotations per ident | smoke-test scale |
+| `medium` | Even Sample + 2025-06-04 original annotations, from `01_annotate` | ~9.6k annotations, 79 folds |
+| `large` | copy of `medium`, framehop 0.2 instead of 1 | same annotations, finer frames |
+| `lite` | `medium` subset: Even Sample only, ≤10 annotations per ident per label | ~1.2k annotations, troubleshooting |
+| `tiny` | `medium` subset: first two annotations per ident | smoke-test scale |
 
 > `medium` is the set experiments run on: day-long annotated recordings from a
 > diversity of environments. Its `folds.csv` assigns `rotate` to 11 deployment
