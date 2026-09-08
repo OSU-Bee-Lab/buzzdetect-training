@@ -153,6 +153,7 @@ def get_ident_audio_path(ident):
 FNAME_SNIP_MANIFEST = 'manifest.json'
 FNAME_FINGERPRINT = 'annotations.fingerprint'
 FNAME_FRAMETIMES = 'frametimes.csv'
+FNAME_INCOMPLETE = 'extraction.incomplete'
 
 
 def _fingerprint_annotations(annotations_sub: pd.DataFrame) -> str:
@@ -186,6 +187,32 @@ def _read_fingerprint(dir_path):
 def _write_fingerprint(dir_path, fingerprint):
     with open(os.path.join(dir_path, FNAME_FINGERPRINT), 'w') as f:
         f.write(fingerprint + '\n')
+
+
+def _mark_incomplete(dir_path):
+    """Claim a directory for the writes about to happen.
+
+    The fingerprint is stamped last and a *missing* one means 'unjudgeable, leave
+    alone' (see AssignIdent) — which is right for a directory that predates the
+    check, and wrong for one a killed run left half-written. Without this marker
+    those two look identical, so an ident holding a truncated set of pickles is
+    read as complete forever and silently trains on partial audio. Cleared by
+    _mark_complete once the fingerprint is down.
+    """
+    os.makedirs(dir_path, exist_ok=True)
+    with open(os.path.join(dir_path, FNAME_INCOMPLETE), 'w') as f:
+        f.write('')
+
+
+def _mark_complete(dir_path):
+    try:
+        os.remove(os.path.join(dir_path, FNAME_INCOMPLETE))
+    except FileNotFoundError:
+        pass
+
+
+def _is_incomplete(dir_path):
+    return os.path.exists(os.path.join(dir_path, FNAME_INCOMPLETE))
 
 
 def _has_pickles(dir_path):
@@ -353,7 +380,11 @@ def _sync_snips_ident(ident: str, annotations_sub: pd.DataFrame, path_audio: str
             if track.channels > 1:
                 audio_data = np.mean(audio_data, axis=1)
 
-            sf.write(path_out, audio_data, sr)
+            # Write then rename: a kill mid-write would otherwise leave a truncated
+            # .flac that the `os.path.exists` skip above accepts on the next run.
+            path_part = path_out + '.part'
+            sf.write(path_part, audio_data, sr)
+            os.replace(path_part, path_out)
             n_written += 1
 
     with open(path_manifest, 'w') as f:
@@ -498,7 +529,9 @@ class AssignIdent:
     Staleness is decided by the annotation fingerprint each output directory carries.
     A directory with no fingerprint predates the check and is left alone: it can't be
     judged, and the snip layer catches the case that matters (annotations that moved
-    far enough to change the snips), via `force_stale`.
+    far enough to change the snips), via `force_stale`. The exception is a directory
+    still carrying an FNAME_INCOMPLETE marker — that is not an unjudgeable legacy
+    directory but one a killed run left mid-write, and it is always stale.
     """
 
     def __init__(self, ident: str, fold: str, config_extract: ConfigExtract,
@@ -519,10 +552,14 @@ class AssignIdent:
         self.dir_snips_ident = os.path.join(dir_snips_base, ident)
         self.snips_exist = bool(_snip_paths(self.dir_snips_ident))
 
-        self.audio_stale = self.audio_exists and self._is_stale(self.dir_out_audio, force_stale)
+        self.audio_stale = self.audio_exists and (
+            _is_incomplete(self.dir_out_audio)
+            or self._is_stale(self.dir_out_audio, force_stale))
         # Embeddings are derived from the cached audio, so stale audio implies stale embeddings.
         self.embeddings_stale = self.embeddings_exist and (
-            self.audio_stale or self._is_stale(self.dir_out_embeddings, force_stale))
+            self.audio_stale
+            or _is_incomplete(self.dir_out_embeddings)
+            or self._is_stale(self.dir_out_embeddings, force_stale))
 
         self.handle, self.handle_msg = self._init_handle()
 
@@ -608,7 +645,7 @@ class WorkerExtract:
     def extract_ident_embeddings(self, a_ident: AssignIdent):
         paths_audio = glob.glob(os.path.join(glob.escape(a_ident.dir_out_audio), '*.pickle'))
 
-        os.makedirs(a_ident.dir_out_embeddings, exist_ok=True)
+        _mark_incomplete(a_ident.dir_out_embeddings)
 
         def process_extracted_audio(path_audio):
             path_embedding = path_audio.replace(a_ident.dir_out_audio, a_ident.dir_out_embeddings)
@@ -635,6 +672,7 @@ class WorkerExtract:
                 os.path.join(a_ident.dir_out_embeddings, FNAME_FRAMETIMES))
         if a_ident.fingerprint is not None:
             _write_fingerprint(a_ident.dir_out_embeddings, a_ident.fingerprint)
+        _mark_complete(a_ident.dir_out_embeddings)
         return f'{len(paths_audio)} cached label file(s) → embeddings'
 
     def extract_ident_both(self, a_ident: AssignIdent):
@@ -796,8 +834,8 @@ class WorkerExtract:
                               f'{row["label"]!r} at {snip_start + event[0]:.3f}s '
                               f'({event[1]-event[0]:.3f}s) as {labels_collapse}', flush=True)
 
-        os.makedirs(a_ident.dir_out_audio, exist_ok=True)
-        os.makedirs(a_ident.dir_out_embeddings, exist_ok=True)
+        _mark_incomplete(a_ident.dir_out_audio)
+        _mark_incomplete(a_ident.dir_out_embeddings)
 
         for labels_collapse, samples in frames_by_label.items():
             path_out_samples = os.path.join(a_ident.dir_out_audio, labels_collapse + '.pickle')
@@ -836,6 +874,8 @@ class WorkerExtract:
         if a_ident.fingerprint is not None:
             _write_fingerprint(a_ident.dir_out_audio, a_ident.fingerprint)
             _write_fingerprint(a_ident.dir_out_embeddings, a_ident.fingerprint)
+        _mark_complete(a_ident.dir_out_audio)
+        _mark_complete(a_ident.dir_out_embeddings)
 
         n_frames = sum(len(s) for s in frames_by_label.values())
         return (f'{len(snip_paths)} snip(s) → {n_frames} frames, '
