@@ -26,9 +26,37 @@ rate, the eval was a single fixed split with no deployment structure, and the
 training set pooled collection methods that a real deployment never mixes. Any
 verdict below could invert the same way.
 
-Treat these as **leads worth rerunning**, never as settled answers. The distilled
-version — with the old verdicts marked as such — is in `IDEAS.md` under "Tried
-before the rework."
+Treat these as **leads worth rerunning**, never as settled answers.
+
+## What the era concluded
+
+A scannable digest of the 29 entries, so proposing something already tried costs
+one glance rather than a read of the log. Every verdict carries the caveats
+above: the numbers are gone and only the direction is worth anything.
+
+| Area | What was tried | Old verdict |
+|---|---|---|
+| Regularization | Dropout(0.2) + label smoothing 0.2 | The whole gain over an unregularized probe (3.6pp). Current default. |
+| | Label smoothing 0.3 | Collapses. 0.2 was the peak of a monotone trend. |
+| | L2(1e-4), alone or added | Indistinguishable from no regularization. |
+| | BatchNorm on input embeddings | Clear negative (-5.8pp) — training-set running stats didn't transfer. |
+| Head shape | Dense(128, relu) before output | Worse than a linear probe, replicated twice, no overfitting signature. |
+| Input surgery | Bandpass 100-3000 Hz before YAMNet | Clear negative (-4.7pp); corrupts YAMNet's expected input. |
+| | Zeroing mel bins above 3000 Hz | Catastrophic (-14.3pp). |
+| | Handcrafted frequency features | Neutral twice; YAMNet already encodes it. |
+| | White-noise samples as 'static' | Neutral; the false positives are structured, not broadband. |
+| Backbone | Fine-tune YAMNet layers 13-14 at 1e-5 | Clear negative (-8.3pp); overfit, train 78% vs val 59%. |
+| Class weighting | 2x buzz upweight over balanced | Negative-to-neutral; balanced weights already fine. |
+| Loss | Focal loss, alpha 0.25 and 0.75 | Shifts the operating point, doesn't lift the curve. |
+| Translation | Binary (all non-buzz collapsed) | Hurt; multi-class auxiliary supervision helped. Retested under CV — see `binary-translation-cv`, neutral on the endpoint. |
+| Training procedure | min_delta=0.002 early stopping | 6.6x variance reduction, no mean change. Adopted as default. |
+| | Forcing buzz out of validation | Negative; early stopping needs buzz in the monitor fold. |
+| Temporal | [prev, curr, next] frame concatenation | Negative (-2pp) — **and now known to be wrong**, see above. |
+
+Two have since been retested under CV, and the pair is the whole argument for
+rerunning rather than deferring: `[prev, curr, next]` concatenation inverted
+from -2pp to the largest gain of the following era, while the `binary`
+translation's negative held up (neutral, `binary-translation-cv`).
 
 ## No `set/` snapshot exists
 

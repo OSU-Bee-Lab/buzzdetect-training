@@ -113,6 +113,13 @@ rather than inherited from the archive.
   `archive/2026-08_cv-medium-v1/set/translations/` holds a copy — but a new
   experiment that passes it is comparing against nothing.
 - Augmentation: has hurt training so far — avoid without strong reason.
+- **What survives a data change, and what doesn't.** Annotation is ongoing, so
+  the folds and the training pool move under every result. Hyperparameter
+  results do not survive that — don't bank them. Large one-directional
+  structural results usually do. Diagnostics and instrumentation survive
+  absolutely: they cost one cheap run, recompute for free whenever the data
+  moves, and they tell Luke what to annotate next, which is the standing
+  bottleneck. Weight the rotation accordingly.
 - Err against hyperparameter tuning, unless you have a strong reason. We're
   looking for structural gains; hyperparameters can be tuned in one large sweep
   once a good structure is identified.

@@ -1,404 +1,233 @@
 # Experiment Ideas
 
-Check this file and `log.jsonl` before proposing an experiment, then take it
-through the lifecycle in `LOOP.md`.
+Candidate experiments, nothing else. Results go in `log.jsonl`, protocol in
+`LOOP.md`, closed eras in `archive/` — each with a README digesting what that
+era concluded. Check all three before proposing an experiment.
 
-`log.jsonl` holds the current era only, and is **empty** — the training data was
-revised on 2026-09-08 and no baseline has been rerun yet. Every number quoted
-below comes from `archive/`, was measured on different data, and is a lead
-rather than a target.
-
-Everything under [Tried before the rework](#tried-before-the-rework) comes from
-an era with a different metric, a different eval corpus, and a training set that
-was a scattershot of collection methods. Its numbers are gone and its verdicts
-are unreliable — see the warning at the head of that section before you treat
-any of it as settled.
+**State as of 2026-09-08.** `log.jsonl` is empty; the training data was revised
+and the era before it is archived. The baseline is `cv_baseline` (frozen YAMNet
+probe, `general`, per-class weighting in the loss, restore at the true val_loss
+argmin). Every number quoted below was measured on the **previous** data over
+**11** rotating folds; there are now **5**. Treat them as directions, not
+targets, and re-establish anything you intend to build on.
 
 ---
 
-## Where to spend effort while the annotations are still moving
+## Revalidate the two clean embedder wins
 
-Three of the last four experiments were unfreeze-depth variants, and depth is
-now settled on `medium` (13-14, `lora-adapter` below). The rest of the trunk-FT
-follow-up list is hyperparameter work, which LOOP deprioritises and which
-`trunk-ft-stop-sweep` already showed is inside the noise. That vein is close to
-mined out at this frame density.
+**The highest-value next runs, and the reason the baseline doesn't already
+include them.** Both are `clean`-trust, above the old noise floor, and ship
+properly — but both change the embedder and cost a re-extraction, and neither
+was ever tested in combination with the other. Folding them into the baseline
+would have bundled three changes into one undecomposable reference point.
 
-More importantly, **the rotating folds are still being annotated toward 24 snips
-each**, so per-fold buzz counts and the training pool both move under every
-result in `log.jsonl`. That changes what an experiment is worth:
+| | old delta | folds up | cost |
+|---|---|---|---|
+| `context-embedder` — [prev, curr, next] concatenated **inside** the embedder, 3072-d | +0.022 | 7/11 | re-extraction |
+| `yamnet-combined` — YAMNet embeddings + the 521 AudioSet sigmoid scores, 1545-d | +0.016 | 7/11 | re-extraction |
 
-- **Hyperparameter results do not survive a data change.** Don't bank them.
-- **Large one-directional structural results probably do** — `trunk-ft-1e5`'s
-  9/11 will most likely still be 9/11 next month. One confirmation on a
-  different frame density (`large-set-confirmation`) is worth more than another
-  medium-set variant.
-- **Diagnostics and instrumentation survive absolutely.** They cost one cheap
-  run, they can be recomputed for free whenever the data moves, and — this is
-  the part that matters right now — they tell Luke *what to annotate next*,
-  which is the live bottleneck. `prediction-provenance`, `trill-vs-buzz` and
-  `eval-sampling-floor` are all of this kind.
+`context-embedder` is the honest version of `context-stack` (+0.050, logged
+`artifact`): stacking at train time let the eval see same-label neighbours that
+continuous audio never gives you, and the gap between 0.050 and 0.022 is roughly
+that artifact. `model.py` sizes its input from `n_embeddings`, so inference
+follows automatically.
 
-A reasonable split for the next several loops: one instrumentation run and the
-rest on the structural ideas that need no re-extraction (`subframe-head`,
-`lab-positives-ablation`). The `large` exploit run (below) is not part of this
-rotation — it happens once, at Luke's request, after the structural search
-concludes; see the note on `large-set-confirmation`.
+`embedders/yamnet_combined/` is in main and needs only a re-extraction.
+`yamnet_context` is **not** — that branch was deleted and survives only as
+`refs/archive/context-embedder`; recover it with
 
----
+```bash
+git show refs/archive/context-embedder:embedders/yamnet_context/embedder.py
+```
 
-## Open ideas
+Run them one at a time against `cv_baseline`, `context-embedder` first. If both
+hold up, *then* ask whether they compose — `yamnet-combined`'s own note warns
+that its sigmoid block is ~10x smaller in scale than the embedding block and
+nothing normalizes the two (see **standardization** below).
 
-### subframe-head
+## near-chance-deployments
 
-**Option 1 tested (`exp/subframe-head`, 2026-09-06): negative.** Time-max/
-freq-mean pooling, run frozen (not stacked on the fine-tune — see notes.md on
-that branch for why) against `trunk_frozen` (0.216): 0.209, mean delta -0.007,
-5/11 folds up vs 6/11 down — inside the ~0.014 noise floor. `willard`, the
-named test case for this exact mechanism, moved only +0.010. `best_epoch`
-stayed in `trunk_frozen`'s range, so no sign of a collapsed/noisy gradient
-either. Per the branch's own stopping condition ("if this wins clearly frozen,
-*then* retest on the fine-tune"), it didn't win frozen, so it was not
-retested stacked on the fine-tune, and options 2/3 below were not run. Mean
-pooling's evidence dilution is not the bottleneck here, at least not one this
-swap recovers — don't rerun option 1 as stated.
+Two of the five rotating folds sit near zero for every model tried:
+`Diel Drivers/2026-04-08/1_150` (0.021) and `2026-05-06/1_95` (0.037) on
+`cv_baseline`'s predecessor. Since the endpoint averages deployments equally,
+**they pin 40% of the headline near zero** — a much bigger share than the 27%
+they were at 11 folds, which makes this the single largest lever on the metric.
 
-**Hypothesis:** `yamnet_trunk` caches `layer12_pointwise_conv_relu` at shape
-**(6, 4, 512)** — 6 time steps and 4 frequency bands inside each 0.96 s frame.
-Layers 13-14 stride that to (3, 2, 1024) and then
-`global_average_pooling2d` **averages all six remaining positions away**. For a
-buzz that occupies 200 ms of a 960 ms frame, mean pooling divides its evidence
-by ~5 and mixes in the background either side. Replacing the mean over the
-*time* axis with a max (or log-sum-exp) should recover it.
+One story is ruled out (2026-09-05): it is not leave-one-*concept*-out.
+Scoring each fold by how well its buzz sublabels are covered elsewhere gives
+r = 0.013 against per-fold sensitivity, and the worst folds are 100% plain
+`ins_buzz_medium` with >6,000 frames of exactly that elsewhere. Whatever is
+wrong is acoustic or site-level.
 
-**Why this is the best-value structural idea open:**
-- **Zero re-extraction.** The `yamnet_trunk` cache already on disk holds the
-  full spatial map; only `build_head()` changes.
-- **It does not change the frame population**, so unlike `framehop-overlap` the
-  result stays comparable to every entry in `log.jsonl`. It buys that
-  experiment's intended benefit (better-centred short events) without the
-  confound that made it uninterpretable.
-- It is the mechanism `willard-regression` and `deployment-forensics` both
-  point at from the other direction — willard has the highest fraction of
-  short (<1 s, 68%) and isolated events of any fold, is the fold temporal
-  context hurt most, and is a big mover for trunk-FT.
-- **Frequency is also thrown away.** Buzz is narrowband; the 4-band axis is
-  exactly the structure a linear probe on a GAP'd vector cannot reconstruct.
+**What to do — listen to the frames.** This diagnostic has now deferred four
+times. `2026-04-08` had a threshold of -1.401: its buzz frames score *below
+almost every negative in the fold*, which is stronger than "hard" and says
+something about the recording puts buzz on the wrong side of the distribution
+entirely. `03_train/surprisal.py` is on by default and has never been pointed
+at these folds. Is the buzz audible? Is the annotation right? Is recorder gain
+or placement different?
 
-**What to do**, cheapest first, one per CV, on top of `trunk_ft_1e5`
-(comparator: `trunk_ft_1e5`, not `cv-baseline`):
+## night-negatives
 
-1. **Time-max, frequency-mean** — replace GAP with
-   `max` over the time axis then `mean` over frequency. 1024-d output, so the
-   head is unchanged and nothing else in the pipeline moves.
-2. **Log-sum-exp over time** (smooth max, one temperature) if the hard max is
-   unstable in training.
-3. **Keep the frequency axis**: mean/max over time only, flatten to 2048-d.
-   Doubles the head width — watch for the `stopping-rule-scale` confound and
-   report `best_epoch` alongside.
+**Needs a data decision from Luke — an experiment may not add or edit an
+annotation effort unilaterally.** Surfaced here because it is the largest
+untapped resource in the project.
 
-**Caveats:** replacing GAP means layers 13-14's downstream statistics are no
-longer what AudioSet trained them for; run it *with* the fine-tune (which can
-re-adapt) rather than frozen. Max pooling over a ReLU map is also a noisier
-gradient path than mean — if it collapses, check `best_epoch` before concluding
-the pooling is wrong.
+`01_annotate/2026-05-26 Automatic Annotations/README.md` reports that the
+shipped model has a tight false-positive spike near midnight, and that the false
+positives "can even dwarf the diel trend in the focal crop (e.g. `Luke - Diel
+Drivers/2026-05-06`)" — one of the two near-chance folds above. Every nighttime
+detection is false by construction, so labels generate automatically at any
+volume.
 
-### night-negatives
+Why it beats another architecture run: these are **in-domain hard negatives from
+the deployment's own recorder**, the thing every `aug-*` experiment tried to
+synthesize and failed at. It is **fold-safe for free** (night audio from site X
+belongs to site X's fold, so CLAUDE.md's augmentation rule doesn't bind). And it
+**scales with deployments, not annotation labour**, so it doesn't get invalidated
+as the set grows.
 
-**Status: not a LOOP experiment yet — it needs a data decision from Luke.**
-Adding it means a new/edited annotation effort, which `LOOP.md` prohibits an
-experiment from doing unilaterally. Surfacing it here because it is the largest
-untapped resource in the project and it is already half-specified in the repo.
+Settle before running: **what label?** A nighttime FP could be trill, plane or
+truck, and calling it all `ambient_background` teaches a class the probe meets in
+daylight too; `ins_trill` is the likeliest true identity for most, and
+mislabelling trill as background would be actively harmful — consider a distinct
+`auto_night_negative` with its own translation row. **How much?** A dose-response
+(0x / 1x / 4x the fold's existing negatives) is the experiment, not one volume.
 
-`01_annotate/2026-05-26 Automatic Annotations/README.md` states the case: the
-shipped model has a consistent, tightly clustered spike of false positives near
-midnight, and **"the false positives can even dwarf the diel trend in the focal
-crop (e.g. 'Luke - Diel Drivers/2026-05-06')"** — which is one of the two
-near-chance folds (`sens` 0.046 under `trunk_ft_1e5`). Every nighttime detection
-is false by construction, so labels can be generated automatically at whatever
-volume is wanted.
-
-**Why it is worth more than another architecture run:**
-- These are **in-domain hard negatives from the deployment's own recorder** —
-  the exact thing `aug-*` kept trying to synthesize and failing at.
-- **It is fold-safe for free.** Night audio from site X belongs to site X's
-  fold, so nothing crosses a boundary; the CLAUDE.md augmentation rule doesn't
-  bind.
-- **It scales with the deployments, not with annotation labour**, so unlike the
-  hand-annotated positives it does not get invalidated as the set grows.
-- It targets a *named* failure on a *named* fold, rather than hoping for a
-  diffuse gain.
-
-**Open questions to settle before running it:**
-- What label? The README flags the specificity problem — a nighttime FP could
-  be trill, a plane, or a truck, and calling it all `ambient_background` teaches
-  the probe a class it will meet in daylight too. `ins_trill` is the likeliest
-  true identity for most of them (see `trill-vs-buzz`), and mislabelling trill
-  as background would be actively harmful. Consider a distinct
-  `auto_night_negative` label with its own translation row.
-- How much? Automatic labels can trivially outnumber the ~5.7k hand-annotated
-  buzz frames. A dose-response (0x / 1x / 4x the fold's existing negatives)
-  is the experiment, not a single volume.
-- Which model generates them? `model_general_v3` is the stale artifact; using
-  the current best (`trunk_ft_1e5`) risks a mild self-confirmation loop, though
-  a much weaker one than usual since night labels are true by time of day, not
-  by the model's judgement.
-
-### prediction-provenance-followups
-
-**Landed 2026-09-07** (`exp/prediction-provenance`, no CV — code change only):
-`predictions.csv` now carries `path` (join key, one event per pickle),
-`frame_index` and `labels_raw` alongside `activation_ins_buzz`/`correct`.
-`03_train/sx.py::read_fold_predictions_events` collapses to one row per
-event. `trill-vs-buzz`'s diagnostic step 1 is now a query on any model
-trained from here on, not a separate run.
-
-**Left undone, on purpose (both need a run to close, unlike the above):**
-
-- **Timestamp join.** `frametimes.csv` (per-ident, written by
-  `02_set/extract.py`) isn't actually on disk for any current ident in
-  `medium`/`lite` — it was added to the extractor after these were last
-  extracted, and the annotation fingerprint hasn't changed since, so nothing
-  re-triggered it. `frame_index` joins to it once a fold re-extracts for
-  some other reason; don't force a re-extraction just for this.
-- **Backfilling old models.** `resummarize.py` only rebuilds `folds_sx.csv`
-  from an existing `predictions.csv` — it never re-scores, so it can't add
-  columns a training run didn't write. Old models (everything in
-  `log.jsonl` so far) keep two-column `predictions.csv` unless a small
-  rescore-from-`model.keras` script gets written. Not worth it unless a
-  specific old model's provenance is actually needed.
-
-### trill-vs-buzz
+## trill-vs-buzz
 
 **Hypothesis:** the false positives that set the threshold are mostly
-`ins_trill`, and buzz-vs-trill is the actual discrimination problem.
+`ins_trill`, and buzz-vs-trill is the real discrimination problem.
 
-**Evidence it deserves a look:** `ins_trill` is by a wide margin the largest
-non-ambient class in the rotating folds — **13,422 frames against 5,691 buzz
-frames** — and it is the nearest acoustic neighbour buzz has (both are sustained
-narrowband insect stridulation/wingbeat). It is also very unevenly distributed:
-JamesU has 5,126 trill frames against 2,385 buzz, `Diel Drivers/2026-05-06` has
-**zero**, `2026-04-08` has 7. The two folds with essentially no trill are
-`0.046` and `0.068`; the fold with the most is the best at `0.469`. That
-correlation runs the *opposite* way to the naive "trill confuses the model"
-story and is worth understanding either way — it may be that trill-rich folds
-are simply insect-rich folds.
+`ins_trill` was the largest non-ambient class in the rotating folds by a wide
+margin. But it is very unevenly distributed, and the correlation runs the
+*opposite* way to the naive story: the folds with essentially no trill were the
+worst (0.046, 0.068) and the fold with the most was the best (0.469). Worth
+understanding either way — it may just be that trill-rich folds are insect-rich
+folds. Recount on the current 5 folds before theorising; the roster changed.
 
-**What to do:**
-1. Diagnostic first, now free (`prediction-provenance` landed, `labels_raw`
-   is on `predictions.csv`): tabulate the raw labels of the negatives above
-   each fold's threshold. Needs a model trained after 2026-09-07; nothing in
-   `log.jsonl` yet has the column. If trill dominates, the whole research
-   program narrows.
-2. If it does: the `general` translation already keeps `ins_trill` as its own
-   class, so the probe *has* the auxiliary supervision. The next lever is a
-   pairwise margin — an explicit ranking term on buzz-vs-trill pairs only —
-   rather than another representation change. Smoke-test any custom loss with
-   `tools/smoke_model.py` first; `tail-loss` is the cautionary tale.
+**Step 1 is now a query, not a run.** `prediction-provenance` landed 2026-09-07,
+so `predictions.csv` carries `labels_raw`: tabulate the raw labels of negatives
+above each fold's threshold. `cv_baseline` has the column. If trill dominates,
+the research program narrows sharply.
 
-### eval-sampling-floor
+**If it does:** `general` already keeps `ins_trill` as its own class, so the
+probe has the auxiliary supervision; the next lever is a pairwise margin — an
+explicit ranking term on buzz-vs-trill pairs only — not another representation
+change. Smoke-test any custom loss with `tools/smoke_model.py` first;
+`tail-loss` is the cautionary tale.
 
-**Measured, not hypothesised (2026-09-05, from existing `predictions.csv` — no
-training; `tools/eval_sampling_sd.py <model dir>` reproduces it in seconds):**
-bootstrapping frames within each fold and recomputing
-sens@fpr0.005 gives a per-fold sampling SD of **0.02-0.03** on the eight normal
-folds, and **0.092** on `2025-06-23/1_23` (whose threshold rests on a single
-negative frame) and 0.025 on `2025-08-05/31` (two). Propagated to the
-eleven-fold mean, that is **0.012 of headline SD from the evaluation sample
-alone** (`trunk_ft_1e5`; 0.010 for `cv-baseline`).
+## eval-sampling-floor → annotation guidance
 
-`noise-floor-cv` measured total run-to-run noise at ~0.017 median per-fold and
-0.014 on the headline. So **roughly half the noise floor is eval-set sampling,
-not training stochasticity** — seed control would not fix it, and no cheaper
-estimator can either (partial-AUC over an FPR band of 0.001-0.02 was tried in
-the same session: it tracks sens@0.005 almost exactly, 0.258 vs 0.262 for
-`trunk_ft_1e5` and 0.198 vs 0.197 for baseline, and cuts per-fold SD only
-modestly — not worth a metric change).
+**Measured, not hypothesised** (`tools/eval_sampling_sd.py <model dir>`,
+seconds, no training). Bootstrapping frames within each fold gave a per-fold
+sampling SD of 0.02–0.03 on normal folds and up to 0.092 on the thinnest,
+propagating to ~0.012 of headline SD from the evaluation sample alone.
+`noise-floor-cv` put total run-to-run noise at ~0.014 headline — so **roughly
+half the noise floor is eval-set sampling, not training stochasticity.** Seed
+control would not fix it, and a partial-AUC estimator was tried and tracks
+sens@0.005 almost exactly without cutting SD much.
 
-**What this is actually good for: it is annotation guidance.** The only thing
-that shrinks this floor is *more annotated non-buzz frames in the thin folds*.
-`1_23` (315 val frames) and `2025-08-05/31` (942) cannot resolve a 0.5% FPR at
-all — they contribute 2/11 of the headline on 1 and 2 negative frames
-respectively. Annotating negatives in those two deployments buys more
-measurement precision per hour than anything the loop can do in software, and
-it compounds across every future experiment.
+**The only thing that shrinks it is more annotated non-buzz frames in the thin
+folds.** That buys more measurement precision per hour than anything the loop
+can do in software, and it compounds across every future experiment. Re-run the
+tool on `cv_baseline` to get the current per-fold ranking — the roster changed,
+so the old thin-fold list is stale.
 
-### large-set-confirmation
+## willard-regression
 
-**Not a loop experiment. Training on `large` is forbidden without Luke asking
-for it explicitly**, no matter how ready it looks (extraction already
-finished, a promising structural diff pending). `large` is a one-time final
-confirmation to run *after* the structural search on `medium` concludes, not
-another set to rotate experiments through — see the `Set:` constraint in
-`LOOP.md`. An agent must never launch it on its own initiative.
+`context-stack` gained in 8/11 deployments but lost 0.074 at
+`willard/1_11` — still a rotating fold — and the regression scaled monotonically
+with context width (0.177 → 0.118 at k=1 → 0.066 at k=2).
+`exp/deployment-forensics` attributes it to willard having the highest fraction
+of short (<1 s: 68%) and isolated (>5 s gap: 68%) buzz events of any fold:
+stacking dilutes a brief isolated buzz with silent neighbours.
 
-**The idea, for when Luke does ask for it:** `trunk-ft-1e5` is +0.046 at 9/11
-folds and is the only result in the log clearly outside the noise floor, but it
-has only ever been measured at `framehop_prop 1`. `large` is the same
-annotations and folds at `framehop_prop 0.2` (5x frame density), and the
-working assumption on this project is that a change can look modest on
-`medium` and be strong on `large`.
+Check it when **revalidate-clean-embedder-wins** runs `context-embedder`, which
+lost on willard too (-0.059) — so the regression is a property of the
+deployment, not the cached-eval bug. If the dilution story is right, the fix is
+better time resolution *inside* the frame rather than adaptive context width —
+see `subframe-head`.
 
-`.local/worktrees/large-trunk-ft/` already exists; extraction there finished
-(2026-09-02, `extract_large.log` ends `all extractions complete`), but the only
-training done there is a one-fold smoke probe (`large_trunk_ft_1e5`,
-1/11 folds) — not a real CV.
+## subframe-head (options 2 and 3 only)
 
-**Read it carefully:** `large`'s `folds_sx.csv` is **not comparable to any
-`log.jsonl` entry** — changing frame density moves the negative population the
-FPR threshold rests on (`framehop-overlap` is the worked example). The valid
-comparison is a matched `trunk_frozen` control trained on `large`, i.e. the
-delta on `large` against the delta on `medium`. That means **two** CV runs, and
-a `large` CV is much longer than a `medium` one. Budget for it deliberately or
-don't start.
+**Option 1 is tested and negative** (2026-09-06): time-max/freq-mean pooling
+frozen against `trunk_frozen` gave -0.007, folds split 5/6 — inside the noise
+floor. Willard, the named test case, moved only +0.010. Don't rerun it as
+stated.
 
-### near-chance-deployments
+The underlying observation still stands: `yamnet_trunk` caches
+`layer12_pointwise_conv_relu` at **(6, 4, 512)** — 6 time steps, 4 frequency
+bands per 0.96 s frame — and GAP averages all of it away. A buzz occupying
+200 ms of a 960 ms frame has its evidence divided by ~5. Frequency is discarded
+too, and buzz is narrowband.
 
-**Hypothesis:** two deployments (`Luke - Diel Drivers/2026-05-06/1_95` and
-`Luke - Various Opportunistic Recordings/2025-08-27/48`, joined by
-`2026-04-08/1_150`) sit near zero for every model tried, including one with 430
-buzz frames — so it is not a small-sample artifact. Since the endpoint averages
-deployments equally, these three pin ~27% of the headline near zero and dilute
-every real gain elsewhere.
+Untried: **(2)** log-sum-exp over time instead of a hard max, if the max's
+gradient path was the problem; **(3)** keep the frequency axis — pool over time
+only, flatten to 2048-d. Both need the `yamnet_trunk` cache, which no longer
+exists for `medium` (see **trunk-fine-tuning** below), and option 1's result
+means neither is a priority.
 
-**One story has now been ruled out (2026-09-05).** It looked like
-leave-one-*concept*-out: `2026-05-06` is 74% `ins_buzz_low` and `2025-08-05/31`
-is 33% `ins_buzz_pollination`, sublabels with thin support outside their own
-fold. But scoring each fold by how well its buzz sublabels are covered elsewhere
-in the training pool gives **r = 0.013 against per-fold sensitivity (n=11)**, and
-the two *worst* folds are the cleanest cases of all: `2026-04-08` (0.068) and
-`2025-08-27/48` (0.020) are **100% plain `ins_buzz_medium`, with >6,000 frames
-of exactly that sublabel available elsewhere**. Whatever is wrong is acoustic or
-site-level, not conceptual. `ins_buzz_pollination` remains a real acoustic
-outlier (see `2025-08-05`, 0.180) but it is not what is sinking the worst folds.
+## Cheap and open
 
-**What to do:** the diagnostic LOOP has deferred three times now. Listen to the
-frames. Are the buzzes audible? Is the annotation right? Is the recorder gain or
-placement different? `2026-04-08` has a threshold of -1.401 — its buzz frames
-score *below almost every negative in the fold*, which is a stronger statement
-than "hard": something about that recording puts buzz on the wrong side of the
-score distribution entirely. `03_train/surprisal.py` (on by default) is the
-built tool for this and has not been pointed at these folds.
+- **Patience 20–25 instead of 50.** Every archived run stopped by early
+  stopping, never at the epoch cap, so patience is a flat tax of exactly N
+  epochs per fold — 35–94% of a trunk-FT fold's compute. Replaying
+  `EarlyStopping` over the saved `val_loss_curve`s puts patience 25 at 58% of
+  the compute while restoring a different epoch on 3/4 folds; but those
+  differences are the same size as the ±15–50-epoch run-to-run jitter
+  `trunk-ft-stop-sweep` measured at patience 50 for an *identical* config. Now
+  that `val_sens_fpr0.005_curve` is persisted per fold, this is answerable
+  offline from any run — replay it before changing the default.
+- **restore-on-sens' other half, on a trunk fine-tune.** Restoring the true
+  val_loss argmin landed in `cv_baseline`. Restoring the *sens@FPR argmax*
+  instead was worth another ~+0.006 — inside the noise on a frozen probe, which
+  is why it was left out, but the divergence it exploits is a
+  backbone-fine-tuning effect (label-smoothing overconfidence). `trunk-ft-restore-sens`
+  saw the two curves diverge on all 11 folds, 8 shipping a later epoch than the
+  loss argmin. Retest there, not here.
+- **Split framing from embedding in `--workers`.** `--snip-workers` already
+  separates the I/O-bound snip sync, but `--workers` still covers both framing
+  (CPU, no GPU) and embedding (VRAM-bound), so protecting 4 GB of VRAM with
+  `--workers 1` needlessly serialises the framing too. Pure throughput; no
+  effect on any metric.
+- **Standardize the input blocks.** On the 8 folds with ≥3000 val frames,
+  standardization added +0.014 on top of `yamnet-combined` (6/8 up) — the
+  scale-mismatch hypothesis was real. Not adopted because 10/11 folds then ran
+  the full 400-epoch cap against a median ~120, i.e. the LR and patience were
+  tuned for the old input scale. **Known bug if revisited:** 52 of
+  `yamnet_combined`'s 1545 dims have ~zero variance, and a `Normalization` layer
+  divides by `sqrt(var + 1e-7)` ≈ 3e-4 on those, amplifying noise ~3000x into a
+  genuine NaN blowup that no learning rate avoids. Mask, floor, or drop those
+  dims before adapting the layer.
 
-### willard-regression
+## Deliberately parked
 
-**Hypothesis:** `exp/context-stack` gained in 8 of 11 deployments but lost 0.074
-at `Lily Adam - One Hive/recorders/willard/2024-08-07/1_11`, a large fold, and
-the regression scales with context width monotonically — baseline 0.177, k=1
-0.118, k=2 0.066. `exp/deployment-forensics` attributes it to willard having the
-highest fraction of short (<1 s: 68%) and isolated (>5 s gap: 68%) buzz events
-of any fold: stacking dilutes a brief isolated buzz with silent neighbours.
-
-**Note the connection to `subframe-head`:** if the dilution story is right, the
-fix is not adaptive context *width* but better time resolution *inside* the
-frame — which is what pooling the layer-12 map over time instead of averaging it
-gives you, at no cost in frame density. Willard is the fold to check first when
-that run lands. Under `trunk_ft_1e5` willard is already one of the big movers
-(0.191 → 0.318), which is consistent with the fine-tune partly fixing this.
-
-### normalization-zero-variance
-
-**Status:** the `standardization-convergence` sweep this replaces was run as
-`exp/std-convergence` and came back negative-to-inconclusive. What it left
-behind is a concrete bug rather than an open question.
-
-52 of `yamnet_combined`'s 1545 input dims have ~zero variance across the
-training folds. A `Normalization` layer divides by `sqrt(var + 1e-7) ~ 3e-4` on
-those dims, amplifying anything nonzero by ~3000x — a genuine NaN blowup at
-lr=5e-4 without gradient clipping, and structural, so no learning rate avoids
-it. **If anyone revisits standardization:** mask or floor the near-zero-variance
-dims before adapting the layer, or drop them (they carry no signal by
-definition). Until then any standardized-input result is numerically fragile and
-its failures can't be attributed to the hypothesis.
-
-### aves-intermediate-layer
-
-**Hypothesis:** AVES embeddings from the last transformer layer are too
-bird-specific to discriminate insect buzz; an intermediate layer (6-9 of 12)
-carries more general acoustic features. `aves_lite` performed at chance, and
-AVES embeddings are symmetric around zero for both classes where YAMNet's are
-ReLU-sparse and linearly separable. Wav2vec2 transfer literature consistently
-favours middle layers.
-
-**What to do:** in `embedders/aves/embedder.py`, change `layer_outputs[-1]` to
-`layer_outputs[N]` for N in {5, 7, 9}; re-extract; train. `n_embeddings` stays
-768, so no other code changes.
-
-**Caveats:** `LOOP.md` constrains the embedder to YAMNet, so this needs that
-constraint lifted first, and it costs a re-extraction per layer. Given
-`subframe-head` tests the same "the pooled output discards what we need" idea on
-a backbone that already works, and for free, do that one first.
-
-### lora-adapter
-
-**Largely answered — kept for the record.** Differential-rate fine-tuning of
-YAMNet layers 13-14 (`exp/trunk-ft`, `trunk-ft-1e5`) is **+0.046 vs a matched
-frozen control**, inverting the pre-rework `yamnet-ft` verdict, so LoRA's
-motivation (fine-tune with less overfit risk) is much weaker than it was. Depth
-is settled on `medium` by `exp/unfreeze-more` and `exp/unfreeze-one`: frozen
-0.216 → **layer 14 only 0.234** → 13-14 **0.262** → 12-14 0.229, median
-`best_epoch` 48 → 35 → 25. 13-14 is a true interior optimum, not the edge of
-an overfitting cliff — both the shallower (14-only) and deeper (12-14) points
-underperform it, so there's no shallower point left to try. A cleaner
-low-rank adapter could still beat plain FT, but it is a transformer technique
-and inserting it into YAMNet's conv layers is non-standard — it is now a
-low-priority idea, not a promising one.
-
-### stopping-rule-scale
-
-**Mostly closed.** The hypothesis was that `EarlyStopping`'s absolute
-`min_delta=0.002` on `val_loss` is mis-scaled for wider inputs and denser epochs,
-so every structural result was partly measuring a stopping rule. Two runs since
-have largely settled it: `trunk-ft-stop-sweep` found `min_delta` 0.002 → 1e-4
-moved a 3-fold mean by +0.015 while a *rerun of the identical config* moved it
-+0.018 — a non-lever inside run noise. `restore-on-sens` then found that
-restoring at the true `val_loss` argmin (rather than the last min_delta-clearing
-epoch) is worth ~+0.008, i.e. real but small, and it is now the default.
-
-**What is left:** the per-fold `best_epoch` column is still the cheapest
-tell that a config is stopping for the wrong reason — `trunk-ft-1e5-aug`'s
-collapse was diagnosed from `best_epoch 1`. Keep reporting it in every
-`notes.md`; don't spend another CV on the stopping rule itself.
-
----
-
-## Tried before the rework
-
-**Read these as leads, not verdicts.** They were measured on a fixed
-train/validate split against a retired hand-curated corpus, with a training set
-of mixed provenance, at a time when single-run variance was wide enough
-(~0.16-0.25 on the same config) that several entries were later invalidated as
-dataset artifacts.
-
-The clearest reason not to trust them: **`temporal-context` — concatenating
-[prev, curr, next] frames — was logged as a clear negative (-2pp). The identical
-change, rerun as `exp/context-stack` on the current set and metric, is the
-largest gain yet (+0.050).** A verdict inverted. Assume any of the below could
-do the same, and rerun rather than defer to it.
-
-Full entries: `archive/2026-06_fixed-test/log.jsonl`; notes for 19 of the 29 in
-`notes/` beside it, and that era's README explains why the other ten are
-discarded outright.
-
-One has already been retested under CV: the fixed-test entry `combined-embedder`
-was about validation scope, but the `yamnet_combined` *embedder* it left behind
-was finally extracted and trained as `exp/yamnet-combined` (+0.016).
-
-| Area | What was tried | Old verdict |
-|---|---|---|
-| Regularization | Dropout(0.2) + label smoothing 0.2 | The whole gain over an unregularized probe (3.6pp). Current default. |
-| | Label smoothing 0.3 | Collapses. 0.2 was the peak of a monotone trend. |
-| | L2(1e-4), alone or added | Indistinguishable from no regularization. |
-| | BatchNorm on input embeddings | Clear negative (-5.8pp) — training-set running stats didn't transfer. |
-| Head shape | Dense(128, relu) before output | Worse than a linear probe, replicated twice, no overfitting signature. |
-| Input surgery | Bandpass 100-3000 Hz before YAMNet | Clear negative (-4.7pp); corrupts YAMNet's expected input. |
-| | Zeroing mel bins above 3000 Hz | Catastrophic (-14.3pp). |
-| | Handcrafted frequency features | Neutral twice; YAMNet already encodes it. |
-| | White-noise samples as 'static' | Neutral; the false positives are structured, not broadband. |
-| Backbone | Fine-tune YAMNet layers 13-14 at 1e-5 | Clear negative (-8.3pp); overfit, train 78% vs val 59%. |
-| Class weighting | 2x buzz upweight over balanced | Negative-to-neutral; balanced weights already fine. |
-| Loss | Focal loss, alpha 0.25 and 0.75 | Shifts the operating point, doesn't lift the curve. |
-| Translation | Binary (all non-buzz collapsed) | Hurt; multi-class auxiliary supervision helped. Retested under CV — see `binary-translation-cv`, neutral on the endpoint. |
-| Training procedure | min_delta=0.002 early stopping | 6.6x variance reduction, no mean change. Adopted as default. |
-| | Forcing buzz out of validation | Negative; early stopping needs buzz in the monitor fold. |
-| Temporal | [prev, curr, next] frame concatenation | Negative (-2pp) — **and now known to be wrong**, see above. |
+- **Trunk fine-tuning.** `trunk-ft-1e5` (YAMNet layers 13-14 at lr 1e-5) was
+  +0.046 at 9/11 folds, the largest clearly-outside-noise result in the archive,
+  and depth is settled: frozen 0.216 → 14-only 0.234 → **13-14 0.262** → 12-14
+  0.229, a true interior optimum. It is parked, not dismissed: it needs a
+  `yamnet_trunk` re-extraction (the `medium` cache went with the pruned
+  worktrees), it is the expensive config (~80 s/epoch vs ~1 s), and a standing
+  injunction limits training to one layer. Revisit when that lifts. LoRA is a
+  weak follow-up now that plain FT works — it is a transformer technique and
+  inserting it into YAMNet's conv layers is non-standard.
+- **`large`-set confirmation.** **Training on `large` is forbidden without Luke
+  asking explicitly**, however ready it looks. It is a one-time final
+  confirmation after the structural search on `medium` concludes, not another
+  set to rotate through. When it happens: `large` is the same annotations and
+  folds at 5x frame density, and its `folds_sx.csv` is **not comparable to any
+  `medium` number** — changing frame density moves the negative population the
+  FPR threshold rests on (`framehop-overlap` is the worked example). The valid
+  test is a matched control on `large`, i.e. two CV runs, and a `large` CV is
+  much longer. Budget deliberately or don't start.
+- **AVES intermediate layers.** `aves_lite` performed at chance and AVES
+  embeddings are symmetric around zero for both classes where YAMNet's are
+  ReLU-sparse and linearly separable; wav2vec2 transfer literature favours middle
+  layers. `embedders/aves/embedder.py`, `layer_outputs[-1]` → `[N]` for N in
+  {5, 7, 9}; `n_embeddings` stays 768. Needs the YAMNet-only constraint lifted
+  and a re-extraction per layer.
+- **Timestamp join for provenance.** `frametimes.csv` isn't on disk for current
+  idents — it was added to the extractor after they were last extracted and the
+  fingerprint hasn't changed since. `frame_index` joins to it whenever a fold
+  re-extracts for some other reason; don't force a re-extraction just for this.
