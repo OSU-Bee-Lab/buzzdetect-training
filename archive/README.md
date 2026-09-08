@@ -34,17 +34,22 @@ directory exists in the form it does; see that era's README.
 
 ## Adding an era
 
-At cutover, before truncating `log.jsonl`:
+```bash
+python tools/archive_era.py --slug <name>            # preflight, read-only
+python tools/archive_era.py --slug <name> --write    # archive and truncate
+```
 
-1. `mkdir archive/<first-date>_<slug>/{notes,set}`
-2. Copy `log.jsonl`, the six set files from `02_set/sets/<set>/`, and the
-   translations that runs actually resolved against
-3. Copy `notes.md` from every branch the log names — **including branches you
-   are about to delete.** A worktree can be pruned freely; a deleted branch
-   takes its notes with it
-4. Write the README from the template the existing ones follow
-5. Tag the pre-truncation commit
-6. *Then* truncate
+It creates the directory, copies the log and the set snapshot, harvests
+`notes.md` from every surviving branch, rescues orphaned ones from dangling
+commits into `refs/archive/*`, computes the fold roster, tags, truncates, and
+adds the index row above.
+
+It **refuses** while any `exp/*` branch is unpushed or any worktree holds
+uncommitted tracked changes — both have silently destroyed work here before.
+
+It leaves the README's prose as TODO markers. What ended the era, which verdicts
+survive as leads, what a later reader would misread: that is the part worth
+having, and the script can't write it.
 
 ## Recovering deleted branches
 

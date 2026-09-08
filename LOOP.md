@@ -92,9 +92,11 @@ rather than inherited from the archive.
   commit of the set a run used if it matters. Every entry in `log.jsonl` is
   implicitly on `medium` at its current fold roster, so neither is logged per
   entry — which is exactly why a roster change (a deployment added or dropped)
-  or a data revision **ends the era**. When that happens, archive `log.jsonl`
-  per `archive/README.md` and start a fresh one, rather than mixing incomparable
-  numbers silently in one file.
+  or a data revision **ends the era**. When that happens, run
+  `python tools/archive_era.py --slug <name>` (preflight; `--write` to do it)
+  and start a fresh log, rather than mixing incomparable numbers in one file.
+  The script refuses while any branch is unpushed or any worktree is dirty, and
+  leaves the era README's prose to you.
   **Training or CV runs on `large` are forbidden as a loop experiment,
   regardless of how ready it looks (extraction finished, a promising diff
   pending).** `large` is not an alternative set to iterate structure on — same
