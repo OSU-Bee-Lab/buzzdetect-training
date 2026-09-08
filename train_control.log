@@ -10,3 +10,21 @@
 2026-09-08 19:05:24.522611: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:169] kernel reported version is: NOT_FOUND: could not find kernel module information in driver version file contents: "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.173.02  Release Build  (dvs-builder@U22-I3-AK02-24-4)  Tue Jun 23 08:17:01 UTC 2026
 GCC version:  gcc version 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 
 "
+[1/5] JamesU - MustardBumbler/1_29: 157 epochs (best 157), val_loss 0.9332, 74440/7617 frames train/val, sens@fpr0.5%=0.436
+[2/5] Lily - Fit+Fast/2023_R3_Marysville/53: 161 epochs (best 160), val_loss 0.9284, 74517/7540 frames train/val, sens@fpr0.5%=0.424
+[3/5] Lily Adam - One Hive/recorders/willard/2024-08-07/1_11: 88 epochs (best 68), val_loss 0.7290, 75127/6930 frames train/val, sens@fpr0.5%=0.223
+[4/5] Luke - Diel Drivers/2026-04-08/1_150: 67 epochs (best 19), val_loss 0.9038, 77110/4947 frames train/val, sens@fpr0.5%=0.034
+[5/5] Luke - Diel Drivers/2026-05-06/1_95: 135 epochs (best 135), val_loss 1.0500, 74485/7572 frames train/val, sens@fpr0.5%=0.032
+
+[combined_control] sens@fpr0.5% per deployment: 0.230
+  mean over 5/5 held-out fold(s), each tuned to 0.5% FPR on its own audio (~32 negative frames set each threshold)
+  threshold: mean -1.424 — what each fold's own audio set, not one number to ship
+    JamesU - MustardBumbler/1_29: threshold -1.490, sensitivity 0.436 (~27 negative frames)
+    Lily - Fit+Fast/2023_R3_Marysville/53: threshold -1.688, sensitivity 0.424 (~32 negative frames)
+    Lily Adam - One Hive/recorders/willard/2024-08-07/1_11: threshold -1.909, sensitivity 0.223 (~33 negative frames)
+    Luke - Diel Drivers/2026-04-08/1_150: threshold -1.893, sensitivity 0.034 (~24 negative frames)
+    Luke - Diel Drivers/2026-05-06/1_95: threshold -0.139, sensitivity 0.032 (~35 negative frames)
+  an oracle: each threshold is placed using that fold's labels, so read this as the ceiling on operator tuning
+  per-fold spread understates uncertainty about a new deployment (training pools overlap heavily)
+
+[combined_control] rotations done; shipped model not trained (default). Pass --train-shipped, or run --skip-cv later with this --name.
