@@ -40,6 +40,18 @@ if __name__ == '__main__':
                         help='train no rotations; go straight to the shipped model, '
                              'taking its epoch count from the fold results already '
                              'on disk. Errors if there are none.')
+    parser.add_argument('--only-folds', nargs='+', default=None, dest='only_folds',
+                        metavar='FOLD',
+                        help='diagnostic: hold out & score only these rotating '
+                             'folds (still trains on the full pool); implies '
+                             '--skip-shipped. folds_sx.csv is then a subset, not '
+                             'comparable to a full CV.')
+    parser.add_argument('--skip-shipped', action='store_true', dest='skip_shipped',
+                        help='train the rotations and stop, skipping the shipped '
+                             'model. It contributes nothing to folds_sx.csv, so an '
+                             'experiment does not need it; train it later with the '
+                             'same --name plus --skip-cv. The exact inverse of '
+                             '--skip-cv.')
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
@@ -62,5 +74,7 @@ if __name__ == '__main__':
         assume_yes=args.assume_yes,
         stop_tol=args.stop_tol,
         skip_cv=args.skip_cv,
+        skip_shipped=args.skip_shipped,
+        only_folds=args.only_folds,
         surprisal=args.surprisal,
     )

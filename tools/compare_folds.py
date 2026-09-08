@@ -100,7 +100,7 @@ def format_report(merged, baseline, exp, fpr):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('baseline', help='model name under models/, e.g. cv-baseline\'s yamnet_medium_general')
+    parser.add_argument('baseline', help='model name under models/, e.g. cv-baseline\'s cv_baseline')
     parser.add_argument('exp', help='model name under models/ to compare against baseline')
     parser.add_argument('--fpr', type=float, default=0.005, choices=[0.001, 0.005, 0.01])
     args = parser.parse_args()

@@ -6,7 +6,7 @@ much of the run-to-run noise floor is that sampling, rather than training
 stochasticity: it resamples frames within each fold (with replacement) and
 recomputes the metric. No training, no TensorFlow.
 
-    python tools/eval_sampling_sd.py models/yamnet_medium_general
+    python tools/eval_sampling_sd.py models/cv_baseline
 """
 import csv
 import glob
@@ -67,4 +67,4 @@ def main(model_dir, fpr=0.005, n_boot=200, seed=0):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1] if len(sys.argv) > 1 else 'models/yamnet_medium_general')
+    main(sys.argv[1] if len(sys.argv) > 1 else 'models/cv_baseline')

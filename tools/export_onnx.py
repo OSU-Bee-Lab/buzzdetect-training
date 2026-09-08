@@ -1,6 +1,6 @@
 """Export a trained model into buzzdetect's engine/models/.
 
-    conda run -n buzzdetect-train python tools/export_onnx.py yamnet_medium_general
+    conda run -n buzzdetect-train python tools/export_onnx.py cv_baseline
 
 Reads models/<name>/ here and writes <dest>/<name>/ over in buzzdetect. The
 ONNX half is one graph that takes a waveform and returns predictions -- the

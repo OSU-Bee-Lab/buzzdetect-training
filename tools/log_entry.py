@@ -9,7 +9,7 @@ name unless overridden.
     conda run -n buzzdetect-train python tools/log_entry.py \\
       --name class-weight-fix \\
       --model .local/worktrees/class-weight-fix/models/class_weight_fix \\
-      --baseline-model models/yamnet_medium_general \\
+      --baseline-model models/cv_baseline \\
       --hypothesis "..." \\
       --trust caveated \\
       --conclusion "..."
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--name', required=True, help='experiment slug, e.g. class-weight-fix')
     parser.add_argument('--model', required=True, help='trained model dir (name under models/, or a path — e.g. into a worktree)')
-    parser.add_argument('--baseline-model', default='models/yamnet_medium_general',
+    parser.add_argument('--baseline-model', default='models/cv_baseline',
                          help='baseline model dir to diff against (default: cv-baseline\'s model)')
     parser.add_argument('--baseline-name', default='cv-baseline', help='label for baseline.model in the entry')
     parser.add_argument('--hypothesis', required=True)

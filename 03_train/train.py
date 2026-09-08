@@ -489,11 +489,26 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
 
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
-              assume_yes=False, stop_tol=0.01, skip_cv=False, surprisal=True):
+              assume_yes=False, stop_tol=0.01, skip_cv=False, skip_shipped=False,
+              only_folds=None, surprisal=True):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
     folds_holdout = folds_by_role(roles, ROLE_HOLDOUT)
+
+    # --only-folds narrows which rotations are *scored*, not what they train on:
+    # a rotation's pool is already "everything but the held-out fold", so a probe
+    # run trains on exactly the data a full rotation would. folds_sx.csv over a
+    # subset is NOT comparable to a full CV, and the shipped model is skipped.
+    folds_scored = folds_rotate
+    if only_folds:
+        keep = set(only_folds)
+        missing = keep - set(folds_rotate)
+        if missing:
+            raise ValueError(f'--only-folds not in the rotate set: {sorted(missing)}')
+        folds_scored = [f for f in folds_rotate if f in keep]
+        print(f'[{name}] --only-folds: scoring {len(folds_scored)} of '
+              f'{len(folds_rotate)} rotating folds; shipped model skipped')
 
     if len(folds_rotate) < 2:
         raise ValueError(
@@ -527,7 +542,7 @@ def train_set(name, embeddername, setname, name_translation,
     if skip_cv:
         print(f'[{name}] --skip-cv: no rotations trained; shipped epoch count '
               f'comes from existing fold results only')
-    for i, held_out in enumerate([] if skip_cv else folds_rotate, 1):
+    for i, held_out in enumerate([] if skip_cv else folds_scored, 1):
         folds_train = [f for f in folds_rotate if f != held_out] + folds_train_always
         dir_model = os.path.join(dir_folds, str(held_out))
         modelname = f'{name}_fold{held_out}'
@@ -576,7 +591,7 @@ def train_set(name, embeddername, setname, name_translation,
               f"{data.frames_train}/{data.frames_val} frames train/val, "
               f"{_format_sens(sens)}", flush=True)
 
-    summary_rows, predictions_pooled = _collect_fold_results(dir_folds, folds_rotate)
+    summary_rows, predictions_pooled = _collect_fold_results(dir_folds, folds_scored)
 
     if skip_cv and not summary_rows:
         raise ValueError(
@@ -595,6 +610,20 @@ def train_set(name, embeddername, setname, name_translation,
         sx = summarize_folds(pooled, facts)
         sx.to_csv(os.path.join(dir_model_full, FNAME_SX_SUMMARY), index=False)
         print(format_sx_report(name, sx))
+
+    if skip_shipped or only_folds:
+        # The shipped model is a deliverable, not a measurement: folds_sx.csv is
+        # built entirely from the rotations above, so nothing an experiment is
+        # judged on depends on it. Its epoch count comes from the fold curves
+        # (_consensus_epoch), which are on disk now, so it can be trained later
+        # against this same model dir with --skip-cv and get an identical
+        # result. Skipping it saves ~8% of a frozen-probe run and more of a
+        # trunk fine-tune, where it trains for tens of 80 s epochs on the full
+        # pool -- more frames than any single rotation sees.
+        why = '--only-folds' if only_folds else '--skip-shipped'
+        print(f'[{name}] {why}: rotations only, shipped model not trained. '
+              f'Train it later with the same --name plus --skip-cv.')
+        return
 
     # Shipped model: trains on every fold except 'holdout'. No fold is held
     # out, so there is nothing clean left to monitor — the epoch count is read
