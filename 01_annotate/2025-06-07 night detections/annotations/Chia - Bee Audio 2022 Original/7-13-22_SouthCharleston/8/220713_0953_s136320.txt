@@ -1,0 +1,4 @@
+0.000000	114.963000	"mech_plane_prop"
+75.728200	156.596000	"mech_hum_traffic"
+167.390000	175.614000	"mech_hum_traffic"
+185.551000	296.402000	"mech_hum_traffic"

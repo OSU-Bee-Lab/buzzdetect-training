@@ -1,0 +1,7 @@
+2.548544	10.328312	ambient_rustle
+14.888865	18.242213	ambient_rustle
+116.830641	118.574382	ambient_rustle
+136.145925	138.560336	ambient_rustle
+196.372054	202.810482	ambient_squeak
+223.332971	224.137775	ambient_scrape
+281.140479	283.673988	ambient_rustle

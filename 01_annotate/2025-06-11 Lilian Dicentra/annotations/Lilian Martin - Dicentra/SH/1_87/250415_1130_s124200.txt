@@ -1,0 +1,5 @@
+0.000000	94.958968	mech_hum_traffic
+100.775286	103.168196	ambient_night
+130.387555	132.930023	ambient_night
+149.680398	154.017549	ambient_night
+168.251533	174.532923	mech_auto_truck

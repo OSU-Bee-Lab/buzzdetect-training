@@ -1,0 +1,2 @@
+0.4529	0.9414	ambient_bang
+1.4210	1.5453	ambient_bang

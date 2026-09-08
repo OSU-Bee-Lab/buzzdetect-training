@@ -1,0 +1,5 @@
+11.632944	52.286243	mech_hum_traffic
+113.086437	121.888997	mech_hum_traffic
+146.565025	181.919568	mech_plane_prop
+233.243783	277.689494	mech_hum_traffic
+290.484472	297.892091	mech_hum_traffic

@@ -122,10 +122,17 @@ an effort, and sources each one with the working directory set to that effort.
 Errors in one effort are caught and reported, not fatal to the rest; at the end
 it warns about any effort that didn't leave both CSVs behind.
 
-To add an effort: create the directory, drop raw annotations in `data/`, and
-write a `combine.R` that emits those two CSVs — fold assignment included, in
+To add an effort: create the directory, drop raw annotations in `annotations/`,
+and write a `combine.R` that emits those two CSVs — fold assignment included, in
 that same file. Copy the closest existing effort; `01_annotate/Even Sample/` is
 the current model, and its `README.md` documents the sampling design.
+
+Most efforts' raw annotation files are tracked in this repo under
+`<effort>/annotations/`, so one `git pull` moves code and annotations together.
+The exceptions — efforts with their own annotation repo, and the one effort not
+reproducible from a fresh clone — are listed in `01_annotate/data_sources.json`;
+clone those where it says before running `MAKE.R`. `MAKE.R` aborts an effort
+with an empty `annotations/` and tells you its data is not synced.
 
 `role` is per-fold and picks how the fold is used at training time:
 

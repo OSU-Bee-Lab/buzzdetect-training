@@ -1,0 +1,5 @@
+18.430000	61.092200	"mech_hum_traffic"
+61.433400	116.894000	"mech_auto_truck"
+165.358000	190.273000	"mech_hum_traffic"
+190.273000	225.768000	"mech_auto_truck"
+244.881000	300.000000	"mech_auto_truck"

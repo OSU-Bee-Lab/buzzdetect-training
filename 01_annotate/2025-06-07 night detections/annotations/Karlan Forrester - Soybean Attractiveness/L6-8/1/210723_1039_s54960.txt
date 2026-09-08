@@ -1,0 +1,5 @@
+0.000000	22.385600	"mech_auto_car"
+27.551600	80.430500	"mech_hum_traffic"
+80.430500	137.543000	"mech_auto_truck"
+184.610000	207.641000	"mech_hum_traffic"
+207.641000	299.982000	"mech_auto_truck"

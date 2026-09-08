@@ -1,0 +1,8 @@
+2.215352	4.873774	ambient_squeak
+37.439444	38.990190	ambient_squeak
+56.713004	160.834536	mech_hum_traffic
+163.049887	164.268331	ambient_squeak
+170.471316	172.132829	ambient_squeak
+178.889652	285.337303	mech_plane_prop
+197.498607	251.442421	mech_hum_traffic
+237.264170	238.704149	ambient_squeak

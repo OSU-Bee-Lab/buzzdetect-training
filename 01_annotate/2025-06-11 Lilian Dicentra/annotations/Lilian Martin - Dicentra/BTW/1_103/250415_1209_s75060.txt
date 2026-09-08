@@ -1,0 +1,4 @@
+0.000000	300.000000	ambient_day
+17.340495	19.032251	ambient_squeak
+266.267568	267.587527	ambient_squeak
+279.876799	300.000000	mech_plane_prop

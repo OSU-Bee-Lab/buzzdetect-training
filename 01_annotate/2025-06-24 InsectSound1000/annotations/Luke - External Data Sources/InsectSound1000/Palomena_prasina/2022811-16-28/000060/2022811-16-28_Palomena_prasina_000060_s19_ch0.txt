@@ -1,0 +1,2 @@
+0.0000	2.5000	ambient_background
+2.1666	2.2950	ambient_scraping

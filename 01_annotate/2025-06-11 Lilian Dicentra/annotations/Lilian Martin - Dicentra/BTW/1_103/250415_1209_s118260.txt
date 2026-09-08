@@ -1,0 +1,2 @@
+96.112381	131.434145	mech_hum_traffic
+270.555386	270.923943	ambient_scraping

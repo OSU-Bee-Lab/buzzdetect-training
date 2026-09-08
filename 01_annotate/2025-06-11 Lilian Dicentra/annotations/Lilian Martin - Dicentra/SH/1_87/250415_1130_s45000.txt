@@ -1,0 +1,4 @@
+155.721241	157.258970	ambient_rustle
+215.981035	217.938144	ambient_squeak
+232.057293	234.014403	ambient_squeak
+241.982635	243.380570	ambient_rustle

@@ -1,0 +1,2 @@
+74.733815	134.664127	mech_hum_traffic
+172.929682	253.597540	mech_hum_traffic

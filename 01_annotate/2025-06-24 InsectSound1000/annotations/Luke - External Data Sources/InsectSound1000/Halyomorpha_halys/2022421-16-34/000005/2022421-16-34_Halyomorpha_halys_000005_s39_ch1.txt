@@ -1,0 +1,2 @@
+0.92257	1.42916	"ins_buzz_Halyomorpha"
+1.12438	1.26853	"ambient_noise"

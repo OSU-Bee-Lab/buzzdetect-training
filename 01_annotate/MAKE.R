@@ -24,6 +24,19 @@ failed <- character()
 for (d in effort_dirs) {
   message(paste0('building ', basename(d)))
 
+  # An effort with a combine.R but no raw annotation files (its data not
+  # synced) fails in a way that misreports the cause: list.files() returns
+  # nothing, bind_rows() on the empty list yields a 0-column frame, and the
+  # first mutate/select on a missing column is what actually errors. Check
+  # up front and say the real thing.
+  n_raw <- length(list.files(file.path(d, 'annotations'), recursive = TRUE,
+                             include.dirs = FALSE))
+  if (n_raw == 0 && dir.exists(file.path(d, 'annotations'))) {
+    message('  [error] no annotation files under annotations/; is this effort\'s data synced?')
+    failed <- c(failed, basename(d))
+    next
+  }
+
   ok <- tryCatch({
     with_dir(d, source('combine.R'))
     TRUE

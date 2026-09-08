@@ -1,0 +1,5 @@
+14.185776	187.245220	mech_hum_traffic
+135.482129	140.423242	ambient_squeak
+151.739984	154.290236	ambient_squeak
+236.196364	236.931262	ambient_squeak
+269.858108	270.437341	ambient_squeak

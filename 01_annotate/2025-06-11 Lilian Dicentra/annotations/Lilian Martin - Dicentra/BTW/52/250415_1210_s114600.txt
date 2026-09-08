@@ -1,0 +1,4 @@
+42.782829	46.774230	ambient_night
+85.191464	93.922654	ambient_night
+109.015139	111.010839	ambient_night
+272.038922	274.658279	ambient_night

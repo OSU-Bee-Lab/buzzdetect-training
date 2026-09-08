@@ -1,0 +1,4 @@
+0.000000	300.000000	"ins_trill"
+109.445000	114.906000	"mech_hum_traffic"
+147.782000	165.162000	"mech_hum_traffic"
+168.916000	195.367000	"mech_hum_traffic"

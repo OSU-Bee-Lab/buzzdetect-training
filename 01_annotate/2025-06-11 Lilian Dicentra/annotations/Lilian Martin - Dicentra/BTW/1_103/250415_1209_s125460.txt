@@ -1,0 +1,3 @@
+33.914950	34.435063	ambient_scraping
+216.795509	258.736577	mech_hum_traffic
+289.115218	300.000000	mech_plane_prop

@@ -1,0 +1,2 @@
+75.758795	122.638259	mech_plane_prop
+178.913667	222.033399	mech_plane_prop

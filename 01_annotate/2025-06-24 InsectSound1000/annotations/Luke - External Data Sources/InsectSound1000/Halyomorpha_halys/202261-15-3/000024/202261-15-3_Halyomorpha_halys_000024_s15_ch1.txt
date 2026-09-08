@@ -1,0 +1,2 @@
+0.490115	0.632208	"ins_buzz_Halyomorpha"
+1.75041	1.93575	"ins_buzz_Halyomorpha"

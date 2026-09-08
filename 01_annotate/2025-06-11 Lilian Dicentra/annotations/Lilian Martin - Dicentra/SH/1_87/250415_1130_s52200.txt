@@ -1,0 +1,6 @@
+2.798083	3.649674	ambient_night
+7.299347	8.880872	ambient_rustle
+44.039395	163.992000	mech_hum_traffic
+95.013169	96.351383	ambient_night
+138.687596	141.120712	ambient_night
+245.744688	246.596278	ambient_scraping

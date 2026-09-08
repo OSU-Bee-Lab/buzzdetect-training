@@ -1,0 +1,10 @@
+0.000000	300.000000	ambient_day
+53.977040	81.389870	mech_hum_traffic
+87.367104	136.627754	mech_hum_traffic
+133.758243	134.469693	ambient_rustle
+138.861317	142.881032	ambient_rustle
+148.240652	148.711429	ambient_rustle
+173.997404	174.365263	ambient_scraping
+175.626495	176.204559	ambient_scraping
+189.956254	202.936182	ambient_hum_traffic
+274.874937	277.920228	ambient_rustle
