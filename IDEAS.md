@@ -13,26 +13,52 @@ targets, and re-establish anything you intend to build on.
 
 ---
 
-## Revalidate `yamnet-combined`
+## Standardize the input blocks
 
-`context-embedder` **ran 2026-09-08 and revalidated: +0.040, `clean`** (0.218 →
-0.258, the largest live result in this era). `yamnet-combined` is the other
-archived clean embedder win and is still untested on this data.
+Promoted from a one-line "cheap and open" bullet, because `combined-revalidate`
+(2026-09-08) measured the mismatch it is about and found it real on live data.
 
-| | old delta | folds up | cost |
+`yamnet-combined` itself is **tested and inconclusive**: +0.010, 2 folds up / 3
+down, inside the 0.016 repeat-run spread. Both archived embedder wins have now
+been rerun on this data — `context-embedder` +0.040 `clean`, `yamnet-combined`
++0.010 `caveated` — so there is nothing left to revalidate, and composing the
+two is off the table (the precondition was that combined stand on its own).
+
+What it left behind is a live measurement of the scale mismatch:
+
+| | mean per-dim sd | mean abs value | max |
 |---|---|---|---|
-| `yamnet-combined` — YAMNet embeddings + the 521 AudioSet sigmoid scores, 1545-d | +0.016 | 7/11 | re-extraction |
+| embedding block (1024-d) | 0.089 | 0.053 | 7.3 |
+| sigmoid block (521-d) | 0.011 | 0.004 | 1.0 |
 
-`embedders/yamnet_combined/` is in main and needs only a re-extraction. Run it
-against `cv_baseline` **alone** first — only then ask whether it composes with
-`context-embedder`. Its own note warns the sigmoid block is ~10x smaller in scale
-than the embedding block with nothing normalizing the two (see
-**standardization** below), and that caution now matters more, since composing
-would stack it on a 3072-d input.
+**~8x in spread, ~13x in magnitude**, with one shared Adam LR serving both — the
+archived "~10x, nothing normalizing the two" caution, confirmed. On the old data
+standardization added **+0.014 on top of combined (6/8 folds)**; it was not
+adopted only because 10/11 folds then ran the full 400-epoch cap against a
+median ~120, i.e. the LR and patience were tuned for the old input scale. That
+is a fixable problem, not a verdict.
 
-Extraction cost, measured for `context-embedder` on 2026-09-08: ~11 min for
-`medium` at `--workers 2` on CPU, 982 MB. A 3072-d CV was ~19 min, ~2x the
-frozen-probe baseline. Neither needs the detached-job machinery.
+**Known bug, also confirmed live:** ~120 of the 521 sigmoid dims have per-dim
+sd < 1e-4 — AudioSet classes that never fire on this corpus. Keras
+`Normalization` divides by `sqrt(var + 1e-7)`, a ~1e4x amplification of nothing
+on exactly those dims, and that is the NaN blowup no learning rate avoids. Mask,
+floor, or drop them before adapting the layer.
+
+Note the honest framing of what is being fixed: combined reached the *same*
+`best_val_loss` as the baseline in *fewer* epochs (mustard 162 -> 129, Fit+Fast
+174 -> 130, val_loss identical to 4dp). The 521 scores are a supervised readout
+of the 1024-d beside them, so they carry no new audio information — the case for
+standardization is that a badly-scaled block cannot contribute even the
+*redundant-but-conveniently-shaped* part of what it has, not that normalizing
+unlocks hidden signal.
+
+Needs **no re-extraction**: `embedders/yamnet_combined/yamnet_combined.keras`
+was rebuilt on 2026-09-08 (it had been missing) and
+`02_set/sets/medium/embeddings/yamnet_combined/` (506 MB) is in the shared tree.
+If the LR/patience interaction is the real obstacle, the honest version of this
+experiment is standardization **plus** whatever stopping change it forces, which
+is two changes — so measure the epoch-cap behaviour first and say up front which
+one is being tested.
 
 ## near-chance-deployments
 
