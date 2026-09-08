@@ -413,7 +413,10 @@ def extract_snips(setname: str, verbose=False, n_workers=4):
             manifest = _read_json(os.path.join(dir_out, FNAME_SNIP_MANIFEST))
             if manifest is not None and manifest.get('fingerprint') == _fingerprint_annotations(annotations_sub):
                 return ident, 'unchanged', 0, 0
-            warnings.warn(f'extract_snips: no audio file for {ident}; skipping')
+            warnings.warn(
+                f'extract_snips: {ident} needs snips cut but its source audio is not '
+                f'readable under {cfg.TRAIN_DIR_AUDIO}. Its snips are missing or '
+                f'out of date, so it will be left out of extraction entirely.')
             return ident, 'missing_audio', 0, 0
 
         if verbose:
@@ -456,10 +459,14 @@ def extract_snips(setname: str, verbose=False, n_workers=4):
             warnings.warn(f'extract_snips: removed stale output {path_removed}')
 
     n_updated = sum(1 for s in status_by_ident.values() if s == 'updated')
+    n_unchanged = sum(1 for s in status_by_ident.values() if s == 'unchanged')
     n_missing = sum(1 for s in status_by_ident.values() if s == 'missing_audio')
-    print(f'{time.time()-t0:.1f}s - extract_snips: {n_updated} ident(s) updated '
-          f'({n_written} snip(s) written, {n_deleted} superseded), '
-          f'{len(idents) - n_updated - n_missing} unchanged, {n_missing} missing audio')
+    # Counted, not inferred by subtraction, so the parts always sum to the total
+    # and a new status can't silently land in the "unchanged" bucket.
+    print(f'{time.time()-t0:.1f}s - extract_snips: {len(idents)} ident(s): '
+          f'{n_updated} updated ({n_written} snip(s) written, {n_deleted} superseded), '
+          f'{n_unchanged} unchanged'
+          + (f', {n_missing} MISSING SOURCE AUDIO' if n_missing else ''))
 
     return status_by_ident
 
@@ -980,10 +987,22 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
     dir_embeddings_base = config_extract.dir_out_embeddings(embeddername)
 
     idents_todo = []
-    n_stale = 0
+    # Every ident lands in exactly one of these. They are genuinely different
+    # outcomes -- two are normal, two mean something is wrong -- so they are
+    # counted and reported separately rather than lumped into one "skipped".
+    n_current = 0     # already extracted under these exact annotations
+    n_new = 0         # never extracted; will be built from snips
+    n_stale = 0       # extracted, but the annotations moved since; will rebuild
+    no_snips = []     # snips absent -- extract_snips could not supply them
+    no_fold = []      # no usable fold assignment; cannot be placed
+
     for ident in idents:
         fold_rows = folds[folds['ident'] == ident]['fold'].unique()
         if len(fold_rows) != 1:
+            # Silently dropping these would extract a partial set and say nothing.
+            # The worker warns for the same case, but the worker never sees an
+            # ident the pre-filter rejects, so the warning has to happen here.
+            no_fold.append((ident, len(fold_rows)))
             continue
         fold = str(fold_rows[0])
         fingerprint = _fingerprint_annotations(annotations[annotations['ident'] == ident])
@@ -996,24 +1015,48 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
             fingerprint=fingerprint,
             force_stale=ident in idents_forced,
         )
-        if a_ident.audio_stale or a_ident.embeddings_stale:
-            n_stale += 1
-        if a_ident.handle not in ('skip', 'no_snips'):
-            idents_todo.append(ident)
+        stale = a_ident.audio_stale or a_ident.embeddings_stale
+
+        if a_ident.handle == 'no_snips':
+            no_snips.append(ident)
         elif a_ident.handle == 'skip':
+            n_current += 1
             # Adopt: nothing has changed under this ident, so record the fingerprint it
             # was built from. Directories extracted before fingerprinting existed can't
             # be judged retroactively; stamping them now makes the *next* edit detectable.
             for dir_done in (a_ident.dir_out_audio, a_ident.dir_out_embeddings):
                 if _read_fingerprint(dir_done) is None:
                     _write_fingerprint(dir_done, fingerprint)
+        else:
+            idents_todo.append(ident)
+            n_stale += bool(stale)
+            n_new += not stale
 
-    n_skip = len(idents) - len(idents_todo)
-    print(f'{time.time()-t0:.1f}s - [{setname}/{embeddername}] {len(idents_todo)} of {len(idents)} idents to extract '
-          f'({n_skip} already done or missing snips; {n_stale} superseded by new annotations)')
+    if no_fold:
+        detail = ', '.join(f'{i} ({n} fold rows)' for i, n in no_fold[:5])
+        warnings.warn(
+            f'extract_set: {len(no_fold)} ident(s) in annotations.csv have no single '
+            f'fold in folds.csv and will NOT be extracted: {detail}'
+            + (' ...' if len(no_fold) > 5 else '')
+            + '. Rebuild the set (build.R) so folds.csv covers every annotated ident.')
+
+    if no_snips:
+        warnings.warn(
+            f'extract_set: {len(no_snips)} ident(s) have no snips and will NOT be '
+            f'extracted: {", ".join(no_snips[:5])}'
+            + (' ...' if len(no_snips) > 5 else '')
+            + '. Their source audio was unreadable during the snip sync -- check the '
+              'warnings above from extract_snips.')
+
+    print(f'{time.time()-t0:.1f}s - [{setname}/{embeddername}] {len(idents)} ident(s): '
+          f'{len(idents_todo)} to extract ({n_new} new, {n_stale} superseded by new '
+          f'annotations), {n_current} already current'
+          + (f', {len(no_snips)} MISSING SNIPS' if no_snips else '')
+          + (f', {len(no_fold)} NO FOLD' if no_fold else ''))
 
     if not idents_todo:
-        print(f'{time.time()-t0:.1f}s - [{setname}/{embeddername}] nothing to do')
+        print(f'{time.time()-t0:.1f}s - [{setname}/{embeddername}] nothing to extract; '
+              f'all {n_current} ident(s) are current')
         return True
 
     if verbose:
