@@ -20,7 +20,7 @@ if os.environ.get('BUZZDETECT_NO_GPU'):
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from train import train_set
+from train import train_set, ProbeConfig
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -57,6 +57,23 @@ if __name__ == '__main__':
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
+    # Probe-structure levers. Every default is the value that was hardcoded in
+    # train.py, so omitting all of them reproduces cv_baseline's config.
+    g = parser.add_argument_group('probe structure')
+    g.add_argument('--dropout', type=float, default=0.2,
+                   help='input dropout on the embedding (default 0.2)')
+    g.add_argument('--label-smoothing', type=float, default=0.2, dest='label_smoothing')
+    g.add_argument('--learning-rate', type=float, default=0.002, dest='learning_rate')
+    g.add_argument('--weight-decay', type=float, default=0.0, dest='weight_decay',
+                   help='L2 on the Dense kernel (default 0 = none)')
+    g.add_argument('--batch-size', type=int, default=65568, dest='batch_size',
+                   help='65568 exceeds the training pool, i.e. full-batch, ~2 '
+                        'gradient steps per epoch (default)')
+    g.add_argument('--monitor', default='val_loss', choices=('val_loss', 'val_sens'),
+                   help='what EarlyStopping watches and restores the best of')
+    g.add_argument('--min-delta', type=float, default=0.002, dest='min_delta',
+                   help="EarlyStopping's patience-reset threshold (default 0.002)")
+
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--no-surprisal', action='store_false', dest='surprisal',
                         help='skip the per-frame surprisal CSVs under '
@@ -80,4 +97,13 @@ if __name__ == '__main__':
         train_shipped=args.train_shipped or args.skip_cv,
         only_folds=args.only_folds,
         surprisal=args.surprisal,
+        probe=ProbeConfig(
+            dropout=args.dropout,
+            label_smoothing=args.label_smoothing,
+            learning_rate=args.learning_rate,
+            weight_decay=args.weight_decay,
+            size_batch=args.batch_size,
+            monitor=args.monitor,
+            min_delta=args.min_delta,
+        ),
     )
