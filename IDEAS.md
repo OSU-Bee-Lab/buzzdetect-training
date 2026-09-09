@@ -13,52 +13,23 @@ targets, and re-establish anything you intend to build on.
 
 ---
 
-## Standardize the input blocks
+## Closed: standardize the input blocks
 
-Promoted from a one-line "cheap and open" bullet, because `combined-revalidate`
-(2026-09-08) measured the mismatch it is about and found it real on live data.
+Ran 2026-09-08 as `standardize-blocks`, paired against a matched control
+(`combined_control`, same embedder/data/code, flag off). **Negative.** Headline
+0.230 -> 0.261, but the whole +0.031 is fold `1_150` (+0.151), the 146-buzz-frame
+fold that has swung 0.007 -> 0.062 between two identical runs; both rich folds
+are flat (`1_29` 0.000, `Fit+Fast` -0.003) and the other four average +0.001.
 
-`yamnet-combined` itself is **tested and inconclusive**: +0.010, 2 folds up / 3
-down, inside the 0.016 repeat-run spread. Both archived embedder wins have now
-been rerun on this data — `context-embedder` +0.040 `clean`, `yamnet-combined`
-+0.010 `caveated` — so there is nothing left to revalidate, and composing the
-two is off the table (the precondition was that combined stand on its own).
-
-What it left behind is a live measurement of the scale mismatch:
-
-| | mean per-dim sd | mean abs value | max |
-|---|---|---|---|
-| embedding block (1024-d) | 0.089 | 0.053 | 7.3 |
-| sigmoid block (521-d) | 0.011 | 0.004 | 1.0 |
-
-**~8x in spread, ~13x in magnitude**, with one shared Adam LR serving both — the
-archived "~10x, nothing normalizing the two" caution, confirmed. On the old data
-standardization added **+0.014 on top of combined (6/8 folds)**; it was not
-adopted only because 10/11 folds then ran the full 400-epoch cap against a
-median ~120, i.e. the LR and patience were tuned for the old input scale. That
-is a fixable problem, not a verdict.
-
-**Known bug, also confirmed live:** ~120 of the 521 sigmoid dims have per-dim
-sd < 1e-4 — AudioSet classes that never fire on this corpus. Keras
-`Normalization` divides by `sqrt(var + 1e-7)`, a ~1e4x amplification of nothing
-on exactly those dims, and that is the NaN blowup no learning rate avoids. Mask,
-floor, or drop them before adapting the layer.
-
-Note the honest framing of what is being fixed: combined reached the *same*
-`best_val_loss` as the baseline in *fewer* epochs (mustard 162 -> 129, Fit+Fast
-174 -> 130, val_loss identical to 4dp). The 521 scores are a supervised readout
-of the 1024-d beside them, so they carry no new audio information — the case for
-standardization is that a badly-scaled block cannot contribute even the
-*redundant-but-conveniently-shaped* part of what it has, not that normalizing
-unlocks hidden signal.
-
-Needs **no re-extraction**: `embedders/yamnet_combined/yamnet_combined.keras`
-was rebuilt on 2026-09-08 (it had been missing) and
-`02_set/sets/medium/embeddings/yamnet_combined/` (506 MB) is in the shared tree.
-If the LR/patience interaction is the real obstacle, the honest version of this
-experiment is standardization **plus** whatever stopping change it forces, which
-is two changes — so measure the epoch-cap behaviour first and say up front which
-one is being tested.
+The epoch-cap question the section demanded be settled first was settled: with
+the cap raised to 3000 and the stopping rule untouched, all folds converged at
+502-1000 epochs, so this is a comparison of two converged models, not a
+truncation artifact. Standardization simply costs ~6x the epochs for nothing.
+Reading: the 521 sigmoid scores are a supervised readout of the block beside
+them, so fixing their gradient share adds no information that was not already
+there. `--standardize` is in `03_train`, off by default, fold-safe and
+save/load-clean — available if an embedder ever mixes genuinely heterogeneous
+blocks. Don't re-run this one on YAMNet.
 
 ## near-chance-deployments
 
@@ -67,6 +38,15 @@ Two of the five rotating folds sit near zero for every model tried:
 `cv_baseline`'s predecessor. Since the endpoint averages deployments equally,
 **they pin 40% of the headline near zero** — a much bigger share than the 27%
 they were at 11 folds, which makes this the single largest lever on the metric.
+
+They are also, as of 2026-09-08, **actively corrupting comparisons**, not just
+depressing the mean. `standardize-blocks` produced a null result on every fold
+that can resolve one and still moved the headline +0.031, entirely because
+1_150 swung +0.151. Two of five folds contributing noise larger than any real
+effect this era has produced means the 5-fold mean is not a usable comparator
+on its own. Until they are fixed, read `compare_folds.py`'s per-fold table
+before the headline — and consider whether the endpoint should weight folds by
+buzz-frame count, or exclude a fold whose repeat-run spread exceeds its delta.
 
 One story is ruled out (2026-09-05): it is not leave-one-*concept*-out.
 Scoring each fold by how well its buzz sublabels are covered elsewhere gives
