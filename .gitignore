@@ -65,3 +65,6 @@ embeddings/
 # per-machine paths (buzzdetect export dest, external audio drives, ...);
 # see paths.local.example.json for the shape
 paths.local.json
+# Scratch diagnostic scripts kept on disk for posterity, not versioned.
+# Nothing tracked may cite these paths -- see CLAUDE.md on gitignored artifacts.
+diagnostics/
