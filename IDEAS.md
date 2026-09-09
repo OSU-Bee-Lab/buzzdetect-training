@@ -535,6 +535,47 @@ only, flatten to 2048-d. Both need the `yamnet_trunk` cache, which no longer
 exists for `medium` (see **trunk-fine-tuning** below), and option 1's result
 means neither is a priority.
 
+## The `binary` control is confounded — read before running it
+
+*Evidence: **E3** — read off `train_utils.build_weights` and `train.py`, 2026-09-09.
+Arithmetic, not a measurement.*
+
+LOOP.md flags the `general`/`binary` pair as "worth rerunning early". It is, but
+**a naive rerun does not measure what it looks like it measures**, because
+collapsing the taxonomy changes two things that have nothing to do with the
+taxonomy:
+
+1. **`ins_buzz`'s own positive weight moves ~5.4x.** `build_weights` uses
+   `weight = samples_total / (samples_class * n_classes_present)`, so the class
+   *count* is in the denominator of every class's weight. On `medium`:
+   **0.76 under `general` (15 classes) vs 4.10 under `binary` (2)**. That is a
+   large change to the buzz neuron's positive/negative balance, applied purely
+   as an artifact of how many classes exist.
+2. **`val_loss` is the mean over neurons, so the stopping signal changes
+   composition** — ~1/15 buzz under `general`, ~1/2 under `binary`. The epoch
+   that gets restored is therefore chosen on a different curve. `probe-grid`
+   measured the stopping rule as the largest lever in the era (+0.031), so this
+   is not a second-order concern.
+
+Both channels are real and neither is "does a multi-class taxonomy teach the
+model what is not a buzz". **Run the control with `ins_buzz`'s `pos_weight`
+pinned to `general`'s value and the monitor held fixed**, or the number is
+uninterpretable. If pinned-`binary` then matches `general`, the taxonomy's
+apparent benefit is weights-and-stopping and can be had directly, without
+carrying 15 classes to get it.
+
+**What the taxonomy provably does *not* do is take gradient away from buzz.**
+The head is `Dropout -> Dense(n_classes)` with no activation, into
+`weighted_cross_entropy_with_logits` — 15 independent sigmoids, no softmax, so
+`W[:, buzz]` sees gradient only from the `ins_buzz` term
+([[decoupled-probe-head]]). The "one neuron lights up, the others plummet"
+behaviour is real but is *inference geometry*: the readout vectors share one
+1024-d space and end up anticorrelated where the labels are near-exclusive
+(`cosine(W_ins_buzz, W_mech_background) = -0.390`). Softmax-looking, not softmax.
+The live paths from a translation to the buzz neuron are `exclude`/`ignore`
+reshaping the frame pool, multi-hot frames losing a buzz positive, the weight
+renormalisation above, and the monitor composition above.
+
 ## Closed: absolute-margin confuser penalties
 
 *Evidence: **E3** — `mech-margin` (2026-09-09), a 4-CV geometric dose ladder. Closed.*
