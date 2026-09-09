@@ -4,16 +4,34 @@ Candidate experiments, nothing else. Results go in `log.jsonl`, protocol in
 `LOOP.md`, closed eras in `archive/` — each with a README digesting what that
 era concluded. Check all three before proposing an experiment.
 
-**State as of 2026-09-08.** `log.jsonl` is empty; the training data was revised
-and the era before it is archived. The baseline is `cv_baseline` (frozen YAMNet
-probe, `general`, per-class weighting in the loss, restore at the true val_loss
-argmin). Every number quoted below was measured on the **previous** data over
-**11** rotating folds; there are now **5**. Treat them as directions, not
-targets, and re-establish anything you intend to build on.
+**State as of 2026-09-08.** `log.jsonl` holds the current era only; the training
+data was revised and the era before it is archived. The baseline is
+`cv_baseline` (frozen YAMNet probe, `general`, per-class weighting in the loss,
+restore at the true val_loss argmin).
+
+## Which era a number came from
+
+Evidence in this file spans **three** eras, and which one a claim comes from
+decides what it is worth. Every section below is tagged. An untagged claim is a
+proposal, not a measurement.
+
+| tag | era | what it was | how to treat it |
+|---|---|---|---|
+| **E1** | `archive/2026-06_fixed-test` — 2026-06-02..06-09, 29 runs | fixed test corpus, **precision against base rate**, the retired stage 4, often on `lite` | **Not a verdict.** Different metric, different data, two revisions ago. Re-establish from scratch or don't cite it. |
+| **E2** | `archive/2026-08_cv-medium-v1` — 2026-08-19..09-08, 30 runs | the CV rework: sens@FPR, **11** rotating folds, pre-revision annotations, `general_v1` | Right metric, wrong data and roster. Directions survive; numbers don't. |
+| **E3** | current `log.jsonl` — 2026-09-08 onward | **5** rotating folds, revised annotations, `general` | Directly comparable. The only numbers you can beat. |
+
+The standing warning: `temporal-context` was a clear negative in E1 and, rerun
+as `context-stack` in E2, became the largest gain in the log. A verdict
+inverted on an eval change alone. **E1 and E2 negatives are leads, not
+answers** — and an E1 negative on `lite` under the retired metric is barely
+even a lead.
 
 ---
 
 ## Closed: standardize the input blocks
+
+*Evidence: **E3** — ran and closed on the current roster. (The +0.014 it was promoted on was **E2**.)*
 
 Ran 2026-09-08 as `standardize-blocks`, paired against a matched control
 (`combined_control`, same embedder/data/code, flag off). **Negative.** Headline
@@ -32,6 +50,8 @@ save/load-clean — available if an embedder ever mixes genuinely heterogeneous
 blocks. Don't re-run this one on YAMNet.
 
 ## near-chance-deployments
+
+*Evidence: **E3**, with **E2** origins. The fold identities and the concept-coverage ruling carried over from E2; every number below was re-measured on the current 5 folds.*
 
 Two of the five rotating folds sit near zero for every model tried:
 `Diel Drivers/2026-04-08/1_150` (0.021) and `2026-05-06/1_95` (0.037) on
@@ -102,6 +122,8 @@ part of what the metric rewards is detecting a continuous drone.
 
 ## night-negatives
 
+*Evidence: **Untagged — a proposal, never measured.** Needs a data decision from Luke.*
+
 **Needs a data decision from Luke — an experiment may not add or edit an
 annotation effort unilaterally.** Surfaced here because it is the largest
 untapped resource in the project.
@@ -129,6 +151,8 @@ mislabelling trill as background would be actively harmful — consider a distin
 
 ## Closed: handcrafted frequency features
 
+*Evidence: **E3.** Supersedes the weaker **E1** closure (`supp-freq-v2`, under the retired metric).*
+
 `harmonic-comb` (2026-09-08) tested the strongest form — 40 f0 candidates over
 70-450 Hz with harmonic reinforcement and off-comb subtraction, plus modulation
 and band contrast, gain-invariant, no fitted statistics — and it did not move
@@ -143,6 +167,8 @@ only untried variant and the redundancy finding argues against it — the probe
 is not starved of this information.
 
 ## trill-vs-buzz
+
+*Evidence: **E3** answer to an **E2** hypothesis. The counts below are from `cv_baseline` on the current roster.*
 
 **Hypothesis:** the false positives that set the threshold are mostly
 `ins_trill`, and buzz-vs-trill is the real discrimination problem.
@@ -171,6 +197,8 @@ cautionary tale.
 
 ## eval-sampling-floor → annotation guidance
 
+*Evidence: **E2** bootstrap, **E3** confirmation by direct repetition. The two agree, which is why this one is trustworthy.*
+
 **Measured, not hypothesised** (`tools/eval_sampling_sd.py <model dir>`,
 seconds, no training). Bootstrapping frames within each fold gave a per-fold
 sampling SD of 0.02–0.03 on normal folds and up to 0.092 on the thinnest,
@@ -197,6 +225,8 @@ so the old thin-fold list is stale.
 
 ## willard-regression
 
+*Evidence: **E2** claim that **did not reproduce in E3.** Kept as a worked example of an inherited caution dissolving, not as a caution.*
+
 `context-stack` gained in 8/11 deployments but lost 0.074 at
 `willard/1_11` — still a rotating fold — and the regression scaled monotonically
 with context width (0.177 → 0.118 at k=1 → 0.066 at k=2).
@@ -218,6 +248,8 @@ annotations (see **near-chance-deployments**), not long buzz events.
 
 ## subframe-head (options 2 and 3 only)
 
+*Evidence: **E2** — 11 folds, pre-revision data. Option 1's negative is an E2 negative: a lead, not a closed door.*
+
 **Option 1 is tested and negative** (2026-09-06): time-max/freq-mean pooling
 frozen against `trunk_frozen` gave -0.007, folds split 5/6 — inside the noise
 floor. Willard, the named test case, moved only +0.010. Don't rerun it as
@@ -237,7 +269,9 @@ means neither is a priority.
 
 ## Cheap and open
 
-- **Patience 20–25 instead of 50.** Every archived run stopped by early
+*Evidence: **E2 unless noted.** None of these has been re-established on the current roster.*
+
+- **[E2] Patience 20–25 instead of 50.** Every archived run stopped by early
   stopping, never at the epoch cap, so patience is a flat tax of exactly N
   epochs per fold — 35–94% of a trunk-FT fold's compute. Replaying
   `EarlyStopping` over the saved `val_loss_curve`s puts patience 25 at 58% of
@@ -246,31 +280,24 @@ means neither is a priority.
   `trunk-ft-stop-sweep` measured at patience 50 for an *identical* config. Now
   that `val_sens_fpr0.005_curve` is persisted per fold, this is answerable
   offline from any run — replay it before changing the default.
-- **restore-on-sens' other half, on a trunk fine-tune.** Restoring the true
+- **[E2] restore-on-sens' other half, on a trunk fine-tune.** Restoring the true
   val_loss argmin landed in `cv_baseline`. Restoring the *sens@FPR argmax*
   instead was worth another ~+0.006 — inside the noise on a frozen probe, which
   is why it was left out, but the divergence it exploits is a
   backbone-fine-tuning effect (label-smoothing overconfidence). `trunk-ft-restore-sens`
   saw the two curves diverge on all 11 folds, 8 shipping a later epoch than the
   loss argmin. Retest there, not here.
-- **Split framing from embedding in `--workers`.** `--snip-workers` already
+- **[no era — pure throughput, no metric] Split framing from embedding in `--workers`.** `--snip-workers` already
   separates the I/O-bound snip sync, but `--workers` still covers both framing
   (CPU, no GPU) and embedding (VRAM-bound), so protecting 4 GB of VRAM with
   `--workers 1` needlessly serialises the framing too. Pure throughput; no
   effect on any metric.
-- **Standardize the input blocks.** On the 8 folds with ≥3000 val frames,
-  standardization added +0.014 on top of `yamnet-combined` (6/8 up) — the
-  scale-mismatch hypothesis was real. Not adopted because 10/11 folds then ran
-  the full 400-epoch cap against a median ~120, i.e. the LR and patience were
-  tuned for the old input scale. **Known bug if revisited:** 52 of
-  `yamnet_combined`'s 1545 dims have ~zero variance, and a `Normalization` layer
-  divides by `sqrt(var + 1e-7)` ≈ 3e-4 on those, amplifying noise ~3000x into a
-  genuine NaN blowup that no learning rate avoids. Mask, floor, or drop those
-  dims before adapting the layer.
 
 ## Deliberately parked
 
-- **Trunk fine-tuning.** `trunk-ft-1e5` (YAMNet layers 13-14 at lr 1e-5) was
+*Evidence: **Mixed — each bullet is tagged individually.** Read the tag before quoting a number.*
+
+- **[E2] Trunk fine-tuning.** `trunk-ft-1e5` (YAMNet layers 13-14 at lr 1e-5) was
   +0.046 at 9/11 folds, the largest clearly-outside-noise result in the archive,
   and depth is settled: frozen 0.216 → 14-only 0.234 → **13-14 0.262** → 12-14
   0.229, a true interior optimum. It is parked, not dismissed: it needs a
@@ -279,7 +306,7 @@ means neither is a priority.
   injunction limits training to one layer. Revisit when that lifts. LoRA is a
   weak follow-up now that plain FT works — it is a transformer technique and
   inserting it into YAMNet's conv layers is non-standard.
-- **`large`-set confirmation.** **Training on `large` is forbidden without Luke
+- **[no era — standing policy] `large`-set confirmation.** **Training on `large` is forbidden without Luke
   asking explicitly**, however ready it looks. It is a one-time final
   confirmation after the structural search on `medium` concludes, not another
   set to rotate through. When it happens: `large` is the same annotations and
@@ -288,7 +315,7 @@ means neither is a priority.
   FPR threshold rests on (`framehop-overlap` is the worked example). The valid
   test is a matched control on `large`, i.e. two CV runs, and a `large` CV is
   much longer. Budget deliberately or don't start.
-- **AVES intermediate layers.** `embedders/aves/embedder.py` is 1.0 s / 16 kHz /
+- **[E1, and barely that] AVES intermediate layers.** `embedders/aves/embedder.py` is 1.0 s / 16 kHz /
   768-d — **frame-matched to YAMNet's 0.96 s**, so unlike Perch its headline
   would join `cv_baseline` directly with no frame-density caveat.
   The idea is to take a middle transformer layer instead of the last
@@ -315,7 +342,7 @@ means neither is a priority.
   embeddings first** — it needs no training and no re-extraction, and it is a
   far cheaper filter on whether a layer sweep is worth one.
 
-- **Timestamp join for provenance.** `frametimes.csv` isn't on disk for current
+- **[no era — infrastructure] Timestamp join for provenance.** `frametimes.csv` isn't on disk for current
   idents — it was added to the extractor after they were last extracted and the
   fingerprint hasn't changed since. `frame_index` joins to it whenever a fold
   re-extracts for some other reason; don't force a re-extraction just for this.
