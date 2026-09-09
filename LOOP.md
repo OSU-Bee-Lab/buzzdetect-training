@@ -387,6 +387,53 @@ Two cautions that apply to every conclusion you write:
   a fold with forty seconds of buzz in it. Check `buzz_frames` in
   `folds_sx.csv` before believing a per-fold delta.
 
+### The thin-fold caution is about magnitude. It is not permission to discount a hard-fold gain.
+
+**The hard folds are the target.** The endpoint is a *new* deployment, and a new
+deployment may well be a quiet one. `1_29` sits at ~0.43 whatever we do; a lever
+that moved only the rich folds would be close to worthless, and one that lifts a
+near-chance deployment is the thing this project is for. So when a gain is
+concentrated in `1_150`, `1_95` or `willard`, that concentration is the
+**result** — do not write it up as "the headline rests on one thin fold" and
+discount it. Read a delta table as: which way did the hard folds move, and are
+the losses elsewhere material? A -0.005 does not cancel a +0.068, and calling
+that "3 up, 2 down, inconclusive" is bad accounting.
+
+**The specific error to avoid — a repeat spread bounds noise WITHIN a treatment,
+not a difference BETWEEN two.** `1_150` moved 0.007 → 0.062 across two identical
+baseline runs, and that number is quoted all over this repo. It is the right
+caution for reading two `val_loss` runs against each other. It says nothing
+about a difference produced by a change in configuration, and using it that way
+will talk you out of every hard-fold result the loop is capable of finding.
+
+`context-monitor` (2026-09-09) is the worked example, and it was logged
+`caveated` before being amended to `clean` the same day. The agent saw +0.049
+carried entirely by `1_150`, reached for the 0.007–0.062 spread, and flagged the
+size as untrustworthy. Splitting all 17 runs of the era by which monitor they
+used takes about two minutes and settles it:
+
+| monitor | `1_150` | n |
+|---|---|---|
+| `val_loss` | 0.007, 0.014 x5, 0.021 x4, 0.027, 0.034, 0.041, 0.062 | 13 |
+| `val_sens` | 0.089, 0.158, 0.171, 0.219 | 4 |
+
+**The groups do not overlap.** Every `val_sens` run beats every `val_loss` run
+on that fold. The within-`val_loss` spread was never evidence about the gap
+between the groups.
+
+**What to do instead of discounting.** Confirm a large hard-fold gain with a
+**repeat run** — there is no seed control, so a rerun is an independent draw and
+it costs one CV. Frame it as confirmation, not as a check on a suspect number.
+And before you reach for a repeat spread at all, ask whether the runs you are
+comparing sat in the same treatment group; if they did not, go and group the
+era's runs by the variable you changed and look, as above.
+
+**`trust` is what a later agent scans before building on your result.** Flagging
+a hard-fold gain `caveated` on magnitude grounds tells the next agent to
+discount exactly the movement the loop exists to produce. Reserve `caveated` for
+a defect in how the number was *measured*, and put "this rests on one fold, here
+is the group split" in `conclusion`, where it belongs.
+
 There is no seed control anywhere in the pipeline, so run-to-run variation from
 TF's nondeterministic init and shuffling is unmeasured. If a result lands close
 to baseline, say it's within unquantified run noise rather than reaching for a
