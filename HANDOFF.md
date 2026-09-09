@@ -1,8 +1,11 @@
 # HANDOFF — aves-probe
 
-Launched 2026-09-09 ~01:02. Root `main.py` doing stage 2 + stage 3 in one
-process, detached. Worktree `.local/worktrees/aves-probe`, branch
+Relaunched **2026-09-09 ~01:25 on the GPU**. Root `main.py`, stage 2 + stage 3
+in one detached process. Worktree `.local/worktrees/aves-probe`, branch
 `exp/aves-probe`. Read `notes.md` for the hypothesis.
+
+**Expected finish: ~2 h from launch (~03:30).** Stage 2 ~1.0 h of GPU embedding
+plus ~1 h of serial CPU framing; stage 3 is a frozen probe, ~10 min for 5 folds.
 
 ```
 WT=/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe
@@ -12,33 +15,31 @@ WT=/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe
 
 ```bash
 cd $WT
-pgrep -af "main.py --model aves_probe"          # alive?
-tail -3 run_aves_probe.log
-find models/aves_probe/folds -name summary.json | wc -l   # of 5, stage 3 only
+pgrep -af "main.py --model aves_probe"                      # alive?
+grep -v NNPACK run_aves_probe.log | tail -3
+find /home/luke/projects/buzzdetect-training/02_set/sets/medium/embeddings/aves \
+     -name annotations.fingerprint | wc -l                  # of 83, stage 2
+find models/aves_probe/folds -name summary.json | wc -l      # of 5, stage 3
 ```
 
-Stage 2 is the long part: 83 idents, ~39,800 frames at 0.199 s/frame on
-2 workers — **estimate ~1.5–2.5 h**. Progress there is
-`ls /home/luke/projects/buzzdetect-training/02_set/sets/medium/embeddings/aves/raw`
-plus the `[N]` ident counter in the log. Stage 3 is a frozen probe: **~10 min
-for all 5 folds**, so once the log says `=== 03 train ===` it is nearly done.
+Once the log says `=== 03 train ===`, stage 2 is done and it is ~10 min from
+finishing.
 
 ## 2. If it's still running, STOP.
 
-Report `stage 2, N/83 idents` or `stage 3, fold N/5` and quit. Do not tail the
-log on a timer, do not open a Monitor, do not read the rest of the repo while
-waiting — everything read while waiting is paid for twice. Come back later.
+Report `stage 2, N/83 idents` or `stage 3, fold N/5` and quit. No tailing the
+log on a timer, no Monitor, no reading the rest of the repo — everything read
+while waiting is paid for twice.
 
 ## 3. When it finishes
 
-Comparator is **`models/cv_baseline`** (0.218), not a matched control — this is
-an embedder swap, and AVES's 1.0 s frame is near-matched to YAMNet's 0.96 s, so
-the join is direct. One caveat to state, not to panic about:
-`overlap_event_s = framelength_s * 0.2` moves 0.192 -> 0.200, a 4% shift in the
-labelling rule. That is the same confound that made `perch-probe`
-uninterpretable, but at 4% instead of 5.2x. If the result is close, check
-`buzz_frames` per fold in the two `folds_sx.csv` files before reading anything
-into it.
+Comparator is **`models/cv_baseline`** (0.218). AVES's 1.0 s frame is
+near-matched to YAMNet's 0.96 s, so the join is direct — this is the reason AVES
+was worth running at all where Perch was not. One caveat to state, not to panic
+about: `overlap_event_s = framelength_s * 0.2` moves 0.192 -> 0.200, a 4% shift
+in the labelling rule, against the 5.2x shift that made `perch-probe`
+uninterpretable. If the result is close, check `buzz_frames` per fold in both
+`folds_sx.csv` files before reading anything into it.
 
 ```bash
 cd /home/luke/projects/buzzdetect-training
@@ -51,9 +52,9 @@ Fold trust, from the baseline's own `folds_sx.csv`:
 | fold | buzz_frames | baseline sens | read it? |
 |---|---|---|---|
 | JamesU - MustardBumbler/1_29 | 2144 | 0.426 | yes — the only rich fold |
-| Lily - Fit+Fast/.../53 | 1031 | 0.425 | yes |
+| Lily - Fit+Fast/2023_R3_Marysville/53 | 1031 | 0.425 | yes |
 | Lily Adam - One Hive/.../1_11 | 305 | 0.180 | weak |
-| Luke - Diel Drivers/2026-04-08/1_150 | 146 | 0.021 | **no** — near chance, moved 0.007->0.062 between two identical runs |
+| Luke - Diel Drivers/2026-04-08/1_150 | 146 | 0.021 | **no** — near chance; moved 0.007->0.062 between two identical runs |
 | Luke - Diel Drivers/2026-05-06/1_95 | 433 | 0.037 | **no** — near chance |
 
 Noise floor on this roster is ~0.016 headline, concentrated in exactly those
@@ -65,53 +66,75 @@ commit -> `git push origin exp/aves-probe` -> prune the worktree.
 
 **Also update `IDEAS.md` in main.** E1 (AVES intermediate layers) predicted a
 loss and asked for the embedding-geometry diagnostic as a cheap pre-filter.
-That filter is now free — the `medium` AVES embeddings exist on disk. Recompute
-the dimension-wise buzz/non-buzz separation (2026-06 measured 0.13 for AVES vs
-0.23 for YAMNet, on a different set) and write the current number into E1
-whatever the CV says. If the CV is a clear loss AND the separation is still
+That filter is now free — the `medium` AVES embeddings exist on disk.
+Recompute the dimension-wise buzz/non-buzz separation (2026-06 measured 0.13 for
+AVES vs 0.23 for YAMNet, on a different set) and write the current number into
+E1 whatever the CV says. If the CV is a clear loss AND the separation is still
 about half YAMNet's, close E1 — a middle-layer sweep costs one re-extraction per
 layer and the geometry argues against all of them. Remove the idea from
-`IDEAS.md` once it is tested either way.
+`IDEAS.md` once tested either way.
 
 ## 4. If it died
 
-`tail -40 run_aves_probe.log`. Distinguish:
+`grep -v NNPACK run_aves_probe.log | tail -40`. Distinguish:
 
-- **Stage 2 partial** — an ident dir carries an `extraction.incomplete` marker
+- **Stage 2 partial** — each ident dir carries an `extraction.incomplete` marker
   until its fingerprint is stamped, so a relaunch rebuilds it rather than
   reading a truncated product. Safe to relaunch the identical command; it
   resumes at ident granularity.
 - **Stage 3 partial** — folds holding a `config_model.json` are **skipped
-  silently**. If the crash was mid-fold that is what you want (it resumes); if
-  you changed anything, delete `models/aves_probe/` first or use a fresh
-  `--model`.
+  silently**. If the crash was mid-fold that is what you want; if you changed
+  anything, delete `models/aves_probe/` first or use a fresh `--model`.
+- **CUDA OOM** — drop `BUZZDETECT_AVES_BATCH` to 32 (0.76 GB) or 16 (0.56 GB).
+  Throughput is flat from batch 16, so this costs essentially nothing. Do **not**
+  raise workers above 1 to compensate; see below.
 
 Relaunch, from `$WT`:
 
 ```bash
-nohup env PYTHONUNBUFFERED=1 CUDA_VISIBLE_DEVICES="" MALLOC_ARENA_MAX=2 \
-  BUZZDETECT_CHUNK_FRAMES=48 OMP_NUM_THREADS=4 \
+nohup env PYTHONUNBUFFERED=1 BUZZDETECT_NO_GPU=1 MALLOC_ARENA_MAX=2 \
+  BUZZDETECT_AVES_DEVICE=cuda BUZZDETECT_AVES_BATCH=64 \
   /home/luke/anaconda3/envs/buzzdetect-train/bin/python -u \
   main.py --model aves_probe --set medium --embedder aves \
-  --translation general --workers 2 --verbose -y \
+  --translation general --workers 1 --verbose -y \
   >> run_aves_probe.log 2>&1 &
 disown; echo "pid $!"
 ```
 
 ## Things a fresh agent would get wrong
 
-- **`02_set/sets/*/embeddings` and `audio` are symlinks into main, and so is
-  every `embedders/*` dir.** Never `rm -rf` through them. The AVES embeddings
-  this run builds land in main's shared cache **on purpose** — they survive the
-  worktree pruning and save the next experiment a 2 h re-extraction. Extracting
-  under a new `--embedder` name is exactly the case LOOP.md says needs no
-  symlink broken; nothing else claims `aves`.
-- **No tracked code changed.** `embedders/aves/embedder.py` was already on main
-  and is unmodified. The only thing that was missing was the gitignored 377 MB
-  `aves-base-bio.pt` checkpoint, fetched with `embedders/aves/BUILD.py` into
-  main's `embedders/aves/`. The branch's whole diff is `notes.md` and this file.
+- **`BUZZDETECT_NO_GPU=1` is not a mistake, and `CUDA_VISIBLE_DEVICES=""` must
+  NOT be set.** They do different jobs here. `BUZZDETECT_NO_GPU` is read by
+  `main.py` and hides the GPU **from TensorFlow only**, so stage 3 trains on the
+  CPU (CPU ~= GPU for this probe) and TF never pre-allocates VRAM that torch
+  needs during stage 2. Torch still sees the GPU. Setting
+  `CUDA_VISIBLE_DEVICES=""` — which CLAUDE.md's generic recipe does — would hide
+  it from torch too and put you back on the 14 h CPU path.
+- **`--workers 1`, not 2.** Throughput is flat from batch 16, i.e. one process
+  saturates the GTX 1650; a second worker adds a second CUDA context competing
+  for the 4 GB and buys no speed. The embedder's `initialize()` runs inside the
+  worker *after* the fork, so CUDA is never initialized pre-fork — that is why
+  forking is safe here at all.
+- **`embedders/aves/embedder.py` was rewritten and committed to main**
+  (`8fe1336`), not to this branch. It is a pure speedup — batching + GPU,
+  14.3 h -> 1.0 h — and `embedders/*` is symlinked to main from every worktree,
+  so it belongs there. Output is unchanged against the old one-frame-at-a-time
+  path: max abs diff 6.7e-6 on a scale of 0.85, per-frame cosine >= 0.9999998.
+  No aves embeddings existed on disk to be made inconsistent by it. **This
+  branch's own diff is still only `notes.md` and this file.**
+- **cuDNN is disabled inside the embedder on purpose.** The pinned env raises
+  `CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH` finalizing this model's conv1d
+  descriptors. Torch's native kernels are the same speed (0.0139 vs 0.0140
+  s/frame). Do **not** "fix" it by installing or repinning anything — that drags
+  TF 2.16.2 with it and breaks era comparability.
+- **`02_set/sets/*/embeddings` and `audio` are symlinks into main**, as is every
+  `embedders/*` dir. Never `rm -rf` through them. The AVES embeddings land in
+  main's shared cache on purpose — they survive the worktree pruning and save
+  the next experiment the extraction.
+- **`run_aves_probe_cpu_aborted.log`** is the first, CPU-only attempt, killed at
+  13 min once it was clear it would take ~13 h. Ignore it.
 - **`-y` was passed**, so untranslated labels were accepted without a prompt.
-  Check the `survey_untranslated` block near the top of the stage-3 section of
-  the log before trusting the numbers.
+  Check the `survey_untranslated` block in the stage-3 section of the log before
+  trusting the numbers.
 - The shipped model was **not** trained, by design. `folds_sx.csv` comes
   entirely from the rotations.

@@ -1,0 +1,162 @@
+2026-09-09 01:23:27.964766: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2026-09-09 01:23:27.991580: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2026-09-09 01:23:27.991634: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2026-09-09 01:23:29.034285: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+2026-09-09 01:23:31.268661: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-09-09 01:23:31.308296: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-09-09 01:23:31.310453: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+=== 02 extract set ===
+0.0s - [medium/aves] existing config: overlap_event_prop=0.2, framehop_prop=1
+0.0s -   loaded from /home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/02_set/sets/medium/config_extract.json
+0.2s - extract_snips: [1/83] JamesU - MustardBumbler/1_29/240903_1319 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [2/83] Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [3/83] Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [4/83] Lily Adam - One Hive/recorders/wooster/2024-07-26/1_143/240726_1446 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [5/83] Luke - Diel Drivers/2026-04-08/1_150/260408_1942 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [6/83] Luke - Diel Drivers/2026-05-06/1_95/260506_1924 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [7/83] Luke - Various Opportunistic Recordings/2025-06-23/1_23/250623_0857 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [8/83] Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [9/83] Luke - Various Opportunistic Recordings/2025-08-05/31/250805_1247 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [10/83] Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [11/83] Luke - Various Opportunistic Recordings/2025-08-27/48/250827_1828 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [12/83] Luke - Various Opportunistic Recordings/2026-07-27/1_25/260727_1632 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [13/83] Luke - Various Opportunistic Recordings/2026-07-27/1_99/260727_1633 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [14/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/1/220713_0941_01 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [15/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/1/220715_1123 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [16/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/2/220713_0943 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [17/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/2/220715_1125 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [18/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/3/220713_0944 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [19/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/3/220715_1127 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [20/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/4/220713_0946 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [21/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/4/220715_1128 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [22/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/5/220713_0947 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [23/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/5/220715_1130 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [24/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/6/220713_0948 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [25/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/6/220715_1131 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [26/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/7/220713_0951 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [27/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/7/220715_1134 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [28/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/8/220713_0953 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [29/83] Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/8/220715_1135 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [30/83] Chia - OSPT/2022/2022-07-26/10/220726_1209 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [31/83] Chia - OSPT/2022/2022-07-26/14/220726_1202 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [32/83] Chia - OSPT/2022/2022-07-26/15/220728_1403 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [33/83] Chia - OSPT/2022/2022-07-26/17/220725_1311 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [34/83] Chia - OSPT/2022/2022-07-26/18/220725_1319 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [35/83] Chia - OSPT/2022/2022-07-26/18/220727_1501 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [36/83] Chia - OSPT/2022/2022-07-26/23/220727_1453 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [37/83] Chia - OSPT/2022/2022-07-26/25/220725_1324 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [38/83] Chia - OSPT/2022/2022-07-26/25/220727_1507 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [39/83] Chia - OSPT/2022/2022-07-26/29/220725_1321 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [40/83] Chia - OSPT/2022/2022-08-02/11/220802_1058 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [41/83] Chia - OSPT/2022/2022-08-02/13/220802_1108 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [42/83] Chia - OSPT/2022/2022-08-02/13/220806_1432 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [43/83] Chia - OSPT/2022/2022-08-02/20/220802_1056 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [44/83] Chia - OSPT/2022/2022-08-02/22/220804_1241 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [45/83] Chia - OSPT/2022/2022-08-02/23/220802_1047 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [46/83] Chia - OSPT/2022/2022-08-02/29/220802_1102 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [47/83] Chia - OSPT/2022/2022-08-02/29/220804_1244 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [48/83] Chia - OSPT/2022/2022-08-02/32/220804_1227 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [49/83] Chia_Lin - Soybean on-farm spray audios/2023-07-25 Combs Sabine-Bigelow/14/230725_1202 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [50/83] Chia_Lin - Soybean on-farm spray audios/2023-07-25 Combs Sabine-Bigelow/14/230727_1344 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [51/83] Chia_Lin - Soybean on-farm spray audios/2023-07-25 Combs Sabine-Bigelow/14/230730_1621 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [52/83] Chia_Lin - Soybean on-farm spray audios/2023-07-25 Combs Sabine-Bigelow/14/230801_1803 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [53/83] Chia_Lin - Soybean on-farm spray audios/2023-07-25 Combs Sabine-Bigelow/23/230725_1159 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [54/83] Chia_Lin - Soybean on-farm spray audios/2023-07-25 Combs Sabine-Bigelow/23/230727_1341 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [55/83] Chia_Lin - Soybean on-farm spray audios/2023-07-25 Combs Sabine-Bigelow/23/230730_1624 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [56/83] Chia_Lin - Soybean on-farm spray audios/2023-07-25 Combs Sabine-Bigelow/23/230801_1806 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [57/83] Chia_Lin - Soybean on-farm spray audios/2023-07-30 FSR/29/230730_1704 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [58/83] Chia_Lin - Soybean on-farm spray audios/2023-07-30 FSR/29/230801_1846 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [59/83] Chia_Lin - Soybean on-farm spray audios/2023-07-30 FSR/3/230730_1704 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [60/83] Chia_Lin - Soybean on-farm spray audios/2023-07-30 FSR/3/230801_1847 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [61/83] Karlan Forrester - Soybean Attractiveness/A11/4/210721_0949 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [62/83] Karlan Forrester - Soybean Attractiveness/A11/4/210723_1131 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [63/83] Karlan Forrester - Soybean Attractiveness/A11/4/210726_1007 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [64/83] Karlan Forrester - Soybean Attractiveness/A11/4/210728_1150 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [65/83] Karlan Forrester - Soybean Attractiveness/A11/4/210805_0819 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [66/83] Karlan Forrester - Soybean Attractiveness/A11/4/210807_1001 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [67/83] Karlan Forrester - Soybean Attractiveness/C9-16/4/210721_0910 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [68/83] Karlan Forrester - Soybean Attractiveness/C9-16/4/210723_1052 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [69/83] Karlan Forrester - Soybean Attractiveness/C9-16/4/210726_0933 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [70/83] Karlan Forrester - Soybean Attractiveness/C9-16/4/210728_1115 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [71/83] Karlan Forrester - Soybean Attractiveness/C9-16/4/210805_0743 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [72/83] Karlan Forrester - Soybean Attractiveness/C9-16/4/210807_0925 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [73/83] Karlan Forrester - Soybean Attractiveness/EBN/4/210721_0930 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [74/83] Karlan Forrester - Soybean Attractiveness/EBN/4/210723_1112 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [75/83] Karlan Forrester - Soybean Attractiveness/EBN/4/210726_0950 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [76/83] Karlan Forrester - Soybean Attractiveness/EBN/4/210728_1132 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [77/83] Karlan Forrester - Soybean Attractiveness/EBN/4/210805_0800 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [78/83] Karlan Forrester - Soybean Attractiveness/L6-8/4/210721_0855 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [79/83] Karlan Forrester - Soybean Attractiveness/L6-8/4/210723_1038 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [80/83] Karlan Forrester - Soybean Attractiveness/L6-8/4/210726_0918 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [81/83] Karlan Forrester - Soybean Attractiveness/L6-8/4/210728_1100 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [82/83] Karlan Forrester - Soybean Attractiveness/L6-8/4/210805_0726 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: [83/83] Karlan Forrester - Soybean Attractiveness/L6-8/4/210807_0908 — unchanged (0 written, 0 deleted)
+0.2s - extract_snips: 83 ident(s): 0 updated (0 snip(s) written, 0 superseded), 83 unchanged
+0.5s - [medium/aves] 83 ident(s): 83 to extract (80 new, 3 superseded by new annotations), 0 already current
+0.5s -   1 worker(s); folds: 44
+WORKER 0 FATAL: RuntimeError: CUDA driver initialization failed, you might not have a CUDA gpu.
+Traceback (most recent call last):
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/02_set/extract.py", line 956, in run_worker
+    worker.run()
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/02_set/extract.py", line 942, in run
+    self.embedder.initialize()
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/embedders/aves/embedder.py", line 60, in initialize
+    self.model.to(device)
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1383, in to
+    return self._apply(convert)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 933, in _apply
+    module._apply(fn)
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 933, in _apply
+    module._apply(fn)
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 933, in _apply
+    module._apply(fn)
+  [Previous line repeated 1 more time]
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 964, in _apply
+    param_applied = fn(param)
+                    ^^^^^^^^^
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1369, in convert
+    return t.to(
+           ^^^^^
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/cuda/__init__.py", line 529, in _lazy_init
+    torch._C._cuda_init()
+RuntimeError: CUDA driver initialization failed, you might not have a CUDA gpu.
+Process Process-1:
+Traceback (most recent call last):
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/02_set/extract.py", line 956, in run_worker
+    worker.run()
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/02_set/extract.py", line 942, in run
+    self.embedder.initialize()
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/embedders/aves/embedder.py", line 60, in initialize
+    self.model.to(device)
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1383, in to
+    return self._apply(convert)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 933, in _apply
+    module._apply(fn)
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 933, in _apply
+    module._apply(fn)
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 933, in _apply
+    module._apply(fn)
+  [Previous line repeated 1 more time]
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 964, in _apply
+    param_applied = fn(param)
+                    ^^^^^^^^^
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1369, in convert
+    return t.to(
+           ^^^^^
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/cuda/__init__.py", line 529, in _lazy_init
+    torch._C._cuda_init()
+RuntimeError: CUDA driver initialization failed, you might not have a CUDA gpu.
+Traceback (most recent call last):
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/main.py", line 130, in <module>
+    main(
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/main.py", line 63, in main
+    stage2.extract_set(
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/02_set/extract.py", line 1138, in extract_set
+    raise RuntimeError(
+RuntimeError: 1/1 extraction worker(s) crashed (exit codes: [1])
