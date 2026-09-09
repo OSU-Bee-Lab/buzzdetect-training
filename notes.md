@@ -82,6 +82,17 @@ Everything that wrapper added on top of the raw model was framing and peak
 normalization. `extract.py` already frames; the normalization (DC-remove, scale
 each frame's peak to 0.25) is reproduced verbatim in `embed()`.
 
+### The cross-env handoff is tested, not assumed
+
+The one real risk in the two-interpreter split is that embeddings written under
+TF 2.21 might not read back correctly under TF 2.16.2. Checked directly on the
+files the live extraction had already written (2026-09-08, mid-run):
+`load_embedder('perch', initialize=False)` gives `n_embeddings` 1536 in the
+pinned env; stage 3's own `read_pickle_exhaustive` reads them back at
+(885, 1536), all finite; and they fit through stage 3's exact head
+(Input(1536) -> Dropout(0.2) -> Dense) for one step. Pickled float arrays carry
+no TF state, which is why this holds.
+
 Extraction runs at `BUZZDETECT_CHUNK_FRAMES=48` — Perch allocates ~1.2 GB of
 intermediates at that width, and the default 300 would want ~8 GB.
 
