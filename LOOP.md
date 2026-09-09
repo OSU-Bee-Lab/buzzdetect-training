@@ -297,8 +297,8 @@ models and reports a mix of both. Always use a fresh `--name`, or pass
 
 **If the run will outlast you, write a handoff doc.** Any job you expect to take
 more than about an hour will outlive your context — waiting on it burns uncached
-tokens for nothing. Launch it detached, commit a `HANDOFF_<slug>.md` in the
-worktree, and end your turn. Keep it short; it needs four things:
+tokens for nothing. Launch it detached, commit a `HANDOFF.md` in the worktree,
+and end your turn. Keep it short; it needs four things:
 
 1. **The one-command progress check** — is it running, and how many of 11 folds
    are done (`pgrep -f 03_train/main.py`, `find models/<name>/folds -name
@@ -313,8 +313,15 @@ worktree, and end your turn. Keep it short; it needs four things:
    crash, and the exact relaunch command.
 
 Also note anything a fresh agent would get wrong: symlinked caches it must not
-delete, why the branch is based where it is. Don't name it plain `HANDOFF.md` —
-that's taken by the machine-setup doc.
+delete, why the branch is based where it is.
+
+**Name it exactly `HANDOFF.md`** — not `HANDOFF_<slug>.md`, not any other
+variant. One worktree is one experiment, so the slug is already in the worktree
+path and the branch name; putting it in the filename too just means a fresh
+agent has to `ls` to find the file instead of opening the one place it always
+is. An earlier version of this section said the opposite, to avoid colliding
+with a machine-setup `HANDOFF.md` at the repo root — that doc no longer exists,
+and nothing else claims the name.
 
 ### 4. Read the results
 
