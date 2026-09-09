@@ -80,7 +80,28 @@ agent a rediscovery — follow the recipe below and don't re-derive it.
 **1. Launch the job itself detached from the shell** — direct env-python (no
 `conda run` wrapper process), unbuffered, logging to a file in the worktree.
 **Capture its PID** (`echo $!`); a `pkill -f` on the job name has previously
-killed the shell running it, so prefer read-only `pgrep -af`.
+killed the shell running it, so prefer read-only `pgrep`.
+
+**Always bracket the first letter of a `pgrep -f` / `pkill -f` pattern.** Claude
+Code runs every Bash call as `bash -c '<your command>'`, so your pattern text is
+itself in a live process's command line and **`pgrep -f foo` matches the shell
+that is asking**. It reports a match for a job that is not running, and
+`pkill -f` kills its own shell (observed 2026-09-09: exit 144).
+
+```
+pgrep -af "[0]3_train/main.py"    # right
+pgrep -af 03_train/main.py        # WRONG: always matches, even with nothing running
+```
+
+The bracket works because the regex `[0]3_train` does not match the literal text
+`[0]3_train` in the wrapper's own command line. It fails if the unbracketed
+string also appears elsewhere in the same Bash call, so don't echo the plain
+name alongside the check.
+
+This cost a whole grid launch on 2026-09-09: a detached
+`while pgrep -f <job>; do sleep; done` waiter could never exit, because the
+pgrep matched the waiter itself. It was diagnosed at first as the harness
+killing the waiter (the failure below) — it was not.
 
 ```
 nohup env PYTHONUNBUFFERED=1 CUDA_VISIBLE_DEVICES="" MALLOC_ARENA_MAX=2 \
@@ -106,7 +127,7 @@ Come back on your own schedule instead — cheap, and it doesn't hold the
 session's cache hostage to the job's pace:
 
 ```
-pgrep -af 03_train/main.py   # or 02_set/main.py
+pgrep -af "[0]3_train/main.py"   # or "[0]2_set/main.py" — bracket it, see above
 find models/<name>/folds -name summary.json | wc -l
 tail -5 <log>
 ```
