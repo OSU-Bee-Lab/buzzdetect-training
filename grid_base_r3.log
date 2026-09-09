@@ -1,0 +1,33 @@
+2026-09-09 12:34:28.681337: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2026-09-09 12:34:28.705254: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2026-09-09 12:34:28.705314: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2026-09-09 12:34:29.590440: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+2026-09-09 12:34:31.813122: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-09-09 12:34:31.853786: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-09-09 12:34:31.859305: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+/home/luke/projects/buzzdetect-training/.local/worktrees/probe-grid/03_train/dataset.py:237: UserWarning: /home/luke/projects/buzzdetect-training/.local/worktrees/probe-grid/02_set/sets/medium/embeddings/yamnet/raw holds embeddings for fold(s) ['Luke - External Data Sources'] that are absent from /home/luke/projects/buzzdetect-training/.local/worktrees/probe-grid/02_set/sets/medium/folds.csv; ignoring them. Likely leftovers from an earlier build of this set.
+  warnings.warn(
+[base_r3] set medium, embedder yamnet, translation general: 5 rotating fold(s), 39 train-only, 0 holdout
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1788971681.396674 2366899 service.cc:145] XLA service 0x73e32c008c90 initialized for platform Host (this does not guarantee that XLA will be used). Devices:
+I0000 00:00:1788971681.396729 2366899 service.cc:153]   StreamExecutor device (0): Host, Default Version
+2026-09-09 12:34:41.442918: I tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.cc:268] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+I0000 00:00:1788971682.126994 2366899 device_compiler.h:188] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+[1/5] JamesU - MustardBumbler/1_29: 131 epochs (best 130), val_loss 0.9360, 74440/7617 frames train/val, sens@fpr0.5%=0.421
+[2/5] Lily - Fit+Fast/2023_R3_Marysville/53: 179 epochs (best 179), val_loss 0.9289, 74517/7540 frames train/val, sens@fpr0.5%=0.372
+[3/5] Lily Adam - One Hive/recorders/willard/2024-08-07/1_11: 78 epochs (best 78), val_loss 0.7286, 75127/6930 frames train/val, sens@fpr0.5%=0.194
+[4/5] Luke - Diel Drivers/2026-04-08/1_150: 67 epochs (best 20), val_loss 0.9068, 77110/4947 frames train/val, sens@fpr0.5%=0.014
+[5/5] Luke - Diel Drivers/2026-05-06/1_95: 128 epochs (best 124), val_loss 1.0508, 74485/7572 frames train/val, sens@fpr0.5%=0.037
+
+[base_r3] sens@fpr0.5% per deployment: 0.208
+  mean over 5/5 held-out fold(s), each tuned to 0.5% FPR on its own audio (~32 negative frames set each threshold)
+  threshold: mean -1.463 — what each fold's own audio set, not one number to ship
+    JamesU - MustardBumbler/1_29: threshold -1.637, sensitivity 0.421 (~27 negative frames)
+    Lily - Fit+Fast/2023_R3_Marysville/53: threshold -1.684, sensitivity 0.372 (~32 negative frames)
+    Lily Adam - One Hive/recorders/willard/2024-08-07/1_11: threshold -1.780, sensitivity 0.194 (~33 negative frames)
+    Luke - Diel Drivers/2026-04-08/1_150: threshold -1.712, sensitivity 0.014 (~24 negative frames)
+    Luke - Diel Drivers/2026-05-06/1_95: threshold -0.502, sensitivity 0.037 (~35 negative frames)
+  an oracle: each threshold is placed using that fold's labels, so read this as the ceiling on operator tuning
+  per-fold spread understates uncertainty about a new deployment (training pools overlap heavily)
+
+[base_r3] rotations done; shipped model not trained (default). Pass --train-shipped, or run --skip-cv later with this --name.

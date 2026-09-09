@@ -1,1 +1,10 @@
 == 12:24:48 base_r2 : (defaults = cv_baseline config)
+== 12:34:28 base_r2 done rc=0
+total,0.005,-1.505,0.227,0.598,4059,151,34606,140
+== 12:34:28 base_r3 : (defaults = cv_baseline config)
+== 12:43:30 base_r3 done rc=0
+total,0.005,-1.463,0.208,0.584,4059,151,34606,124
+== 12:43:30 L6_ls005_r2 : --label-smoothing 0.05
+== 12:52:29 L6_ls005_r2 done rc=0
+total,0.005,-1.553,0.197,0.582,4059,151,34606,94
+== NOISE COMPLETE Wed Sep  9 12:52:29 PM EDT 2026

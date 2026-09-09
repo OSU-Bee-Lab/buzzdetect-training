@@ -13,3 +13,21 @@ I0000 00:00:1788971101.559724 2343432 service.cc:145] XLA service 0x79cb60008c90
 I0000 00:00:1788971101.559793 2343432 service.cc:153]   StreamExecutor device (0): Host, Default Version
 2026-09-09 12:25:01.601898: I tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.cc:268] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
 I0000 00:00:1788971102.292214 2343432 device_compiler.h:188] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+[1/5] JamesU - MustardBumbler/1_29: 146 epochs (best 140), val_loss 0.9351, 74440/7617 frames train/val, sens@fpr0.5%=0.440
+[2/5] Lily - Fit+Fast/2023_R3_Marysville/53: 152 epochs (best 150), val_loss 0.9301, 74517/7540 frames train/val, sens@fpr0.5%=0.408
+[3/5] Lily Adam - One Hive/recorders/willard/2024-08-07/1_11: 96 epochs (best 85), val_loss 0.7290, 75127/6930 frames train/val, sens@fpr0.5%=0.233
+[4/5] Luke - Diel Drivers/2026-04-08/1_150: 69 epochs (best 23), val_loss 0.9059, 77110/4947 frames train/val, sens@fpr0.5%=0.021
+[5/5] Luke - Diel Drivers/2026-05-06/1_95: 163 epochs (best 161), val_loss 1.0503, 74485/7572 frames train/val, sens@fpr0.5%=0.035
+
+[base_r2] sens@fpr0.5% per deployment: 0.227
+  mean over 5/5 held-out fold(s), each tuned to 0.5% FPR on its own audio (~32 negative frames set each threshold)
+  threshold: mean -1.505 — what each fold's own audio set, not one number to ship
+    JamesU - MustardBumbler/1_29: threshold -1.618, sensitivity 0.440 (~27 negative frames)
+    Lily - Fit+Fast/2023_R3_Marysville/53: threshold -1.781, sensitivity 0.408 (~32 negative frames)
+    Lily Adam - One Hive/recorders/willard/2024-08-07/1_11: threshold -1.914, sensitivity 0.233 (~33 negative frames)
+    Luke - Diel Drivers/2026-04-08/1_150: threshold -1.884, sensitivity 0.021 (~24 negative frames)
+    Luke - Diel Drivers/2026-05-06/1_95: threshold -0.328, sensitivity 0.035 (~35 negative frames)
+  an oracle: each threshold is placed using that fold's labels, so read this as the ceiling on operator tuning
+  per-fold spread understates uncertainty about a new deployment (training pools overlap heavily)
+
+[base_r2] rotations done; shipped model not trained (default). Pass --train-shipped, or run --skip-cv later with this --name.

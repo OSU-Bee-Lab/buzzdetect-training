@@ -204,11 +204,86 @@ At 0.262 the combo also lands on the same figure as `standardize-blocks`
 (0.261) and the offline `sklearn` readout (0.261) — three unrelated routes to
 the same ceiling, which is worth someone's attention.
 
-### Targeted repeats (running)
+### Targeted repeats — the decisive table
 
-Not a noise-floor study. `run_noise.sh`: two `cv_baseline` repeats (`base_r2`,
-`base_r3`) so the era's common denominator has n=3 and every future delta can be
-taken against a mean rather than one draw, plus one `L6_ls005_r2` to resolve the
-single live claim sitting at exactly one spread.
+`run_noise.sh`: two `cv_baseline` repeats so the era's denominator has n=3, plus
+one `L6_ls005` repeat to resolve the single claim sitting at one spread.
+
+| fold | base | base_r2 | base_r3 | L6 | L6_r2 | L1 | L1_r2 | combo |
+|---|---|---|---|---|---|---|---|---|
+| `1_29` | 0.426 | 0.440 | 0.421 | 0.443 | 0.334 | 0.431 | 0.421 | 0.431 |
+| `53` | 0.425 | 0.408 | 0.372 | 0.434 | 0.417 | 0.410 | 0.445 | 0.430 |
+| `willard` | 0.180 | 0.233 | 0.194 | 0.220 | 0.180 | 0.243 | 0.226 | 0.243 |
+| **`1_150`** | 0.021 | 0.021 | 0.014 | 0.034 | 0.027 | **0.089** | **0.158** | **0.171** |
+| `1_95` | 0.037 | 0.035 | 0.037 | 0.032 | 0.028 | 0.032 | 0.035 | 0.034 |
+| **TOTAL** | 0.218 | 0.227 | 0.208 | 0.233 | 0.197 | 0.241 | 0.257 | 0.262 |
+
+**Baseline n=3: mean 0.2177, SD 0.0095, range 0.019.** The earlier 0.016
+estimate came from an unlucky L1 pair; 0.0095 is the better number, putting the
+minimum detectable effect at **~0.027** rather than 0.045. It still rules out
+every lever in the grid except L1.
+
+**`cv_baseline` is a fair draw** — 0.218 against a 3-run mean of 0.2177. The
+era's logged deltas are not biased by a lucky denominator, so nothing already in
+`log.jsonl` needs re-baselining. That was the main risk the repeats bought off.
+
+**L1 is real: +0.031 vs the baseline mean, and the draws separate completely.**
+L1's worst run (0.241) beats baseline's best (0.227).
+
+**L1's gain is `1_150`, not `willard`.** Baseline on `1_150` is tight across
+three draws (0.021, 0.021, 0.014); L1 gives 0.089 and 0.158 and the combo 0.171
+— 4-8x baseline on the hardest deployment, far outside baseline's own spread
+there. `willard`, by contrast, ranges 0.180-0.233 in the **baseline** alone,
+which covers most of what looked like a lever effect earlier. `willard` is not
+evidence; `1_150` is.
+
+**L6 is dead: mean 0.215, i.e. -0.003 vs baseline.** The +0.015 single run was
+noise, as the MDE arithmetic predicted. The repeat came back 0.197 with `1_29`
+collapsing to 0.334 — not merely neutral but unstable. Nine minutes well spent.
 
 ## Conclusion
+
+**L1 — stop on `val_sens`, not `val_loss` — is the result. +0.031 over the
+baseline mean (0.2177 -> 0.249, n=2 vs n=3), with no overlap between the two
+configs' draws.** It should become the default, and it revives
+`restore-on-sens`, which E2 measured at +0.014 and shelved on the grounds that
+"the frozen probe's `val_loss` barely diverges from sens." On this data that
+reasoning is wrong: the divergence is worth 0.03, and it is concentrated
+entirely in the deployment we most need to fix.
+
+**The gain is a hard-deployment gain.** `1_150` goes from 0.021 (tight over
+three baseline draws) to 0.089/0.158/0.171. The thick folds are flat. That is
+the shape of result this project wants — the model is already fine in mustard.
+
+**The grid's motivating hypothesis was wrong, and that is worth as much as L1.**
+It was premised on the probe being step-starved at ~2 gradient steps per epoch.
+L3 gave it 9x the steps for +0.003; L2 let it train longer for -0.001; L4's cap
+never binds. The probe converges fine. What was broken is that it was being
+scored on the wrong curve while it converged. **The offline-readout gap is not a
+convergence gap** — so the remaining distance to 0.261 is not going to come from
+optimiser levers, and the next agent should not spend a CV looking for it there.
+
+**L6 (`label_smoothing=0.05`) does not replicate and L1+L6 do not stack.** The
+combo is +0.005 over L1 alone, inside noise. Mechanistically expected: label
+smoothing's overconfidence penalty is *what makes* `val_loss` diverge from sens,
+so L6 removes some of the divergence and L1 stops reading the divergent curve.
+Two fixes to one problem; take the better one.
+
+**Everything else is dead** at this resolution: batch size, both dropout
+directions, stopping slack, weight decay. All are under the ~0.027 minimum
+detectable effect, several with most folds moving down.
+
+### What to do next
+
+1. **Adopt `--monitor val_sens`** as the default and re-baseline the era on it.
+   The flag is on this branch and defaults to the old behaviour, so merging is
+   safe; flipping the default is the deliberate act.
+2. **Do not re-run the loss/optimiser levers.** They are measured and dead.
+3. The remaining gap to the offline readout is a **representation/geometry**
+   question, not an optimisation one. `standardize-blocks` (0.261) and the
+   combo (0.262) reaching the same ceiling by unrelated routes is the lead.
+4. **Variance reduction beats variance measurement.** Averaging 2-3 seeds per
+   fold inside one run would shrink the error on every future experiment for
+   ~2x the compute of one run, and would have made this entire grid readable in
+   8 runs instead of 13. It changes what a run means, so it is an era-boundary
+   decision — parked in IDEAS.md, not done here.
