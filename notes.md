@@ -67,10 +67,12 @@ run wants:
    run `--workers 0`, because `main.py` imports TensorFlow first, TF initializes
    the CUDA driver in the parent, and `fork` then poisons the child's context.
 
-**This makes the "AVES is horrifically slow" folklore concrete, and mostly
-wrong**: AVES is ~1.4x YAMNet's cost per frame on a GPU, not the 10x+ that the
-unbatched CPU path implied. Whatever the CV says, the embedder is cheap enough
-that the E1 middle-layer sweep is no longer gated on extraction cost.
+**The "AVES is horrifically slow" folklore was about the implementation, not
+the model.** One unbatched CPU forward pass per frame is 14 h for this set;
+batched on the GPU the same embeddings take 1 h. Not benchmarked against
+YAMNet's own per-frame cost here, so no claim is made about the ratio — but at
+~1 h per full extraction, the E1 middle-layer sweep is no longer gated on
+extraction cost the way the parked note assumed.
 
 ## Results
 
