@@ -4,8 +4,10 @@ Relaunched **2026-09-09 ~01:25 on the GPU**. Root `main.py`, stage 2 + stage 3
 in one detached process. Worktree `.local/worktrees/aves-probe`, branch
 `exp/aves-probe`. Read `notes.md` for the hypothesis.
 
-**Expected finish: ~2 h from launch (~03:30).** Stage 2 ~1.0 h of GPU embedding
-plus ~1 h of serial CPU framing; stage 3 is a frozen probe, ~10 min for 5 folds.
+**Expected finish ~03:00.** Measured on the first ident rather than estimated:
+7,303 frames in 125.1 s end-to-end (CPU framing + GPU embedding) = 0.0171
+s/frame, so the set's 267,742 frames take ~1.3 h from the 01:25 launch. Stage 3
+is a frozen probe, ~10 min for 5 folds.
 
 ```
 WT=/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe
