@@ -1,0 +1,7 @@
+fold,fpr,threshold,sensitivity,precision,buzz_frames,neg_frames,frames_val,best_epoch
+JamesU - MustardBumbler/1_29,0.005,-1.627,0.419,0.97,2144,27,7617,160
+Lily - Fit+Fast/2023_R3_Marysville/53,0.005,-1.753,0.415,0.929,1031,32,7540,160
+Lily Adam - One Hive/recorders/willard/2024-08-07/1_11,0.005,-1.752,0.193,0.64,305,33,6930,66
+Luke - Diel Drivers/2026-04-08/1_150,0.005,-1.662,0.007,0.04,146,24,4947,20
+Luke - Diel Drivers/2026-05-06/1_95,0.005,-0.508,0.03,0.267,433,35,7572,120
+total,0.005,-1.46,0.213,0.569,4059,151,34606,120

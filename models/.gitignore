@@ -11,3 +11,21 @@
 */tests/results*
 model_general_v3/*.pb
 model_general_v3/variables/
+
+# --- Small text artifacts of every trained model -------------------------
+# An experiment's worktree is disposable and its models/ is gitignored, so
+# pruning used to destroy the only copy of its per-fold numbers — which is
+# exactly what a later paired comparison needs (LOOP.md "Compare paired, per
+# fold"). standardize-blocks' 0.261 was lost that way. Keep the two small text
+# artifacts on the branch: ~4 KB per model, and they make every past experiment
+# comparable forever. Weights, predictions.csv and plots stay ignored.
+#
+# Git will not descend into an excluded directory, so each level has to be
+# re-included before the files inside it can be.
+!*/
+*/*
+!*/folds_sx.csv
+!*/folds/
+*/folds/**
+!*/folds/**/
+!*/folds/**/summary.json
