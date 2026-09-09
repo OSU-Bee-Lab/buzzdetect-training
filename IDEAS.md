@@ -535,11 +535,39 @@ with >1000 buzz frames moved 0.019 and 0.013, while `1_150` (146 buzz frames)
 moved **0.055** — 0.007 to 0.062 on the same config. Read any result in this era
 under ~0.02 headline, or any result resting on `1_150`, against that.
 
-**The only thing that shrinks it is more annotated non-buzz frames in the thin
-folds.** That buys more measurement precision per hour than anything the loop
-can do in software, and it compounds across every future experiment. Re-run the
-tool on `cv_baseline` to get the current per-fold ranking — the roster changed,
-so the old thin-fold list is stale.
+**RE-MEASURED 2026-09-09, and this section's numbers were stale in a way that
+changes the advice.** `tools/eval_sampling_sd.py` on the current roster:
+
+| fold | buzz frames | boot SD (`cv_baseline`) | boot SD (`context_monitor`) |
+|---|---|---|---|
+| 1_29 | 2144 | 0.014 | 0.029 |
+| 53 | 1031 | 0.020 | 0.029 |
+| willard | 305 | 0.024 | 0.027 |
+| 1_150 | 146 | 0.012 | 0.037 |
+| 1_95 | 433 | 0.010 | 0.010 |
+| **headline** | | **0.007** | **0.012** |
+
+Per-fold SD is **0.010-0.037**, not the 0.02-0.092 recorded above, and the
+"±0.25 or worse" that was in LOOP.md is ~7x too large. Snip equalization is why:
+`frames_val` is now within ~1.5x across folds and `neg_frames` is 24-35, so the
+FPR side is no longer the ragged thing these numbers were measured on. Buzz
+density is not equalized and cannot be — `buzz_frames` still spans 14.7x — but
+that turns out to cost much less than assumed.
+
+**The advice inverts for the thinnest fold.** `1_150` has the *smallest*
+eval-sampling SD of the five under `cv_baseline` (0.012 — a fold pinned near
+chance has little binomial variance) while moving **0.055** between two identical
+runs. So its run-to-run noise is **training stochasticity, not eval sampling**,
+and more annotated negatives there will not shrink it — a seed control or seed
+averaging would. That is an argument for the seed-averaging section below, not
+for annotation.
+
+Two limits on the new numbers: the bootstrap resamples frames independently
+while frames within a buzz event are correlated, so read 0.037 as a floor; and
+it says nothing about training variance, which is the larger term on `1_150`.
+More annotated non-buzz frames still buy measurement precision, but the case is
+weaker than this section used to make it. Re-run the tool rather than quoting
+any of these figures — it is seconds and the roster moves.
 
 ## willard-regression
 

@@ -382,10 +382,28 @@ Two cautions that apply to every conclusion you write:
 - **Fold-to-fold spread is not a confidence interval.** Training pools overlap
   ~90% across rotations, so fold models are correlated and the spread
   understates uncertainty about a genuinely new deployment.
-- **Per-fold sensitivity is unreliable where there's little buzz.** In the
-  quietest deployments it's ±0.25 or worse. A fold that swings hard may just be
-  a fold with forty seconds of buzz in it. Check `buzz_frames` in
-  `folds_sx.csv` before believing a per-fold delta.
+- **Per-fold sensitivity is less certain where there's little buzz — but check
+  the current number before quoting one.** Folds no longer differ in *audio*:
+  snip equalization has `frames_val` within ~1.5x (4947-7617) and `neg_frames`,
+  the negative sample the threshold rests on, at 24-35 across all five. What
+  cannot be equalized is buzz *density*, which is ecology — `buzz_frames` still
+  spans 146 to 2144 (14.7x), because annotating more of a quiet site buys mostly
+  negatives.
+
+  **The "±0.25 or worse" figure this bullet used to carry was ~7x too large.**
+  It was an 11-fold-roster number from before equalization. Re-measured
+  2026-09-09 (`tools/eval_sampling_sd.py`, seconds, no training): per-fold
+  bootstrap SD is **0.010-0.037**, worst case `1_150` at 0.037, headline SD from
+  eval sampling 0.007 (`cv_baseline`) to 0.012 (`context_monitor`). Run the tool
+  rather than quoting any figure from these docs — it is cheap and the roster
+  moves.
+
+  Two limits on that number. The bootstrap resamples frames independently while
+  frames inside one buzz event are correlated, so it is a **floor**. And it
+  measures eval sampling only: `1_150` moved **0.055** between two identical runs
+  against a 0.012 eval-sampling SD, so its run-to-run noise is dominated by
+  **training stochasticity**, not by its buzz count. More annotation will not fix
+  that; a seed control or seed averaging would.
 
 ### The thin-fold caution is about magnitude. It is not permission to discount a hard-fold gain.
 
