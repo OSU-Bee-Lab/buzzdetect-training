@@ -58,7 +58,7 @@ def build_weights(data_train: list[Sample], classes):
     return weights
 
 
-def weighted_bce_loss(weights, label_smoothing=0.2):
+def weighted_bce_loss(weights, label_smoothing=0.2, margin_spec=None):
     """Per-class weighted binary crossentropy for a multi-hot, multi-label
     target — the loss `class_weight=` was meant to express, applied correctly.
 
@@ -80,18 +80,47 @@ def weighted_bce_loss(weights, label_smoothing=0.2):
             'weight' column).
         label_smoothing: applied to targets before the loss, matching
             `tf.keras.losses.BinaryCrossentropy`'s `label_smoothing` formula.
+        margin_spec: `None` (default) leaves the loss byte-identical to the
+            plain weighted BCE. Otherwise `(idx_target, idx_condition, lam, m)`
+            adds a class-conditional hinge
+
+                lam * 1[y[idx_condition] and not y[idx_target]] * relu(z + m)
+
+            on the *raw* (unsmoothed) labels, pushing the target class's logit
+            at least `m` below zero on frames carrying the conditioning class
+            but not the target. Used to spend extra loss on the confuser class
+            that actually sets the low-FPR operating point (`mech_auto` for
+            `ins_buzz`) rather than on every negative equally.
+
+            This is deliberately a *per-frame* function of `(y_true, y_pred)`:
+            no top-k, no within-batch rank, no batch-composition dependence.
+            That is what keeps the compiled loss a valid `val_loss` monitor,
+            and it is the difference from the archived `tail-loss` OHEM term,
+            whose batch-local hard-negative set made `val_loss` meaningless on
+            a single small validation fold.
     """
     weight_tensor = tf.constant(weights, dtype=tf.float32)
 
     def loss(y_true, y_pred):
-        y_true = tf.cast(y_true, y_pred.dtype)
+        y_raw = tf.cast(y_true, y_pred.dtype)
+        y_true = y_raw
         if label_smoothing:
-            y_true = y_true * (1.0 - label_smoothing) + 0.5 * label_smoothing
+            y_true = y_raw * (1.0 - label_smoothing) + 0.5 * label_smoothing
 
         per_neuron = tf.nn.weighted_cross_entropy_with_logits(
             labels=y_true, logits=y_pred, pos_weight=weight_tensor,
         )
-        return tf.reduce_mean(per_neuron, axis=-1)
+        per_sample = tf.reduce_mean(per_neuron, axis=-1)
+
+        if margin_spec is not None:
+            i_target, i_condition, lam, m = margin_spec
+            # Raw labels, not the smoothed ones: this selects frames by what
+            # they *are*, so smoothing would turn the indicator into 0.1/0.9.
+            mask = y_raw[:, i_condition] * (1.0 - y_raw[:, i_target])
+            hinge = tf.nn.relu(y_pred[:, i_target] + m)
+            per_sample = per_sample + lam * mask * hinge
+
+        return per_sample
 
     return loss
 

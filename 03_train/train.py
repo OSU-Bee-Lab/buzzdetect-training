@@ -273,7 +273,8 @@ def _consensus_epoch(summary_rows, tol):
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs_max, aug_dirnames, verbose,
                held_out_fold, save_binary, epochs_fixed=None, patience=50,
-               stop_tol=None):
+               stop_tol=None, margin_lambda=0.0, margin_m=2.0,
+               margin_class='mech_auto'):
     """Train one model. Returns (result_row, model); (None, None) if the model
     directory is already populated."""
     if not can_write(dir_model):
@@ -305,8 +306,27 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     # a buzz frame co-occurring with an earlier-indexed class never gets
     # ins_buzz's weight at all. See train_utils.weighted_bce_loss.
     weights_ordered = [data.weight_dict[i] for i in range(len(data.classes))]
+
+    # Class-conditional margin on the ins_buzz logit (see
+    # train_utils.weighted_bce_loss). lambda 0 leaves the loss untouched, so
+    # every run without --margin-lambda takes the historical code path.
+    margin_spec = None
+    if margin_lambda:
+        if margin_class not in data.classes:
+            raise ValueError(
+                f'--margin-class {margin_class!r} is not a class under '
+                f'translation {name_translation!r}: {sorted(data.classes)}')
+        margin_spec = (
+            data.classes.index('ins_buzz'), data.classes.index(margin_class),
+            float(margin_lambda), float(margin_m),
+        )
+        if verbose:
+            print(f'[{modelname}] margin: lambda={margin_lambda} m={margin_m} '
+                  f'on {margin_class} -> ins_buzz', flush=True)
+
     model.compile(
-        loss=weighted_bce_loss(weights_ordered, label_smoothing=0.2),
+        loss=weighted_bce_loss(weights_ordered, label_smoothing=0.2,
+                               margin_spec=margin_spec),
         optimizer=tf.keras.optimizers.Adam(learning_rate=0.002),
         metrics=['accuracy'],
     )
@@ -408,6 +428,9 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         'epochs_fixed': epochs_fixed,
         'patience': patience,
         'stop_tol': stop_tol,
+        'margin_lambda': margin_lambda,
+        'margin_m': margin_m,
+        'margin_class': margin_class if margin_lambda else None,
     }
     # 'w' for the same reason as write_model_py's — can_write() is the gate
     with open(os.path.join(dir_model, 'config_model.json'), 'w') as f:
@@ -490,7 +513,8 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
               assume_yes=False, stop_tol=0.01, skip_cv=False, train_shipped=False,
-              only_folds=None, surprisal=True):
+              only_folds=None, surprisal=True, margin_lambda=0.0, margin_m=2.0,
+              margin_class='mech_auto'):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -565,6 +589,8 @@ def train_set(name, embeddername, setname, name_translation,
             dir_model, modelname, embeddername, setname, name_translation,
             data, epochs_max, aug_dirnames, verbose,
             held_out, save_binary=False, patience=patience,
+            margin_lambda=margin_lambda, margin_m=margin_m,
+            margin_class=margin_class,
         )
         if result is None:
             continue
@@ -654,7 +680,8 @@ def train_set(name, embeddername, setname, name_translation,
         dir_model_full, name, embeddername, setname, name_translation,
         data, epochs_max, aug_dirnames, verbose,
         None, save_binary=True, epochs_fixed=epochs_fixed, patience=patience,
-        stop_tol=stop_tol,
+        stop_tol=stop_tol, margin_lambda=margin_lambda, margin_m=margin_m,
+        margin_class=margin_class,
     )
 
     if result is None:

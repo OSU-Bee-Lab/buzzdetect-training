@@ -57,6 +57,21 @@ if __name__ == '__main__':
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
+    parser.add_argument('--margin-lambda', type=float, default=0.0,
+                        dest='margin_lambda',
+                        help='weight of the class-conditional hinge that pushes '
+                             'the ins_buzz logit at least --margin-m below zero '
+                             'on frames labelled --margin-class and not '
+                             'ins_buzz. 0 (default) leaves the loss identical to '
+                             'every run logged before this flag existed.')
+    parser.add_argument('--margin-m', type=float, default=2.0, dest='margin_m',
+                        help='margin in logits for --margin-lambda (default 2.0)')
+    parser.add_argument('--margin-class', default='mech_auto',
+                        dest='margin_class',
+                        help='conditioning class for --margin-lambda, named in '
+                             'the translation\'s output space (default mech_auto, '
+                             'the plurality of cv_baseline\'s threshold-setting '
+                             'false positives)')
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--no-surprisal', action='store_false', dest='surprisal',
                         help='skip the per-frame surprisal CSVs under '
@@ -80,4 +95,7 @@ if __name__ == '__main__':
         train_shipped=args.train_shipped or args.skip_cv,
         only_folds=args.only_folds,
         surprisal=args.surprisal,
+        margin_lambda=args.margin_lambda,
+        margin_m=args.margin_m,
+        margin_class=args.margin_class,
     )
