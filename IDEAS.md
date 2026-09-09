@@ -209,13 +209,31 @@ from `cv_baseline`. Reproduce it with `exp/context-monitor` (the embedder is a
 real directory there, not a symlink; the `yamnet_context` cache is already in
 the shared tree, so no extraction).
 
-**Owed, and cheap: one repeat.** Over the four folds other than `1_150` the
-gain against `context_embedder` is +0.0095, i.e. nothing — the headline delta is
-that one 146-buzz-frame fold, which moved 0.007 → 0.062 between two *identical*
-baseline runs. Its 0.219 is above the top of its range over ~8 draws this era
-(previous max 0.158) and the epoch-5 diagnostic gives it a cause, so the
-direction is probably real; the **size** is not established. One 17-minute rerun
-of the same config settles it, and it is the cheapest item in this file.
+**The gain over `context_embedder` is carried by `1_150`, and that is the
+result, not a caveat on it.** Over the other four folds the delta is +0.0095;
+the headline is that one near-chance fold going 0.014 → 0.219. Read that as the
+thing the project is for — `1_29` sits at ~0.43 whatever we do, and a lever that
+only moved the rich folds would be close to worthless.
+
+**Do not discount it with `1_150`'s repeat spread.** That spread (0.007 → 0.062
+on two identical runs) is a *within-treatment* number and does not bound a
+between-treatment difference. Split all 17 runs of the era by monitor:
+
+| monitor | `1_150` | n |
+|---|---|---|
+| `val_loss` | 0.007, 0.014 x5, 0.021 x4, 0.027, 0.034, 0.041, 0.062 | 13 |
+| `val_sens` | 0.089, 0.158, 0.171, **0.219** | 4 |
+
+**The two groups do not overlap.** Every `val_sens` run beats every `val_loss`
+run on this fold, and `context-monitor` is the highest of the four. With the
+`best_epoch` 5 → 160 mechanism, that is a treatment effect, not a fold that
+swung.
+
+**Still worth one repeat** — as confirmation of a large hard-fold gain, which is
+standing practice given there is no seed control, **not** because the number is
+suspect. 17 minutes, and it also tests whether `1_150`'s 0.219 (the top of the
+`val_sens` group by 0.048) carries an extra context x monitor lift, which is the
+one part of this that is n=1.
 
 ## Seed averaging inside a run — variance reduction over variance measurement
 
