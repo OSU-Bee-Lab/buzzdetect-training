@@ -110,6 +110,32 @@ inherited from the archive.
   bottleneck. Weight the rotation accordingly.
 - **Err against hyperparameter tuning.** We're looking for structural gains;
   hyperparameters can be tuned in one sweep once a good structure is found.
+  **Exception: a new embedder does not inherit the probe config's validity.**
+  See below.
+- **The probe config is YAMNet-tuned, and it is hardcoded.**
+  `03_train/train.py` builds `Dropout(0.2) -> Dense(n_classes)` with
+  `label_smoothing=0.2`, Adam at 0.002 and no weight decay, with no CLI flag to
+  vary any of it. Those values were tuned on YAMNet, whose embedding is 89.6%
+  exact zeros, non-negative, and already linearly separable — it is the
+  penultimate layer of a supervised classifier whose 521 AudioSet classes
+  include `Buzz` and `Bee, wasp, etc.`. Input dropout on a code like that is
+  mild; on a dense, signed, zero-centred code it is heavy multiplicative noise,
+  and with no weight decay a 768-dimension distributed representation overfits
+  the training sites instead of transferring.
+
+  **So when an embedder swap comes back negative, that number is
+  `embedder + this head`, and the head may be doing the damage.** Before logging
+  an embedder verdict, sweep the readout offline against
+  `03_train/metrics.py:sens_at_fpr` on the cached embeddings — no Keras, no
+  extraction, seconds per configuration — and say which part of the loss you
+  measured. `aves-probe` (2026-09-09) did not do this, logged
+  0.218 -> 0.074 as an embedder verdict, and an offline L2 sweep on the *same*
+  embeddings then recovered most of it. The follow-up is `exp/aves-readout`;
+  if that entry has not been amended, the amendment is still owed.
+
+  This is not licence to tune. It is one diagnostic sweep to attribute a
+  negative before it becomes a verdict, and it stays offline unless it changes
+  the reading.
 - **Change one thing.** Layering a change on another risks interaction effects
   that obscure whether the change itself helped.
 - **Look for clear signals; don't try to measure the noise floor.** There is no
@@ -133,6 +159,13 @@ leads), and `ls archive/` (the 59 runs before this era). Most obvious ideas have
 been tried, and the conclusions about *dead ends* — bandpass, mel masking, MLP
 heads, L2, handcrafted frequency features — are the part likeliest to still
 hold; it is the positive results a data change invalidates.
+
+**That last sentence has one known exception, and it is easy to walk into: every
+one of those dead ends was measured on YAMNet embeddings.** Head and
+regularisation verdicts are statements about a *representation*, not about the
+pipeline. If your experiment changes the embedder, they do not carry — see
+"the probe config is YAMNet-tuned" under Constraints before treating any of them
+as settled.
 
 For detail behind an archived run: `archive/<era>/notes/<slug>.md`, complete for
 both eras. Code is on `exp/<slug>`, or `refs/archive/<slug>` where the branch
@@ -317,6 +350,14 @@ enough buzz to trust? did any fold fail to reach the target FPR?>
 Append one line to `log.jsonl` in **main** and commit it. Be very brief; the log
 only guides later agents toward where to dig. Keep `"method": "cv"` — it is what
 distinguishes an entry from the first era's fixed-split ones.
+
+**Amending an entry.** Entries are not immutable — a later run can show that an
+earlier conclusion, though correctly measured, claimed more than it measured.
+Do not rewrite `conclusion` or the metrics: they are the record of what was
+believed and what was observed. Instead set `trust` to what the entry now
+deserves and add an `amended` field, dated, saying what changed and which run
+supersedes it. `aves-probe` is the worked example. An entry nobody can trust
+and nobody has marked is worse than a wrong one.
 
 Every entry also needs a `trust` judgment, kept separate from the delta. This is
 not a significance test — there's no seed control to build one from — just
