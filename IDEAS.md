@@ -121,7 +121,7 @@ if a cheaper readout fix lands first and works — that would establish the
 representation is usable and make "which layer is most usable" worth paying for.
 
 **The live lead is the readout, and it is cheaper than any layer.** Run as
-`aves-readout` (2026-09-09) — see "Probe-convergence levers" below. **The
+`aves-readout` (2026-09-09) — see "Closed: probe-convergence levers" below. **The
 mechanism guessed here was wrong** and is corrected there: the probe was *not*
 overfitting. It was **undertrained**. `val_sens` rises monotonically to the
 final epoch in all 5 folds, the training pool is 43 folds not 5
@@ -215,6 +215,13 @@ the intended input to a later unfreeze, and half of it will not transfer.*
 The plan this anticipates: settle the probe-convergence levers cheaply on the
 frozen probe, *then* unfreeze and retrain. That sequencing is right. What it
 must not do is carry the wrong half of the grid across.
+
+**Update (`probe-grid`, 2026-09-09): the grid is run and this section's
+prediction held.** L1 was the only survivor on the frozen probe (+0.031) and is
+exactly the lever this section says gets *more* valuable once the trunk moves.
+L2 did not pay frozen (-0.001), so the L1/L2 pairing below should be read as L1
+only. The levers this section predicts will not transfer (L5-L7) are all dead
+frozen too, so nothing is owed them.
 
 **Transfers, and gets more valuable:**
 
