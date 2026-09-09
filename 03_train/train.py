@@ -35,6 +35,32 @@ SUBDIR_FOLDS = 'folds'
 SUBDIR_HOLDOUT = 'holdout'
 
 
+# The probe's shape, loss and stopping rule. These were hardcoded, tuned on
+# YAMNet; every one of them is a lever the probe-convergence grid varies, so
+# they are surfaced as flags with the historical values as defaults. Defaults
+# reproduce cv_baseline exactly — a run that passes none of the new flags takes
+# the same path it always did.
+@dataclass
+class ProbeConfig:
+    dropout: float = 0.2            # input dropout, applied to the embedding
+    label_smoothing: float = 0.2
+    learning_rate: float = 0.002
+    weight_decay: float = 0.0       # AdamW-style decay on the Dense kernel
+    size_batch: int = 65568         # >= the training pool: full-batch, ~2 steps/epoch
+    monitor: str = 'val_loss'       # or 'val_sens' -> val_sens_fpr0.005, mode max
+    min_delta: float = 0.002        # EarlyStopping's patience-reset threshold
+
+
+# The sens monitor only predicts; its batch size is a memory knob, not a
+# training lever, so it stays put when --batch-size moves.
+BATCH_PREDICT = 65568
+
+MONITOR_KEYS = {
+    'val_loss': ('val_loss', 'min'),
+    'val_sens': ('val_sens_fpr0.005', 'max'),
+}
+
+
 @dataclass
 class TrainingData:
     """One CV iteration's worth of data, plus everything derived from it that
@@ -83,6 +109,7 @@ def _eval_arrays(samples, classes):
 
 
 def _load_data(setname, embeddername, folds_train, name_translation, aug_dirnames,
+               size_batch=ProbeConfig.size_batch,
                val_fold=None):
     """Pool folds_train for training; val_fold, if given, is a whole separate
     deployment used as the early-stopping monitor.
@@ -129,7 +156,6 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     weights = build_weights(data_train, classes)
     weight_dict = {i: w for i, w in enumerate(weights['weight'])}
 
-    size_batch = 65568
     size_shuffle = 10 * size_batch
 
     return TrainingData(
@@ -273,9 +299,10 @@ def _consensus_epoch(summary_rows, tol):
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs_max, aug_dirnames, verbose,
                held_out_fold, save_binary, epochs_fixed=None, patience=50,
-               stop_tol=None):
+               stop_tol=None, probe=None):
     """Train one model. Returns (result_row, model); (None, None) if the model
     directory is already populated."""
+    probe = probe or ProbeConfig()
     if not can_write(dir_model):
         print(f'[{modelname}] already trained; skipping')
         return None, None
@@ -296,8 +323,13 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     tf_name = re.sub(r'[^A-Za-z0-9_.>-]', '_', modelname)
     model = tf.keras.Sequential(name=tf_name)
     model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
-    model.add(tf.keras.layers.Dropout(0.2))
-    model.add(tf.keras.layers.Dense(len(data.classes)))
+    if probe.dropout > 0:
+        model.add(tf.keras.layers.Dropout(probe.dropout))
+    model.add(tf.keras.layers.Dense(
+        len(data.classes),
+        kernel_regularizer=(tf.keras.regularizers.l2(probe.weight_decay)
+                            if probe.weight_decay > 0 else None),
+    ))
 
     # Per-class weights go in the loss, not in fit(class_weight=). Keras'
     # class_weight= assumes single-label targets: for a multi-hot y it collapses
@@ -306,8 +338,8 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     # ins_buzz's weight at all. See train_utils.weighted_bce_loss.
     weights_ordered = [data.weight_dict[i] for i in range(len(data.classes))]
     model.compile(
-        loss=weighted_bce_loss(weights_ordered, label_smoothing=0.2),
-        optimizer=tf.keras.optimizers.Adam(learning_rate=0.002),
+        loss=weighted_bce_loss(weights_ordered, label_smoothing=probe.label_smoothing),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=probe.learning_rate),
         metrics=['accuracy'],
     )
 
@@ -332,15 +364,17 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             'frames_train': data.frames_train,
         }
     else:
+        monitor_key, monitor_mode = MONITOR_KEYS[probe.monitor]
         callback = RestoreTrueBest(
-            monitor='val_loss', patience=patience, min_delta=0.002, restore_best_weights=True,
+            monitor=monitor_key, patience=patience, min_delta=probe.min_delta,
+            mode=monitor_mode, restore_best_weights=True,
         )
         # Reporting only, and listed first so its keys are in `logs` before
         # EarlyStopping and History see them. Stopping still happens on
         # val_loss; these curves are the evidence for whether it should.
         sens_callback = SensAtFPR(
             *data.val_eval, data.classes.index('ins_buzz'), FPR_TARGETS,
-            batch_size=data.size_batch,
+            batch_size=BATCH_PREDICT,
         )
         history = model.fit(
             data.train_tf,
@@ -490,7 +524,8 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
               assume_yes=False, stop_tol=0.01, skip_cv=False, train_shipped=False,
-              only_folds=None, surprisal=True):
+              only_folds=None, surprisal=True, probe=None):
+    probe = probe or ProbeConfig()
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -553,7 +588,7 @@ def train_set(name, embeddername, setname, name_translation,
             continue
 
         data = _load_data(setname, embeddername, folds_train, name_translation,
-                          aug_dirnames, val_fold=held_out)
+                          aug_dirnames, size_batch=probe.size_batch, val_fold=held_out)
         if data.frames_val == 0:
             # Nothing to early-stop on or score against — a legitimate state if
             # every label in this deployment is ignored or excluded, but it
@@ -564,7 +599,7 @@ def train_set(name, embeddername, setname, name_translation,
         result, model = _train_one(
             dir_model, modelname, embeddername, setname, name_translation,
             data, epochs_max, aug_dirnames, verbose,
-            held_out, save_binary=False, patience=patience,
+            held_out, save_binary=False, patience=patience, probe=probe,
         )
         if result is None:
             continue
@@ -649,12 +684,12 @@ def train_set(name, embeddername, setname, name_translation,
 
     folds_shipped = folds_rotate + folds_train_always
     data = _load_data(setname, embeddername, folds_shipped, name_translation,
-                      aug_dirnames, val_fold=None)
+                      aug_dirnames, size_batch=probe.size_batch, val_fold=None)
     result, model = _train_one(
         dir_model_full, name, embeddername, setname, name_translation,
         data, epochs_max, aug_dirnames, verbose,
         None, save_binary=True, epochs_fixed=epochs_fixed, patience=patience,
-        stop_tol=stop_tol,
+        stop_tol=stop_tol, probe=probe,
     )
 
     if result is None:
