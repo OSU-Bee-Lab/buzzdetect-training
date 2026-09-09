@@ -332,8 +332,11 @@ So they need different fixes and should stop being treated as one item:
   audio. **The buzz-vs-`mech_auto` margin that used to be named here as the
   remaining candidate is now closed and negative** — see
   "Closed: absolute-margin confuser penalties" below. `1_95` moved *down* at
-  every dose. It has now defeated two targeted interventions; nothing cheap is
-  left, and the next move on it is to listen to the audio.
+  every dose. It has now defeated two targeted interventions (`harmonic-comb`,
+  `mech-margin`), so nothing cheap and loss-shaped is left for it. The remaining
+  lead for `1_95` specifically is **night-negatives** — in-domain hard negatives
+  from its own recorder — which needs a data decision from Luke. (The
+  listen-to-the-audio item below is `1_150`'s, not this fold's.)
 - **1_150 is a positives problem** — its negatives are unremarkable and its buzz
   frames are simply indistinguishable from its own background, despite being 88 s
   of plain `ins_buzz_medium` with 6503 s of support. Nothing structural explains it.
