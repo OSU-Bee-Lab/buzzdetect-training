@@ -1,0 +1,161 @@
+=== 02 extract (lite, perch) === 2026-09-08T21:17:58-04:00
+0.0s - [lite/perch] existing config: overlap_event_prop=0.2, framehop_prop=1
+0.0s -   loaded from /home/luke/projects/buzzdetect-training/.local/worktrees/perch-probe/02_set/sets/lite/config_extract.json
+0.0s - extract_snips: [1/10] JamesU - MustardBumbler/1_29/240903_1319 — unchanged (0 written, 0 deleted)
+0.0s - extract_snips: [2/10] Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 — unchanged (0 written, 0 deleted)
+0.0s - extract_snips: [3/10] Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 — unchanged (0 written, 0 deleted)
+0.0s - extract_snips: [4/10] Luke - Diel Drivers/2026-04-08/1_150/260408_1942 — unchanged (0 written, 0 deleted)
+0.0s - extract_snips: [5/10] Luke - Diel Drivers/2026-05-06/1_95/260506_1924 — unchanged (0 written, 0 deleted)
+0.0s - extract_snips: [6/10] Luke - Various Opportunistic Recordings/2025-06-23/1_23/250623_0857 — unchanged (0 written, 0 deleted)
+0.0s - extract_snips: [7/10] Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 — unchanged (0 written, 0 deleted)
+0.0s - extract_snips: [8/10] Luke - Various Opportunistic Recordings/2025-08-05/31/250805_1247 — unchanged (0 written, 0 deleted)
+0.0s - extract_snips: [9/10] Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 — unchanged (0 written, 0 deleted)
+0.0s - extract_snips: [10/10] Luke - Various Opportunistic Recordings/2025-08-27/48/250827_1828 — unchanged (0 written, 0 deleted)
+0.0s - extract_snips: 10 ident(s): 0 updated (0 snip(s) written, 0 superseded), 10 unchanged
+0.1s - [lite/perch] 10 ident(s): 10 to extract (10 new, 0 superseded by new annotations), 0 already current
+0.1s -   1 worker(s); folds: 10
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+E0000 00:00:1788916682.431571 1984558 cuda_platform.cc:52] failed call to cuInit: INTERNAL: CUDA error: Failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+I0000 00:00:1788916682.431641 1984558 cuda_diagnostics.cc:160] env: CUDA_VISIBLE_DEVICES=""
+I0000 00:00:1788916682.431676 1984558 cuda_diagnostics.cc:163] CUDA_VISIBLE_DEVICES is set to an empty string - this hides all GPUs from CUDA
+I0000 00:00:1788916682.431695 1984558 cuda_diagnostics.cc:171] verbose logging is disabled. Rerun with verbose logging (usually --v=1 or --vmodule=cuda_diagnostics=1) to get more diagnostic output from this module
+I0000 00:00:1788916682.431700 1984558 cuda_diagnostics.cc:176] retrieving CUDA diagnostic information for host: beelab-files
+I0000 00:00:1788916682.431705 1984558 cuda_diagnostics.cc:183] hostname: beelab-files
+I0000 00:00:1788916682.431835 1984558 cuda_diagnostics.cc:190] libcuda reported version is: 580.173.2
+I0000 00:00:1788916682.431867 1984558 cuda_diagnostics.cc:194] kernel reported version is: 580.173.2
+I0000 00:00:1788916682.431872 1984558 cuda_diagnostics.cc:284] kernel version seems to match DSO: 580.173.2
+I0000 00:00:1788916685.191304 1984576 service.cc:153] XLA service 0x5ada59678d20 initialized for platform Host (this does not guarantee that XLA will be used). Devices:
+I0000 00:00:1788916685.191361 1984576 service.cc:161]   StreamExecutor [0]: Host, Default Version (Driver: 0.0.0; Runtime: 0.0.0; Toolkit: 0.0.0; DNN: 0.0.0)
+I0000 00:00:1788916685.593004 1984576 dump_mlir_util.cc:269] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+I0000 00:00:1788916687.334125 1984576 device_compiler.h:208] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+5.9s - extractor 0: [1] JamesU - MustardBumbler/1_29/240903_1319 — starting (both)
+5.9s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [1/22] snip_103230.000_103590.004.flac
+7.8s - extractor 0: rescued 'ins_buzz_high' at 103485.433s (1.367s) as ins_buzz_high+ins_trill
+7.8s - extractor 0: rescued 'ins_buzz_medium' at 103535.380s (1.236s) as ins_buzz_medium+ins_trill
+7.8s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [2/22] snip_106830.000_107190.030.flac
+8.4s - extractor 0: rescued 'ins_buzz_medium' at 107135.197s (1.189s) as ins_buzz_medium+ins_trill
+8.4s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [3/22] snip_110430.000_110790.004.flac
+8.9s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [4/22] snip_114030.000_114390.000.flac
+9.5s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [5/22] snip_117630.000_117990.000.flac
+10.1s - extractor 0: rescued 'animal_dog' at 117680.962s (0.430s) as animal_dog+ins_trill
+10.1s - extractor 0: rescued 'animal_dog' at 117685.495s (0.978s) as animal_dog+ins_trill
+10.1s - extractor 0: rescued 'animal_dog' at 117700.058s (1.350s) as animal_dog+ins_trill
+10.2s - extractor 0: rescued 'animal_dog' at 117770.523s (0.798s) as animal_dog+ins_trill
+10.2s - extractor 0: rescued 'mech_hum_traffic' at 117935.885s (1.039s) as ins_trill+mech_hum_traffic
+10.2s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [6/22] snip_121230.000_121590.000.flac
+10.7s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [7/22] snip_38430.000_38790.000.flac
+11.3s - extractor 0: rescued 'ambient_wind' at 38515.182s (1.655s) as ambient_wind+ins_trill
+11.3s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [8/22] snip_42030.000_42390.000.flac
+11.9s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [9/22] snip_45630.000_45990.000.flac
+12.5s - extractor 0: rescued 'ins_trill' at 45665.989s (0.194s) as ins_trill+mech_plane_jet
+12.5s - extractor 0: rescued 'ins_trill' at 45686.028s (0.140s) as ins_trill+mech_plane_jet
+12.5s - extractor 0: rescued 'ins_trill' at 45716.005s (0.138s) as ins_trill+mech_plane_jet
+12.5s - extractor 0: rescued 'ambient_background' at 45725.809s (0.868s) as ambient_background+ins_trill
+12.5s - extractor 0: rescued 'ambient_background' at 45730.516s (0.839s) as ambient_background+ins_trill
+12.5s - extractor 0: rescued 'ins_trill' at 45735.940s (0.147s) as ambient_background+ins_trill
+12.5s - extractor 0: rescued 'ambient_background' at 45740.478s (0.722s) as ambient_background+ins_trill
+12.5s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [10/22] snip_49230.000_49590.000.flac
+13.1s - extractor 0: rescued 'ambient_background' at 49260.546s (1.017s) as ambient_background+ins_trill
+13.1s - extractor 0: rescued 'ambient_background' at 49265.243s (0.803s) as ambient_background+ins_trill
+13.1s - extractor 0: rescued 'ins_trill' at 49306.038s (0.143s) as ins_trill+mech_auto_truck+mech_hum_traffic
+13.1s - extractor 0: rescued 'ambient_background' at 49320.828s (1.123s) as ambient_background+ins_trill
+13.1s - extractor 0: rescued 'ambient_background' at 49325.540s (0.900s) as ambient_background+ins_trill
+13.2s - extractor 0: rescued 'ins_trill' at 49330.991s (0.128s) as ambient_background+ins_trill
+13.2s - extractor 0: rescued 'ambient_background' at 49335.624s (0.891s) as ambient_background+ins_trill
+13.2s - extractor 0: rescued 'ambient_background' at 49340.912s (0.714s) as ambient_background+ins_trill
+13.2s - extractor 0: rescued 'ambient_background' at 49345.878s (0.742s) as ambient_background+ins_trill
+13.2s - extractor 0: rescued 'ambient_background' at 49350.983s (0.821s) as ambient_background+ins_trill
+13.2s - extractor 0: rescued 'ambient_background' at 49355.907s (0.817s) as ambient_background+ins_trill
+13.2s - extractor 0: rescued 'ins_trill' at 49360.916s (0.142s) as ambient_background+ins_trill
+13.2s - extractor 0: rescued 'ambient_background' at 49370.734s (0.836s) as ambient_background+ins_trill
+13.2s - extractor 0: rescued 'ambient_background' at 49375.932s (0.982s) as ambient_background+ins_trill
+13.2s - extractor 0: rescued 'ambient_background' at 49380.560s (0.910s) as ambient_background+ins_trill
+13.3s - extractor 0: rescued 'ambient_background' at 49385.291s (1.024s) as ambient_background+ins_trill
+13.3s - extractor 0: rescued 'ambient_background' at 49390.809s (1.131s) as ambient_background+ins_trill
+13.3s - extractor 0: rescued 'ambient_background' at 49400.662s (0.915s) as ambient_background+ins_trill
+13.3s - extractor 0: rescued 'ambient_background' at 49405.773s (0.779s) as ambient_background+ins_trill
+13.3s - extractor 0: rescued 'ambient_background' at 49410.946s (0.800s) as ambient_background+ins_trill
+13.3s - extractor 0: rescued 'ins_trill' at 49415.893s (0.148s) as ambient_background+ins_trill
+13.3s - extractor 0: rescued 'ambient_background' at 49420.187s (0.942s) as ambient_background+ins_trill
+13.3s - extractor 0: rescued 'ins_trill' at 49425.938s (0.173s) as ambient_background+ins_trill
+13.3s - extractor 0: rescued 'ambient_background' at 49430.397s (0.892s) as ambient_background+ins_trill
+13.3s - extractor 0: rescued 'ambient_background' at 49435.508s (1.036s) as ambient_background+ins_trill
+13.4s - extractor 0: rescued 'ambient_background' at 49445.350s (0.908s) as ambient_background+ins_trill
+13.4s - extractor 0: rescued 'ambient_background' at 49451.010s (0.931s) as ambient_background+ins_trill
+13.4s - extractor 0: rescued 'ins_trill' at 49461.028s (0.144s) as ambient_background+ins_trill
+13.4s - extractor 0: rescued 'ambient_background' at 49465.925s (0.911s) as ambient_background+ins_trill
+13.4s - extractor 0: rescued 'ambient_background' at 49470.100s (1.091s) as ambient_background+ins_trill
+13.4s - extractor 0: rescued 'ins_trill' at 49475.934s (0.131s) as ambient_background+ins_trill
+13.4s - extractor 0: rescued 'ambient_background' at 49480.356s (1.359s) as ambient_background+ins_trill
+13.4s - extractor 0: rescued 'ambient_background' at 49485.306s (0.821s) as ambient_background+ins_trill
+13.4s - extractor 0: rescued 'ambient_background' at 49500.740s (0.938s) as ambient_background+ins_trill
+13.4s - extractor 0: rescued 'ambient_background' at 49505.932s (0.455s) as ambient_background+ins_trill
+13.5s - extractor 0: rescued 'ambient_background' at 49510.832s (1.028s) as ambient_background+ins_trill
+13.5s - extractor 0: rescued 'ambient_background' at 49535.078s (1.113s) as ambient_background+ins_trill
+13.5s - extractor 0: rescued 'ins_trill' at 49540.978s (0.142s) as ambient_background+ins_trill
+13.5s - extractor 0: rescued 'ambient_background' at 49545.688s (0.814s) as ambient_background+ins_trill
+13.5s - extractor 0: rescued 'ambient_background' at 49550.809s (0.858s) as ambient_background+ins_trill
+13.5s - extractor 0: rescued 'ambient_background' at 49555.308s (1.192s) as ambient_background+ins_trill
+13.5s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [11/22] snip_60030.000_60389.960.flac
+14.1s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [12/22] snip_63630.000_63990.000.flac
+14.7s - extractor 0: rescued 'ambient_background' at 63660.531s (0.758s) as ambient_background+ins_trill
+14.7s - extractor 0: rescued 'ambient_background' at 63815.416s (1.031s) as ambient_background+ins_trill
+14.7s - extractor 0: rescued 'ambient_background' at 63825.483s (1.153s) as ambient_background+ins_trill
+14.7s - extractor 0: rescued 'ambient_background' at 63835.481s (1.033s) as ambient_background+ins_trill
+14.7s - extractor 0: rescued 'ambient_background' at 63850.219s (1.377s) as ambient_background+ins_trill
+14.7s - extractor 0: rescued 'ins_trill' at 63855.918s (0.217s) as ambient_background+ins_trill
+14.7s - extractor 0: rescued 'ins_trill' at 63955.572s (1.084s) as ambient_background+ins_trill
+14.7s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [13/22] snip_67230.000_67590.000.flac
+15.3s - extractor 0: rescued 'ins_buzz_medium' at 67445.685s (0.644s) as ins_buzz_medium+ins_trill
+15.3s - extractor 0: rescued 'animal_bird_goose' at 67465.910s (0.184s) as animal_bird_goose+ins_trill
+15.3s - extractor 0: rescued 'animal_bird_goose' at 67541.002s (0.251s) as animal_bird_goose+ins_trill
+15.3s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [14/22] snip_70830.000_71190.000.flac
+15.9s - extractor 0: rescued 'ins_buzz_medium' at 70995.917s (0.540s) as ambient_background+ins_buzz_medium+mech_auto_truck
+16.0s - extractor 0: rescued 'ambient_background' at 71015.524s (0.792s) as ambient_background+ins_buzz_medium
+16.0s - extractor 0: rescued 'ins_buzz_medium' at 71125.507s (0.782s) as ambient_background+ins_buzz_medium
+16.0s - extractor 0: rescued 'ambient_background' at 71130.766s (0.421s) as ambient_background+ins_buzz_medium
+16.0s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [15/22] snip_74430.000_74790.004.flac
+16.6s - extractor 0: rescued 'ins_buzz_medium' at 74645.766s (0.706s) as ins_buzz_medium
+16.6s - extractor 0: rescued 'ins_buzz_medium' at 74650.351s (0.961s) as ins_buzz_medium+ins_trill
+16.6s - extractor 0: rescued 'ins_buzz_medium' at 74695.182s (1.081s) as ins_buzz_medium+ins_trill
+16.6s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [16/22] snip_78030.000_78390.030.flac
+17.2s - extractor 0: rescued 'ins_buzz_medium' at 78165.356s (1.367s) as ins_buzz_medium
+17.2s - extractor 0: rescued 'ins_buzz_medium' at 78205.142s (1.352s) as ins_buzz_medium+ins_trill
+17.2s - extractor 0: rescued 'ins_buzz_medium' at 78210.619s (0.924s) as ins_buzz_medium+ins_trill
+17.2s - extractor 0: rescued 'ins_buzz_medium' at 78300.906s (0.818s) as ins_buzz_medium
+17.2s - extractor 0: rescued 'ins_buzz_medium' at 78310.362s (0.988s) as ins_buzz_medium
+17.2s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [17/22] snip_81630.000_81990.004.flac
+17.8s - extractor 0: rescued 'ins_buzz_medium' at 81821.027s (0.471s) as ins_buzz_medium+ins_trill
+17.8s - extractor 0: rescued 'ins_buzz_medium' at 81860.542s (0.891s) as ins_buzz_medium+ins_trill
+17.8s - extractor 0: rescued 'ins_buzz_medium' at 81870.207s (1.070s) as ins_buzz_medium+ins_trill
+17.8s - extractor 0: rescued 'ins_buzz_medium' at 81890.098s (1.783s) as ins_buzz_medium+ins_trill
+17.8s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [18/22] snip_85230.000_85590.030.flac
+18.4s - extractor 0: rescued 'ins_buzz_medium' at 85300.988s (0.932s) as ins_buzz_medium
+18.4s - extractor 0: rescued 'ins_buzz_medium' at 85305.706s (0.571s) as ins_buzz_medium+ins_trill
+18.4s - extractor 0: rescued 'ins_buzz_medium' at 85320.882s (0.781s) as ins_buzz_medium+ins_trill
+18.4s - extractor 0: rescued 'ins_buzz_medium' at 85325.524s (0.992s) as ins_buzz_medium+ins_trill
+18.4s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [19/22] snip_88830.000_89190.004.flac
+19.1s - extractor 0: rescued 'ins_buzz_medium' at 88885.736s (0.406s) as ins_buzz_medium+ins_trill
+19.1s - extractor 0: rescued 'ins_buzz_medium' at 88895.663s (0.839s) as ins_buzz_medium+ins_trill
+19.1s - extractor 0: rescued 'ins_buzz_medium' at 89090.464s (1.083s) as ins_buzz_medium+ins_trill
+19.1s - extractor 0: rescued 'ins_buzz_medium' at 89115.301s (0.882s) as ins_buzz_medium+ins_trill
+19.1s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [20/22] snip_92430.000_92790.030.flac
+19.7s - extractor 0: rescued 'ins_buzz_medium' at 92461.033s (0.668s) as ins_buzz_medium+ins_trill+mech_plane_prop
+19.7s - extractor 0: rescued 'ins_buzz_medium' at 92515.337s (1.555s) as ins_buzz_medium+ins_trill
+19.7s - extractor 0: rescued 'ins_buzz_medium' at 92625.848s (1.023s) as ins_buzz_medium+ins_trill
+19.7s - extractor 0: rescued 'ins_buzz_medium' at 92665.844s (0.965s) as ins_buzz_medium+ins_trill
+19.7s - extractor 0: rescued 'ins_buzz_medium' at 92696.001s (0.797s) as ins_buzz_medium+ins_trill
+19.7s - extractor 0: rescued 'ins_buzz_medium' at 92725.934s (0.619s) as ins_buzz_medium+ins_trill
+19.7s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [21/22] snip_96030.000_96390.004.flac
+20.3s - extractor 0: rescued 'ins_buzz_medium' at 96200.417s (0.804s) as ins_buzz_medium+ins_trill
+20.3s - extractor 0: rescued 'ins_buzz_medium' at 96240.681s (0.579s) as ins_buzz_medium+ins_trill
+20.3s - extractor 0: rescued 'ins_buzz_medium' at 96310.104s (0.954s) as ins_buzz_medium+ins_trill
+20.3s - extractor 0: rescued 'ins_buzz_medium' at 96330.918s (1.047s) as ins_buzz_medium+ins_trill
+20.3s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [22/22] snip_99630.000_99990.030.flac
+20.9s - extractor 0: rescued 'ins_buzz_medium' at 99790.919s (0.903s) as ins_buzz_medium+ins_trill+mech_plane_prop
+20.9s - extractor 0: rescued 'ins_buzz_medium' at 99871.004s (0.825s) as ambient_scraping+ins_buzz_medium+ins_trill+mech_plane_prop
+W0000 00:00:1788916706.092401 1984573 cpu_allocator_impl.cc:82] Allocation of 1231204608 exceeds 10% of free system memory.
+W0000 00:00:1788916729.443135 1984576 cpu_allocator_impl.cc:82] Allocation of 1231204608 exceeds 10% of free system memory.
+W0000 00:00:1788916751.075128 1984572 cpu_allocator_impl.cc:82] Allocation of 1231204608 exceeds 10% of free system memory.
+W0000 00:00:1788916773.163545 1984572 cpu_allocator_impl.cc:82] Allocation of 1231204608 exceeds 10% of free system memory.
+W0000 00:00:1788916795.076675 1984572 cpu_allocator_impl.cc:82] Allocation of 1231204608 exceeds 10% of free system memory.
