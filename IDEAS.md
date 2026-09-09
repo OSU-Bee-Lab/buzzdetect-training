@@ -335,15 +335,45 @@ So they need different fixes and should stop being treated as one item:
   every dose. It has now defeated two targeted interventions (`harmonic-comb`,
   `mech-margin`), so nothing cheap and loss-shaped is left for it. The remaining
   lead for `1_95` specifically is **night-negatives** — in-domain hard negatives
-  from its own recorder — which needs a data decision from Luke. (The
+  from its own recorder — which needs a data decision from Luke, and which the
+  measurement below now argues for much more strongly than when it was proposed. (The
   listen-to-the-audio item below is `1_150`'s, not this fold's.)
+- **`1_95`'s threshold is set by two five-minute windows.** Rebasing
+  `cv_baseline`'s false positives onto Even Sample's snips (2026-09-09): of the
+  42 negatives above the fold's own fpr0.005 threshold, **22 fall in
+  `260506_1924_s95760` (22:00-22:05) and 11 in `_s88560` (20:00-20:05)** — 79% of
+  them in 2 of the fold's 24 snips, and 32 of the 42 are `mech_auto`. Of the top
+  60 negatives by buzz score, 47 are in those same two snips. Dropping just those
+  snips' *negatives* takes the fold from 0.034 to 0.059 (s95760) to **0.097**
+  (both) — a diagnostic, not a legitimate metric, but it says the fold's
+  near-chance score is a property of ~10 minutes of audio, not of its whole day.
+
+  **This is the same event `tools/night-positives/README.txt` already
+  documented** — a ~5% nighttime false-positive spike in a 20-minute bin starting
+  at 22:00 on this exact recording, found independently with `model_general_v3`,
+  with the audio already extracted to `tools/night-positives/260507_2200.mp3`.
+  Two unrelated models, two eras apart, fail in the same ten minutes. That is
+  the strongest evidence in the file for **night-negatives**, and it means the
+  first dose of it could be built from audio that is already on disk.
+
 - **1_150 is a positives problem** — its negatives are unremarkable and its buzz
   frames are simply indistinguishable from its own background, despite being 88 s
   of plain `ins_buzz_medium` with 6503 s of support. Nothing structural explains it.
 
-**What to do — listen to the frames, and only 1_150 now.** Deferred five times.
-It is a narrow target: **88 seconds of audio.** Is the buzz audible? Is the
-annotation right? Is recorder gain or placement different? Note `context-embedder`
+**DONE 2026-09-09 — Luke listened, and the annotations are sound.** The buzzes
+are real: "fairly quiet and there's background noise, but they're there. Most of
+them are very quiet, but still legitimate targets." So the two cheap
+explanations are dead — this is **not** a mislabelling and not a phantom. `1_150`
+is a genuine low-SNR detection problem, which is the hardest of the possible
+answers and the one that says the fold is honest. Do not re-open it as an
+annotation-quality question; if it is attacked again, attack it as quiet-buzz
+sensitivity (and note `context-embedder` pushed its threshold *down*,
+-1.819 -> -2.107, without helping, so a better representation alone did not
+touch it).
+
+The original framing, kept because it is what got answered: a narrow target of
+**88 seconds of audio.** Is the buzz audible? Is the annotation right? Is
+recorder gain or placement different? Note `context-embedder`
 pushed its threshold further down (-1.819 → -2.107), so a better representation
 does not touch it.
 
