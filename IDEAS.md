@@ -84,13 +84,34 @@ max \|d\| 1.91 vs 0.91), its few strong directions being sparse, non-negative an
 linearly separable, while AVES spreads the same information thinly across a
 dense zero-centred basis.
 
-So E1 is closed on the CV magnitude alone: a middle layer would have to recover
-~0.15 sensitivity the final layer has nowhere, and one re-extraction per layer
-buys no reason to expect it. **The live lead the diagnostic actually points at
-is a non-linear head over AVES's distributed representation** — a linear probe
-over Dropout(0.2) is the worst available reader of that geometry, and the
-embeddings are already on disk, so it costs no extraction. Parked under the
-standing 1-layer injunction rather than proposed.
+**E1 is downgraded to closed-on-cost, not refuted.** The original wording here
+said a middle layer "would have to recover ~0.15 sensitivity the final layer has
+nowhere." That overstates it, and the geometry table above is why: the
+information is *not* nowhere. AVES's per-dimension separation is the better of
+the two on average — what fails is the readout, not the representation.
+
+Two things also argue that the last layer is a systematically bad place to have
+tested. It is the layer specialised to the masked-prediction pretext task, and
+last-layer-worst is the standard wav2vec2/HuBERT layer-wise probing result
+rather than bad luck here. And `embedders/aves/embedder.py` mean-pools it
+(`layer_outputs[-1].mean(dim=1)`, ~49 steps) — pooling a signed zero-centred
+basis can cancel, where YAMNet's ReLU-non-negative features accumulate under the
+same operation.
+
+So: **E1 stays closed because a per-layer sweep costs a re-extraction each for
+no specific reason to prefer one layer, not because AVES is empty.** Reopen it
+if a cheaper readout fix lands first and works — that would establish the
+representation is usable and make "which layer is most usable" worth paying for.
+
+**The live lead is the readout, and it is cheaper than any layer.** The failure
+signature is overfitting a distributed representation across sites, not
+ignorance: 768 weakly-informative dims, leave-one-fold-out over deployments, and
+`1_29`'s val_sens peaking at 0.0020 in epoch 3 before decaying to 0 while train
+loss keeps falling. That points at regularisation, input scaling and
+dimensionality — all pure transforms of embeddings already on disk, no
+extraction, no architecture change, minutes per CV. A non-linear head is the
+escalation *after* those, and only that step needs the 1-layer injunction
+lifted.
 
 Cheap now regardless of the verdict: AVES extraction went 14.3 h -> 1.0 h
 (main, `8fe1336`, batched on the GPU) and `medium`'s AVES embeddings are in the
