@@ -74,4 +74,53 @@ because `combined-revalidate`'s model directory went with its pruned worktree.
 
 ## Results
 
+All 5 folds converged well inside the raised cap — 502-1000 epochs against the
+3000 guard, best epoch always within ~1% of the last. The cap is not binding,
+so this is a comparison of two converged models. (It also confirms the probe's
+warning was real: the control stops at 19-160, the standardized run needs
+500-1000. Standardization costs ~6x the epochs.)
+
+Paired against `combined_control`, sens@FPR 0.005:
+
+| fold | buzz frames | control | standardized | delta |
+|---|---|---|---|---|
+| JamesU - MustardBumbler/1_29 | 2144 | 0.436 | 0.436 | 0.000 |
+| Lily - Fit+Fast/2023_R3_Marysville/53 | 1031 | 0.424 | 0.421 | -0.003 |
+| Lily Adam - One Hive/.../willard/2024-08-07/1_11 | 305 | 0.223 | 0.236 | +0.013 |
+| Luke - Diel Drivers/2026-05-06/1_95 | 433 | 0.032 | 0.027 | -0.005 |
+| Luke - Diel Drivers/2026-04-08/1_150 | 146 | 0.034 | 0.185 | +0.151 |
+
+Headline **0.230 -> 0.261 (+0.031)**, 2 up / 2 down / 1 flat.
+
 ## Conclusion
+
+**Negative, despite a positive headline.** The entire +0.031 is one fold:
+1_150, +0.151. Drop it and the mean delta is +0.001 across the other four.
+
+1_150 is the fold the handoff flagged as untrustworthy in advance — 146 buzz
+frames, and it moved 0.007 -> 0.062 between two *identical* runs earlier in
+this era. A +0.151 swing on it is inside the behaviour that fold has already
+demonstrated without any code change, and the pre-registered reading was that a
+real effect has to show on the two rich folds. It does not: 1_29 is 0.000 and
+Fit+Fast is -0.003, both far inside the 0.014-0.016 noise floor, and both are
+the folds where the probe has enough buzz frames to resolve a 3% change.
+
+So the hypothesis is not supported at the scale it predicted. The scale
+mismatch between the two blocks is real and measured (~8x sd), and
+standardization does remove it, but on the rich folds the probe's headline is
+unchanged by removing it — consistent with the hypothesis's own caveat that the
+521 sigmoid scores carry no new audio information, only a differently-shaped
+readout of the block beside them. Fixing their gradient share buys nothing
+because there was nothing extra there to gain.
+
+Not adopting `--standardize`. The flag stays in, off by default: it is
+fold-safe, correct, round-trips through save/load, and costs ~6x epochs for no
+measured gain, so it is available if a future embedder genuinely mixes
+heterogeneous blocks rather than a block and its own readout.
+
+The one thing worth carrying forward is not about standardization: **1_150 and
+1_95 are not measuring anything.** Both sit at 0.03 in the control and both
+have swung by more than any effect this era has produced. Two of five folds
+contributing pure noise to a 5-fold mean is why the headline moved +0.031 on a
+null result. That belongs in IDEAS as a fold-weighting or thin-fold-exclusion
+question, not as another embedder experiment.

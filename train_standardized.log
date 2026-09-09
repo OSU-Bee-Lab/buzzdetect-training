@@ -10,3 +10,25 @@
 2026-09-08 19:19:42.806323: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:169] kernel reported version is: NOT_FOUND: could not find kernel module information in driver version file contents: "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.173.02  Release Build  (dvs-builder@U22-I3-AK02-24-4)  Tue Jun 23 08:17:01 UTC 2026
 GCC version:  gcc version 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 
 "
+[1/5] JamesU - MustardBumbler/1_29: 920 epochs (best 913), val_loss 0.9403, 74440/7617 frames train/val, sens@fpr0.5%=0.436
+[2/5] Lily - Fit+Fast/2023_R3_Marysville/53: 1000 epochs (best 995), val_loss 0.9343, 74517/7540 frames train/val, sens@fpr0.5%=0.421
+/home/luke/projects/buzzdetect-training/.local/worktrees/standardize-blocks/03_train/surprisal.py:99: RuntimeWarning: divide by zero encountered in log
+  bce = -(target * np.log(probs_c) + (1.0 - target) * np.log(1.0 - probs_c))
+/home/luke/projects/buzzdetect-training/.local/worktrees/standardize-blocks/03_train/surprisal.py:99: RuntimeWarning: invalid value encountered in multiply
+  bce = -(target * np.log(probs_c) + (1.0 - target) * np.log(1.0 - probs_c))
+[3/5] Lily Adam - One Hive/recorders/willard/2024-08-07/1_11: 502 epochs (best 491), val_loss 0.7396, 75127/6930 frames train/val, sens@fpr0.5%=0.236
+[4/5] Luke - Diel Drivers/2026-04-08/1_150: 859 epochs (best 828), val_loss 0.9354, 77110/4947 frames train/val, sens@fpr0.5%=0.185
+[5/5] Luke - Diel Drivers/2026-05-06/1_95: 940 epochs (best 937), val_loss 1.0577, 74485/7572 frames train/val, sens@fpr0.5%=0.027
+
+[combined_standardized] sens@fpr0.5% per deployment: 0.261
+  mean over 5/5 held-out fold(s), each tuned to 0.5% FPR on its own audio (~32 negative frames set each threshold)
+  threshold: mean -0.801 — what each fold's own audio set, not one number to ship
+    JamesU - MustardBumbler/1_29: threshold -0.991, sensitivity 0.436 (~27 negative frames)
+    Lily - Fit+Fast/2023_R3_Marysville/53: threshold -1.398, sensitivity 0.421 (~32 negative frames)
+    Lily Adam - One Hive/recorders/willard/2024-08-07/1_11: threshold -0.777, sensitivity 0.236 (~33 negative frames)
+    Luke - Diel Drivers/2026-04-08/1_150: threshold -1.438, sensitivity 0.185 (~24 negative frames)
+    Luke - Diel Drivers/2026-05-06/1_95: threshold 0.597, sensitivity 0.027 (~35 negative frames)
+  an oracle: each threshold is placed using that fold's labels, so read this as the ceiling on operator tuning
+  per-fold spread understates uncertainty about a new deployment (training pools overlap heavily)
+
+[combined_standardized] rotations done; shipped model not trained (default). Pass --train-shipped, or run --skip-cv later with this --name.
