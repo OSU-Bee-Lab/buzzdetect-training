@@ -9,7 +9,7 @@ detached driver, `./run_grid.sh`, in this worktree.
 cd /home/luke/projects/buzzdetect-training/.local/worktrees/probe-grid
 tail -5 grid_driver.log            # which run is up, and the sx tail of each finished one
 ls -d models/L*/                   # runs started
-pgrep -af run_grid.sh              # driver alive?
+pgrep -af "[r]un_grid.sh"          # driver alive? BRACKET IT — see below
 ```
 
 `grid_driver.log` prints `== <time> <name> : <flags>` when a run starts and
@@ -60,12 +60,20 @@ in `notes.md`, and the log line says which lever paid and by how much. Use
 `--baseline-model models/cv_baseline`. Remember `main_commit` is main's HEAD at
 logging time, not the worktree's base.
 
-### Do not wrap the driver in a waiter
+### Bracket every `pgrep -f` pattern
 
-The first launch attempt put `run_grid.sh` behind a detached
-`while pgrep ...; do sleep; done` loop and **the waiter was killed within
-minutes**, so the grid never started. That is the exact failure CLAUDE.md's
-"Running long jobs" documents. Relaunch `run_grid.sh` directly.
+Claude Code runs Bash calls as `bash -c '<command>'`, so **`pgrep -f foo`
+matches the shell that is asking** and reports a match for a job that is not
+running. Use `pgrep -af "[r]un_grid.sh"`, not `pgrep -af run_grid.sh`.
+
+This cost the first launch of this grid. `run_grid.sh` was put behind a detached
+`while pgrep -f <job>; do sleep; done` waiter, and the waiter's own pgrep
+matched the waiter, so the loop could never exit and the grid never started. It
+was first written up here as the harness killing the waiter (the documented
+failure below) — **that diagnosis was wrong**. Now in CLAUDE.md.
+
+Prefer the completion marker over process polling anyway: the driver logs
+`== <name> done rc=` and a final `== ... COMPLETE`.
 
 ## 4. If it died
 
