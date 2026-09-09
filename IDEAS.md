@@ -76,6 +76,23 @@ i.e. half) was recomputed on the current `medium` embeddings, and it **inverts**
 | YAMNet 1024-d | 0.155 | 0.022 | 0.260 | 0.896 |
 | AVES 768-d | **0.242** | **0.074** | 0.226 | 0.000 |
 
+**The replacement number, and the one worth quoting.** PCA-whitening to k
+dimensions (fit on training folds only, converged `lbfgs` readout, same metric
+and rotation) measures concentrated-vs-distributed directly:
+
+| dims kept | YAMNet | (% of its best) | AVES | (% of its best) |
+|---|---|---|---|---|
+| 16 | 0.235 | 90% | 0.055 | 28% |
+| 64 | 0.248 | 95% | 0.114 | 59% |
+| 256 | 0.242 | 93% | 0.182 | 94% |
+| all | 0.261 | 100% | 0.194 | 100% |
+
+**YAMNet keeps 90% of its sensitivity in 16 principal directions; AVES keeps
+28%, and needs ~256 to reach 94%.** This is independent of the
+training-procedure confound that sank the rest of `aves-readout` — every row is
+a converged fit — so it is the one result from that run that stands alone.
+Full detail in `exp/aves-readout:notes.md`.
+
 **Do not cite 0.13-vs-0.23 again.** It was a scale artifact: YAMNet's
 activations are 89.6% exact zeros, so any mean across its basis is diluted by
 ~900 dead dimensions. What survives is the *shape* claim, not the magnitude —
@@ -103,15 +120,31 @@ no specific reason to prefer one layer, not because AVES is empty.** Reopen it
 if a cheaper readout fix lands first and works — that would establish the
 representation is usable and make "which layer is most usable" worth paying for.
 
-**The live lead is the readout, and it is cheaper than any layer.** The failure
-signature is overfitting a distributed representation across sites, not
-ignorance: 768 weakly-informative dims, leave-one-fold-out over deployments, and
-`1_29`'s val_sens peaking at 0.0020 in epoch 3 before decaying to 0 while train
-loss keeps falling. That points at regularisation, input scaling and
-dimensionality — all pure transforms of embeddings already on disk, no
-extraction, no architecture change, minutes per CV. A non-linear head is the
-escalation *after* those, and only that step needs the 1-layer injunction
-lifted.
+**The live lead is the readout, and it is cheaper than any layer.** Run as
+`aves-readout` (2026-09-09) — see "Probe-convergence levers" below. **The
+mechanism guessed here was wrong** and is corrected there: the probe was *not*
+overfitting. It was **undertrained**. `val_sens` rises monotonically to the
+final epoch in all 5 folds, the training pool is 43 folds not 5
+([[training-data-character]] — "5 rotating folds" is the eval split), and
+training runs ~2 gradient steps per epoch before `EarlyStopping` halts it on a
+`val_loss` plateau. A converged offline linear readout of the same embeddings
+reaches 0.194 against the 0.074 logged, and YAMNet lifts too (0.218 -> 0.261).
+If you find "val_sens peaks at 0.0020 in epoch 3 then decays" quoted anywhere
+(it was in this section, and in `exp/aves-probe`'s `notes.md`), it is wrong —
+the first ~17 epochs of a 153-epoch run misread as a trajectory.
+
+**A non-linear head over frozen AVES is NOT blocked and is cheap — run it.**
+An earlier version of this section said it was parked under the standing
+1-layer injunction. That was a misreading: the injunction is about *runtime*
+and bans unfreezing **backbone** layers, not head depth. An MLP over frozen
+embeddings is ~1 s/epoch, the same order as the linear probe. It is also the
+single most informative cheap experiment available on AVES, because it
+separates "needs a better reader" from "needs the representation reshaped" —
+see "What survives unfreezing" below. Caveat before running it:
+`archive/2026-06_fixed-test/notes/mlp-head-repro.md` is a clear negative
+(-0.028, non-overlapping CIs) but its own conclusion scopes itself — "buzz is
+already linearly accessible in *this space*" — and that space is YAMNet's.
+The PCA result is the reason to expect a different answer here.
 
 Cheap now regardless of the verdict: AVES extraction went 14.3 h -> 1.0 h
 (main, `8fe1336`, batched on the GPU) and `medium`'s AVES embeddings are in the
@@ -184,6 +217,65 @@ Each is independent and CV-cheap (~9 min). Change one at a time.
 finding is "the probe never converged" and L5-L9 are noise. If they don't, the
 gap is in the loss/geometry levers and the offline/pipeline mismatch needs its
 own control.
+
+## What survives unfreezing — read before spending a fine-tune
+
+*Evidence: **E3** reasoning over `aves-readout` (2026-09-09) plus **E2**
+fine-tuning results. No fine-tune has been run since the CV rework, so this is
+a prediction, not a measurement. Written because the frozen-probe grid above is
+the intended input to a later unfreeze, and half of it will not transfer.*
+
+The plan this anticipates: settle the probe-convergence levers cheaply on the
+frozen probe, *then* unfreeze and retrain. That sequencing is right. What it
+must not do is carry the wrong half of the grid across.
+
+**Transfers, and gets more valuable:**
+
+- **L1 (restore on `val_sens`) and L2 (stopping slack).** `restore-on-sens`
+  measures the sens/`val_loss` divergence it targets at **+0.03-0.05 on
+  `unfreeze_more_1e5`** against ~+0.006 on the frozen probe, and names it "a
+  backbone-fine-tuning phenomenon." So the stopping rule is worth several times
+  more once the trunk moves. Fixing it *before* a long run is the whole point —
+  otherwise a 24 h fine-tune gets halted by a rule that stops while the shipped
+  metric is still rising.
+- **L3 (batch size)** resolves itself: full-batch is a frozen-probe luxury that
+  disappears once activations must be stored. But every epoch-denominated
+  setting (patience, caps) is then measured in different units — re-derive, do
+  not copy.
+
+**Does not transfer:**
+
+- **L5-L7 (dropout, label smoothing, weight decay).** Frozen, these regularise
+  ~11.5k trainable parameters (768x15). Unfrozen AVES is ~95M. The archive
+  already shows the scale of the shift: trunk fine-tuning needs lr 1e-5 against
+  the frozen probe's 2e-3, 200x. Anything capacity-dependent must be re-found
+  after unfreezing; treat frozen optima as uninformative priors, not defaults.
+
+**Do not let the frozen ranking choose the embedder.** This is the important
+one. YAMNet's frozen advantage is substantially an artifact of *what it is* —
+the penultimate layer of a supervised classifier whose 521 AudioSet classes
+include `Buzz`, `Bee, wasp, etc.`, `Insect`, `Mosquito`. Its embedding is
+pre-shaped so that one linear layer separates exactly this concept: the maximum
+possible head start for a frozen linear probe. Unfreezing removes precisely that
+advantage, because once the representation can be reshaped, "already linearly
+separable" stops being worth anything. AVES is self-supervised and was never
+shaped for linear separability of anything, and the PCA result says its buzz
+evidence exists but is smeared over ~256 directions — which is the thing
+fine-tuning is for. **Expect the 0.194-vs-0.261 gap to narrow under fine-tuning,
+and do not rule out an inversion.** The frozen-probe comparison is biased
+against SSL backbones by construction.
+
+**Feasibility, before anyone commits.** AVES base is ~95M parameters on a 4 GB
+GTX 1650: Adam moments alone are ~1.1 GB at fp32 before activations, so a full
+unfreeze is likely infeasible and the realistic version is a top-N transformer
+layer unfreeze. YAMNet trunk-ft was ~80 s/epoch against ~1 s frozen; AVES will
+be worse. Measure a single epoch before budgeting ([[machine-gpu-constraints]]).
+
+**The cheap decision gate.** A non-linear head on *frozen* AVES costs minutes
+and answers the question a fine-tune would answer expensively: if an MLP closes
+most of the gap, the information is there and merely needs a better reader, so
+unfreezing is very likely to pay; if it doesn't, the representation itself may
+need to move. Run that before budgeting a fine-tune, not after.
 
 ## near-chance-deployments
 
@@ -438,8 +530,10 @@ means neither is a priority.
   and depth is settled: frozen 0.216 → 14-only 0.234 → **13-14 0.262** → 12-14
   0.229, a true interior optimum. It is parked, not dismissed: it needs a
   `yamnet_trunk` re-extraction (the `medium` cache went with the pruned
-  worktrees), it is the expensive config (~80 s/epoch vs ~1 s), and a standing
-  injunction limits training to one layer. Revisit when that lifts. LoRA is a
+  worktrees), it is the expensive config (~80 s/epoch vs ~1 s), and the standing
+  injunction bans unfreezing backbone layers. Revisit when that lifts — note
+  the injunction is about *runtime* and does not restrict head depth, so an
+  MLP head over frozen embeddings is available now. LoRA is a
   weak follow-up now that plain FT works — it is a transformer technique and
   inserting it into YAMNet's conv layers is non-standard.
 - **[no era — standing policy] `large`-set confirmation.** **Training on `large` is forbidden without Luke
