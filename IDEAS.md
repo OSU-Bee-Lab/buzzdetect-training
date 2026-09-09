@@ -623,10 +623,37 @@ buzz/non-buzz mean-logit gap are a two-minute read on any model with
 revision. The gap in particular is the diagnostic that explains a fold's
 sensitivity without reference to its threshold.
 
-## shared-trunk-head — give cross-class supervision a path to the buzz neuron
+## Closed (null): shared-trunk-head — cross-class supervision reaching buzz
 
-*Evidence: the **structural fact** below is read off current code, not measured.
-The MLP-head negative it revises is **E1/E2**. The proposal itself is untested.*
+*Evidence: **E3** — `shared-trunk-head` (2026-09-09), a 3-CV width ladder. Ran
+and closed on the current roster. The **structural fact** below is read off
+current code and still holds; only the proposal was tested.*
+
+**Result: null.** h = 64 / 256 / 1024 → 0.219 / 0.221 / 0.226 against baseline
+0.218, folds split 3 up / 2 down at every width, all inside `probe-grid`'s
+~0.027 MDE and inside the baseline's own n=3 range (0.208-0.227). Not a
+negative — no width hurt — but nothing to build on. **1_95, the fold the
+mechanism was aimed at, did not move at any width** (-0.005 / +0.002 / -0.007),
+which is the direct answer to `mech-margin`'s "a linear readout cannot do this,
+a non-linear stage might": given the non-linear stage, it still doesn't.
+The trunk reaches the same mean `best_val_loss` (0.907 vs 0.910) in 2.5x fewer
+epochs — same destination, shorter path — so YAMNet's code already carries what
+the trunk would have learned. `--hidden` is in the code, default 0.
+
+**Step (2) (per-neuron buzz weighting on top of the trunk) is unblocked but
+deprioritised, not closed.** Its premise was that a weighted buzz loss needs
+something to be weighted *against*; the trunk supplies that and buys nothing,
+so the follow-up is loss tuning over a structure with no demonstrated headroom.
+
+**Live residue, and it is a diagnostic rather than an architecture run:** the
+two rich folds trade consistently — 1_29 gains ~+0.03 at all three widths while
+Fit+Fast loses at all three, both above the ~0.019 repeat movement for
+>1000-buzz folds, neither flipping sign across three runs. The mean is null
+because they cancel. Nobody has asked what distinguishes those two deployments.
+
+The structural reasoning that motivated it is retained below, because the
+`binary`-control prediction at the end of it is still untested and still a
+valid check on the framing.
 
 **The structural fact.** `train.py` builds `Input -> Dropout(0.2) ->
 Dense(n_classes)` — one layer, no hidden stage. So `ins_buzz`'s logit is a
