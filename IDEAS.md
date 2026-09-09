@@ -342,6 +342,25 @@ means neither is a priority.
   embeddings first** — it needs no training and no re-extraction, and it is a
   far cheaper filter on whether a layer sweep is worth one.
 
+- **[E3] Frame length, isolated from embedder — the `perch-probe` follow-up.**
+  `perch-probe` (2026-09-09) came out +0.026 and **inconclusive**: Perch's 5.0 s
+  frame moved the labelling rule at the same time as the embedder, because
+  `overlap_event_s = framelength_s * overlap_event_prop`. At 0.2 that is a 1.0 s
+  overlap requirement against YAMNet's 0.192 s, and the median buzz annotation
+  is 1.00 s — 31% of buzz events can no longer label a grid frame at all and
+  enter only through centred rescue (488 rescues vs YAMNet's 187). Perch ends up
+  calling 17,970 frame-seconds buzz where YAMNet calls 9,618.
+  **Per-fold dilution predicted the per-fold delta exactly**: the two folds where
+  buzz-labelled audio inflated ~2.9x gained +0.131 each, the fold where it barely
+  moved (1_29, 1.22x, and the only fold rich enough to resolve an effect) lost
+  0.195. Read that as a measurement of the relabelling.
+  The experiment worth running is **YAMNet re-extracted at a 5 s effective
+  frame** — one variable, and it also answers whether a coarser frame is worth
+  having on its own. Design note: hold **`overlap_event_s` absolute**, not
+  `overlap_event_prop`, or the control reproduces the same confound. Same
+  `framehop-overlap` caveat applies — its `folds_sx.csv` is not comparable to
+  `cv_baseline`, so this is two CV runs, not one.
+
 - **[no era — infrastructure] Timestamp join for provenance.** `frametimes.csv` isn't on disk for current
   idents — it was added to the extractor after they were last extracted and the
   fingerprint hasn't changed since. `frame_index` joins to it whenever a fold
