@@ -117,6 +117,74 @@ Cheap now regardless of the verdict: AVES extraction went 14.3 h -> 1.0 h
 (main, `8fe1336`, batched on the GPU) and `medium`'s AVES embeddings are in the
 shared cache. Any future AVES question is one CV run, not a day.
 
+## Probe-convergence levers — grid these
+
+*Evidence: **E3**. Motivated by `exp/aves-readout` (2026-09-09); every number
+below is offline (`sklearn` `lbfgs`, `class_weight='balanced'`, binary) and is a
+**lead, not a pipeline result**. The offline readout reaches 0.261 on YAMNet
+against `cv_baseline`'s 0.218 and 0.194 on AVES against the shipped probe's
+0.074 — but it changes every lever at once, so which one pays is unmeasured.*
+
+**Why this is not the hyperparameter tuning the Constraints warn off.** The
+shipped probe does **~2 gradient steps per epoch** (`train.py:132`,
+`size_batch = 65568` against ~72k training frames) and stops on a `val_loss`
+plateau while `val_sens` is still rising — in all 5 AVES folds the best
+`val_sens` is at or within two epochs of the *final* epoch. That is a
+convergence bug, not a tuning preference, and it sits under every number in
+`log.jsonl`. Grid the levers below **on YAMNet** first, since a lift there moves
+the baseline itself.
+
+Each is independent and CV-cheap (~9 min). Change one at a time.
+
+- **L1. Stopping metric — `restore_best_weights` on `val_sens` not `val_loss`.**
+  Implementation already exists and is caveated-positive:
+  `archive/2026-08_cv-medium-v1/notes/restore-on-sens.md`, +0.014 (9 up/0 down),
+  shelved on the grounds that "the frozen probe's `val_loss` barely diverges
+  from sens." That is a YAMNet statement and it is false for AVES —
+  `1_29`'s `val_loss` bottoms at epoch 131 while `val_sens` climbs to 153.
+  **Highest prior of anything here.**
+- **L2. `min_delta` / patience.** `EarlyStopping(patience=50,
+  min_delta=0.002)`. `restore-on-sens` attributes ~+0.008 of its +0.014 to the
+  restore-slack alone (its `stopping-rule-scale` lever), never run separately.
+- **L3. Batch size.** 65568 is full-batch; 2 steps/epoch is why ~150 epochs is
+  only ~300 Adam steps. Try 1024/4096 for ~70x more steps per epoch. Interacts
+  with the epoch cap and with L1/L2 — run it after them, not with them.
+  `archive/.../std-convergence.md` looked at LR and clipping for a related
+  convergence caveat and found nothing; it did **not** try batch size.
+- **L4. Epoch cap.** 400. `standardize-blocks` needed 3000 to converge and all
+  folds then landed at 502-1000. Cheap to raise; only matters if L1/L2 stop
+  firing early.
+- **L5. Input `Dropout(0.2)`.** Applied directly to the embedding
+  (`train.py:299`). Mild on YAMNet's 89.6%-zero non-negative code, heavy
+  multiplicative noise on a dense signed one. Try 0.0 / 0.1. Note this is
+  *input* dropout, not hidden dropout — the archived `with-dropout` /
+  `dropout-repro` results are about the same layer but only ever on YAMNet.
+- **L6. `label_smoothing=0.2`.** Aggressive at an 11.7% positive rate, and
+  `restore-on-sens` fingers the label-smoothing overconfidence penalty as what
+  makes `val_loss` diverge from sens once a model sharpens. Try 0.0 / 0.05.
+- **L7. Weight decay on the Dense kernel.** Offline says the *strength* barely
+  matters (YAMNet spans 0.253-0.261 across C=1e-3..10; AVES 0.143-0.193), so
+  expect little — but L2 has only ever been tested on YAMNet
+  (`archive/2026-06_fixed-test/notes/l2-{only,regularize}.md`, both negative)
+  and never in combination with a fixed stopping rule. **Lowest prior; run it
+  last, if at all.**
+- **L8. Binary vs 15-class multi-label head.** The offline probe fits
+  `ins_buzz` alone. A `Dense(15)` linear head is 15 independent weight vectors,
+  so this should be nearly free — but the folds share one loss, one optimiser
+  and one stopping decision, so it is not exactly free. Cheapest way to check
+  is `--translation` with everything but buzz set to `ignore`; confirm frame
+  counts don't move before reading anything into it.
+- **L9. Input standardisation.** `--standardize` exists on
+  `exp/standardize-blocks` (fold-safe, save/load-clean) but is **not in main** —
+  `IDEAS.md` claimed it was in `03_train` and that was stale. Offline it is
+  worth ~0.001 at the best C and matters only where the fit is constrained
+  (AVES `raw` 0.143 -> `std` 0.187 at C=1e-3). Expect it to fold into L1-L4.
+
+**Attribution target.** If L1-L4 recover most of YAMNet's 0.218 -> 0.261, the
+finding is "the probe never converged" and L5-L9 are noise. If they don't, the
+gap is in the loss/geometry levers and the offline/pipeline mismatch needs its
+own control.
+
 ## near-chance-deployments
 
 *Evidence: **E3**, with **E2** origins. The fold identities and the concept-coverage ruling carried over from E2; every number below was re-measured on the current 5 folds.*
