@@ -229,11 +229,30 @@ run on this fold, and `context-monitor` is the highest of the four. With the
 `best_epoch` 5 → 160 mechanism, that is a treatment effect, not a fold that
 swung.
 
-**Still worth one repeat** — as confirmation of a large hard-fold gain, which is
-standing practice given there is no seed control, **not** because the number is
-suspect. 17 minutes, and it also tests whether `1_150`'s 0.219 (the top of the
-`val_sens` group by 0.048) carries an extra context x monitor lift, which is the
-one part of this that is n=1.
+**The repeat is run and it confirms** (`context-monitor-r2`, 2026-09-09,
+**E3**). Second draw of the identical config: **0.312** against 0.307, +0.005
+on a 0.0095 single-run SD, 5 folds up / 0 down vs `cv_baseline` again. Take
+**0.310** as the config's value. Nothing is owed on it any more.
+
+`1_150` landed on **0.219 a second time**, from a different run shipping a
+different epoch (160 -> 192); the fold's granularity is 1/146, so both runs
+found exactly 32 of 146 buzz frames. The `val_sens` group on that fold is now
+0.089 / 0.158 / 0.171 / 0.219 / 0.219 against `val_loss`'s 0.007-0.062. The
+n=1 part resolved *in favour of* a real context x monitor lift: the composed
+config beats the monitor-alone maximum (0.158) on both draws.
+
+**New, and the live cheap lead from that run: the `val_sens` stopping epoch is
+bimodal on RICH folds.** `Fit+Fast/53` (1031 buzz frames, not thin) shipped
+epoch **17** in one draw and **226** in the other, 0.465 vs 0.520 — and
+`context-monitor` saw the same ambiguity there running the other way against
+`context_embedder` (144 -> 17). Most of this config's remaining run-to-run
+spread is now coming from the rich folds, a reversal of the usual pattern.
+A tie-break on the `val_sens` argmax — prefer the later of two comparable
+peaks, or smooth the curve before taking it — is plausible variance reduction
+on the era's best config. **It costs no training:**
+`val_sens_fpr0.005_curve` is persisted in every fold's `summary.json`, so
+replay the candidate rules offline over the runs already on disk and only spend
+a CV if one of them clearly wins.
 
 ## Seed averaging inside a run — variance reduction over variance measurement
 
