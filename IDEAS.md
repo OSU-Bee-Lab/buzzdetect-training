@@ -49,6 +49,53 @@ there. `--standardize` is in `03_train`, off by default, fold-safe and
 save/load-clean — available if an embedder ever mixes genuinely heterogeneous
 blocks. Don't re-run this one on YAMNet.
 
+## Closed: AVES as a drop-in embedder (and E1, its layer sweep)
+
+*Evidence: **E3** — ran and closed on the current roster.*
+
+Ran 2026-09-09 as `aves-probe`: `aves-base-bio`, final transformer layer, 768-d,
+under `cv-baseline`'s exact probe config. **Clear negative — 0.218 -> 0.074
+(-0.144), 5 folds down, 0 up**, and the two folds worth reading are the two
+largest losses (`1_29` -0.410, `Fit+Fast` -0.220). That is 26x the ~0.016 noise
+floor. The frame join is sound: AVES's 1.0 s against YAMNet's 0.96 s moved
+`overlap_event_s` only 0.192 -> 0.200, and unlike `perch-probe` the dilution
+check passes — the per-fold buzz *rate* is unchanged to three decimals
+(`1_29` 0.2815 -> 0.2801).
+
+This also retires the 2026-06 "performs at chance" note, which was worth no
+weight on its own (`aves_lite`, retired stage-4 endpoint, never logged) but
+turns out to have had the right sign.
+
+**E1's middle-layer sweep ({5,7,9}) is closed with it — but not on the
+pre-filter that was supposed to decide it.** The parked geometry diagnostic
+(AVES at 0.13 dimension-wise buzz/non-buzz separation against YAMNet's 0.23,
+i.e. half) was recomputed on the current `medium` embeddings, and it **inverts**:
+
+| | mean \|Cohen d\| | mean \|AUC-0.5\| | top-10 dims \|AUC-0.5\| | frac exact zeros |
+|---|---|---|---|---|
+| YAMNet 1024-d | 0.155 | 0.022 | 0.260 | 0.896 |
+| AVES 768-d | **0.242** | **0.074** | 0.226 | 0.000 |
+
+**Do not cite 0.13-vs-0.23 again.** It was a scale artifact: YAMNet's
+activations are 89.6% exact zeros, so any mean across its basis is diluted by
+~900 dead dimensions. What survives is the *shape* claim, not the magnitude —
+YAMNet wins only where the signal is concentrated (top-10 dims 0.260 vs 0.226,
+max \|d\| 1.91 vs 0.91), its few strong directions being sparse, non-negative and
+linearly separable, while AVES spreads the same information thinly across a
+dense zero-centred basis.
+
+So E1 is closed on the CV magnitude alone: a middle layer would have to recover
+~0.15 sensitivity the final layer has nowhere, and one re-extraction per layer
+buys no reason to expect it. **The live lead the diagnostic actually points at
+is a non-linear head over AVES's distributed representation** — a linear probe
+over Dropout(0.2) is the worst available reader of that geometry, and the
+embeddings are already on disk, so it costs no extraction. Parked under the
+standing 1-layer injunction rather than proposed.
+
+Cheap now regardless of the verdict: AVES extraction went 14.3 h -> 1.0 h
+(main, `8fe1336`, batched on the GPU) and `medium`'s AVES embeddings are in the
+shared cache. Any future AVES question is one CV run, not a day.
+
 ## near-chance-deployments
 
 *Evidence: **E3**, with **E2** origins. The fold identities and the concept-coverage ruling carried over from E2; every number below was re-measured on the current 5 folds.*
@@ -315,33 +362,6 @@ means neither is a priority.
   FPR threshold rests on (`framehop-overlap` is the worked example). The valid
   test is a matched control on `large`, i.e. two CV runs, and a `large` CV is
   much longer. Budget deliberately or don't start.
-- **[E1, and barely that] AVES intermediate layers.** `embedders/aves/embedder.py` is 1.0 s / 16 kHz /
-  768-d — **frame-matched to YAMNet's 0.96 s**, so unlike Perch its headline
-  would join `cv_baseline` directly with no frame-density caveat.
-  The idea is to take a middle transformer layer instead of the last
-  (`layer_outputs[-1]` → `[N]` for N in {5, 7, 9}; `n_embeddings` stays 768),
-  on the wav2vec2 transfer-learning result that middle layers carry more
-  general acoustic features than the task-specialized final one. Needs a
-  re-extraction per layer, and the YAMNet-only constraint lifted.
-
-  **The "AVES performs at chance" result is not a verdict — check its
-  provenance before citing it.** It is from 2026-06-04, two eras back: measured
-  on `aves_lite` (a troubleshooting set LOOP.md says is not a place to draw
-  conclusions), scored on the **retired** stage-4 endpoint (precision against an
-  18% base rate on the fixed test corpus — the metric the CV rework replaced),
-  and never logged. No entry, no notes file, no surviving model dir; the only
-  trace was a hypothesis section in this file. Two data revisions have landed
-  since. `temporal-context` → `context-stack` is the standing warning about
-  exactly this kind of inherited negative.
-
-  What *does* survive is the diagnostic under it, because it is a property of
-  the embeddings rather than of the metric: AVES embeddings are symmetric
-  around zero for both classes with roughly half YAMNet's dimension-wise
-  buzz/non-buzz separation (0.13 vs 0.23), where YAMNet's are ReLU-sparse and
-  non-negative and linearly separable. **Recompute that on current `medium`
-  embeddings first** — it needs no training and no re-extraction, and it is a
-  far cheaper filter on whether a layer sweep is worth one.
-
 - **[E3] Frame length, isolated from embedder — the `perch-probe` follow-up.**
   `perch-probe` (2026-09-09) came out +0.026 and **inconclusive**: Perch's 5.0 s
   frame moved the labelling rule at the same time as the embedder, because
