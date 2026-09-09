@@ -107,14 +107,32 @@ dimensions, an earlier `val_loss` argmin, a worse epoch shipped. Note the same
 signature at Fit+Fast in the other direction (144 → 17, -0.029): the monitor
 moves which epoch ships on every fold, and one of them ships worse.
 
-**What the size of the gain rests on.** Over the primary comparison's other
-four folds the mean delta is **+0.0095** — nothing. The +0.049 is 1_150, the
-146-buzz-frame fold that moved 0.007 → 0.062 between two *identical* baseline
-runs. So this run reproduces `probe-grid`'s finding exactly (L1's gain was
-also entirely 1_150) rather than adding a new effect. Two things argue the
-direction anyway: 1_150 is now at 0.219, above the top of its range across
-every run in the era (previous max 0.158, over ~8 draws), and the epoch-5
-diagnostic gives it a cause. The *size* should not be quoted as +0.049.
+**What the gain rests on — and why that is the result, not a caveat.** Over the
+primary comparison's other four folds the mean delta is +0.0095. The +0.049 is
+`1_150`, going 0.014 -> 0.219. That is the fold the project is *for*: the
+endpoint is a new deployment, it may well be a quiet one, and `1_29` sits at
+~0.43 whatever we do.
+
+The obvious objection is that `1_150` is the 146-buzz-frame fold that moved
+0.007 -> 0.062 between two *identical* baseline runs. **That spread is a
+within-treatment number and does not bound a between-treatment difference.**
+Splitting all 17 runs of this era by which monitor they used:
+
+| monitor | `1_150` | n |
+|---|---|---|
+| `val_loss` | 0.007, 0.014 x5, 0.021 x4, 0.027, 0.034, 0.041, 0.062 | 13 |
+| `val_sens` | 0.089 (L1_sens), 0.158 (L1_sens_r2), 0.171 (L1L6_combo), **0.219** (this) | 4 |
+
+**The two groups do not overlap.** Every `val_sens` run beats every `val_loss`
+run on this fold. Combined with the `best_epoch` 5 -> 160 mechanism, this is a
+treatment effect and not a fold that swung; the repeat spread describes noise
+*within* the `val_loss` group, which is where it was measured.
+
+One repeat is still worth running — confirming a large hard-fold gain is
+standing practice with no seed control in the pipeline — but as confirmation,
+not because the number is suspect. It would also test the one genuinely n=1
+part: this run tops the `val_sens` group by 0.048, which may be an extra
+context x monitor lift on `1_150` or may be draw.
 
 1_95 remains near chance (0.044) — the fourth intervention not to move it.
 Every fold reached the target FPR; `neg_frames` is 24–35 as always.
@@ -134,7 +152,8 @@ next experiment. Two follow-ups, in order:
    raises the stakes: the flag is not a small hyperparameter win, it is
    load-bearing for the context embedder, which without it throws away a fold
    to an epoch-5 restore.
-2. **The headline still rests on 1_150.** Before anything is built on 0.307,
-   one repeat of *this* config would say whether 1_150 holds near 0.219 or
-   falls back into its 0.007–0.158 range. That is one 17-minute run and it is
-   the cheapest thing in the queue.
+2. **One repeat of this config**, as confirmation of a large hard-fold gain
+   rather than as a check on a suspect number (see above: the `val_sens` and
+   `val_loss` groups do not overlap on `1_150`). 17 minutes, and it resolves
+   whether this run's 0.219 — top of the `val_sens` group by 0.048 — carries an
+   extra context x monitor lift.
