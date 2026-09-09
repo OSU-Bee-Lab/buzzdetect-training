@@ -65,3 +65,5 @@ embeddings/
 # per-machine paths (buzzdetect export dest, external audio drives, ...);
 # see paths.local.example.json for the shape
 paths.local.json
+# derived: offline sweep matrices (562 MB), rebuilt by sweep_cache.py
+.cache/
