@@ -177,13 +177,45 @@ of the grid and remain open.
 
 ## Adopt `--monitor val_sens` as the default
 
-*Evidence: **E3** — `probe-grid`. The flag exists on `exp/probe-grid`,
-defaulting to the old `val_loss` behaviour, so merging the branch changes
-nothing until the default is flipped.*
+*Evidence: **E3** — `probe-grid`, strengthened by `context-monitor` (2026-09-09).
+The flag exists on `exp/probe-grid` and `exp/context-monitor`, defaulting to the
+old `val_loss` behaviour, so merging either branch changes nothing until the
+default is flipped.*
 
 The follow-up to `probe-grid`: make it the default and re-baseline the era on
 it. Mechanical, but it moves every subsequent number, so it is Luke's call and
 probably an era boundary.
+
+**`context-monitor` raised the stakes: the flag is load-bearing for the best
+config in the era, not a tidy-up.** `context_embedder` shipped **best_epoch 5**
+on `1_150` — a 3072-d input reaches its `val_loss` argmin almost immediately, so
+that fold was scored on a barely-trained probe (0.014, precision 0.077). Under
+`val_sens` the same config ships epoch 160 and scores 0.219. Whatever is decided
+about the default, **any experiment on a wide input should pass
+`--monitor val_sens`**, or it risks measuring a stopping failure and logging it
+as an embedder verdict — the same trap `aves-probe` fell into from the other
+direction.
+
+## The best-known config, and the one thing owed on it
+
+*Evidence: **E3** — `context-monitor` (2026-09-09). The current top of the log.*
+
+**`yamnet_context` + `--monitor val_sens` = 0.307**, +0.089 over `cv_baseline`
+with **5 folds up / 0 down** — the only all-up run in the era. The two
+components compose *additively* (+0.040 and +0.031 alone, +0.089 together) and
+act on disjoint folds: context carries the rich folds, the monitor carries
+`1_150`. Anything built on top of the search should start from this config, not
+from `cv_baseline`. Reproduce it with `exp/context-monitor` (the embedder is a
+real directory there, not a symlink; the `yamnet_context` cache is already in
+the shared tree, so no extraction).
+
+**Owed, and cheap: one repeat.** Over the four folds other than `1_150` the
+gain against `context_embedder` is +0.0095, i.e. nothing — the headline delta is
+that one 146-buzz-frame fold, which moved 0.007 → 0.062 between two *identical*
+baseline runs. Its 0.219 is above the top of its range over ~8 draws this era
+(previous max 0.158) and the epoch-5 diagnostic gives it a cause, so the
+direction is probably real; the **size** is not established. One 17-minute rerun
+of the same config settles it, and it is the cheapest item in this file.
 
 ## Seed averaging inside a run — variance reduction over variance measurement
 
