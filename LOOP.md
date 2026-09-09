@@ -240,17 +240,61 @@ cd .local/worktrees/<slug>
 **Launch detached — not foreground, not `run_in_background`.** The exact recipe
 and why it is the only thing that works are in CLAUDE.md's "Running long jobs".
 
-Cost depends entirely on what is being trained, and the two ends are orders of
-magnitude apart — **measure before assuming**:
+### The first fold is a gate. Do not step over it.
+
+**After launching, you do exactly one thing: wait for the first fold's
+`summary.json` to appear, and compute the ETA from its wall-clock time.** Not
+the epoch rate, not the table below, not the kind of job. One finished fold x
+the number of folds still to run x the number of chained configs. Until that
+file exists you do not know how long the run takes, and **you may not say that
+you do** — no ETA, no duration, no "this finishes inside my context", no
+handoff-vs-Monitor decision, in your own reasoning or in anything you tell
+Luke. An unmeasured ETA is not a rough answer, it is a fabricated one.
+
+```bash
+find models/<name>/folds -name summary.json -printf '%T@ %TH:%TM:%TS %p\n' | sort -n
+```
+
+Arming a Monitor is *not* the gate. A Monitor tells you when the run ends; the
+gate is about deciding, before then, whether you should still be here at all.
+Arm one only after the measured ETA says to.
+
+**Every agent that has skipped this skipped it the same way**, so recognise the
+move in yourself:
+
+> "It's a frozen probe, the table says ~9 min, that's well inside an hour —
+> I'll set a Monitor and keep working."
+
+That is the failure, verbatim, and it is *reasoning from the table below.* The
+table's rows are **configs, and your experiment is a new config** — that is
+what makes it an experiment. It cannot be in the table.
+
+The worked example is `shared-trunk-head` (2026-09-09), and note which way it
+went wrong. The agent took an epoch-rate reading 40 s after launch with zero
+folds finished, misread its own arithmetic into "~3x baseline per epoch", and
+projected a 3-CV ladder at ~60 min — landing it exactly on the handoff line and
+nearly buying a `HANDOFF.md` for a run that did not need one. The first fold
+then measured 156 s, putting the ladder at **~30 min**: the hidden layer cost
+almost nothing, and the pre-fold estimate was off by ~2x *upward*. It was
+reported to Luke as if measured. **A guess that errs long is not the safe
+direction** — it spends the turn on handoff machinery instead of results. The
+table is for budgeting a run you have not launched; it is never evidence about
+a run you have, and neither is anything you can compute before the first fold
+lands.
 
 | config | per epoch | one CV |
 |---|---|---|
 | frozen probe, 1024-d YAMNet (the baseline) | ~1 s | **~9 min** for 5 folds (2026-09-08) |
 | trunk fine-tune, 12288-d + unfrozen layers | ~80 s | **~24 h** for 11 folds (2026-09-05) |
 
-A frozen-probe CV is a foreground-scale job; don't apply the long-job machinery
-to something that finishes while you wait. Only a trunk fine-tune, or an
-extraction, needs the detached-and-hand-off treatment.
+Two ends orders of magnitude apart, and **your run's place between them is
+measured, never assumed.** "A frozen-probe CV is foreground-scale" is a
+*conclusion the first fold licenses*, not a premise you may enter with — and
+it is not a reason to skip the gate, because the gate is what tells you the run
+is foreground-scale in the first place. Only a trunk fine-tune or an extraction
+needs the full detached-and-hand-off treatment, but **every** run needs the
+first-fold measurement, including the ones that turn out to take nine minutes.
+It costs one `find`.
 
 There is no `--runs` and no stage 4. One training call *is* the experiment.
 
@@ -267,12 +311,16 @@ training it later with the same `--name` gives an identical model:
 **Reruns resume silently** — always use a fresh `--name`, or pass `--clear`, or
 delete `models/<name>/` by hand.
 
-**If the run will outlast you, write a handoff doc — but decide that from a
-measured ETA, not from a guess at launch.** Launch detached, let the first fold
-finish, and compute the remaining time from it; CLAUDE.md's "Running long jobs"
-has the exact procedure. Under ~1 h left, set a completion `Monitor` and keep
-working — **do not write a `HANDOFF.md` for a run that finishes inside your own
-context**, it is written, committed and never opened. Over ~1 h, commit a
+**If the run will outlast you, write a handoff doc — and decide that from the
+first-fold measurement above, never from a guess at launch.** The mechanics of
+detaching, and the Monitor script that covers the failure states, are in
+CLAUDE.md's "Running long jobs"; the decision rule is here, and here only.
+Under ~1 h left, set a completion `Monitor` and keep working — **do not write a `HANDOFF.md` for a run that finishes inside your own
+context**, it is written, committed and never opened. That Monitor fires
+**once, on a terminal state** (done / crashed / vanished), never per fold: you
+armed it in order to stop watching, and every progress line it echoes is
+context spent re-learning that. See CLAUDE.md for the loop that covers all
+three states. Over ~1 h, commit a
 **`HANDOFF.md`** in the worktree (that exact name, so a fresh agent opens the
 one place it always is) and end your turn. Keep it short; it needs four things:
 

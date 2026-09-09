@@ -116,28 +116,24 @@ For stage 3 drop `BUZZDETECT_CHUNK_FRAMES`; keep `CUDA_VISIBLE_DEVICES=""` (the
 12288-d trunk embedders OOM the 4 GB GPU, and CPU ≈ GPU on this box for the
 1024-d probe anyway). Pass `--verbose` to stage 3 or it trains silently.
 
-**2. Launch it, then measure before deciding how to wait.** Do not guess the
-duration and do not decide from the *kind* of job — the two ends are orders of
-magnitude apart (a frozen-probe CV is ~9 min; a trunk fine-tune is ~24 h), and
-guessing is what produces both failure modes below. Follow this in order:
+**2. Launch it, then measure before deciding how to wait.**
 
-1. **Launch detached** (recipe above) and note the wall-clock start.
-2. **Wait for the first fold to finish**, then compute an ETA from it:
+> **The decision rule lives in LOOP.md, under "The first fold is a gate."**
+> Read it there; it is not repeated here, so that there is one copy to keep
+> right. In one line: launch detached, note the wall clock, **wait for the
+> first fold's `summary.json`**, and compute the ETA from that file's mtime —
+> never from the epoch rate, the kind of job, or the cost table. Over ~1 h
+> left, `HANDOFF.md` and end the turn; under, a `Monitor`.
+>
+> ```
+> find models/<name>/folds -name summary.json -printf '%T@ %p\n' | sort -n
+> ```
+>
+> For stage 2, which has no folds, the per-ident progress lines in the log are
+> the equivalent first unit — same rule, same prohibition on guessing.
 
-   ```
-   find models/<name>/folds -name summary.json -printf '%T@ %p\n' | sort -n
-   ```
-
-   One fold's elapsed time x the number of folds still to run (x the number of
-   queued configs, if you chained several) is the ETA. For stage 2, use the
-   per-ident progress lines in the log the same way.
-3. **Decide from that ETA, at that moment** — not from the ETA at launch:
-   - **More than ~1 h left → write `HANDOFF.md`, commit it, and end the turn.**
-     See LOOP.md for what it must contain.
-   - **Less than ~1 h left → set a `Monitor` that fires on completion**, and
-     keep working. No `HANDOFF.md`: nothing outlives the context, so the file
-     is written, committed, and never opened. Do not write one "to be safe" on
-     a borderline estimate — borderline resolves to *no*.
+The rest of this section is the *mechanics* the rule depends on: what a Monitor
+has to cover, and how to check by hand if you are handing off instead.
 
 **Why the 1 h line is where it is.** It is the prompt cache's TTL, not a
 guess about attention span. A `Monitor` on a job whose next real event is
@@ -148,7 +144,49 @@ better than polling.
 
 A completion Monitor must also **cover the failure states**, or a crash is
 indistinguishable from a long fold — poll for the completion marker, for
-tracebacks in the log, *and* for the trainer having vanished without either:
+tracebacks in the log, *and* for the trainer having vanished without either.
+
+**It fires once, on a terminal state. Do not make it a progress meter.** Every
+stdout line becomes a message in your context, so a monitor that echoes each
+finished fold spends context to tell you something you already decided you did
+not need — you set the Monitor *because* the ETA said to stop watching. The
+first fold is the one event worth interrupting for, and it happens before the
+Monitor is armed (it is what tells you to arm one). After that, the next thing
+you need to know is that the run ended, well or badly.
+
+**Per-fold firing does not keep the prompt cache warm — this was checked, and
+the argument is closed.** The session's cache TTL is ~1 h and it is *time*
+based, so a 30-minute silence arrives exactly as warm as one interrupted
+fourteen times; there is nothing to ping. Meanwhile each extra wake re-reads
+the whole conversation at ~10% of input price, which at a realistic context
+size makes fifteen fold-events cost on the order of tens of thousands of
+full-price input tokens to deliver a number that changes no decision. And the
+case where a gap *would* outlive the cache is the >1 h case, where the rule is
+`HANDOFF.md` and no Monitor at all. **So there is no run for which per-fold
+firing is correct**: inside the hour it buys nothing, outside the hour you
+should not be waiting. The cheap option and the un-spammy option are the same
+option.
+
+**The one real gap, and its actual fix.** Terminal-state polling cannot
+distinguish a slow fold from a wedged one — `pgrep` catches the trainer
+*vanishing*, not the trainer *hanging*. Do not solve this with progress
+events. Solve it with a stall timeout, which stays silent while things are
+healthy and speaks only when progress genuinely stops: track the newest
+`summary.json` mtime and fire if it has not advanced in a few times the
+measured fold time.
+
+```
+stall_after=$(( 3 * <measured fold seconds> ))
+newest() { find models/<name>/folds -name summary.json -printf '%T@\n' 2>/dev/null | sort -n | tail -1; }
+last=$(newest); last_change=$(date +%s)
+# ... inside the loop, alongside the three checks below:
+now=$(newest)
+[ "$now" != "$last" ] && { last=$now; last_change=$(date +%s); }
+[ $(( $(date +%s) - last_change )) -gt $stall_after ] && { echo "STALL: no new fold in ${stall_after}s"; break; }
+```
+
+The loop below is the shape for the three terminal states; keep it, and add the
+stall check to it when a hang would cost you the turn:
 
 ```
 while true; do
