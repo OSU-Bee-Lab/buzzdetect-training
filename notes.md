@@ -76,8 +76,82 @@ extraction cost the way the parked note assumed.
 
 ## Results
 
-<!-- filled in when the run lands -->
+**Clear negative. 0.218 -> 0.074 (-0.144), 5 folds down, 0 up.**
+
+| fold | buzz frames (base/aves) | base | aves | delta |
+|---|---|---|---|---|
+| JamesU - MustardBumbler/1_29 | 2144 / 2046 | 0.426 | 0.016 | **-0.410** |
+| Lily - Fit+Fast/2023_R3_Marysville/53 | 1031 / 991 | 0.425 | 0.205 | **-0.220** |
+| Lily Adam - One Hive/.../1_11 | 305 / 296 | 0.180 | 0.120 | -0.060 |
+| Luke - Diel Drivers/2026-05-06/1_95 | 433 / 408 | 0.037 | 0.017 | -0.020 |
+| Luke - Diel Drivers/2026-04-08/1_150 | 146 / 144 | 0.021 | 0.014 | -0.007 |
+
+The two folds worth reading carry the effect, and they are the two largest
+losses. Nothing here is at the noise floor (~0.016); `1_29` alone moves 26x it.
+
+**The 4% labelling shift is not the explanation.** `overlap_event_s`
+0.192 -> 0.200 cost 174 buzz frames out of 4059 (-4.3%) against 1403 fewer
+frames overall (-4.1%) — the buzz *rate* per fold is unchanged to three
+decimals (`1_29`: 0.2815 -> 0.2801). This is the dilution check that made
+`perch-probe` uninterpretable, and AVES passes it. The headline join to
+`cv_baseline` is sound.
+
+Training behaviour matches: `1_29` peaks at `val_sens 0.0020` in epoch 3 and
+decays to 0 — the probe never finds a usable direction on the richest fold.
+
+### The 2026-06 geometry diagnostic does not reproduce; it inverts
+
+Recomputed on the current `medium` embeddings, both embedders, the 5 rotating
+folds, `ins_buzz` vs rest (34,606 YAMNet / 33,203 AVES frames, 11.7% buzz in
+both):
+
+| | mean \|Cohen d\| | mean \|AUC-0.5\| | top-10 dims \|AUC-0.5\| | frac exact zeros |
+|---|---|---|---|---|
+| YAMNet 1024-d | 0.155 | 0.022 | 0.260 | 0.896 |
+| AVES 768-d | **0.242** | **0.074** | 0.226 | 0.000 |
+
+The parked claim was AVES at 0.13 against YAMNet's 0.23, i.e. *half* the
+dimension-wise separation. On current data the **average** AVES dimension
+separates buzz better than the average YAMNet one, on both a parametric and a
+rank measure. The 2026-06 number looks like a scale artifact: YAMNet's
+activations are 89.6% exact zeros, so a mean taken across its basis is diluted
+by ~900 dead dimensions, while AVES's are dense and zero-centred (50.4%
+negative, overall mean -0.0003). Compare where the signal actually lives and
+YAMNet wins narrowly (top-10 dims 0.260 vs 0.226, max \|d\| 1.91 vs 0.91) — its
+information is concentrated in a few sparse, individually-strong,
+ReLU-non-negative directions, which is exactly what a linear probe wants.
+
+So the surviving half of the old diagnostic is the *shape* claim (sparse and
+concentrated vs dense and distributed), not the *magnitude* claim. Retire the
+0.13-vs-0.23 number rather than re-citing it.
 
 ## Conclusion
 
-<!-- filled in when the run lands -->
+**AVES's final layer is not a drop-in for YAMNet on current data, and the
+question is settled rather than inherited.** The 2026-06 "performs at chance"
+verdict was measured on `aves_lite` under the retired stage-4 endpoint and was
+worth no weight; this is the same conclusion re-measured on the current roster,
+the current annotations and the current metric, with a clean frame join and a
+dilution check that passes. 0.074 puts the last layer barely above the two
+near-chance folds' own baseline sensitivity.
+
+**Closing E1 (AVES intermediate layers) anyway, but not on the argument the
+handoff expected.** The cheap pre-filter it asked for was run and came back the
+wrong way — the geometry does *not* argue against middle layers, so E1 cannot be
+closed on that. It is closed on the CV magnitude instead: -0.144 with both rich
+folds collapsing is not the near-miss that would make a per-layer re-extraction
+worth its cost. A middle layer would have to recover ~0.15 sensitivity that the
+final layer does not have anywhere in it, and nothing measured here suggests
+where that would come from.
+
+What would reopen it is a *different* head, not a different layer. The one real
+finding is that AVES's buzz information is distributed across many
+weakly-separating dimensions where YAMNet's is concentrated in a few strong
+ones, and a linear probe over Dropout(0.2) is the worst available reader of the
+former. That is a head experiment on embeddings that now exist on disk, not an
+extraction sweep — but it is blocked by the standing 1-layer injunction, so it
+is parked rather than proposed.
+
+**Infrastructure banked regardless of the verdict:** AVES extraction went
+14.3 h -> 1.0 h (main, `8fe1336`) and `medium`'s AVES embeddings are in the
+shared cache. Any future AVES question is now cheap to ask.
