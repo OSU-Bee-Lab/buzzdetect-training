@@ -86,6 +86,9 @@ layer and the geometry argues against all of them. Remove the idea from
   silently**. If the crash was mid-fold that is what you want; if you changed
   anything, delete `models/aves_probe/` first or use a fresh `--model`.
 - **CUDA OOM** — drop `BUZZDETECT_AVES_BATCH` to 32 (0.76 GB) or 16 (0.56 GB).
+  Observed steady-state use in this run is ~2.0 GB of the card's 4 GB at batch
+  64 (model + activations + framing buffers), so there is real headroom, but
+  nothing else should be put on the GPU while it runs.
   Throughput is flat from batch 16, so this costs essentially nothing. Do **not**
   raise workers above 1 to compensate; see below.
 
