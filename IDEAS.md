@@ -288,12 +288,33 @@ means neither is a priority.
   FPR threshold rests on (`framehop-overlap` is the worked example). The valid
   test is a matched control on `large`, i.e. two CV runs, and a `large` CV is
   much longer. Budget deliberately or don't start.
-- **AVES intermediate layers.** `aves_lite` performed at chance and AVES
-  embeddings are symmetric around zero for both classes where YAMNet's are
-  ReLU-sparse and linearly separable; wav2vec2 transfer literature favours middle
-  layers. `embedders/aves/embedder.py`, `layer_outputs[-1]` → `[N]` for N in
-  {5, 7, 9}; `n_embeddings` stays 768. Needs the YAMNet-only constraint lifted
-  and a re-extraction per layer.
+- **AVES intermediate layers.** `embedders/aves/embedder.py` is 1.0 s / 16 kHz /
+  768-d — **frame-matched to YAMNet's 0.96 s**, so unlike Perch its headline
+  would join `cv_baseline` directly with no frame-density caveat.
+  The idea is to take a middle transformer layer instead of the last
+  (`layer_outputs[-1]` → `[N]` for N in {5, 7, 9}; `n_embeddings` stays 768),
+  on the wav2vec2 transfer-learning result that middle layers carry more
+  general acoustic features than the task-specialized final one. Needs a
+  re-extraction per layer, and the YAMNet-only constraint lifted.
+
+  **The "AVES performs at chance" result is not a verdict — check its
+  provenance before citing it.** It is from 2026-06-04, two eras back: measured
+  on `aves_lite` (a troubleshooting set LOOP.md says is not a place to draw
+  conclusions), scored on the **retired** stage-4 endpoint (precision against an
+  18% base rate on the fixed test corpus — the metric the CV rework replaced),
+  and never logged. No entry, no notes file, no surviving model dir; the only
+  trace was a hypothesis section in this file. Two data revisions have landed
+  since. `temporal-context` → `context-stack` is the standing warning about
+  exactly this kind of inherited negative.
+
+  What *does* survive is the diagnostic under it, because it is a property of
+  the embeddings rather than of the metric: AVES embeddings are symmetric
+  around zero for both classes with roughly half YAMNet's dimension-wise
+  buzz/non-buzz separation (0.13 vs 0.23), where YAMNet's are ReLU-sparse and
+  non-negative and linearly separable. **Recompute that on current `medium`
+  embeddings first** — it needs no training and no re-extraction, and it is a
+  far cheaper filter on whether a layer sweep is worth one.
+
 - **Timestamp join for provenance.** `frametimes.csv` isn't on disk for current
   idents — it was added to the extractor after they were last extracted and the
   fingerprint hasn't changed since. `frame_index` joins to it whenever a fold
