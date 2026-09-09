@@ -81,8 +81,16 @@ losses elsewhere actually material? A -0.005 does not cancel a +0.068.
 
 | lever | flag | mean sens@fpr0.005 | vs base (0.218) |
 |---|---|---|---|
-| L1 stopping metric | `--monitor val_sens` | **0.241** | **+0.023** |
-| L2 stopping slack  | `--min-delta 0`      | 0.217 | -0.001 |
+| lever | flag | mean | delta | folds | `1_150` | `willard` | `1_95` |
+|---|---|---|---|---|---|---|---|
+| **L1** stopping metric | `--monitor val_sens` | **0.241** | **+0.023** | 3up 2dn | **+0.068** | **+0.063** | -0.005 |
+| **L6** label smoothing | `--label-smoothing 0.05` | **0.233** | **+0.015** | **4up 1dn** | +0.013 | +0.040 | -0.005 |
+| L3 batch size | `--batch-size 4096` | 0.221 | +0.003 | 2up 3dn | -0.007 | +0.030 | -0.005 |
+| L6 label smoothing | `--label-smoothing 0` | 0.221 | +0.003 | 3up 2dn | +0.020 | +0.056 | **-0.037** |
+| L5 dropout | `--dropout 0.1` | 0.219 | +0.001 | 1up 3dn | 0.000 | -0.006 | -0.002 |
+| L2 stopping slack | `--min-delta 0` | 0.217 | -0.001 | 1up 3dn | -0.007 | 0.000 | -0.005 |
+| L5 dropout | `--dropout 0` | 0.212 | -0.006 | 2up 3dn | -0.007 | +0.013 | -0.009 |
+| L7 weight decay | `--weight-decay 1e-4` | 0.213 | -0.005 | 1up 4dn | -0.014 | +0.013 | -0.007 |
 
 ### L1 — `--monitor val_sens`
 
@@ -103,6 +111,38 @@ Direction believed, magnitude not yet banked — `L1_sens_r2` (`run_confirm.sh`)
 re-runs the identical config for an independent init, since a same-config
 repeat on `1_29` already came back 0.018 apart (above). If the hard-fold gains
 reproduce, L1 is this grid's result.
+
+### L6 — `--label-smoothing 0.05` (+0.015)
+
+The most *consistent* result in the grid: 4 folds up, 1 down, and the only
+lever that lifts both thick folds and `1_150` and `willard` at once. Label
+smoothing 0.2 is too aggressive at an 11.7% positive rate, as IDEAS predicted.
+
+**It is an optimum, not a direction.** At `--label-smoothing 0` the mean is
+0.221 but `1_95` collapses to **0.000** and Fit+Fast drops 0.043. Do not
+extrapolate past 0.05.
+
+### The framing hypothesis was wrong
+
+The grid was motivated by "the probe does ~2 gradient steps per epoch, so it
+never converges." **L3 (`--batch-size 4096`, ~18 steps/epoch instead of 2) is
++0.003, and L2 (stopping slack) is flat.** The probe was not step-starved. What
+paid was *what is monitored* (L1) and *the shape of the loss* (L6) — not how
+many steps it takes or how long it runs. The offline-readout gap is not a
+convergence gap.
+
+### Dead levers
+
+L2 (flat), L5 dropout in both directions (0.0 is -0.006, 0.1 is +0.001), L3,
+and L7 weight decay (-0.005, 4 folds down — consistent with both archived L2
+results and the lowest prior in IDEAS).
+
+### `willard` responds to almost everything
+
+It rises under 6 of 8 levers, including mutually contradictory ones. That leans
+toward its 0.180 baseline being a low draw rather than every lever helping it.
+It does not undercut L1 or L6 (both move other folds too), but it is why
+`L1_sens_r2` exists.
 
 ### L2 — `--min-delta 0`
 

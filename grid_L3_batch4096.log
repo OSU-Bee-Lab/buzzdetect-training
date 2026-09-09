@@ -15,3 +15,19 @@ I0000 00:00:1788965775.507601 2148457 service.cc:153]   StreamExecutor device (0
 I0000 00:00:1788965775.995543 2148457 device_compiler.h:188] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
 [1/5] JamesU - MustardBumbler/1_29: 89 epochs (best 84), val_loss 0.9316, 74440/7617 frames train/val, sens@fpr0.5%=0.421
 [2/5] Lily - Fit+Fast/2023_R3_Marysville/53: 74 epochs (best 63), val_loss 0.9263, 74517/7540 frames train/val, sens@fpr0.5%=0.430
+[3/5] Lily Adam - One Hive/recorders/willard/2024-08-07/1_11: 55 epochs (best 12), val_loss 0.7298, 75127/6930 frames train/val, sens@fpr0.5%=0.210
+[4/5] Luke - Diel Drivers/2026-04-08/1_150: 52 epochs (best 2), val_loss 0.9117, 77110/4947 frames train/val, sens@fpr0.5%=0.014
+[5/5] Luke - Diel Drivers/2026-05-06/1_95: 79 epochs (best 78), val_loss 1.0480, 74485/7572 frames train/val, sens@fpr0.5%=0.032
+
+[L3_batch4096] sens@fpr0.5% per deployment: 0.221
+  mean over 5/5 held-out fold(s), each tuned to 0.5% FPR on its own audio (~32 negative frames set each threshold)
+  threshold: mean -1.230 — what each fold's own audio set, not one number to ship
+    JamesU - MustardBumbler/1_29: threshold -1.306, sensitivity 0.421 (~27 negative frames)
+    Lily - Fit+Fast/2023_R3_Marysville/53: threshold -1.661, sensitivity 0.430 (~32 negative frames)
+    Lily Adam - One Hive/recorders/willard/2024-08-07/1_11: threshold -1.866, sensitivity 0.210 (~33 negative frames)
+    Luke - Diel Drivers/2026-04-08/1_150: threshold -1.417, sensitivity 0.014 (~24 negative frames)
+    Luke - Diel Drivers/2026-05-06/1_95: threshold 0.101, sensitivity 0.032 (~35 negative frames)
+  an oracle: each threshold is placed using that fold's labels, so read this as the ceiling on operator tuning
+  per-fold spread understates uncertainty about a new deployment (training pools overlap heavily)
+
+[L3_batch4096] rotations done; shipped model not trained (default). Pass --train-shipped, or run --skip-cv later with this --name.
