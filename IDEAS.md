@@ -150,73 +150,60 @@ Cheap now regardless of the verdict: AVES extraction went 14.3 h -> 1.0 h
 (main, `8fe1336`, batched on the GPU) and `medium`'s AVES embeddings are in the
 shared cache. Any future AVES question is one CV run, not a day.
 
-## Probe-convergence levers — grid these
+## Closed: probe-convergence levers (L1-L9)
 
-*Evidence: **E3**. Motivated by `exp/aves-readout` (2026-09-09); every number
-below is offline (`sklearn` `lbfgs`, `class_weight='balanced'`, binary) and is a
-**lead, not a pipeline result**. The offline readout reaches 0.261 on YAMNet
-against `cv_baseline`'s 0.218 and 0.194 on AVES against the shipped probe's
-0.074 — but it changes every lever at once, so which one pays is unmeasured.*
+*Evidence: **E3** — `probe-grid` (2026-09-09), 13 CV runs. Closed.*
 
-**Why this is not the hyperparameter tuning the Constraints warn off.** The
-shipped probe does **~2 gradient steps per epoch** (`train.py:132`,
-`size_batch = 65568` against ~72k training frames) and stops on a `val_loss`
-plateau while `val_sens` is still rising — in all 5 AVES folds the best
-`val_sens` is at or within two epochs of the *final* epoch. That is a
-convergence bug, not a tuning preference, and it sits under every number in
-`log.jsonl`. Grid the levers below **on YAMNet** first, since a lift there moves
-the baseline itself.
+**L1 won and is the era's largest clean result: `--monitor val_sens` instead of
+`val_loss`, +0.031** (0.241/0.257 over two draws vs a baseline mean of 0.2177
+over three). No overlap between the two configs' draws. The gain is a
+hard-deployment gain: `1_150` goes 0.021 (tight across three baseline draws) to
+0.089/0.158. This revives E2's `restore-on-sens`, shelved on reasoning that does
+not hold on this data.
 
-Each is independent and CV-cheap (~9 min). Change one at a time.
+**Everything else is dead**, and the grid's motivating hypothesis with it. The
+probe was *not* step-starved: L3 (batch 4096, 9x the gradient steps) is +0.003,
+L2 (stopping slack) -0.001, L4's epoch cap never binds. It converges fine — it
+was being scored on the wrong curve while it did. L5 dropout (both directions),
+L6 label smoothing (0.05 did not replicate: 0.233 then 0.197; 0 destabilises
+`1_95` to 0.000) and L7 weight decay are all negative or inside noise. L1+L6 do
+not stack (+0.005): label smoothing's overconfidence penalty is *what makes*
+val_loss diverge from sens, so they are two fixes to one problem.
 
-- **L1. Stopping metric — `restore_best_weights` on `val_sens` not `val_loss`.**
-  Implementation already exists and is caveated-positive:
-  `archive/2026-08_cv-medium-v1/notes/restore-on-sens.md`, +0.014 (9 up/0 down),
-  shelved on the grounds that "the frozen probe's `val_loss` barely diverges
-  from sens." That is a YAMNet statement and it is false for AVES —
-  `1_29`'s `val_loss` bottoms at epoch 131 while `val_sens` climbs to 153.
-  **Highest prior of anything here.**
-- **L2. `min_delta` / patience.** `EarlyStopping(patience=50,
-  min_delta=0.002)`. `restore-on-sens` attributes ~+0.008 of its +0.014 to the
-  restore-slack alone (its `stopping-rule-scale` lever), never run separately.
-- **L3. Batch size.** 65568 is full-batch; 2 steps/epoch is why ~150 epochs is
-  only ~300 Adam steps. Try 1024/4096 for ~70x more steps per epoch. Interacts
-  with the epoch cap and with L1/L2 — run it after them, not with them.
-  `archive/.../std-convergence.md` looked at LR and clipping for a related
-  convergence caveat and found nothing; it did **not** try batch size.
-- **L4. Epoch cap.** 400. `standardize-blocks` needed 3000 to converge and all
-  folds then landed at 502-1000. Cheap to raise; only matters if L1/L2 stop
-  firing early.
-- **L5. Input `Dropout(0.2)`.** Applied directly to the embedding
-  (`train.py:299`). Mild on YAMNet's 89.6%-zero non-negative code, heavy
-  multiplicative noise on a dense signed one. Try 0.0 / 0.1. Note this is
-  *input* dropout, not hidden dropout — the archived `with-dropout` /
-  `dropout-repro` results are about the same layer but only ever on YAMNet.
-- **L6. `label_smoothing=0.2`.** Aggressive at an 11.7% positive rate, and
-  `restore-on-sens` fingers the label-smoothing overconfidence penalty as what
-  makes `val_loss` diverge from sens once a model sharpens. Try 0.0 / 0.05.
-- **L7. Weight decay on the Dense kernel.** Offline says the *strength* barely
-  matters (YAMNet spans 0.253-0.261 across C=1e-3..10; AVES 0.143-0.193), so
-  expect little — but L2 has only ever been tested on YAMNet
-  (`archive/2026-06_fixed-test/notes/l2-{only,regularize}.md`, both negative)
-  and never in combination with a fixed stopping rule. **Lowest prior; run it
-  last, if at all.**
-- **L8. Binary vs 15-class multi-label head.** The offline probe fits
-  `ins_buzz` alone. A `Dense(15)` linear head is 15 independent weight vectors,
-  so this should be nearly free — but the folds share one loss, one optimiser
-  and one stopping decision, so it is not exactly free. Cheapest way to check
-  is `--translation` with everything but buzz set to `ignore`; confirm frame
-  counts don't move before reading anything into it.
-- **L9. Input standardisation.** `--standardize` exists on
-  `exp/standardize-blocks` (fold-safe, save/load-clean) but is **not in main** —
-  `IDEAS.md` claimed it was in `03_train` and that was stale. Offline it is
-  worth ~0.001 at the best C and matters only where the fit is constrained
-  (AVES `raw` 0.143 -> `std` 0.187 at C=1e-3). Expect it to fold into L1-L4.
+**The consequence for future work: the offline-readout gap is not a convergence
+gap.** Do not spend another CV on optimiser levers. L8 (binary vs 15-class head)
+and L9 (standardisation, already +0.043 as `standardize-blocks`) were not part
+of the grid and remain open.
 
-**Attribution target.** If L1-L4 recover most of YAMNet's 0.218 -> 0.261, the
-finding is "the probe never converged" and L5-L9 are noise. If they don't, the
-gap is in the loss/geometry levers and the offline/pipeline mismatch needs its
-own control.
+## Adopt `--monitor val_sens` as the default
+
+*Evidence: **E3** — `probe-grid`. The flag exists on `exp/probe-grid`,
+defaulting to the old `val_loss` behaviour, so merging the branch changes
+nothing until the default is flipped.*
+
+The follow-up to `probe-grid`: make it the default and re-baseline the era on
+it. Mechanical, but it moves every subsequent number, so it is Luke's call and
+probably an era boundary.
+
+## Seed averaging inside a run — variance reduction over variance measurement
+
+*Evidence: **E3** — `probe-grid` measured baseline run-to-run SD at 0.0095 over
+n=3, putting the minimum detectable effect of a single-run comparison at
+**~0.027**.*
+
+That MDE is the reason `probe-grid` needed 13 runs to read 8 levers, and it is
+why every sub-0.027 result in `log.jsonl` is unreadable as stated. Averaging
+2-3 seeds per fold *within* one run would shrink the error on every future
+experiment for ~2-3x the compute of one run — cheaper than repeating whole
+experiments, and it compounds.
+
+It changes what "a run" means and breaks comparability with everything already
+logged, so it is an **era-boundary decision**, not a mid-search change. Raise it
+at the next cutover.
+
+**Related standing fact:** `cv_baseline` is a fair draw (0.218 vs a 3-run mean
+of 0.2177), so nothing currently in `log.jsonl` is biased by a lucky
+denominator. `models/base_r2` and `base_r3` on `exp/probe-grid` are the repeats.
 
 ## What survives unfreezing — read before spending a fine-tune
 
