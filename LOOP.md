@@ -255,9 +255,18 @@ Luke. An unmeasured ETA is not a rough answer, it is a fabricated one.
 find models/<name>/folds -name summary.json -printf '%T@ %TH:%TM:%TS %p\n' | sort -n
 ```
 
-Arming a Monitor is *not* the gate. A Monitor tells you when the run ends; the
-gate is about deciding, before then, whether you should still be here at all.
-Arm one only after the measured ETA says to.
+Arming a Monitor is *not* the gate. A Monitor tells you how the run is going;
+the gate is about deciding, before then, whether you should still be here at
+all. Arm one only after the measured ETA says to.
+
+**What the ETA is for — read the gap, not the total.** The prompt cache's TTL
+(~1 h) refreshes every time it is read, so each fold event renews it and a
+chain of them keeps one agent warm indefinitely. What forces a handoff is a
+single silence longer than the TTL. So the number you compare against is the
+**per-fold time**, not the length of the run: under ~50 min per fold, a
+per-fold Monitor carries the experiment however many hours it takes; over, no
+Monitor can help and you hand off. A 4 h CV landing a fold every 20 min is a
+run you stay with.
 
 **Every agent that has skipped this skipped it the same way**, so recognise the
 move in yourself:
@@ -311,16 +320,19 @@ training it later with the same `--name` gives an identical model:
 **Reruns resume silently** — always use a fresh `--name`, or pass `--clear`, or
 delete `models/<name>/` by hand.
 
-**If the run will outlast you, write a handoff doc — and decide that from the
-first-fold measurement above, never from a guess at launch.** The mechanics of
-detaching, and the Monitor script that covers the failure states, are in
-CLAUDE.md's "Running long jobs"; the decision rule is here, and here only.
-Under ~1 h left, set a completion `Monitor` and keep working — **do not write a `HANDOFF.md` for a run that finishes inside your own
-context**, it is written, committed and never opened. That Monitor fires
-**once, on a terminal state** (done / crashed / vanished), never per fold: you
-armed it in order to stop watching, and every progress line it echoes is
-context spent re-learning that. See CLAUDE.md for the loop that covers all
-three states. Over ~1 h, commit a
+**A handoff is a last resort, not a precaution — and the trigger is measured,
+never guessed at launch.** The mechanics of detaching, and the Monitor script,
+are in CLAUDE.md's "Running long jobs"; the decision rule is here, and here
+only. **Do not write a `HANDOFF.md` for a run you can stay with**: it is
+written, committed and never opened, and the agent that opens one pays full
+uncached price to re-read this file, CLAUDE.md, `log.jsonl` and `IDEAS.md`, then
+reorients into an experiment it did not design. That is the expensive path, not
+the wakeups it saves.
+
+So: **arm a Monitor that fires once per fold plus on the terminal states, with
+a ~50-minute timeout built in.** The fold events double as progress and as the
+cache keepalive; answer each in one line and go back to waiting. If the timeout
+fires, the cache is lapsing whatever you do — *that* is the moment to commit a
 **`HANDOFF.md`** in the worktree (that exact name, so a fresh agent opens the
 one place it always is) and end your turn. Keep it short; it needs four things:
 

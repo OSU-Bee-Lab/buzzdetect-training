@@ -122,8 +122,9 @@ For stage 3 drop `BUZZDETECT_CHUNK_FRAMES`; keep `CUDA_VISIBLE_DEVICES=""` (the
 > Read it there; it is not repeated here, so that there is one copy to keep
 > right. In one line: launch detached, note the wall clock, **wait for the
 > first fold's `summary.json`**, and compute the ETA from that file's mtime —
-> never from the epoch rate, the kind of job, or the cost table. Over ~1 h
-> left, `HANDOFF.md` and end the turn; under, a `Monitor`.
+> never from the epoch rate, the kind of job, or the cost table. Then decide
+> from the **gap between folds**, not the total: under ~50 min per fold, a
+> per-fold `Monitor` carries the run however long it is; over, `HANDOFF.md`.
 >
 > ```
 > find models/<name>/folds -name summary.json -printf '%T@ %p\n' | sort -n
@@ -135,57 +136,70 @@ For stage 3 drop `BUZZDETECT_CHUNK_FRAMES`; keep `CUDA_VISIBLE_DEVICES=""` (the
 The rest of this section is the *mechanics* the rule depends on: what a Monitor
 has to cover, and how to check by hand if you are handing off instead.
 
-**Why the 1 h line is where it is.** It is the prompt cache's TTL, not a
-guess about attention span. A `Monitor` on a job whose next real event is
-further out than that — persistent or not — buys nothing: the cache goes cold
-in the gap either way, and every wake pays full uncached-context price. Inside
-the hour the cache is still warm, so a Monitor is nearly free and strictly
-better than polling.
+**Why ~50 min, and why it is a gap and not a duration.** The prompt cache's TTL
+is ~1 h, and **it refreshes on every read** — it measures time since the cache
+was last *used*, not since it was created. So any wake inside the hour renews
+it, and a chain of them holds one warm indefinitely. What can kill it is a
+single silent stretch longer than the TTL, which means the quantity that
+decides a handoff is the **longest gap between events**, never the run's total
+length. 50 min is the TTL with a margin for a fold running late.
+
+The consequence is the important part: **a 4 h CV whose folds land every
+~20 min needs no handoff at all.** One agent carries it start to finish, each
+fold event renewing the cache, and the experiment keeps the hypothesis and the
+launch decisions that were never written down. A handoff is not the cheap
+option it looks like — the incoming agent pays *full uncached* price to re-read
+LOOP.md, CLAUDE.md, `log.jsonl` and `IDEAS.md`, and reorients into work it did
+not design. That is worth far more than a dozen cached re-reads at ~10% of
+input price. **Hand off when the cache cannot be kept alive, not when the run
+is long.**
 
 A completion Monitor must also **cover the failure states**, or a crash is
 indistinguishable from a long fold — poll for the completion marker, for
 tracebacks in the log, *and* for the trainer having vanished without either.
 
-**It fires once, on a terminal state. Do not make it a progress meter.** Every
-stdout line becomes a message in your context, so a monitor that echoes each
-finished fold spends context to tell you something you already decided you did
-not need — you set the Monitor *because* the ETA said to stop watching. The
-first fold is the one event worth interrupting for, and it happens before the
-Monitor is armed (it is what tells you to arm one). After that, the next thing
-you need to know is that the run ended, well or badly.
+**Fire one event per fold, plus the terminal states.** Each fold event is doing
+two jobs at once: it is the progress line, and it is the cache keepalive that
+makes a long run survivable without a handoff. This was got backwards once —
+an earlier revision of this file argued for terminal-state-only firing on the
+grounds that the TTL is absolute and there is nothing to ping. **That premise
+was false** (see above), and with it the conclusion: silence is not free, it is
+what eventually forces the handoff.
 
-**Per-fold firing does not keep the prompt cache warm — this was checked, and
-the argument is closed.** The session's cache TTL is ~1 h and it is *time*
-based, so a 30-minute silence arrives exactly as warm as one interrupted
-fourteen times; there is nothing to ping. Meanwhile each extra wake re-reads
-the whole conversation at ~10% of input price, which at a realistic context
-size makes fifteen fold-events cost on the order of tens of thousands of
-full-price input tokens to deliver a number that changes no decision. And the
-case where a gap *would* outlive the cache is the >1 h case, where the rule is
-`HANDOFF.md` and no Monitor at all. **So there is no run for which per-fold
-firing is correct**: inside the hour it buys nothing, outside the hour you
-should not be waiting. The cheap option and the un-spammy option are the same
-option.
+Keep the events cheap rather than rare. A fold event should be one short line,
+and **the right response to one is one short line back** — acknowledge and stop.
+Do not re-read the log, re-check the diff, or start a side task on a fold
+event; everything read while waiting is paid for twice, and that cost, not the
+wake itself, is what makes a progress meter expensive.
 
-**The one real gap, and its actual fix.** Terminal-state polling cannot
-distinguish a slow fold from a wedged one — `pgrep` catches the trainer
-*vanishing*, not the trainer *hanging*. Do not solve this with progress
-events. Solve it with a stall timeout, which stays silent while things are
-healthy and speaks only when progress genuinely stops: track the newest
-`summary.json` mtime and fire if it has not advanced in a few times the
-measured fold time.
+**The 50-minute timeout is the handoff trigger, and it belongs in the monitor.**
+If no fold lands within it, the cache is about to lapse whatever you do, so the
+monitor says so explicitly and the agent writes `HANDOFF.md` *then* — at the
+moment it is actually needed, on measured evidence, rather than being
+guessed at launch. This is also the hang detector: a wedged trainer and a fold
+too slow to keep the cache alive call for the same action.
 
 ```
-stall_after=$(( 3 * <measured fold seconds> ))
+stall_after=3000   # ~50 min: the cache TTL with margin
 newest() { find models/<name>/folds -name summary.json -printf '%T@\n' 2>/dev/null | sort -n | tail -1; }
-last=$(newest); last_change=$(date +%s)
-# ... inside the loop, alongside the three checks below:
-now=$(newest)
-[ "$now" != "$last" ] && { last=$now; last_change=$(date +%s); }
-[ $(( $(date +%s) - last_change )) -gt $stall_after ] && { echo "STALL: no new fold in ${stall_after}s"; break; }
+last=$(newest); last_change=$(date +%s); n=0
+while true; do
+  now=$(newest)
+  if [ "$now" != "$last" ]; then
+    last=$now; last_change=$(date +%s)
+    echo "fold $(find models/<name>/folds -name summary.json | wc -l)/<total> done"
+  fi
+  [ -f <marker> ] && { echo "DONE"; break; }
+  grep -qE "Traceback|MemoryError|Killed" <log> 2>/dev/null && { echo "CRASH"; break; }
+  pgrep -f "[0]3_train/main.py" >/dev/null || { echo "STALLED: trainer gone"; break; }
+  [ $(( $(date +%s) - last_change )) -gt $stall_after ] \
+    && { echo "WRITE HANDOFF: no fold in ${stall_after}s, cache will lapse"; break; }
+  sleep 30
+done
 ```
 
-The loop below is the shape for the three terminal states; keep it, and add the
+The three terminal checks above are not optional — without them a crash is
+indistinguishable from a long fold. The loop below is the shape for the three terminal states; keep it, and add the
 stall check to it when a hang would cost you the turn:
 
 ```
