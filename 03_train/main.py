@@ -54,6 +54,13 @@ if __name__ == '__main__':
                              'epoch count is read from the fold curves on disk, so '
                              'a later run with the same --name plus --skip-cv '
                              'produces the same model. Implied by --skip-cv.')
+    parser.add_argument('--hidden', type=int, default=0,
+                        help='width of a shared ReLU hidden layer between the '
+                             'input dropout and the class logits (default 0 = '
+                             'no hidden layer, the shipped decoupled head). '
+                             'h>0 gives all classes one learned representation, '
+                             'so auxiliary-class supervision reaches the buzz '
+                             'neuron.')
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
@@ -78,6 +85,7 @@ if __name__ == '__main__':
         skip_cv=args.skip_cv,
         # --skip-cv means 'shipped model only', so it has to turn it on.
         train_shipped=args.train_shipped or args.skip_cv,
+        hidden=args.hidden,
         only_folds=args.only_folds,
         surprisal=args.surprisal,
     )
