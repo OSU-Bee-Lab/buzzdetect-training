@@ -648,6 +648,16 @@ the reported metric is buzz sensitivity at fixed FPR. It also mostly cancels whe
 *comparing* configurations, since every config carries the same bias; it does
 not cancel when quoting an absolute number.
 
+**It mattered, and the bound above holds only for `val_loss`.** Every clause of
+it — a coarse scalar, correlated adjacent epochs, selection on multi-class
+`val_loss` while the reported metric is buzz sensitivity, cancellation across
+configs — assumes the selection statistic differs from the reported one. Under
+`--monitor val_sens` they are the same statistic, and the fold's reported score
+becomes `max` over epochs of itself: `monitor-leakage` (2026-09-09) measured
+`peak - at_best` at exactly 0.000 on all five folds of every `val_sens` run, and
+0.02-0.05 of the resulting headline. Nor does it cancel when the thing being
+compared *is* the monitor. See `tools/honest_epoch.py`.
+
 Cheap to remove later if it ever matters: keep monitoring as-is but report each
 fold at `median(best_epoch)` of the *other* folds, so the epoch that produced the
 quoted number never saw the fold it's scored on. The probe is small enough

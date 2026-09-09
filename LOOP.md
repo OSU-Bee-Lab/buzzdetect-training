@@ -424,6 +424,19 @@ caution for reading two `val_loss` runs against each other. It says nothing
 about a difference produced by a change in configuration, and using it that way
 will talk you out of every hard-fold result the loop is capable of finding.
 
+**The worked example below has since been withdrawn — the lesson stands, its
+example does not.** `monitor-leakage` (2026-09-09) showed `context-monitor`'s
+`1_150` gain was selection leakage: the held-out fold is its own early-stopping
+monitor, so a `val_sens` run reports `max` over epochs of the statistic it is
+scored on, and the non-overlapping group split below is a comparison of *a
+point on a curve* against *the maximum of that same curve*. Re-scored at a
+cross-fold epoch the two groups overlap completely. Read what follows as the
+method for *how to check* a hard-fold gain — grouping the era's runs by the
+variable you changed is exactly what settled it, in both directions — and note
+the check it does not perform: **ask whether the treatment could have selected
+on the reported metric.** Keep the accounting lesson; it is right, and the
+hard folds are still the target.
+
 `context-monitor` (2026-09-09) is the worked example, and it was logged
 `caveated` before being amended to `clean` the same day. The agent saw +0.049
 carried entirely by `1_150`, reached for the 0.007–0.062 spread, and flagged the

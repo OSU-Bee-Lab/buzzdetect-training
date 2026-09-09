@@ -175,7 +175,20 @@ gap.** Do not spend another CV on optimiser levers. L8 (binary vs 15-class head)
 and L9 (standardisation, already +0.043 as `standardize-blocks`) were not part
 of the grid and remain open.
 
-## Adopt `--monitor val_sens` as the default
+## WITHDRAWN: adopt `--monitor val_sens` as the default
+
+> **Do not do this.** `monitor-leakage` (2026-09-09, **E3**) shows the lever is
+> a measurement artifact. The held-out fold *is* the early-stopping monitor
+> (`train.py:568`), so a `val_sens` run reports `max` over epochs of the exact
+> statistic it is scored on — `peak - at_best` is exactly 0.000 on all five
+> folds of every `val_sens` run on disk. Re-scored at an epoch chosen from the
+> *other* folds, the +0.031 becomes **+0.007** and the composed gain becomes
+> **-0.014**. `probe-grid`, `context-monitor` and `context-monitor-r2` are all
+> marked `artifact` in `log.jsonl`. The section below is kept as the record of
+> what was believed; the `1_150` stopping failure it describes is real, but see
+> "cross-fold epoch selection" below for the fix that does not leak.
+
+### The record of what was believed (superseded — read the box above first)
 
 *Evidence: **E3** — `probe-grid`, strengthened by `context-monitor` (2026-09-09).
 The flag exists on `exp/probe-grid` and `exp/context-monitor`, defaulting to the
@@ -196,9 +209,48 @@ about the default, **any experiment on a wide input should pass
 as an embedder verdict — the same trap `aves-probe` fell into from the other
 direction.
 
-## The best-known config, and the one thing owed on it
+## The best-known config
 
-*Evidence: **E3** — `context-monitor` (2026-09-09). The current top of the log.*
+*Evidence: **E3** — `context-embedder`, re-scored by `monitor-leakage`
+(2026-09-09).*
+
+**`yamnet_context` alone, honest headline 0.277.** Not `yamnet_context +
+--monitor val_sens` at 0.310 — that number is `max`-over-epochs of its own
+reported statistic (see the withdrawn section above). Under a cross-fold epoch
+rule applied identically to both, the context embedder scores **0.277** and the
+composed config **0.263**, paired 2 up / 3 down.
+
+The context embedder is the era's real result and it got *larger* under the
+honest rule: **+0.040 -> +0.061** over `cv_baseline`. Build on it.
+
+Its shipped 0.258 understates it because `1_150` stopped at epoch 5 (a 3072-d
+input reaches its `val_loss` argmin almost immediately). That failure is real —
+but its own curve already reaches 0.144, so the fix is the epoch rule, not the
+monitor.
+
+## Cross-fold epoch selection as the shipped rule
+
+*Evidence: **E3** — `monitor-leakage` (2026-09-09). Measured offline; the
+implementation is unrun.*
+
+`README.md:651` already proposes it: score each fold at an epoch derived from
+the *other* folds, so the epoch that produced a fold's number never saw that
+fold. `tools/honest_epoch.py` shows it is worth **+0.019** on
+`context_embedder` (0.258 -> 0.277) and ~0 on `cv_baseline`, i.e. it is how you
+repair a stopping failure without leaking.
+
+**Not a drop-in.** Early stopping truncates each fold's curve at its own
+patience tail, so a cross-fold epoch later than that is untestable — the tool
+marks those folds `*` and most runs hit the cap. Making this the shipped rule
+needs a **fixed epoch budget** (train every fold to a common cap, select
+afterwards) or a two-pass fit. That is one cheap frozen-probe CV, and it is the
+highest-value open item in the era.
+
+### Superseded: the one thing owed on the old best config
+
+*Evidence: **E3** — `context-monitor` (2026-09-09), marked `artifact` by
+`monitor-leakage` the same day. Kept as the record of what was believed; the
+0.307/0.310 below is `max`-over-epochs of its own reported statistic.*
 
 **`yamnet_context` + `--monitor val_sens` = 0.307**, +0.089 over `cv_baseline`
 with **5 folds up / 0 down** — the only all-up run in the era. The two
