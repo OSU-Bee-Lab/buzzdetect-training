@@ -319,13 +319,21 @@ So they need different fixes and should stop being treated as one item:
   threshold, which is why the threshold goes positive while every other fold sits
   near -1.7. Its buzz is 242 s of 328 s `ins_buzz_low`, and low buzz vs engine
   drone is an acoustically plausible confusion. This is the fold **night-negatives**
-  would help most; a buzz-vs-`mech_auto` margin is the other candidate.
+  would help most. (The other candidate, a buzz-vs-`mech_auto` margin, was run
+  and is closed negative — below.) `mech-margin` also measured *why* it is hard:
+  its buzz and non-buzz frames are separated by only **0.513** of mean logit in
+  `cv_baseline`, against 1.578 at `1_29` and 1.425 at `Fit+Fast`. It is not that
+  its threshold is misplaced; the two populations barely separate at all.
 - `1_95` was the explicit target of `harmonic-comb` (2026-09-08) and **did not
   move**: +0.002 in each of two runs, and the only fold byte-stable across two
   nondeterministic runs, i.e. its failure is structural rather than stochastic.
   An explicit f0 channel that cleanly separates a 90 Hz engine comb from a
   220 Hz wingbeat comb on synthetic tones does nothing on this fold's real
-  audio. A buzz-vs-`mech_auto` margin is now the remaining candidate.
+  audio. **The buzz-vs-`mech_auto` margin that used to be named here as the
+  remaining candidate is now closed and negative** — see
+  "Closed: absolute-margin confuser penalties" below. `1_95` moved *down* at
+  every dose. It has now defeated two targeted interventions; nothing cheap is
+  left, and the next move on it is to listen to the audio.
 - **1_150 is a positives problem** — its negatives are unremarkable and its buzz
   frames are simply indistinguishable from its own background, despite being 88 s
   of plain `ins_buzz_medium` with 6503 s of support. Nothing structural explains it.
@@ -413,9 +421,14 @@ per-class activations and reproduce `folds_sx.csv` exactly;
 `activation_ins_buzz,correct`, no `labels_raw`.)
 
 **So the pairwise buzz-vs-trill margin this idea recommends would be aimed at the
-wrong class.** If a margin term is worth trying, make it buzz-vs-`mech_auto`.
-Smoke-test any custom loss with `tools/smoke_model.py` first; `tail-loss` is the
-cautionary tale.
+wrong class.** The buzz-vs-`mech_auto` margin it redirected to was run as
+`mech-margin` (2026-09-09) and is **closed negative** — see below. Note the
+readout geometry measured there cuts against the redirection too:
+`cosine(W_ins_buzz, W_c)` puts `ins_trill` (+0.268) and `ambient_background`
+(+0.265) closest to buzz and `mech_auto` near-orthogonal (-0.016), so trill is
+the class whose *readout* is entangled with buzz even though vehicles supply
+more of the FP frames. Smoke-test any custom loss with `tools/smoke_model.py`
+first; `tail-loss` is the cautionary tale.
 
 ## eval-sampling-floor → annotation guidance
 
@@ -489,6 +502,53 @@ only, flatten to 2048-d. Both need the `yamnet_trunk` cache, which no longer
 exists for `medium` (see **trunk-fine-tuning** below), and option 1's result
 means neither is a priority.
 
+## Closed: absolute-margin confuser penalties
+
+*Evidence: **E3** — `mech-margin` (2026-09-09), a 4-CV geometric dose ladder. Closed.*
+
+A class-conditional hinge `lam * 1[mech_auto and not ins_buzz] * relu(z_buzz + m)`
+at `m = 2.0`, over `lam` 0.125 / 0.5 / 2.0 / 8.0: **0.202 / 0.169 / 0.090 /
+0.021** against `cv_baseline`'s 0.218. Monotone in the dose, 5 folds down and 0
+up at every dose at or above 0.5, the two rich folds carrying the largest
+losses, and the largest doses 5-7x `probe-grid`'s ~0.027 MDE. `1_95`, the fold
+it was designed for, is down at every dose.
+
+**Do not re-run this in another costume.** The mechanism generalises past
+`mech_auto`, and it is the reason to read this section:
+
+- **The `mech_auto` share of threshold-setting FPs *rose* with the dose** —
+  26.5% -> 32.1% -> 39.3%. The term pushed those frames down in absolute terms
+  and lost ground on them in rank.
+- **The metric reads rank only.** Every fold is thresholded on its own held-out
+  audio, so a term that drives a subpopulation below a fixed logit buys nothing
+  by itself; it can only pay by *rotating* the readout. Here rotating away from
+  `mech_auto` frames rotates away from buzz: the buzz/non-buzz mean-logit gap
+  collapses monotonically (`1_29` 1.578 -> 1.000 -> 0.519), and at `1_95` under
+  `lam 2.0` it **inverts** to -0.064.
+- **The overlap is in the frame population, not the weights.**
+  `cosine(W_ins_buzz, W_mech_auto) = -0.016` — near-orthogonal. `mech_auto`
+  frames simply sit high on the buzz direction, which is *why* they lead the FP
+  census, and no linear readout of frozen YAMNet separates them.
+
+**What is left of the idea.** A confuser penalty must be **pairwise** — buzz
+frame ranked above confuser frame — not absolute, so that it expresses the
+ordering the metric actually scores. That shape is `tail-loss`'s, whose E2
+failure was a *monitor* artifact (batch-local rank made the compiled loss
+invalid as `val_loss`) rather than evidence against ranking losses; the fix is a
+pairing that is deterministic per frame, e.g. against a frozen reference model's
+scores rather than the live batch. Nobody has run that. Weigh it against the
+plainer reading of this result — that a linear readout of frozen YAMNet has no
+room to separate these populations at all, which is an argument for
+[[shared-trunk-head]] or a better representation rather than for a cleverer
+loss.
+
+**Reusable tooling.** The FP census (raw labels of negatives above each fold's
+own fpr0.005 threshold, from `models/<m>/surprisal/**/*.csv`) and the
+buzz/non-buzz mean-logit gap are a two-minute read on any model with
+`surprisal/` on disk, need no training, and recompute for free after a data
+revision. The gap in particular is the diagnostic that explains a fold's
+sensitivity without reference to its threshold.
+
 ## shared-trunk-head — give cross-class supervision a path to the buzz neuron
 
 *Evidence: the **structural fact** below is read off current code, not measured.
@@ -546,8 +606,13 @@ already linearly separable for this concept by construction, which is the case
 where a hidden layer buys least; the training pool is ~72k frames with ~7.7k
 buzz, so a wide hidden layer can overfit the training sites; and the *reason*
 the auxiliary classes might help — that vehicles and trill are the confusers
-that set the operating point — is better attacked directly by a per-confuser
-margin (see `mech-margin`) if that pays. Read this as a real lever with a
+that set the operating point — was attacked directly by a per-confuser margin
+and **failed** (`mech-margin`, above). That cuts both ways: it removes the
+cheaper alternative, and its mechanism (a *linear* readout of frozen YAMNet
+cannot push `mech_auto` frames down without taking buzz with them, despite the
+two readout directions being near-orthogonal) is precisely the situation where a
+non-linear stage has something to add. Treat `mech-margin`'s failure as mild
+support for this section rather than against it. Read this as a real lever with a
 plausible mechanism, not as a favourite.
 
 **Free prediction that tests the whole framing.** Because the head is decoupled,
