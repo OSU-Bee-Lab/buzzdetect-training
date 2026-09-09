@@ -96,7 +96,7 @@ nohup env PYTHONUNBUFFERED=1 BUZZDETECT_NO_GPU=1 MALLOC_ARENA_MAX=2 \
   BUZZDETECT_AVES_DEVICE=cuda BUZZDETECT_AVES_BATCH=64 \
   /home/luke/anaconda3/envs/buzzdetect-train/bin/python -u \
   main.py --model aves_probe --set medium --embedder aves \
-  --translation general --workers 1 --verbose -y \
+  --translation general --workers 0 --verbose -y \
   >> run_aves_probe.log 2>&1 &
 disown; echo "pid $!"
 ```
@@ -110,11 +110,15 @@ disown; echo "pid $!"
   needs during stage 2. Torch still sees the GPU. Setting
   `CUDA_VISIBLE_DEVICES=""` — which CLAUDE.md's generic recipe does — would hide
   it from torch too and put you back on the 14 h CPU path.
-- **`--workers 1`, not 2.** Throughput is flat from batch 16, i.e. one process
-  saturates the GTX 1650; a second worker adds a second CUDA context competing
-  for the 4 GB and buys no speed. The embedder's `initialize()` runs inside the
-  worker *after* the fork, so CUDA is never initialized pre-fork — that is why
-  forking is safe here at all.
+- **`--workers 0` is mandatory, not a tuning choice.** 0 means in-process; any
+  value >= 1 forks a worker and **the run dies instantly** with
+  `RuntimeError: CUDA driver initialization failed`. `main.py` imports
+  TensorFlow before anything else, and TF touches the CUDA driver during import
+  — before `BUZZDETECT_NO_GPU` gets to hide the GPU from it — so the parent
+  already holds a CUDA context and `fork` poisons it for the child. This cost
+  one crashed relaunch (`run_aves_probe_fork_crash.log`). Losing the workers
+  costs nothing here anyway: throughput is flat from batch 16, so one stream
+  already saturates the GTX 1650.
 - **`embedders/aves/embedder.py` was rewritten and committed to main**
   (`8fe1336`), not to this branch. It is a pure speedup — batching + GPU,
   14.3 h -> 1.0 h — and `embedders/*` is symlinked to main from every worktree,

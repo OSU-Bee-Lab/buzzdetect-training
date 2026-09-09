@@ -1,10 +1,10 @@
-2026-09-09 01:24:57.605510: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
-2026-09-09 01:24:57.631265: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
-2026-09-09 01:24:57.631319: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
-2026-09-09 01:24:58.672593: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
-2026-09-09 01:25:00.895928: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2026-09-09 01:25:00.937140: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
-2026-09-09 01:25:00.939587: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-09-09 01:23:27.964766: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2026-09-09 01:23:27.991580: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2026-09-09 01:23:27.991634: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2026-09-09 01:23:29.034285: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+2026-09-09 01:23:31.268661: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-09-09 01:23:31.308296: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-09-09 01:23:31.310453: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
 === 02 extract set ===
 0.0s - [medium/aves] existing config: overlap_event_prop=0.2, framehop_prop=1
 0.0s -   loaded from /home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/02_set/sets/medium/config_extract.json
@@ -93,41 +93,70 @@
 0.2s - extract_snips: [83/83] Karlan Forrester - Soybean Attractiveness/L6-8/4/210807_0908 — unchanged (0 written, 0 deleted)
 0.2s - extract_snips: 83 ident(s): 0 updated (0 snip(s) written, 0 superseded), 83 unchanged
 0.5s - [medium/aves] 83 ident(s): 83 to extract (80 new, 3 superseded by new annotations), 0 already current
-0.5s -   0 worker(s); folds: 44
-/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/02_set/extract.py:915: UserWarning: extractor main: JamesU - MustardBumbler/1_29/240903_1319 superseded by new annotations; removed /home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/02_set/sets/medium/audio/sr16000_fl1/raw/JamesU - MustardBumbler/1_29/JamesU - MustardBumbler/1_29/240903_1319
-  warnings.warn(f'extractor {self.name}: {ident} superseded by new annotations; '
-3.1s - extractor main: [1] JamesU - MustardBumbler/1_29/240903_1319 — starting (both)
-3.1s - extractor main: JamesU - MustardBumbler/1_29/240903_1319 snip [1/24] snip_103230.000_103590.004.flac
-5.1s - extractor main: JamesU - MustardBumbler/1_29/240903_1319 snip [2/24] snip_106830.000_107190.030.flac
-5.9s - extractor main: JamesU - MustardBumbler/1_29/240903_1319 snip [3/24] snip_110430.000_110790.004.flac
-6.8s - extractor main: JamesU - MustardBumbler/1_29/240903_1319 snip [4/24] snip_114030.000_114390.000.flac
-7.6s - extractor main: JamesU - MustardBumbler/1_29/240903_1319 snip [5/24] snip_117630.000_117990.000.flac
-8.4s - extractor main: rescued 'animal_dog' at 117674.047s (0.180s) as animal_dog+ins_trill
-8.4s - extractor main: rescued 'animal_dog' at 117677.060s (0.178s) as animal_dog+ins_trill
-8.5s - extractor main: rescued 'animal_dog' at 117707.204s (0.164s) as animal_dog+ins_trill
-8.5s - extractor main: rescued 'animal_dog' at 117739.124s (0.114s) as animal_dog+ins_trill
-8.5s - extractor main: rescued 'animal_dog' at 117742.156s (0.209s) as animal_dog+ins_trill
-8.5s - extractor main: JamesU - MustardBumbler/1_29/240903_1319 snip [6/24] snip_121230.000_121590.000.flac
-9.3s - extractor main: JamesU - MustardBumbler/1_29/240903_1319 snip [7/24] snip_38430.000_38790.000.flac
-10.2s - extractor main: JamesU - MustardBumbler/1_29/240903_1319 snip [8/24] snip_42030.000_42390.000.flac
-11.0s - extractor main: JamesU - MustardBumbler/1_29/240903_1319 snip [9/24] snip_45630.000_45990.000.flac
-11.9s - extractor main: rescued 'ins_trill' at 45665.201s (0.129s) as ins_trill+mech_plane_jet
-11.9s - extractor main: rescued 'ins_trill' at 45668.042s (0.183s) as ins_trill+mech_plane_jet
-11.9s - extractor main: rescued 'ins_trill' at 45673.139s (0.156s) as ins_trill+mech_plane_jet
-11.9s - extractor main: rescued 'ins_trill' at 45676.203s (0.183s) as ins_trill+mech_plane_jet
-11.9s - extractor main: rescued 'ins_trill' at 45681.190s (0.178s) as ins_trill+mech_plane_jet
-11.9s - extractor main: rescued 'ins_trill' at 45684.092s (0.146s) as ins_trill+mech_plane_jet
-12.0s - extractor main: rescued 'ins_trill' at 45698.067s (0.161s) as ins_trill+mech_plane_jet
-12.0s - extractor main: rescued 'ins_trill' at 45700.125s (0.144s) as ins_trill+mech_plane_jet
-12.0s - extractor main: rescued 'ins_trill' at 45701.176s (0.138s) as ins_trill+mech_plane_jet
-12.0s - extractor main: rescued 'ins_trill' at 45702.113s (0.155s) as ins_trill+mech_plane_jet
-12.0s - extractor main: rescued 'ins_trill' at 45706.156s (0.169s) as ins_trill+mech_plane_jet
-12.0s - extractor main: rescued 'ins_trill' at 45714.063s (0.155s) as ins_trill+mech_plane_jet
-12.0s - extractor main: rescued 'ins_trill' at 45715.075s (0.144s) as ins_trill+mech_plane_jet
-12.0s - extractor main: rescued 'ins_trill' at 45723.154s (0.138s) as ins_trill+mech_plane_jet
-12.0s - extractor main: rescued 'ins_trill' at 45734.120s (0.156s) as ambient_background+ins_trill
-12.0s - extractor main: rescued 'ins_trill' at 45741.199s (0.175s) as ambient_background+ins_trill
-12.0s - extractor main: rescued 'ins_trill' at 45742.206s (0.152s) as ambient_background+ins_trill
-12.0s - extractor main: rescued 'ins_trill' at 45745.199s (0.138s) as ambient_background+ins_trill
-12.0s - extractor main: rescued 'ins_trill' at 45746.146s (0.152s) as ins_trill
-12.0s - extractor main: JamesU - MustardBumbler/1_29/240903_1319 snip [10/24] snip_49230.000_49590.000.flac
+0.5s -   1 worker(s); folds: 44
+WORKER 0 FATAL: RuntimeError: CUDA driver initialization failed, you might not have a CUDA gpu.
+Traceback (most recent call last):
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/02_set/extract.py", line 956, in run_worker
+    worker.run()
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/02_set/extract.py", line 942, in run
+    self.embedder.initialize()
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/embedders/aves/embedder.py", line 60, in initialize
+    self.model.to(device)
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1383, in to
+    return self._apply(convert)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 933, in _apply
+    module._apply(fn)
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 933, in _apply
+    module._apply(fn)
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 933, in _apply
+    module._apply(fn)
+  [Previous line repeated 1 more time]
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 964, in _apply
+    param_applied = fn(param)
+                    ^^^^^^^^^
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1369, in convert
+    return t.to(
+           ^^^^^
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/cuda/__init__.py", line 529, in _lazy_init
+    torch._C._cuda_init()
+RuntimeError: CUDA driver initialization failed, you might not have a CUDA gpu.
+Process Process-1:
+Traceback (most recent call last):
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/02_set/extract.py", line 956, in run_worker
+    worker.run()
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/02_set/extract.py", line 942, in run
+    self.embedder.initialize()
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/embedders/aves/embedder.py", line 60, in initialize
+    self.model.to(device)
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1383, in to
+    return self._apply(convert)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 933, in _apply
+    module._apply(fn)
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 933, in _apply
+    module._apply(fn)
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 933, in _apply
+    module._apply(fn)
+  [Previous line repeated 1 more time]
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 964, in _apply
+    param_applied = fn(param)
+                    ^^^^^^^^^
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1369, in convert
+    return t.to(
+           ^^^^^
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/torch/cuda/__init__.py", line 529, in _lazy_init
+    torch._C._cuda_init()
+RuntimeError: CUDA driver initialization failed, you might not have a CUDA gpu.
+Traceback (most recent call last):
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/main.py", line 130, in <module>
+    main(
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/main.py", line 63, in main
+    stage2.extract_set(
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/aves-probe/02_set/extract.py", line 1138, in extract_set
+    raise RuntimeError(
+RuntimeError: 1/1 extraction worker(s) crashed (exit codes: [1])
