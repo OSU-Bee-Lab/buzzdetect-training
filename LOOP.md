@@ -267,11 +267,14 @@ training it later with the same `--name` gives an identical model:
 **Reruns resume silently** — always use a fresh `--name`, or pass `--clear`, or
 delete `models/<name>/` by hand.
 
-**If the run will outlast you, write a handoff doc.** Any job you expect to take
-more than about an hour will outlive your context — waiting on it burns uncached
-tokens for nothing. Launch it detached, commit a **`HANDOFF.md`** in the
-worktree (that exact name, so a fresh agent opens the one place it always is),
-and end your turn. Keep it short; it needs four things:
+**If the run will outlast you, write a handoff doc — but decide that from a
+measured ETA, not from a guess at launch.** Launch detached, let the first fold
+finish, and compute the remaining time from it; CLAUDE.md's "Running long jobs"
+has the exact procedure. Under ~1 h left, set a completion `Monitor` and keep
+working — **do not write a `HANDOFF.md` for a run that finishes inside your own
+context**, it is written, committed and never opened. Over ~1 h, commit a
+**`HANDOFF.md`** in the worktree (that exact name, so a fresh agent opens the
+one place it always is) and end your turn. Keep it short; it needs four things:
 
 1. **The one-command progress check** — is it running, and how many of the 5
    folds are done (`pgrep -af <entry point>`, `find models/<name>/folds -name

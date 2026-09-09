@@ -489,6 +489,75 @@ only, flatten to 2048-d. Both need the `yamnet_trunk` cache, which no longer
 exists for `medium` (see **trunk-fine-tuning** below), and option 1's result
 means neither is a priority.
 
+## shared-trunk-head — give cross-class supervision a path to the buzz neuron
+
+*Evidence: the **structural fact** below is read off current code, not measured.
+The MLP-head negative it revises is **E1/E2**. The proposal itself is untested.*
+
+**The structural fact.** `train.py` builds `Input -> Dropout(0.2) ->
+Dense(n_classes)` — one layer, no hidden stage. So `ins_buzz`'s logit is a
+function of `W[:, buzz]` and `b[buzz]` alone, the loss is a sum of independent
+per-neuron terms, and **the 15 classes are 15 decoupled logistic regressions**
+sharing only the input dropout mask. No gradient path runs from a `mech_auto`
+error to `W[:, buzz]`.
+
+Three consequences, all of which bite:
+
+1. **Non-buzz confusion is already free.** Getting `ambient_noise` wrong costs
+   the buzz neuron nothing. There is no "spend less capacity on the other 14
+   classes" gain available, because none is being spent.
+2. **A per-neuron loss weight is a no-op.** Scaling `ins_buzz`'s neuron loss by
+   alpha scales only that neuron's gradients, uniformly — and Adam is invariant
+   to uniform per-parameter gradient scaling (up to epsilon). The existing
+   `reduce_mean` over 15 neurons is the same constant, equally nullified. Do not
+   spend a CV on this lever; it cannot move the number.
+3. **`build_weights`' per-class weights only ever act *within* their own
+   neuron.** For buzz, `pos_weight` is a positives-vs-negatives tradeoff inside
+   one logistic regression. Cross-class weight *comparisons* are meaningless.
+
+**And a fourth, about the metric.** To first order, changing a logistic
+regression's positive/negative balance moves the **bias**, and every fold is
+thresholded on its own held-out audio — so a pure bias shift is *invisible* to
+sens@fpr0.005. This is why raising `ins_buzz`'s weight reads as "overprediction"
+with no metric movement: the per-fold threshold absorbs exactly the thing the
+weight moved. Only changes to the *direction* `W[:, buzz]` — i.e. to which
+negatives pull on it — can move this metric.
+
+**The proposal.** Insert a shared hidden layer:
+`Dropout -> Dense(h, relu) -> Dropout -> Dense(n_classes)`. Now all 15 heads
+read one learned intermediate representation, so `mech_auto` supervision shapes
+features the buzz neuron also uses, and a buzz-weighted loss finally has
+something to be weighted *against*. This is the multi-task-transfer argument,
+which is a different claim from the capacity argument that MLP heads were
+closed on in E1/E2 — those asked "does the probe need more capacity?" (no).
+Nobody has asked "should the auxiliary classes inform buzz at all?"
+
+**Sequencing matters, and it is two experiments, not one.** The hidden layer is
+the *enabling* change; the buzz weighting is only meaningful afterwards. So:
+(1) shared hidden layer alone vs `cv_baseline`, uniform loss — does connecting
+the classes help or hurt on its own? (2) only if (1) is not a clear negative,
+per-neuron weighting on top, paired against (1). Running them together confounds
+an architecture change with a loss change and tells you nothing.
+
+**Costs and honest priors.** Cheap — a frozen-probe CV, ~9 min, no
+re-extraction, and head depth is explicitly outside the standing no-unfreezing
+injunction ([[injunction-no-long-training-runs]]). But: YAMNet's 1024-d is
+already linearly separable for this concept by construction, which is the case
+where a hidden layer buys least; the training pool is ~72k frames with ~7.7k
+buzz, so a wide hidden layer can overfit the training sites; and the *reason*
+the auxiliary classes might help — that vehicles and trill are the confusers
+that set the operating point — is better attacked directly by a per-confuser
+margin (see `mech-margin`) if that pays. Read this as a real lever with a
+plausible mechanism, not as a favourite.
+
+**Free prediction that tests the whole framing.** Because the head is decoupled,
+the 15-class head's buzz neuron *is* the binary probe, up to label-mapping
+differences. So **L8 (`binary` vs `general` translation) should come back a
+near-null.** LOOP.md already flags that control as worth rerunning early; if it
+comes back a *large* effect in either direction, the decoupling reasoning above
+is missing something and this section should be re-derived before anyone builds
+on it.
+
 ## Cheap and open
 
 *Evidence: **E2 unless noted.** None of these has been re-established on the current roster.*

@@ -116,15 +116,50 @@ For stage 3 drop `BUZZDETECT_CHUNK_FRAMES`; keep `CUDA_VISIBLE_DEVICES=""` (the
 12288-d trunk embedders OOM the 4 GB GPU, and CPU ≈ GPU on this box for the
 1024-d probe anyway). Pass `--verbose` to stage 3 or it trains silently.
 
-**2. Launch it, then end the turn.** Do not wait in-session, and do not
-`Monitor` a job whose next real event is more than ~1 h away — persistent or
-not. A persistent Monitor looks like the fix, since it only wakes on a real
-state change, but the prompt cache has its own ~1 h TTL independent of
-Monitor's: when events are sparser than that the cache goes cold in the gap
-either way, and every wake pays full uncached-context price.
+**2. Launch it, then measure before deciding how to wait.** Do not guess the
+duration and do not decide from the *kind* of job — the two ends are orders of
+magnitude apart (a frozen-probe CV is ~9 min; a trunk fine-tune is ~24 h), and
+guessing is what produces both failure modes below. Follow this in order:
 
-Come back on your own schedule instead — cheap, and it doesn't hold the
-session's cache hostage to the job's pace:
+1. **Launch detached** (recipe above) and note the wall-clock start.
+2. **Wait for the first fold to finish**, then compute an ETA from it:
+
+   ```
+   find models/<name>/folds -name summary.json -printf '%T@ %p\n' | sort -n
+   ```
+
+   One fold's elapsed time x the number of folds still to run (x the number of
+   queued configs, if you chained several) is the ETA. For stage 2, use the
+   per-ident progress lines in the log the same way.
+3. **Decide from that ETA, at that moment** — not from the ETA at launch:
+   - **More than ~1 h left → write `HANDOFF.md`, commit it, and end the turn.**
+     See LOOP.md for what it must contain.
+   - **Less than ~1 h left → set a `Monitor` that fires on completion**, and
+     keep working. No `HANDOFF.md`: nothing outlives the context, so the file
+     is written, committed, and never opened. Do not write one "to be safe" on
+     a borderline estimate — borderline resolves to *no*.
+
+**Why the 1 h line is where it is.** It is the prompt cache's TTL, not a
+guess about attention span. A `Monitor` on a job whose next real event is
+further out than that — persistent or not — buys nothing: the cache goes cold
+in the gap either way, and every wake pays full uncached-context price. Inside
+the hour the cache is still warm, so a Monitor is nearly free and strictly
+better than polling.
+
+A completion Monitor must also **cover the failure states**, or a crash is
+indistinguishable from a long fold — poll for the completion marker, for
+tracebacks in the log, *and* for the trainer having vanished without either:
+
+```
+while true; do
+  [ -f <marker> ] && { echo "DONE"; break; }
+  grep -lE "Traceback|MemoryError|Killed" <log> 2>/dev/null | grep -q . && { echo "CRASH"; break; }
+  pgrep -f "[0]3_train/main.py" >/dev/null || { echo "STALLED"; break; }
+  sleep 30
+done
+```
+
+If you are handing off instead, the manual check is:
 
 ```
 pgrep -af "[0]3_train/main.py"   # or "[0]2_set/main.py" — bracket it, see above
@@ -132,14 +167,10 @@ find models/<name>/folds -name summary.json | wc -l
 tail -5 <log>
 ```
 
-To be *notified* rather than check back, it must happen outside this session — a
-`nohup`-detached shell loop (launched like the job itself, not via
+To be *notified* after your context is gone, it must happen outside this
+session — a `nohup`-detached shell loop (launched like the job itself, not via
 `run_in_background`) that polls for the completion marker and then invokes a
 fresh `claude` CLI call.
-
-Cost is entirely config-dependent and the two ends are orders of magnitude
-apart, so **measure before assuming**: a frozen-probe CV is ~9 min and needs
-none of this machinery, while a trunk fine-tune is ~24 h and needs all of it.
 
 ## Testing
 
