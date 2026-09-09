@@ -45,6 +45,24 @@ into it — noted per-run below.
 - **L3 note.** The epoch cap is left at 400 for the batch-size run so it stays a
   single-lever change; ~18 steps/epoch instead of 2 should stop it well short.
 
+### Seed noise, measured by accident
+
+`models/test_monitor_smoke/` and L1's first fold are the **same config on the
+same fold** (`--monitor val_sens`, `JamesU - MustardBumbler/1_29`), run twice:
+
+| run | epochs | best | sens@fpr0.005 |
+|---|---|---|---|
+| test_monitor_smoke | 261 | 215 | 0.449 |
+| L1_sens fold 1     | 319 | 288 | 0.431 |
+
+baseline on that fold: 0.426.
+
+There is no seed control in the pipeline, so this is the first same-config
+repeat this era has on a single fold: **0.018 apart**, which is most of the
+distance from baseline to either of them. It is n=2 on one fold and not a noise
+estimate, but it is a standing caution for every per-fold delta below — and it
+means the smoke's apparent +0.023 for L1 on this fold was not a result.
+
 ## Results
 
 ## Conclusion

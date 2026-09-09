@@ -22,9 +22,10 @@ Report which run it's on and how many of the eight are finished, and quit. Do
 not tail the training logs on a timer, do not Monitor it, do not read the rest
 of the repo. Everything read while waiting is paid for twice.
 
-Budget: L1 (`--monitor val_sens`) won't early-stop, so it runs to the 400-epoch
-cap on all 5 folds — ~35 min. L3 (`--batch-size 4096`) is the other slow one.
-The rest are ~10-15 min each. Whole grid ≈ 2 h from ~launch.
+Budget, measured not guessed: L1's fold 1 took **4.5 min** (319 epochs — it
+does early-stop, it does not hit the 400 cap), so L1 ≈ 20-22 min. L3
+(`--batch-size 4096`) is the other slow one. The rest should be ~9-10 min like
+cv_baseline. **Whole grid ≈ 1 h 40 m from the 10:21 relaunch, i.e. done ~12:00.**
 
 ## 3. When it finishes
 
@@ -59,6 +60,13 @@ in `notes.md`, and the log line says which lever paid and by how much. Use
 `--baseline-model models/cv_baseline`. Remember `main_commit` is main's HEAD at
 logging time, not the worktree's base.
 
+### Do not wrap the driver in a waiter
+
+The first launch attempt put `run_grid.sh` behind a detached
+`while pgrep ...; do sleep; done` loop and **the waiter was killed within
+minutes**, so the grid never started. That is the exact failure CLAUDE.md's
+"Running long jobs" documents. Relaunch `run_grid.sh` directly.
+
 ## 4. If it died
 
 `rc=` on the last `done` line in `grid_driver.log` says whether a run failed;
@@ -81,6 +89,9 @@ models/<name>` first.
   re-extracts; all eight runs read main's cached `yamnet` embeddings.
 - Models land in this worktree's own `models/`, not main's.
 - `models/test_monitor_smoke/` is a one-fold throwaway that verified the
-  `val_sens` monitor key populates. Delete it; do not log it.
+  `val_sens` monitor key populates. **Read `notes.md`'s "Seed noise" section
+  before deleting it** — it and L1's fold 1 are the same config on the same
+  fold and landed 0.018 apart, which is the only same-config repeat this era
+  has. Don't log it as a result.
 - The branch is based on main@57de23f. `standardize-blocks` (0.261) is *not*
   the comparator — it is a different lever (L9) that already has its own entry.
