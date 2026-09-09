@@ -409,15 +409,30 @@ worktree is disposable and this machine's disk is not backed up. Thirty-one
 branches from the last two eras were deleted with their notes still only local,
 and were recovered from dangling commits by luck.
 
-Then prune — the branch keeps what matters, and a worktree that re-extracted
-embeddings can hold several GB. **Check `git status` first**; uncommitted work
-in a worktree dies with it.
+`git add -A` picks up **every model's `folds_sx.csv` and per-fold
+`summary.json`** — `models/.gitignore` re-includes those two, and only those two
+(~4 KB per model). That is deliberate: `models/` is otherwise gitignored, so
+pruning used to destroy the only copy of an experiment's per-fold numbers, which
+is exactly what a later paired comparison needs. `standardize-blocks`' 0.261 —
+cited in `IDEAS.md` as the ceiling — cannot be joined against today for that
+reason. Weights, `predictions.csv` and plots stay ignored; if your experiment's
+predictions are the point (surprisal, annotation triage), `git add -f` them
+deliberately.
+
+Then prune. **Check `git status` first**; uncommitted work in a worktree dies
+with it.
 
 ```bash
 git worktree remove --force .local/worktrees/<slug>
 ```
 
-Keep it only if the run is unfinished and resumable.
+**Prune by size, not by reflex.** A worktree that only trained is ~50 MB and
+costs nothing to keep; the "several GB" case needs a *broken* embeddings
+symlink, and step 1 already routes a new embedder straight into the shared tree
+so that rarely happens. For scale on `medium`: yamnet 351 MB, the largest single
+cache (`yamnet_context`) 982 MB, all six embedders 2.6 GB, `large` 8.4 GB. Keep
+the worktree if the run is unfinished and resumable, or if you want its
+`predictions.csv` around; otherwise prune and rely on the branch.
 
 Then stop. Do not merge into main. Do not proceed to another experiment.
 You're done! Thank you!
