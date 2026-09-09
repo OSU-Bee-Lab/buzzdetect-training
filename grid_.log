@@ -1,0 +1,25 @@
+2026-09-09 12:24:22.090737: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2026-09-09 12:24:22.114939: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2026-09-09 12:24:22.114997: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2026-09-09 12:24:23.013370: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+2026-09-09 12:24:25.312742: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-09-09 12:24:25.354034: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+2026-09-09 12:24:25.364370: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+/home/luke/projects/buzzdetect-training/.local/worktrees/probe-grid/03_train/dataset.py:237: UserWarning: /home/luke/projects/buzzdetect-training/.local/worktrees/probe-grid/02_set/sets/medium/embeddings/yamnet/raw holds embeddings for fold(s) ['Luke - External Data Sources'] that are absent from /home/luke/projects/buzzdetect-training/.local/worktrees/probe-grid/02_set/sets/medium/folds.csv; ignoring them. Likely leftovers from an earlier build of this set.
+  warnings.warn(
+[] set medium, embedder yamnet, translation general: 5 rotating fold(s), 39 train-only, 0 holdout
+Traceback (most recent call last):
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/probe-grid/03_train/main.py", line 84, in <module>
+    train_set(
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/probe-grid/03_train/train.py", line 599, in train_set
+    result, model = _train_one(
+                    ^^^^^^^^^^^
+  File "/home/luke/projects/buzzdetect-training/.local/worktrees/probe-grid/03_train/train.py", line 379, in _train_one
+    history = model.fit(
+              ^^^^^^^^^^
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/utils/traceback_utils.py", line 122, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: '_foldJamesU_-_MustardBumbler_1_29' is not a valid root scope name. A root scope name has to match the following pattern: ^[A-Za-z0-9.][A-Za-z0-9_.\\/>-]*$

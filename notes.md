@@ -151,4 +151,64 @@ gain comes from **what is monitored**, not from training longer. That also
 means the 400-epoch cap (L4) stays a non-issue: L2 ran a fold to 364 epochs
 without the cap binding.
 
+### Confirmation runs
+
+`L1_sens_r2` is `L1_sens` re-run with no changes (no seed control exists, so a
+re-run is an independent init).
+
+| fold | buzz frames | base | L1 run 1 | L1 run 2 | L1+L6 combo |
+|---|---|---|---|---|---|
+| JamesU MustardBumbler/1_29 | 2144 | 0.426 | 0.431 | 0.421 | 0.431 |
+| Lily Fit+Fast/53 | 1031 | 0.425 | 0.410 | 0.445 | 0.430 |
+| willard/1_11 | 305 | 0.180 | **0.243** | **0.226** | **0.243** |
+| Diel Drivers/1_150 | 146 | 0.021 | **0.089** | **0.158** | **0.171** |
+| Diel Drivers/1_95 | 433 | 0.037 | 0.032 | 0.035 | 0.034 |
+| **mean** | | **0.218** | **0.241** | **0.257** | **0.262** |
+
+**L1's direction reproduces, and it reproduces on the hard folds.** Both draws
+lift `willard` (0.180 -> 0.243, 0.226) and `1_150` (0.021 -> 0.089, 0.158) well
+clear of baseline. That is the lever working as intended, not a lucky fold.
+
+**L1's magnitude does not reproduce**, and neither does `1_150`'s: 0.089 vs
+0.158 between identical configs is 13 vs 23 detected frames of 146. Quote the
+direction, not the size.
+
+### What the repeat costs us: a minimum detectable effect
+
+The identical-config pair puts the run-to-run SD on the CV mean at **~0.016**
+(0.241 vs 0.257). So a difference between two *single* runs has SE ~0.016*sqrt2
+= **0.023**, and the smallest effect a single-run comparison can resolve is
+**~0.045**.
+
+That reframes the whole grid: **only L1 and the combo clear it.** L6's +0.015
+is under one spread, and everything else (<= +0.003) is indistinguishable from
+zero. Resolving a +0.015 effect properly would need ~9 runs per arm, ~19 runs,
+~4 h — which is exactly what LOOP.md means by not bootstrapping CIs. This
+number recomputes for free whenever the data moves and is the useful, portable
+part of the repeat.
+
+### L1 and L6 do not stack
+
+| comparison | delta |
+|---|---|
+| combo vs baseline | +0.044 (4 up, 1 down) |
+| combo vs `L1_sens_r2` alone | **+0.005** |
+
+L6 adds ~nothing on top of L1, which is mechanistically what you would expect:
+`restore-on-sens` fingered the **label-smoothing overconfidence penalty** as
+what makes `val_loss` diverge from sens once a model sharpens. L6 removes some
+of that penalty; L1 stops reading the penalised curve at all. They are two fixes
+to one problem, so the second is redundant given the first.
+
+At 0.262 the combo also lands on the same figure as `standardize-blocks`
+(0.261) and the offline `sklearn` readout (0.261) — three unrelated routes to
+the same ceiling, which is worth someone's attention.
+
+### Targeted repeats (running)
+
+Not a noise-floor study. `run_noise.sh`: two `cv_baseline` repeats (`base_r2`,
+`base_r3`) so the era's common denominator has n=3 and every future delta can be
+taken against a mean rather than one draw, plus one `L6_ls005_r2` to resolve the
+single live claim sitting at exactly one spread.
+
 ## Conclusion

@@ -1,1 +1,9 @@
 == 11:50:58 L1_sens_r2 : --monitor val_sens
+== 12:03:43 L1_sens_r2 done rc=0
+Luke - Diel Drivers/2026-05-06/1_95,0.005,-0.829,0.035,0.296,433,35,7572,46
+total,0.005,-1.613,0.257,0.673,4059,151,34606,135
+== 12:03:43 L1L6_combo : --monitor val_sens --label-smoothing 0.05
+== 12:20:06 L1L6_combo done rc=0
+Luke - Diel Drivers/2026-05-06/1_95,0.005,-0.273,0.034,0.292,433,35,7572,100
+total,0.005,-1.703,0.262,0.679,4059,151,34606,186
+== CONFIRM COMPLETE Wed Sep  9 12:20:06 PM EDT 2026
