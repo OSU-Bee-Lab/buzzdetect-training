@@ -63,6 +63,52 @@ distance from baseline to either of them. It is n=2 on one fold and not a noise
 estimate, but it is a standing caution for every per-fold delta below — and it
 means the smoke's apparent +0.023 for L1 on this fold was not a result.
 
+### How to score a fold delta here (Luke, 2026-09-09)
+
+**Gains on the low-sensitivity folds are the point, not a caveat.** `1_150`
+(0.021 base) and `1_95` (0.037) are hard deployments, and their low sensitivity
+makes them the target rather than something to discount. The model will be fine
+in mustard (`1_29`, 0.426) whatever we do; the endpoint is a *new* deployment,
+which may well be one of the hard ones. A lever that only moved the thick folds
+would be close to worthless.
+
+So the LOOP.md caution about thin folds is about **magnitude, not
+importance** — and it does not license writing a hard-fold gain off as noise.
+Read a delta table as: which direction did the hard folds move, and are the
+losses elsewhere actually material? A -0.005 does not cancel a +0.068.
+
 ## Results
+
+| lever | flag | mean sens@fpr0.005 | vs base (0.218) |
+|---|---|---|---|
+| L1 stopping metric | `--monitor val_sens` | **0.241** | **+0.023** |
+| L2 stopping slack  | `--min-delta 0`      | 0.217 | -0.001 |
+
+### L1 — `--monitor val_sens`
+
+| fold | buzz frames | base | L1 | delta |
+|---|---|---|---|---|
+| JamesU MustardBumbler/1_29 | 2144 | 0.426 | 0.431 | +0.005 |
+| Lily Fit+Fast/53 | 1031 | 0.425 | 0.410 | -0.015 |
+| willard/1_11 | 305 | 0.180 | 0.243 | **+0.063** |
+| Diel Drivers/1_150 | 146 | 0.021 | 0.089 | **+0.068** |
+| Diel Drivers/1_95 | 433 | 0.037 | 0.032 | -0.005 |
+
+The two large moves are both on hard deployments, which is the direction we
+want. In frame terms: `willard` 55 -> 74 detected of 305, `1_150` 3 -> 13 of
+146. `willard` is the more substantial of the two; `1_150`'s is ten frames.
+The losses are -0.015 and -0.005, i.e. immaterial.
+
+Direction believed, magnitude not yet banked — `L1_sens_r2` (`run_confirm.sh`)
+re-runs the identical config for an independent init, since a same-config
+repeat on `1_29` already came back 0.018 apart (above). If the hard-fold gains
+reproduce, L1 is this grid's result.
+
+### L2 — `--min-delta 0`
+
+0.217, flat. Removing the patience-reset threshold changes nothing, so L1's
+gain comes from **what is monitored**, not from training longer. That also
+means the 400-epoch cap (L4) stays a non-issue: L2 ran a fold to 364 epochs
+without the cap binding.
 
 ## Conclusion
