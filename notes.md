@@ -8,8 +8,10 @@ from every one of its frames, before the probe sees them.**
 The argument is the endpoint's own. `buzzdetect` ships no threshold and the
 metric sets one per deployment, because a model's score scale does not transfer
 between sites — `README.md` makes that argument explicitly, and `1_95` is the
-proof, carrying a threshold of **+0.173** while every other fold sits near
-**-1.7**. That non-transfer does not begin at the readout. It begins in the
+proof, carrying a threshold of **-0.401** while every other fold sits between
+**-1.59 and -1.90** — displaced by ~1.2 against a spread of 0.3 among the rest.
+(IDEAS.md carried +0.173 for this; that was measured on `cv_baseline`'s
+predecessor and is corrected in main as of this experiment.) That non-transfer does not begin at the readout. It begins in the
 input, where a recorder's gain, its placement, and its site's ambient floor
 shift the whole embedding cloud before any weight is applied. Nothing tried in
 this era has addressed it there.
