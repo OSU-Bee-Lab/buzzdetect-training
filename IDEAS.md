@@ -38,6 +38,17 @@ became the largest gain in the log. **E1/E2 negatives are leads, not answers.**
   run-to-run movement (0.055) is *training* stochasticity, not eval sampling.
 - **The hard folds are the target.** `1_150` and `1_95` pin 40% of the headline
   near zero. A gain concentrated there is the result, not a caveat on it.
+- **Read `best_epoch` alongside every delta.** If your treatment moved it,
+  the delta is confounded with a stopping change — re-score both arms at a
+  common epoch (`tools/honest_epoch.py`, no training) before believing it.
+  `recorder-center` produced a textbook +0.082 hard-fold gain at `1_150` that
+  was entirely its `best_epoch` going 26 → 213; under one rule on both arms it
+  is -0.007. Magnitude and repeat spreads do not catch this. **The question is
+  whether the treatment could have selected on the reported metric.**
+- **Any input normalisation moves the stopping epoch.** Three for three:
+  `input-standardization` (E2), `standardize-blocks` (E3, ~6x epochs),
+  `recorder-center` (E3, 1.4-8.2x). Pair the next one with a fixed epoch budget
+  or a cross-fold epoch rule *from the start*, or its number is confounded.
 
 ---
 
@@ -107,42 +118,13 @@ Cheapest form is a transform at extraction time under a new embedder name; it
 can also be done as an input transform in `03_train` over the existing
 `yamnet_context` cache, which costs **no extraction at all** — prefer that.
 
-## C. Per-recorder input centering
+**Pair it with a cross-fold epoch rule from the start.** A difference channel is
+genuinely signed, so it is a larger regime change than `recorder-center`'s
+median shift was (that moved only 86 of 1024 dims and still shifted `best_epoch`
+by up to 8x). Run the stopping fix and the transform together, or the number
+will be confounded the way `recorder-center`'s was.
 
-*Evidence: **Untagged — a proposal.** Distinct from `standardize-blocks` (E3,
-null) — see below.*
-
-Subtract each ident's own median embedding, computed from that ident's own
-audio, before the probe sees it. Label-free, so **leak-free by construction** —
-it needs no training pool and no fold logic, unlike anything fitted.
-
-The argument is the metric's own. We threshold per deployment because the score
-scale does not transfer between sites — `README.md` says so explicitly, and
-`1_95` is the proof (threshold -0.401 against every other fold's -1.59 to -1.90). That
-non-transfer does not begin at the readout; it begins in the input, where a
-recorder's gain, placement and ambient floor shift the whole embedding cloud.
-Nothing tried so far has addressed it there. Per-recorder centering is the
-standard domain-adaptation move for exactly this, and it is free.
-
-**Not `standardize-blocks`.** That was global, per-dimension, fitted on the
-training pool, and equalised two *feature blocks* against each other; it was
-null. This is per-*ident*, fitted on nothing, and equalises *deployments*
-against each other. Different quantity, different target.
-
-It should bite hardest where the loop most needs it: `1_95`, whose threshold is
-set by ~10 minutes of vehicle noise in 2 of 24 snips — a flyover is anomalous
-*for that recorder*, which is precisely what centering exposes and what a global
-statistic cannot see. `1_150`'s buzz sits at its own background level (mean
-surprisal 0.071 against a background of the same), so centering plausibly
-touches it too.
-
-Design decisions to settle before running: median vs mean (median, for the
-flyover robustness that motivates it); whole-ident vs per-snip (whole ident —
-per-snip risks centering out the buzz in a buzz-dense snip); and whether to
-divide by a per-ident scale as well or only subtract (subtract only, first pass,
-one variable). Compose with `yamnet_context` only *after* it reads alone.
-
-## D. YAMNet ⊕ AVES concatenation
+## C. YAMNet ⊕ AVES concatenation
 
 *Evidence: **E3** — `aves-probe`, `aves-readout`, `aves-mlp-head`. Both caches
 are on disk; this needs **no extraction**.*
