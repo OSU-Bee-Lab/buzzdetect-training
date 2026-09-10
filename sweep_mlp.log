@@ -1,0 +1,23 @@
+  [aves] done JamesU - MustardBumbler/1_29
+  [aves] done Lily - Fit+Fast/2023_R3_Marysville/53
+  [aves] done Lily Adam - One Hive/recorders/willard/2024-08-07/1_11
+  [aves] done Luke - Diel Drivers/2026-04-08/1_150
+  [aves] done Luke - Diel Drivers/2026-05-06/1_95
+
+=== aves ======================================================================
+ mode       hidden   alpha    mean   JamesU - Mu/1_  Lily - Fit+/53  Lily Adam -/1_  Luke - Diel/1_  Luke - Diel/1_
+   lr         None       1   0.182            0.226           0.281           0.206           0.146           0.049
+  mlp       (256,)   0.001   0.231            0.354           0.392           0.290           0.091           0.027
+  mlp       (256,)     0.1   0.229            0.351           0.394           0.291           0.078           0.032
+  [yamnet] done JamesU - MustardBumbler/1_29
+  [yamnet] done Lily - Fit+Fast/2023_R3_Marysville/53
+  [yamnet] done Lily Adam - One Hive/recorders/willard/2024-08-07/1_11
+  [yamnet] done Luke - Diel Drivers/2026-04-08/1_150
+  [yamnet] done Luke - Diel Drivers/2026-05-06/1_95
+
+=== yamnet ======================================================================
+ mode       hidden   alpha    mean   JamesU - Mu/1_  Lily - Fit+/53  Lily Adam -/1_  Luke - Diel/1_  Luke - Diel/1_
+   lr         None       1   0.248            0.431           0.391           0.279           0.110           0.028
+  mlp       (256,)   0.001   0.272            0.434           0.458           0.311           0.130           0.025
+  mlp       (256,)     0.1   0.267            0.417           0.424           0.305           0.137           0.049
+SWEEP_DONE 670s

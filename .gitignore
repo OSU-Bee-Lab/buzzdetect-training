@@ -68,3 +68,6 @@ paths.local.json
 # Scratch diagnostic scripts kept on disk for posterity, not versioned.
 # Nothing tracked may cite these paths -- see CLAUDE.md on gitignored artifacts.
 diagnostics/
+
+.cache/
+*.log
