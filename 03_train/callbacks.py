@@ -56,6 +56,38 @@ class SensAtFPR(tf.keras.callbacks.Callback):
         for fpr, sens in sens_at_fpr(activation, self.correct, self.fprs).items():
             logs[self.key(fpr)] = sens
 
+        # Two buzz-only candidate selection statistics, reporting only (nothing
+        # here stops or restores on them). See IDEAS.md "A buzz-only, low-variance
+        # selection statistic": val_loss averages over all 15 neurons and can
+        # stop while ins_buzz is still learning; sens@fpr0.005 is buzz-only but a
+        # tail statistic on ~24-35 negative frames. These give the offline
+        # across-epoch SNR comparison something to weigh against both.
+        y = np.asarray(self.correct, dtype=bool)
+        z = np.asarray(activation, dtype=np.float64)
+        n_pos = int(y.sum())
+        n_neg = y.size - n_pos
+        if n_pos and n_neg:
+            order = np.argsort(z, kind='mergesort')
+            ranks = np.empty(z.size, dtype=np.float64)
+            ranks[order] = np.arange(1, z.size + 1)
+            # average-rank correction for ties
+            zs = z[order]
+            i = 0
+            while i < zs.size:
+                j = i + 1
+                while j < zs.size and zs[j] == zs[i]:
+                    j += 1
+                if j - i > 1:
+                    ranks[order[i:j]] = (i + 1 + j) / 2.0
+                i = j
+            auc = (ranks[y].sum() - n_pos * (n_pos + 1) / 2.0) / (n_pos * n_neg)
+        else:
+            auc = float('nan')
+        logs['val_auc_buzz'] = auc
+        # numerically stable buzz-only sigmoid cross-entropy
+        ce = np.maximum(z, 0) - z * y + np.log1p(np.exp(-np.abs(z)))
+        logs['val_ce_buzz'] = float(ce.mean())
+
 
 class RestoreTrueBest(tf.keras.callbacks.EarlyStopping):
     """EarlyStopping that restores the true val_loss argmin, not the last epoch

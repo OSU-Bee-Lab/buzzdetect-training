@@ -450,6 +450,17 @@ def _sens_history_summary(hist, best_epoch):
         peak = int(np.nanargmax(arr))
         out[f'val_sens_fpr{fpr:g}_peak'] = arr[peak]
         out[f'val_sens_fpr{fpr:g}_peak_epoch'] = peak + 1
+
+    # Candidate buzz-only selection statistics (callbacks.SensAtFPR), curves
+    # kept for the same offline re-scoring purpose as the sens curves above.
+    # See IDEAS.md "A buzz-only, low-variance selection statistic".
+    for key in ('val_auc_buzz', 'val_ce_buzz'):
+        curve = hist.get(key)
+        if not curve:
+            continue
+        arr = np.array(curve, dtype=float)
+        out[f'{key}_curve'] = [None if np.isnan(x) else float(x) for x in arr]
+        out[f'{key}_at_best'] = None if np.isnan(arr[best_epoch]) else float(arr[best_epoch])
     return out
 
 
