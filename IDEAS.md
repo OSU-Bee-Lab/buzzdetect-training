@@ -221,6 +221,15 @@ that fold was scored on a barely-trained probe (0.014, precision 0.077). Under
 *Evidence: **E3** — `context-embedder`, re-scored by `monitor-leakage`
 (2026-09-09).*
 
+> **SUPERSEDED 2026-09-09 by `xfold-epoch`.** 0.277 was `honest_epoch.py`'s
+> *truncated lower bound* — it re-scores at an epoch capped by the shortest
+> other-fold curve. Measured on a fixed 400-epoch budget with nothing truncated,
+> the honest best is **`yamnet_context` + cross-fold epoch selection at 0.288**,
+> and the leak that section below attributes the whole monitor gain to measures
+> **+0.021**, against a **real** +0.031 from stopping later. Read the paragraphs
+> below for the reasoning, not the numbers. Cutover procedure:
+> `exp/xfold-epoch:notes/new-era.md`.
+
 **`yamnet_context` alone, honest headline 0.277.** Not `yamnet_context +
 --monitor val_sens` at 0.310 — that number is `max`-over-epochs of its own
 reported statistic (see the withdrawn section above). Under a cross-fold epoch
@@ -252,6 +261,14 @@ marks those folds `*` and most runs hit the cap. Making this the shipped rule
 needs a **fixed epoch budget** (train every fold to a common cap, select
 afterwards) or a two-pass fit. That is one cheap frozen-probe CV, and it is the
 highest-value open item in the era.
+
+> **DONE 2026-09-09 — `xfold-epoch`, `log.jsonl`.** Implemented as
+> `--epoch-rule xfold`. Worth **+0.030** on `yamnet_context` (0.258 → 0.288),
+> but the shape is the result: **−0.008** on the four folds whose early stopping
+> was healthy, **+0.185** on `1_150`, which had stopped at epoch 6. It is
+> insurance against stopping failures, not a general gain. **It ends the era**;
+> Luke is not ready for the refactor as of 2026-09-09, so the handoff lives at
+> `exp/xfold-epoch:notes/new-era.md`. Budget 250, not 400.
 
 ## A buzz-only, low-variance selection statistic
 
