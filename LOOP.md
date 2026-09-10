@@ -189,9 +189,9 @@ appear in the worktree — commit or stash first if they matter.
 
 The script symlinks `embedders/*` and each set's `audio/`+`embeddings/` back to
 main, so extraction is shared. **Keep it that way.** A cache written through the
-symlink survives the worktree pruning at step 6 and is there for the next
-experiment; a worktree-local copy dies with the worktree and costs the next
-agent a re-extraction. Adding a *new* embedder directory, and extracting under a
+symlink lands in the shared tree and is there for the next experiment; a
+worktree-local copy is only ever seen by this run. Adding a *new* embedder
+directory, and extracting under a
 *new* `--embedder` name, both write somewhere nothing else claims — do them
 straight into the shared tree.
 
@@ -565,20 +565,24 @@ reason. Weights, `predictions.csv` and plots stay ignored; if your experiment's
 predictions are the point (surprisal, annotation triage), `git add -f` them
 deliberately.
 
-Then prune. **Check `git status` first**; uncommitted work in a worktree dies
-with it.
+**Do not prune the worktree.** It was pruned here by reflex for a long time and
+it kept costing real things: `yamnet_aves`'s `embedder.py` (a logged `clean`
+result, a live IDEAS lead) was lost with its worktree because a gitignore gap
+meant `git add -A` never captured it, and thirty-one branches' `notes.md` went
+with theirs before the push step was enforced. A worktree that only trained is
+~50 MB. Leaving it costs nothing you will notice; removing it has repeatedly
+destroyed the only copy of something. The branch is the durable record, but the
+worktree is a free second copy and a resumable checkout — keep it.
+
+The one real disk case is a *broken* embeddings symlink (several GB), and step 1
+routes a new embedder into the shared tree specifically so that does not happen.
+If a worktree ever does hold a multi-GB unshared cache and you need the space,
+remove just that directory, not the worktree:
 
 ```bash
-git worktree remove --force .local/worktrees/<slug>
+du -sh .local/worktrees/<slug>/*        # confirm what is actually large
+rm -rf .local/worktrees/<slug>/02_set/sets/<set>/embeddings/<embedder>
 ```
-
-**Prune by size, not by reflex.** A worktree that only trained is ~50 MB and
-costs nothing to keep; the "several GB" case needs a *broken* embeddings
-symlink, and step 1 already routes a new embedder straight into the shared tree
-so that rarely happens. For scale on `medium`: yamnet 351 MB, the largest single
-cache (`yamnet_context`) 982 MB, all six embedders 2.6 GB, `large` 8.4 GB. Keep
-the worktree if the run is unfinished and resumable, or if you want its
-`predictions.csv` around; otherwise prune and rely on the branch.
 
 Then stop. Do not merge into main. Do not proceed to another experiment.
 You're done! Thank you!
