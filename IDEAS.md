@@ -133,18 +133,21 @@ If you find "val_sens peaks at 0.0020 in epoch 3 then decays" quoted anywhere
 (it was in this section, and in `exp/aves-probe`'s `notes.md`), it is wrong —
 the first ~17 epochs of a 153-epoch run misread as a trajectory.
 
-**A non-linear head over frozen AVES is NOT blocked and is cheap — run it.**
-An earlier version of this section said it was parked under the standing
-1-layer injunction. That was a misreading: the injunction is about *runtime*
-and bans unfreezing **backbone** layers, not head depth. An MLP over frozen
-embeddings is ~1 s/epoch, the same order as the linear probe. It is also the
-single most informative cheap experiment available on AVES, because it
-separates "needs a better reader" from "needs the representation reshaped" —
-see "What survives unfreezing" below. Caveat before running it:
-`archive/2026-06_fixed-test/notes/mlp-head-repro.md` is a clear negative
-(-0.028, non-overlapping CIs) but its own conclusion scopes itself — "buzz is
-already linearly accessible in *this space*" — and that space is YAMNet's.
-The PCA result is the reason to expect a different answer here.
+**DONE 2026-09-09/10 — `aves-mlp-head`, and it does not motivate a fine-tune.**
+In-pipeline a `--hidden` head over frozen AVES is a clear negative (h256 0.057 /
+h1024 0.091 vs a linear control 0.108), but that is the `aves-readout` stopping
+pathology amplified — the MLP folds early-stop at epoch 6-40, *more*
+undertrained than the linear probe. The real measurement is offline and
+converged (`exp/aves-mlp-head:sweep_mlp.py`, sklearn, standardized, to
+convergence): **AVES linear 0.182 → MLP(256) 0.231 (+0.049); YAMNet linear
+0.248 → MLP 0.272 (+0.024)**. A non-linear reader helps *both* embedders and
+does **not** close the gap — AVES-MLP 0.231 still trails YAMNet-*linear* 0.248,
+a ~0.04 representation gap at every readout level. So "the information is there,
+spread thin" (the PCA prediction) holds, but beating frozen YAMNet by
+fine-tuning AVES means closing a gap that adding non-linearity does not touch.
+The gains are on the 3 resolvable folds; `1_150`/`1_95` are unmoved under every
+readout. `mlp-head-repro`'s YAMNet negative (-0.028) is now joined by a YAMNet
+offline *positive* (+0.024) — the difference is convergence, not the head.
 
 Cheap now regardless of the verdict: AVES extraction went 14.3 h -> 1.0 h
 (main, `8fe1336`, batched on the GPU) and `medium`'s AVES embeddings are in the
@@ -479,11 +482,14 @@ unfreeze is likely infeasible and the realistic version is a top-N transformer
 layer unfreeze. YAMNet trunk-ft was ~80 s/epoch against ~1 s frozen; AVES will
 be worse. Measure a single epoch before budgeting ([[machine-gpu-constraints]]).
 
-**The cheap decision gate.** A non-linear head on *frozen* AVES costs minutes
-and answers the question a fine-tune would answer expensively: if an MLP closes
-most of the gap, the information is there and merely needs a better reader, so
-unfreezing is very likely to pay; if it doesn't, the representation itself may
-need to move. Run that before budgeting a fine-tune, not after.
+**The cheap decision gate — RUN 2026-09-10 (`aves-mlp-head`), and it reads
+against a fine-tune.** A converged offline MLP(256) on frozen AVES reaches 0.231
+vs a converged linear 0.182 — the non-linear reader does extract more, so the
+information is partly "there, needs a better reader." But it lifts *YAMNet* by a
+similar margin (0.248 → 0.272), and AVES-MLP still trails YAMNet-*linear*. The
+gap that survives adding non-linearity at both ends (~0.04) is the
+representation gap a fine-tune would have to close, and nothing here says it
+can. See "Closed: AVES as a drop-in embedder" above for the full numbers.
 
 ## near-chance-deployments
 
