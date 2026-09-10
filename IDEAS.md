@@ -253,6 +253,60 @@ needs a **fixed epoch budget** (train every fold to a common cap, select
 afterwards) or a two-pass fit. That is one cheap frozen-probe CV, and it is the
 highest-value open item in the era.
 
+## A buzz-only, low-variance selection statistic
+
+*Evidence: **E3** — motivated 2026-09-09; the variance premise was measured the
+same day and **did not hold**. Unrun.*
+
+Both statistics the loop has argued about are bad *selectors* for different
+reasons, and there is a third option neither side proposed.
+
+- `val_loss` is averaged over all 15 classes, so it can flatten — and stop
+  training — because the other 14 stopped improving while `ins_buzz` was still
+  learning. `context_embedder` shipping **best_epoch 5** on `1_150`, whose own
+  buzz curve climbs to 0.144, is that failure in the wild. Luke's objection:
+  "I'm only interested in ins_buzz performance."
+- `sens@fpr0.005` is the right target but is a tail statistic resting on ~24-35
+  negative frames. Cawley & Talbot (JMLR 2010) argue that for *selection*,
+  low variance matters as much as unbiasedness — an unbiased high-variance
+  criterion picks a worse epoch than a biased low-variance one.
+
+So: select on something **buzz-only but stable** — buzz-only cross-entropy, or
+buzz AUC — while still reporting `sens@fpr0.005`.
+
+**The measured caveat, and it is the reason this is a lead and not a
+recommendation.** The premise is that AUC is much lower variance. Bootstrapped
+over frames on `cv_baseline` (300 resamples, `models/cv_baseline` predictions),
+**it is not**:
+
+| fold | buzz frames | sens@fpr0.005 (SD) | AUC (SD) |
+|---|---|---|---|
+| `1_29` | 2144 | 0.426 (0.014) | 0.854 (0.0056) |
+| `53` | 1031 | 0.425 (0.019) | 0.888 (0.0058) |
+| `1_11` | 305 | 0.180 (0.024) | 0.765 (0.0148) |
+| `1_150` | 146 | 0.021 (0.012) | 0.634 (**0.0248**) |
+| `1_95` | 433 | 0.037 (0.011) | 0.645 (0.0135) |
+
+AUC's SD is only 1.2x smaller on average and is **larger in absolute terms on
+the two hardest folds**. The two metrics are on different scales, so raw SD is
+not the right comparison — but it does mean the "AUC is obviously more stable"
+argument is unsupported as stated, and must not be repeated as if measured.
+
+**What would actually settle it, and it is cheap.** The quantity that matters
+for a selector is signal-to-noise *across epochs*: how much the statistic moves
+as the model improves, against how much it jiggles from eval sampling. That is
+computable for `sens@fpr0.005` today (its curve is persisted) and not for AUC
+(no curve). `callbacks.py:SensAtFPR` already computes the buzz activations every
+epoch, so logging `val_auc_buzz` and `val_ce_buzz` alongside is a few lines and
+near-zero cost. Do that on the next run, then compare the three curves'
+signal-to-noise offline before spending a CV on the monitor swap.
+
+Useful context for reading the answer: on `xfold-epoch`'s fixed-budget run the
+**pooled** sens curve is flat from epoch ~145 to 400 (253 of 397 epochs within
+0.005 of the max), while per-fold argmaxes scatter over 37-337. A selector only
+has to land in that plateau, which is a much weaker requirement than finding an
+argmax — so a lower-variance statistic may buy less than it appears to.
+
 ### Superseded: the one thing owed on the old best config
 
 *Evidence: **E3** — `context-monitor` (2026-09-09), marked `artifact` by
