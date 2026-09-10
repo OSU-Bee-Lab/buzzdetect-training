@@ -1,59 +1,41 @@
-# shared-trunk-head
+# yamnet-aves-head
 
 ## Hypothesis
+`yamnet_aves` (YAMNet 1024-d ⊕ AVES 768-d, 1792-d concat) paid a clean but
+modest +0.025 (xfold-pooled) with the stock linear probe. The probe config
+(Dropout 0.2, no weight decay, one Dense straight off the embedding) was tuned
+for YAMNet's sparse, non-negative, already-linearly-separable code. The AVES
+half of the concat is dense, signed, and smears buzz evidence over ~256
+directions (aves-readout PCA). A linear readout is the worst case for that
+half. A shared ReLU hidden layer lets all 15 classes read one learned
+representation and gives the reader room to recombine the AVES dimensions.
 
-`train.py` builds `Input -> Dropout(0.2) -> Dense(n_classes)`: one layer, no
-hidden stage, no activation, into `weighted_cross_entropy_with_logits`. So
-`ins_buzz`'s logit is a function of `W[:, buzz]` and `b[buzz]` alone and the
-15 classes are **15 decoupled logistic regressions** sharing only the input
-dropout mask ([[decoupled-probe-head]]). No gradient path runs from a
-`mech_auto` error to `W[:, buzz]`.
+Offline converged sweeps (aves-mlp-head, 2026-09-10) found a non-linear head
+helps *both* embedders offline (YAMNet 0.248→0.272, AVES 0.182→0.231) but does
+not close representation gaps. The concat + non-linear head is the untested
+cell. Question: does `--hidden` on `yamnet_aves` beat its own linear control
+in-pipeline, and by more than the ~0.027 single-run MDE?
 
-Insert a shared ReLU hidden layer — `Dropout -> Dense(h, relu) -> Dropout ->
-Dense(n_classes)` — and all 15 heads read one learned representation, so
-auxiliary-class supervision shapes features the buzz neuron also uses. This is
-the **multi-task-transfer** claim, which is a different question from the
-capacity claim MLP heads were closed on in E1/E2 ("does the probe need more
-capacity?" — no). Nobody has asked whether the auxiliary classes should inform
-buzz at all.
-
-This is step (1) of IDEAS.md's two-step sequencing: **hidden layer alone,
-uniform loss**, against `cv_baseline`. Per-neuron buzz weighting on top is step
-(2) and only runs if (1) is not a clear negative — running them together
-confounds an architecture change with a loss change.
-
-Priors are genuinely mixed and this is not a favourite:
-
-- Against: YAMNet's 1024-d is already linearly separable for this concept by
-  construction (it is the penultimate layer of a supervised classifier whose
-  AudioSet vocabulary contains `Buzz` and `Bee, wasp, etc.`) — exactly the case
-  where a hidden layer buys least. The pool is ~72k frames with ~7.7k buzz, so
-  a wide hidden layer can overfit the training sites.
-- For: `mech-margin` (2026-09-09) attacked the confuser problem directly with a
-  class-conditional margin and failed monotonically across a 64x dose ladder,
-  and its mechanism was that a **linear** readout of frozen YAMNet cannot push
-  `mech_auto` frames down without taking buzz with them — despite
-  `cosine(W_ins_buzz, W_mech_auto) = -0.016`, i.e. near-orthogonal readouts
-  overlapping in the *frame* population. That is precisely the situation where
-  a non-linear stage has something to add.
-
-**Run as a width ladder, not a single point.** `probe-grid` put the minimum
-detectable effect of a single-run comparison at ~0.027 (baseline SD 0.0095 over
-n=3), so one run at one width cannot distinguish a small real effect from a
-draw. Three widths — h = 64 / 256 / 1024 — give a dose-response reading the way
-`mech-margin`'s ladder did: a real multi-task effect should be non-flat and
-ordered, and overfitting (if that is what happens) should worsen with width.
+Known trap (aves-mlp-head): more head params → earlier val_loss argmin →
+early-stopping ships an undertrained head. Read `best_epoch` on every fold; if
+the hidden arms stop much earlier than h=0, re-score both arms at a common
+cross-fold epoch (`tools/honest_epoch.py`) before believing the delta.
 
 ## Changes
+- Cherry-picked `--hidden` from `exp/shared-trunk-head@4a90546`:
+  `Input → Dropout(0.2) → [Dense(h,relu) → Dropout(0.2)] → Dense(n_classes)`.
+  h=0 (default) is the byte-identical shipped head.
+- Nothing else changes: loss, stopping rule (val_loss, patience 50,
+  RestoreTrueBest), optimizer, label smoothing all unchanged.
+- Embedder `yamnet_aves` (cached, no re-extraction). Translation `general`.
 
-`--hidden N` on `03_train/main.py`, threaded to `_train_one`. Default `0` =
-the shipped decoupled head, byte-identical code path. Nothing else changes:
-same loss (`weighted_bce_loss`, label smoothing 0.2), same Adam 0.002, same
-`RestoreTrueBest` on `val_loss`, same dropout rate on both stages, `medium` /
-`yamnet` / `general`. Branched from main, so **no `--monitor val_sens`** —
-`probe-grid`'s flag is unmerged and adopting it is Luke's call, so the
-comparator is `cv_baseline` as logged.
+## Runs
+- `yav_h0`    — matched linear control on yamnet_aves
+- `yav_h256`  — hidden width 256
+- `yav_h1024` — hidden width 1024
 
 ## Results
+| fold | yav_h0 | h256 | h1024 | best_epoch h0→h256→h1024 |
+|---|---|---|---|---|
 
 ## Conclusion
