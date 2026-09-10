@@ -270,10 +270,25 @@ highest-value open item in the era.
 > Luke is not ready for the refactor as of 2026-09-09, so the handoff lives at
 > `exp/xfold-epoch:notes/new-era.md`. Budget 250, not 400.
 
-## A buzz-only, low-variance selection statistic
+## Closed (negative): a buzz-only, low-variance selection statistic
 
-*Evidence: **E3** — motivated 2026-09-09; the variance premise was measured the
-same day and **did not hold**. Unrun.*
+*Evidence: **E3** — `buzz-selector-curves` (2026-09-09). The variance premise
+failed the bootstrap when motivated; the across-epoch check it asked for is now
+run and closes it.*
+
+> **CLOSED. Do not swap the monitor for a buzz-only statistic.**
+> `buzz-selector-curves` logged `val_auc_buzz` and `val_ce_buzz` per epoch
+> (both now persisted as curves in `summary.json`, kept — cheap instrumentation)
+> and compared all four candidates — `val_loss`, `sens@fpr0.005`, `val_auc_buzz`,
+> `val_ce_buzz` — as epoch selectors under a non-leaking cross-fold rule. They
+> return **identical per-fold sensitivities**, not just an identical mean:
+> `[0.20, 0.41, 0.38, 0.04, 0.09]`, ~0.222 headline. The selector is not a lever
+> while the pooled sens plateau is wide (e129-164), which is exactly
+> `xfold-epoch`'s regime. The live epoch-selection question is `xfold-epoch`'s
+> (land in the plateau, repair stopping failures), settled and deferred. The
+> section below is the record of the reasoning.
+
+Both statistics the loop has argued about are bad *selectors* for different
 
 Both statistics the loop has argued about are bad *selectors* for different
 reasons, and there is a third option neither side proposed.
