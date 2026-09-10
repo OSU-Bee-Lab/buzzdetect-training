@@ -1,59 +1,46 @@
-# shared-trunk-head
+# yamnet-aves-head-fixed
 
 ## Hypothesis
+`yamnet-aves-head` ran a `--hidden` ladder (h=0/256/1024) on the frozen
+`yamnet_aves` concat under plain val_loss early stopping and came back
+inconclusive-leaning-positive: shipped null-to-negative (h256 +0.003, h1024
+-0.009), but `best_epoch` collapsed monotonically with head width (1_29
+100→44→29; willard 89→50→15) and every non-shipped epoch rule
+(own-peak, xfold-median, xfold-pooled) put both hidden widths ~+0.02–0.03 above
+the linear control. Classic `aves-mlp-head` stopping-rule confound: a wider head
+reaches its val_loss argmin sooner and ships undertrained.
 
-`train.py` builds `Input -> Dropout(0.2) -> Dense(n_classes)`: one layer, no
-hidden stage, no activation, into `weighted_cross_entropy_with_logits`. So
-`ins_buzz`'s logit is a function of `W[:, buzz]` and `b[buzz]` alone and the
-15 classes are **15 decoupled logistic regressions** sharing only the input
-dropout mask ([[decoupled-probe-head]]). No gradient path runs from a
-`mech_auto` error to `W[:, buzz]`.
+IDEAS.md's standing rule: pair any capacity or normalisation change with a fixed
+epoch budget or cross-fold epoch rule *from the start*. This experiment does
+that. Run the same h=0/256/1024 ladder at `--fixed-epochs 150` — no early stop,
+no restore-best, every rotation trains exactly 150 epochs and ships its final
+weights, so all three arms are scored at one identical epoch and the capacity
+question is not confounded by when val_loss happened to bottom out. Sens curves
+are still persisted, so the primary read is `tools/honest_epoch.py` xfold-pooled
+(a shared sub-epoch chosen off the other folds) with folds_sx (epoch 150) as the
+secondary.
 
-Insert a shared ReLU hidden layer — `Dropout -> Dense(h, relu) -> Dropout ->
-Dense(n_classes)` — and all 15 heads read one learned representation, so
-auxiliary-class supervision shapes features the buzz neuron also uses. This is
-the **multi-task-transfer** claim, which is a different question from the
-capacity claim MLP heads were closed on in E1/E2 ("does the probe need more
-capacity?" — no). Nobody has asked whether the auxiliary classes should inform
-buzz at all.
-
-This is step (1) of IDEAS.md's two-step sequencing: **hidden layer alone,
-uniform loss**, against `cv_baseline`. Per-neuron buzz weighting on top is step
-(2) and only runs if (1) is not a clear negative — running them together
-confounds an architecture change with a loss change.
-
-Priors are genuinely mixed and this is not a favourite:
-
-- Against: YAMNet's 1024-d is already linearly separable for this concept by
-  construction (it is the penultimate layer of a supervised classifier whose
-  AudioSet vocabulary contains `Buzz` and `Bee, wasp, etc.`) — exactly the case
-  where a hidden layer buys least. The pool is ~72k frames with ~7.7k buzz, so
-  a wide hidden layer can overfit the training sites.
-- For: `mech-margin` (2026-09-09) attacked the confuser problem directly with a
-  class-conditional margin and failed monotonically across a 64x dose ladder,
-  and its mechanism was that a **linear** readout of frozen YAMNet cannot push
-  `mech_auto` frames down without taking buzz with them — despite
-  `cosine(W_ins_buzz, W_mech_auto) = -0.016`, i.e. near-orthogonal readouts
-  overlapping in the *frame* population. That is precisely the situation where
-  a non-linear stage has something to add.
-
-**Run as a width ladder, not a single point.** `probe-grid` put the minimum
-detectable effect of a single-run comparison at ~0.027 (baseline SD 0.0095 over
-n=3), so one run at one width cannot distinguish a small real effect from a
-draw. Three widths — h = 64 / 256 / 1024 — give a dose-response reading the way
-`mech-margin`'s ladder did: a real multi-task effect should be non-flat and
-ordered, and overfitting (if that is what happens) should worsen with width.
+Prediction: if the hidden layer genuinely helps the representation, h256/h1024
+beat h0 by ~+0.02–0.03 xfold-pooled with the gain in the resolvable folds
+(1_29, willard, 53). If the `yamnet-aves-head` signal was a stopping-rule
+artifact only, the ladder is flat here.
 
 ## Changes
+- `--fixed-epochs N` flag (03_train/main.py, train.py): rotations train exactly
+  N epochs, no EarlyStopping / RestoreTrueBest, final weights shipped. SensAtFPR
+  curves still persisted. Shipped-model path unchanged.
+- `--hidden` cherry-picked from `exp/shared-trunk-head@4a90546` (same as
+  `yamnet-aves-head`).
+- Embedder `yamnet_aves` (restored + on main as of 4d9623c). Reads the existing
+  cache.
 
-`--hidden N` on `03_train/main.py`, threaded to `_train_one`. Default `0` =
-the shipped decoupled head, byte-identical code path. Nothing else changes:
-same loss (`weighted_bce_loss`, label smoothing 0.2), same Adam 0.002, same
-`RestoreTrueBest` on `val_loss`, same dropout rate on both stages, `medium` /
-`yamnet` / `general`. Branched from main, so **no `--monitor val_sens`** —
-`probe-grid`'s flag is unmerged and adopting it is Luke's call, so the
-comparator is `cv_baseline` as logged.
+## Runs
+- `yavf_h0`    — linear control, fixed 150
+- `yavf_h256`  — hidden 256, fixed 150
+- `yavf_h1024` — hidden 1024, fixed 150
 
 ## Results
+| rule | h0 | h256 | h1024 |
+|---|---|---|---|
 
 ## Conclusion

@@ -61,6 +61,15 @@ if __name__ == '__main__':
                              'h>0 gives all classes one learned representation, '
                              'so auxiliary-class supervision reaches the buzz '
                              'neuron.')
+    parser.add_argument('--fixed-epochs', type=int, default=None, dest='fixed_epochs',
+                        help='train every rotation for exactly this many epochs '
+                             'with no early stopping and no restore-best, '
+                             'shipping the final weights. All arms of a '
+                             'comparison are then scored at one identical epoch, '
+                             'so a capacity or normalisation change is not '
+                             'confounded by the val_loss stopping rule. Sens '
+                             'curves are still persisted for an offline '
+                             'cross-fold epoch rule (tools/honest_epoch.py).')
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
@@ -86,6 +95,7 @@ if __name__ == '__main__':
         # --skip-cv means 'shipped model only', so it has to turn it on.
         train_shipped=args.train_shipped or args.skip_cv,
         hidden=args.hidden,
+        fixed_epochs=args.fixed_epochs,
         only_folds=args.only_folds,
         surprisal=args.surprisal,
     )
