@@ -106,3 +106,30 @@ class RestoreTrueBest(tf.keras.callbacks.EarlyStopping):
             self.model.set_weights(self._true_best_weights)
             self.best_epoch = self._true_best_epoch
             self.best = self._true_best
+
+
+class EpochSnapshots(tf.keras.callbacks.Callback):
+    """Keep the probe's weights at the end of every epoch, in memory.
+
+    Cross-fold epoch selection cannot be replayed from curves alone. The epoch
+    a fold is scored at is chosen from the *other* folds, so it is not known
+    until every rotation has trained — by which point this fold's model is long
+    past it. Retraining to that epoch is not a substitute: TF's init and
+    shuffling are not seeded, so a second fit is a different draw, and the
+    curve that chose the epoch would belong to a different trajectory than the
+    weights being scored. Snapshotting is what keeps selection and scoring on
+    one trajectory.
+
+    Affordable only because the probe is one Dense layer: 1024-d YAMNet is
+    15,375 parameters (61 KB), the 3072-d context embedder 46,095 (184 KB), so
+    a 5-fold CV at a 300-epoch budget costs ~92 MB and ~276 MB respectively.
+    Anything with a trainable backbone must not use this.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.weights_by_epoch = []
+
+    def on_epoch_end(self, epoch, logs=None):
+        # get_weights() returns fresh arrays, so no copy is needed.
+        self.weights_by_epoch.append(self.model.get_weights())

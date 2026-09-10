@@ -54,6 +54,17 @@ if __name__ == '__main__':
                              'epoch count is read from the fold curves on disk, so '
                              'a later run with the same --name plus --skip-cv '
                              'produces the same model. Implied by --skip-cv.')
+    parser.add_argument('--epoch-rule', default='early', dest='epoch_rule',
+                        choices=('early', 'xfold'),
+                        help="how each rotation's scoring epoch is chosen. "
+                             "'early' (default): its own val_loss argmin, via "
+                             "EarlyStopping -- the epoch has seen the fold it "
+                             "scores. 'xfold': train every rotation the full "
+                             "--epochs budget with no early stopping, then score "
+                             "each fold at the argmax of the OTHER folds' mean "
+                             "sens@fpr curve. Also writes <name>_earlystop, the "
+                             "same trajectories scored where EarlyStopping would "
+                             "have restored, as an exactly paired control.")
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
@@ -76,6 +87,7 @@ if __name__ == '__main__':
         assume_yes=args.assume_yes,
         stop_tol=args.stop_tol,
         skip_cv=args.skip_cv,
+        epoch_rule=args.epoch_rule,
         # --skip-cv means 'shipped model only', so it has to turn it on.
         train_shipped=args.train_shipped or args.skip_cv,
         only_folds=args.only_folds,

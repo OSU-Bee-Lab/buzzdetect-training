@@ -4,6 +4,7 @@ import math
 import os
 import pickle
 import re
+import warnings
 import shutil
 import sys
 from dataclasses import dataclass, field
@@ -24,7 +25,7 @@ from embedders.embedding import load_embedder
 from plot_history import plot_history, plot_sens_history
 from write_model_py import write_model_py
 
-from callbacks import SensAtFPR, RestoreTrueBest
+from callbacks import SensAtFPR, RestoreTrueBest, EpochSnapshots
 
 from sx import summarize_folds, format_sx_report, _fold_sens, FPR_TARGETS, FNAME_SX_SUMMARY
 from surprisal import write_fold_surprisal
@@ -270,15 +271,91 @@ def _consensus_epoch(summary_rows, tol):
     return int(np.argmax(mean <= threshold)) + 1
 
 
+EPOCH_RULES = ('early', 'xfold')
+# The one FPR the project is judged at (sx.py); the curve the cross-fold
+# epoch is selected on has to be the curve the result is read from.
+SX_FPR = FPR_TARGETS[0]
+
+
+def _replay_earlystop_epoch(val_loss_curve, patience, min_delta):
+    """The epoch RestoreTrueBest would have restored, replayed from the curve.
+
+    Under --epoch-rule xfold nothing early-stops: every fold trains the full
+    budget, so the control has to be reconstructed rather than run. This is
+    that reconstruction, and it is the honest control precisely because it
+    reads off the *same* trajectory the xfold epoch is chosen from — same init,
+    same shuffle, same weights. Retraining with early stopping on would have
+    been a different draw, and at a ~0.027 single-run MDE (probe-grid) that
+    noise is larger than the effect under test.
+
+    Faithful to callbacks.RestoreTrueBest in both halves: min_delta drives the
+    patience counter, and the restored epoch is the plain argmin over the
+    epochs seen *before* the run would have stopped. Returns 1-indexed.
+    """
+    best_material = None   # patience counter's reference, min_delta applied
+    true_best = None       # the plain argmin, which is what gets restored
+    true_best_epoch = 0
+    wait = 0
+    for i, loss in enumerate(val_loss_curve):
+        if true_best is None or loss < true_best:
+            true_best, true_best_epoch = loss, i
+        if best_material is None or loss < best_material - min_delta:
+            best_material = loss
+            wait = 0
+        else:
+            wait += 1
+            if wait >= patience:
+                break
+    return true_best_epoch + 1
+
+
+def _xfold_epoch(curves, fold):
+    """The epoch to score `fold` at, chosen from the OTHER folds' sens curves.
+
+    argmax of the mean of the other folds' sens@fpr curves — one shared epoch
+    per rotation, never derived from the fold it is applied to. That is the
+    whole point: the epoch has not seen the fold it scores, so the reported
+    sensitivity carries no selection optimism, and it is also the only rule an
+    operator could run, having no labels for a new site.
+
+    Under a fixed budget every curve spans the same epochs, so the truncation
+    that made tools/honest_epoch.py's offline estimate a lower bound (the
+    pooled epoch capped at the shortest other-fold curve, `*` on 4 of 5 folds
+    in every early-stopped run on disk) does not arise here.
+
+    Epochs where a fold never reached the target FPR are None in the curve;
+    nanmean drops those folds for that epoch rather than the whole epoch.
+    """
+    others = [np.array([np.nan if x is None else x for x in c], dtype=float)
+              for f, c in curves.items() if f != fold]
+    span = min(len(o) for o in others)
+    stack = np.vstack([o[:span] for o in others])
+    with warnings.catch_warnings():
+        # An epoch no other fold reached the target FPR at is an all-NaN slice.
+        warnings.simplefilter('ignore', RuntimeWarning)
+        mean = np.nanmean(stack, axis=0)
+    if np.isnan(mean).all():
+        return None
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        return int(np.nanargmax(mean)) + 1
+
+
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs_max, aug_dirnames, verbose,
                held_out_fold, save_binary, epochs_fixed=None, patience=50,
-               stop_tol=None):
-    """Train one model. Returns (result_row, model); (None, None) if the model
-    directory is already populated."""
+               stop_tol=None, epoch_rule='early'):
+    """Train one model. Returns (result_row, model, snapshots); the first two
+    are None if the model directory is already populated.
+
+    Under epoch_rule='xfold' the rotation trains the full `epochs_max` budget
+    with no early stopping and returns its per-epoch weights, because the epoch
+    it will be scored at is not knowable until every other rotation has run.
+    `best_epoch` is left provisional (the val_loss argmin over the budget); the
+    caller overwrites it once it has picked the epoch."""
     if not can_write(dir_model):
         print(f'[{modelname}] already trained; skipping')
-        return None, None
+        return None, None, None
 
     if verbose:
         monitor = (f'early stopping on {data.val_fold} ({data.frames_val} frames)'
@@ -311,6 +388,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         metrics=['accuracy'],
     )
 
+    snapshots = None
     if data.val_tf is None:
         # Shipped model: no fold is held out, so there's nothing clean to
         # monitor. Train a fixed number of epochs instead, set by the caller
@@ -330,6 +408,38 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             'n_epochs': epochs_fixed,
             'best_epoch': epochs_fixed,
             'frames_train': data.frames_train,
+        }
+    elif epoch_rule == 'xfold':
+        # No early stopping: every rotation trains the same fixed budget, so
+        # all five sens curves span the same epochs and a cross-fold epoch is
+        # testable anywhere in them. EpochSnapshots keeps the trajectory so the
+        # chosen epoch can be restored afterwards without a second fit.
+        sens_callback = SensAtFPR(
+            *data.val_eval, data.classes.index('ins_buzz'), FPR_TARGETS,
+            batch_size=data.size_batch,
+        )
+        snapshots = EpochSnapshots()
+        history = model.fit(
+            data.train_tf,
+            epochs=epochs_max,
+            validation_data=data.val_tf,
+            callbacks=[sens_callback, snapshots, tf.keras.callbacks.TerminateOnNaN()],
+            shuffle=False,  # _to_tf already shuffles; see the fixed-epochs fit above
+            verbose=1 if verbose else 0,
+        )
+        # Provisional only. The caller picks the real epoch from the other
+        # folds' curves and rewrites best_epoch before this lands on disk.
+        best_epoch = int(np.argmin(history.history['val_loss']))
+        best_val_loss = float(history.history['val_loss'][best_epoch])
+        result = {
+            'n_epochs': len(history.history['val_loss']),
+            'best_epoch': best_epoch + 1,
+            'best_val_loss': best_val_loss,
+            'frames_train': data.frames_train,
+            'frames_val': data.frames_val,
+            'epoch_rule': 'xfold',
+            'val_loss_curve': [float(x) for x in history.history['val_loss']],
+            **_sens_history_summary(history.history, best_epoch),
         }
     else:
         callback = RestoreTrueBest(
@@ -408,6 +518,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         'epochs_fixed': epochs_fixed,
         'patience': patience,
         'stop_tol': stop_tol,
+        'epoch_rule': epoch_rule,
     }
     # 'w' for the same reason as write_model_py's — can_write() is the gate
     with open(os.path.join(dir_model, 'config_model.json'), 'w') as f:
@@ -419,7 +530,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     if save_binary:
         write_model_py(dir_model, modelname, embeddername, config_model['digits_results'])
 
-    return result, model
+    return result, model, snapshots.weights_by_epoch if snapshots is not None else None
 
 
 def _sens_history_summary(hist, best_epoch):
@@ -487,10 +598,86 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
     return reply in ('y', 'yes')
 
 
+SUFFIX_EARLYSTOP = '_earlystop'
+
+
+def _settle_xfold(name, dir_model_full, dir_folds, pending, patience,
+                  setname, embeddername, surprisal):
+    """Pick each rotation's epoch, restore it, and score — plus the control.
+
+    Runs once, after every rotation has trained, because a fold's epoch is a
+    function of the other folds' curves. Writes two model dirs off the one set
+    of trajectories:
+
+      <name>              scored at the cross-fold epoch  (the rule under test)
+      <name>_earlystop    scored where RestoreTrueBest would have restored
+
+    Both are ordinary model dirs — same predictions.csv, same summary.json — so
+    folds_sx.csv, resummarize.py and tools/compare_folds.py all work on either
+    without knowing this rule exists. The pairing is exact: one training run,
+    one trajectory per fold, two epochs read off it.
+    """
+    key_curve = f'val_sens_fpr{SX_FPR:g}_curve'
+    curves = {p['fold']: p['result'][key_curve] for p in pending}
+    dir_control = dir_model_full + SUFFIX_EARLYSTOP
+
+    for p in pending:
+        fold, result, model = p['fold'], p['result'], p['model']
+        e_xfold = _xfold_epoch(curves, fold)
+        if e_xfold is None:
+            # No other fold reached the target FPR at any epoch, so there is no
+            # consensus curve to select on. Nothing honest to fall back to.
+            print(f"{p['tag']}: no cross-fold epoch (other folds never reach "
+                  f"fpr{SX_FPR:g}); rotation left unscored", flush=True)
+            continue
+        e_early = _replay_earlystop_epoch(result['val_loss_curve'], patience, 0.002)
+
+        for rule, epoch, dir_out in (
+            ('xfold', e_xfold, p['dir_model']),
+            ('earlystop', e_early, os.path.join(dir_control, SUBDIR_FOLDS, str(fold))),
+        ):
+            model.set_weights(p['snapshots'][epoch - 1])
+            _, sens = _write_predictions(
+                dir_out, model, setname, embeddername, fold,
+                p['translation'], p['classes'],
+            )
+            row = dict(result)
+            row['best_epoch'] = epoch
+            row['epoch_rule'] = rule
+            row['best_val_loss'] = float(result['val_loss_curve'][epoch - 1])
+            with open(os.path.join(dir_out, FNAME_FOLD_SUMMARY), 'w') as f:
+                json.dump(row, f)
+            print(f"{p['tag']} [{rule}]: epoch {epoch}/{result['n_epochs']}, "
+                  f"{_format_sens(sens)}", flush=True)
+
+        # Surprisal is a per-frame diagnostic of the model that ships, and the
+        # rule under test is what ships — so it follows the xfold weights.
+        model.set_weights(p['snapshots'][e_xfold - 1])
+        if surprisal:
+            write_fold_surprisal(
+                dir_model_full, model, setname, embeddername, fold,
+                p['translation'], p['classes'],
+            )
+        # ~180 KB per epoch per fold; drop it as soon as it is spent.
+        p['snapshots'] = None
+
+    control_rows, control_predictions = _collect_fold_results(
+        os.path.join(dir_control, SUBDIR_FOLDS), [p['fold'] for p in pending])
+    if control_rows:
+        pooled = pd.concat(control_predictions, ignore_index=True)
+        facts = {r['fold']: {'frames_val': r['frames_val'], 'best_epoch': r['best_epoch']}
+                 for r in control_rows}
+        sx = summarize_folds(pooled, facts)
+        sx.to_csv(os.path.join(dir_control, FNAME_SX_SUMMARY), index=False)
+        print(format_sx_report(name + SUFFIX_EARLYSTOP, sx))
+
+
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
               assume_yes=False, stop_tol=0.01, skip_cv=False, train_shipped=False,
-              only_folds=None, surprisal=True):
+              only_folds=None, surprisal=True, epoch_rule='early'):
+    if epoch_rule not in EPOCH_RULES:
+        raise ValueError(f'--epoch-rule {epoch_rule!r} not in {EPOCH_RULES}')
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -542,6 +729,7 @@ def train_set(name, embeddername, setname, name_translation,
     if skip_cv:
         print(f'[{name}] --skip-cv: no rotations trained; shipped epoch count '
               f'comes from existing fold results only')
+    pending = []
     for i, held_out in enumerate([] if skip_cv else folds_scored, 1):
         folds_train = [f for f in folds_rotate if f != held_out] + folds_train_always
         dir_model = os.path.join(dir_folds, str(held_out))
@@ -561,12 +749,31 @@ def train_set(name, embeddername, setname, name_translation,
             print(f'{tag}: no usable frames under this translation; skipping rotation')
             continue
 
-        result, model = _train_one(
+        result, model, snapshots = _train_one(
             dir_model, modelname, embeddername, setname, name_translation,
             data, epochs_max, aug_dirnames, verbose,
             held_out, save_binary=False, patience=patience,
+            epoch_rule=epoch_rule,
         )
         if result is None:
+            continue
+
+        if epoch_rule == 'xfold':
+            # Nothing can be scored yet: this fold's epoch comes from folds
+            # that have not trained. Hold the trajectory and settle up below.
+            # Deliberately NOT the whole TrainingData: it pins the fold's
+            # cached train/val tensors (~900 MB per fold on 3072-d medium), and
+            # five of those held at once is several GB for no reason. Settling
+            # up needs only the translation and the class order, both identical
+            # across rotations.
+            pending.append({'fold': held_out, 'model': model, 'result': result,
+                            'translation': data.translation, 'classes': data.classes,
+                            'snapshots': snapshots,
+                            'dir_model': dir_model, 'tag': tag})
+            print(f"{tag}: {result['n_epochs']} epochs trained (full budget, no "
+                  f"early stopping), {data.frames_train}/{data.frames_val} "
+                  f"frames train/val; epoch chosen after the last rotation",
+                  flush=True)
             continue
 
         _, sens = _write_predictions(
@@ -590,6 +797,10 @@ def train_set(name, embeddername, setname, name_translation,
               f"val_loss {result['best_val_loss']:.4f}, "
               f"{data.frames_train}/{data.frames_val} frames train/val, "
               f"{_format_sens(sens)}", flush=True)
+
+    if pending:
+        _settle_xfold(name, dir_model_full, dir_folds, pending, patience,
+                      setname, embeddername, surprisal)
 
     summary_rows, predictions_pooled = _collect_fold_results(dir_folds, folds_scored)
 
@@ -650,7 +861,7 @@ def train_set(name, embeddername, setname, name_translation,
     folds_shipped = folds_rotate + folds_train_always
     data = _load_data(setname, embeddername, folds_shipped, name_translation,
                       aug_dirnames, val_fold=None)
-    result, model = _train_one(
+    result, model, _ = _train_one(
         dir_model_full, name, embeddername, setname, name_translation,
         data, epochs_max, aug_dirnames, verbose,
         None, save_binary=True, epochs_fixed=epochs_fixed, patience=patience,
