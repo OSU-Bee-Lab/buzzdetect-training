@@ -203,11 +203,18 @@ probably an era boundary.
 config in the era, not a tidy-up.** `context_embedder` shipped **best_epoch 5**
 on `1_150` — a 3072-d input reaches its `val_loss` argmin almost immediately, so
 that fold was scored on a barely-trained probe (0.014, precision 0.077). Under
-`val_sens` the same config ships epoch 160 and scores 0.219. Whatever is decided
-about the default, **any experiment on a wide input should pass
-`--monitor val_sens`**, or it risks measuring a stopping failure and logging it
-as an embedder verdict — the same trap `aves-probe` fell into from the other
-direction.
+`val_sens` the same config ships epoch 160 and scores 0.219.
+
+> **The hazard is real; the remedy in this paragraph was wrong.** The original
+> wording here told any experiment on a wide input to pass
+> `--monitor val_sens`. Do not — that is the leak (see the withdrawal box
+> above), and it would replace a stopping failure with a selection artifact.
+> **The non-leaking check is offline and costs nothing:** every fold persists
+> `val_sens_fpr0.005_curve`, so run `tools/honest_epoch.py` on the run before
+> logging an embedder verdict. A `shipped` column far below the run's
+> `xfold-pooled` column is the stopping failure this paragraph is about — the
+> same trap `aves-probe` fell into from the other direction — and the fix for
+> it is the epoch rule, not the monitor.
 
 ## The best-known config
 
