@@ -124,33 +124,25 @@ median shift was (that moved only 86 of 1024 dims and still shifted `best_epoch`
 by up to 8x). Run the stopping fix and the transform together, or the number
 will be confounded the way `recorder-center`'s was.
 
-## C. YAMNet ⊕ AVES concatenation
+## C. yamnet_aves follow-ups — standardization, then compose
 
-*Evidence: **E3** — `aves-probe`, `aves-readout`, `aves-mlp-head`. Both caches
-are on disk; this needs **no extraction**.*
+*Evidence: **E3** — `yamnet-aves` (+0.025 honest, two draws, 4/5 folds up,
+`clean`). Cache is on disk (1792-d, shared tree); neither needs extraction.*
 
-AVES alone is a clear in-pipeline negative (0.074) and, converged offline, still
-trails YAMNet at every readout level (linear 0.182 vs 0.248; MLP 0.231 vs
-0.272). But the two representations carry buzz evidence in **structurally
-different** ways: PCA-whitening to k dimensions (converged `lbfgs`, same metric
-and rotation) puts YAMNet at 90% of its own best in 16 principal directions and
-AVES at 28%, needing ~256 to reach 94%. Sparse-and-concentrated versus
-dense-and-distributed, from different pretraining domains (AudioSet supervised
-vs bioacoustic self-supervised).
+`yamnet_aves` (YAMNet 1024-d ⊕ AVES 768-d, one 1.0 s grid) paid a clean but
+modest +0.025 xfold-pooled — half of `context_embedder`, on a plain concat with
+the YAMNet-tuned probe. Two open moves:
 
-Two representations that are individually predictive and encode differently are
-the textbook case where concatenation beats either. Nobody has tried it, because
-AVES was closed on its solo number — which is a statement about AVES *replacing*
-YAMNet, not about it *adding* to it. 1792-d, both caches shared, one CV.
-
-**The one place block standardization has a real motive.** `standardize-blocks`
-was null on 1024-d YAMNet + 521 sigmoid scores, but that pairing was redundant
-by construction (the scores are a supervised readout of the block beside them).
-YAMNet ⊕ AVES is not redundant, and the blocks genuinely differ in scale and
-sparsity (89.6% zeros vs 0.0%). `--standardize` already exists, off by default.
-Run plain first; if the AVES block looks inert in the fold weights, rerun with
-it. Note `input-standardization` (E2) and `standardize-blocks` (E3) both found
-standardization breaks the epoch budget — pair it with `--epoch-rule xfold`.
+1. **Per-block standardization.** The AVES block is ~3.8x the YAMNet block in
+   per-dim |mean| (0.306 vs 0.080) and 0% zeros vs 91.6%, so under one Adam LR
+   the small block is likely underweighted — the one place `standardize-blocks`
+   has a real motive (the blocks genuinely differ, unlike YAMNet+sigmoid).
+   `--standardize` exists, off by default. Pair with a fixed epoch budget or a
+   cross-fold epoch rule from the start (every input normalisation to date moved
+   `best_epoch`).
+2. **Compose with `yamnet_context`.** Context (+0.058) attacks temporal
+   contrast; aves attacks frequency coverage. Disjoint weaknesses, untried
+   together. A `yamnet_context_aves` embedder (3072 + 768) needs one extraction.
 
 ## The residue nobody has asked about: 1_29 vs Fit+Fast trade consistently
 
