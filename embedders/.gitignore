@@ -16,6 +16,7 @@
 !msclap
 !yamnet_bandpass
 !yamnet_combined
+!yamnet_aves
 !yamnet_doublerate
 
 # Ignore binary model files within unignored embedders
