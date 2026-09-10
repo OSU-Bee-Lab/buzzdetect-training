@@ -40,6 +40,9 @@ Environment: `conda run -n buzzdetect-train python <script>`.
 
 Embedder interface — `embedders/embedding.py`; model loader — `models/models.py`.
 
+`DEPLOYMENTS.md` maps each fold to its crop, site and date. Nothing reads it, but
+every "hard fold" conclusion is really a conclusion about a crop.
+
 ## Known stale
 
 Kept as artifacts, never as comparators:
