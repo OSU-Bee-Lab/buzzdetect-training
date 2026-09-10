@@ -171,7 +171,12 @@ For detail behind an archived run: `archive/<era>/notes/<slug>.md`, complete for
 both eras. Code is on `exp/<slug>`, or `refs/archive/<slug>` where the branch
 didn't survive (`archive/README.md`).
 
-If you use an IDEA, remove it from `IDEAS.md` after testing.
+If you use an IDEA, **delete its section** from `IDEAS.md` after testing —
+delete it, do not convert it into a `## Closed:` writeup. The verdict, the
+mechanism and the "don't rerun this" belong in your `log.jsonl` entry and your
+`notes.md` on the branch, which is where a later agent looks for them. `IDEAS.md`
+reached 1047 lines, 46% of it closed material, before this was enforced; it is a
+queue, and every line of it is re-read uncached by every agent.
 
 ### 1. Create worktree
 
