@@ -118,7 +118,7 @@ it needs no training pool and no fold logic, unlike anything fitted.
 
 The argument is the metric's own. We threshold per deployment because the score
 scale does not transfer between sites — `README.md` says so explicitly, and
-`1_95` is the proof (threshold +0.173 against every other fold's ~-1.7). That
+`1_95` is the proof (threshold -0.401 against every other fold's -1.59 to -1.90). That
 non-transfer does not begin at the readout; it begins in the input, where a
 recorder's gain, placement and ambient floor shift the whole embedding cloud.
 Nothing tried so far has addressed it there. Per-recorder centering is the
@@ -302,7 +302,7 @@ opposite ways and should not be treated as one item:**
 | negatives, p99.5 | 0.139 — normal | **0.391 — ~3x every other fold** |
 | buzz frames, mean/median | **0.071 / 0.064 — ≈ its own background** | 0.102 / 0.068 |
 | frames setting the threshold | diffuse ambient | **32 of 35 `mech_auto`** |
-| fold threshold | -1.819 | **+0.173** (the only positive one) |
+| fold threshold | -1.819 | **-0.401** — every other fold is -1.59 to -1.90 |
 
 - **`1_95` is a false-positive problem.** Its buzz/non-buzz mean-logit gap is
   **0.513** against 1.578 at `1_29` — the populations barely separate at all.
