@@ -53,3 +53,8 @@ run-to-run noise from the comparison entirely, which matters because
 ## Results
 
 ## Conclusion
+
+## Method background
+
+The leakage argument, the literature check, and Luke's arbitrariness objection
+are in `notes/epoch-selection.md`. Read that before changing the stopping rule.
