@@ -83,7 +83,7 @@ def _eval_arrays(samples, classes):
 
 
 def _load_data(setname, embeddername, folds_train, name_translation, aug_dirnames,
-               val_fold=None):
+               val_fold=None, center=False):
     """Pool folds_train for training; val_fold, if given, is a whole separate
     deployment used as the early-stopping monitor.
 
@@ -102,6 +102,7 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     for fold in folds_train:
         data_train += build_fold_dataset(
             cfg.dir_embeddings_fold(setname, embeddername, fold), translation,
+            center=center,
         )
     frames_train = sum(s.frames for s in data_train)
 
@@ -111,12 +112,19 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     if val_fold is not None:
         data_val = build_fold_dataset(
             cfg.dir_embeddings_fold(setname, embeddername, val_fold), translation,
+            center=center,
         )
         frames_val = sum(s.frames for s in data_val)
         if data_val:
             val_eval = _eval_arrays(data_val, classes)
 
     if aug_dirnames:
+        if center:
+            # load_augmented reads whole augment dirs, not fold dirs, so there is
+            # no per-deployment median to center them on. Mixing centered real
+            # frames with uncentered augmented ones would train on two input
+            # regimes at once; refuse rather than quietly do that.
+            raise ValueError('--center and --augment cannot be combined')
         data_train += load_augmented(setname, embeddername, aug_dirnames, translation, folds_train)
 
     if not data_train:
@@ -149,7 +157,7 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     )
 
 
-def _score_fold(model, setname, embeddername, fold, translation, classes):
+def _score_fold(model, setname, embeddername, fold, translation, classes, center=False):
     """Score a trained model on a fold it never saw, ins_buzz only.
 
     Returns the frame-level (activation, correct) table, or None if the fold
@@ -159,6 +167,7 @@ def _score_fold(model, setname, embeddername, fold, translation, classes):
     """
     samples = build_fold_dataset(
         cfg.dir_embeddings_fold(setname, embeddername, fold), translation,
+        center=center,
     )
     if not samples:
         return None
@@ -176,7 +185,8 @@ def _format_sens(sens):
     )
 
 
-def _write_predictions(dir_out, model, setname, embeddername, fold, translation, classes):
+def _write_predictions(dir_out, model, setname, embeddername, fold, translation, classes,
+                       center=False):
     """Score `fold`, write predictions.csv under dir_out, return
     (predictions, sens) — sens for the caller's one-line report.
 
@@ -191,7 +201,8 @@ def _write_predictions(dir_out, model, setname, embeddername, fold, translation,
     Otherwise silent by design — the caller folds these numbers into its
     per-fold line rather than printing a second one here."""
     os.makedirs(dir_out, exist_ok=True)
-    predictions = _score_fold(model, setname, embeddername, fold, translation, classes)
+    predictions = _score_fold(model, setname, embeddername, fold, translation, classes,
+                              center=center)
     if predictions is None:
         return None, None
 
@@ -490,7 +501,7 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
               assume_yes=False, stop_tol=0.01, skip_cv=False, train_shipped=False,
-              only_folds=None, surprisal=True):
+              only_folds=None, surprisal=True, center=False):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -553,7 +564,7 @@ def train_set(name, embeddername, setname, name_translation,
             continue
 
         data = _load_data(setname, embeddername, folds_train, name_translation,
-                          aug_dirnames, val_fold=held_out)
+                          aug_dirnames, val_fold=held_out, center=center)
         if data.frames_val == 0:
             # Nothing to early-stop on or score against — a legitimate state if
             # every label in this deployment is ignored or excluded, but it
@@ -571,12 +582,12 @@ def train_set(name, embeddername, setname, name_translation,
 
         _, sens = _write_predictions(
             dir_model, model, setname, embeddername, held_out,
-            data.translation, data.classes,
+            data.translation, data.classes, center=center,
         )
         if surprisal:
             write_fold_surprisal(
                 dir_model_full, model, setname, embeddername, held_out,
-                data.translation, data.classes,
+                data.translation, data.classes, center=center,
             )
         # Training-side facts only. The scores are not duplicated here: they
         # are recomputed from predictions.csv into folds_sx.csv, so a resumed
@@ -649,7 +660,7 @@ def train_set(name, embeddername, setname, name_translation,
 
     folds_shipped = folds_rotate + folds_train_always
     data = _load_data(setname, embeddername, folds_shipped, name_translation,
-                      aug_dirnames, val_fold=None)
+                      aug_dirnames, val_fold=None, center=center)
     result, model = _train_one(
         dir_model_full, name, embeddername, setname, name_translation,
         data, epochs_max, aug_dirnames, verbose,
@@ -673,7 +684,7 @@ def train_set(name, embeddername, setname, name_translation,
         _, sens = _write_predictions(
             os.path.join(dir_model_full, SUBDIR_HOLDOUT, str(fold)),
             model, setname, embeddername, fold,
-            data.translation, data.classes,
+            data.translation, data.classes, center=center,
         )
         if sens is None:
             print(f'[holdout] {fold}: no usable frames under this translation; not scored')
@@ -682,5 +693,5 @@ def train_set(name, embeddername, setname, name_translation,
         if surprisal:
             write_fold_surprisal(
                 dir_model_full, model, setname, embeddername, fold,
-                data.translation, data.classes,
+                data.translation, data.classes, center=center,
             )

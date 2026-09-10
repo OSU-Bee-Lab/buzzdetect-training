@@ -3,6 +3,7 @@ import os
 import pickle
 import warnings
 
+import numpy as np
 import pandas as pd
 
 import config as cfg
@@ -82,7 +83,39 @@ def labels_to_targets(labels_translate, classes):
     return [c in labels_translate for c in classes]
 
 
-def build_fold_dataset(dir_samples, translation, labels_keep_raw=None, exclusive=False):
+def center_on_fold_median(samples):
+    """Subtract this fold's own median embedding from every one of its frames.
+
+    Per-DEPLOYMENT input normalisation. `build_fold_dataset` is called once per
+    fold everywhere it is used — each training fold separately, the validation
+    fold, and the scored fold — so applying this here gives the median exactly
+    the grain we want (one recorder, one site, one day; see DEPLOYMENTS.md) with
+    no fold bookkeeping of its own.
+
+    It uses NO LABELS, so it cannot leak: every fold, training and held-out
+    alike, is centered on statistics drawn from its own audio and nothing else.
+    Nothing is pooled across folds, so 03_train/CLAUDE.md's rule against
+    parameters fit on cross-fold statistics is satisfied by construction. This
+    is the same information an operator has when they tune their own threshold,
+    which is what the per-deployment endpoint already assumes they do.
+
+    Median rather than mean: the motivating case is `1_95`, whose operating
+    point is set by ~10 minutes of vehicle noise in 2 of its 24 snips, and a
+    mean would fold that excursion into the very statistic meant to expose it.
+
+    Returns the median vector (for logging); mutates samples in place.
+    """
+    stacked = np.concatenate(
+        [np.asarray(s.embeddings, dtype=np.float32) for s in samples]
+    )
+    median = np.median(stacked, axis=0).astype(np.float32)
+    for s in samples:
+        s.embeddings = np.asarray(s.embeddings, dtype=np.float32) - median
+    return median
+
+
+def build_fold_dataset(dir_samples, translation, labels_keep_raw=None, exclusive=False,
+                       center=False):
     translation_dict = build_translation_dict(translation)
     classes = build_classes(translation)
 
@@ -140,6 +173,13 @@ def build_fold_dataset(dir_samples, translation, labels_keep_raw=None, exclusive
                 f'all {len(samples)} embedding file(s) under {dir_samples} were '
                 f'dropped by the translation; raw label(s) present: {labels_raw}'
             )
+
+    # Per-deployment centering, applied to whatever frames survived translation
+    # — the same population the probe trains and is scored on, so training and
+    # scoring see one consistent transform.
+    if center and samples_out:
+        center_on_fold_median(samples_out)
+
     return samples_out
 
 

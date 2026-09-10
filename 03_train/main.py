@@ -57,6 +57,13 @@ if __name__ == '__main__':
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
+    parser.add_argument('--center', action='store_true',
+                        help='per-deployment input centering: subtract each '
+                             'fold\'s own median embedding from its frames. '
+                             'Label-free and computed within one fold, so it '
+                             'pools nothing across folds and cannot leak. Off '
+                             'by default; with it off the input path is '
+                             'byte-identical to before the flag existed.')
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--no-surprisal', action='store_false', dest='surprisal',
                         help='skip the per-frame surprisal CSVs under '
@@ -71,6 +78,7 @@ if __name__ == '__main__':
         name_translation=args.translation,
         epochs_max=args.epochs,
         aug_dirnames=args.aug_dirnames,
+        center=args.center,
         verbose=args.verbose,
         patience=args.patience,
         assume_yes=args.assume_yes,

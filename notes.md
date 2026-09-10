@@ -55,6 +55,47 @@ specifically for robustness to the flyover that motivates it.
 
 ## Changes
 
+`03_train/dataset.py`: new `center_on_fold_median(samples)` — stacks a fold's
+frames, takes the per-dimension median, subtracts it in place. `build_fold_dataset`
+takes `center=False` and calls it just before returning. That function is called
+once per fold everywhere it is used (each training fold separately, the
+validation fold, the scored fold, the surprisal pass), so the median lands at
+exactly the per-deployment grain with no fold bookkeeping of its own.
+
+`03_train/train.py`, `03_train/surprisal.py`, `03_train/main.py`: `center`
+threaded through `_load_data`, `_score_fold`, `_write_predictions`,
+`write_fold_surprisal` and `train_set`, exposed as `--center`. Off by default;
+with it off the input path is byte-identical to before the flag existed.
+`--center` with `--augment` raises rather than mixing regimes — `load_augmented`
+reads augment dirs, not fold dirs, so there is no per-deployment median to
+center augmented frames on.
+
+No change to the loss, the head, the optimiser, the stopping rule or the metric,
+so `model.compile()` is untouched and `tools/smoke_model.py` does not apply.
+
+### Verified before spending a CV (no training)
+
+- Centered fold median is 0 to ~1e-7 on every fold; the result is exactly
+  `A - median(A)` (`atol=1e-5`), i.e. a pure shift and nothing else.
+- **The transform is not trivial.** Fold medians differ from each other by L2
+  **2.33-4.58**, against per-fold median norms of 4.49-5.71 — the
+  between-deployment offset is comparable in size to the vectors themselves.
+- **And it is gentler than the prior feared.** Only **86 of 1024** dimensions
+  have a nonzero median (8.4%), so sparsity moves only 0.894 -> 0.874 and the
+  code stays overwhelmingly non-negative. The shift lands on exactly the
+  persistently-active dimensions — which is what a site's ambient signature is —
+  rather than remapping the whole basis. The `aves-probe` regime-shift worry in
+  the hypothesis is therefore much weaker than written; noted before seeing
+  results, not after.
+
+| fold | median L2 |
+|---|---|
+| `1_29` (mustard) | 5.375 |
+| `53` (Fit+Fast) | 5.670 |
+| `1_11` (willard) | 4.493 |
+| `1_150` | 5.089 |
+| `1_95` | 5.705 |
+
 ## Results
 
 ## Conclusion

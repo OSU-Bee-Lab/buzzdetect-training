@@ -64,7 +64,7 @@ def _frametimes_by_stem(dir_pickle):
 
 
 def write_fold_surprisal(dir_model_full, model, setname, embeddername, fold,
-                         translation, classes):
+                         translation, classes, center=False):
     """Score `fold` with `model` and write its per-ident activation/loss CSVs
     under <dir_model_full>/surprisal/. Returns the number of idents written.
 
@@ -72,7 +72,9 @@ def write_fold_surprisal(dir_model_full, model, setname, embeddername, fold,
     model for a holdout fold -- either way it never trained on `fold`.
     """
     dir_fold = cfg.dir_embeddings_fold(setname, embeddername, fold)
-    samples = build_fold_dataset(dir_fold, translation)
+    # Must match how the model was trained and scored, or the diagnostics
+    # describe a different input than the metrics do.
+    samples = build_fold_dataset(dir_fold, translation, center=center)
     if not samples:
         return 0
 
