@@ -20,6 +20,7 @@ if os.environ.get('BUZZDETECT_NO_GPU'):
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import dataset
 from train import train_set
 
 if __name__ == '__main__':
@@ -54,6 +55,37 @@ if __name__ == '__main__':
                              'epoch count is read from the fold curves on disk, so '
                              'a later run with the same --name plus --skip-cv '
                              'produces the same model. Implied by --skip-cv.')
+    parser.add_argument('--hidden', type=int, default=0,
+                        help='width of a shared ReLU hidden layer between the '
+                             'input dropout and the class logits (default 0 = '
+                             'no hidden layer, the shipped decoupled head). '
+                             'h>0 gives all classes one learned representation, '
+                             'so auxiliary-class supervision reaches the buzz '
+                             'neuron.')
+    parser.add_argument('--fixed-epochs', type=int, default=None, dest='fixed_epochs',
+                        help='train every rotation for exactly this many epochs '
+                             'with no early stopping and no restore-best, '
+                             'shipping the final weights. All arms of a '
+                             'comparison are then scored at one identical epoch, '
+                             'so a capacity or normalisation change is not '
+                             'confounded by the val_loss stopping rule. Sens '
+                             'curves are still persisted for an offline '
+                             'cross-fold epoch rule (tools/honest_epoch.py).')
+    parser.add_argument('--context-frames', type=int, default=0, dest='context_frames',
+                        help='fold each frame\'s temporal neighbours into its '
+                             'embedding at TRAIN time, k frames either side, '
+                             'using frametimes.csv to find the frame that '
+                             'actually sat beside it in the source audio '
+                             '(default 0 = off). Reproduces the yamnet_context '
+                             'embedder over any cache, with no re-extraction. '
+                             'Absent neighbours (snip ends, gaps) clamp to the '
+                             'frame itself.')
+    parser.add_argument('--context-dims', type=int, default=0, dest='context_dims',
+                        help='restrict --context-frames to the leading DIMS of '
+                             'the embedding (default 0 = all of it). For a '
+                             'concat embedder this widens one block only: '
+                             '--context-dims 1024 on yamnet_aves stacks the '
+                             'YAMNet block and leaves the AVES block alone.')
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
@@ -63,6 +95,10 @@ if __name__ == '__main__':
                              '<model>/surprisal/ (written by default, one file '
                              'per source ident, for finding bad annotations)')
     args = parser.parse_args()
+
+    # Process-wide, so every build_fold_dataset() call site — training,
+    # scoring, predictions, surprisal — widens identically.
+    dataset.set_context(args.context_frames, args.context_dims)
 
     train_set(
         name=args.name,
@@ -78,6 +114,8 @@ if __name__ == '__main__':
         skip_cv=args.skip_cv,
         # --skip-cv means 'shipped model only', so it has to turn it on.
         train_shipped=args.train_shipped or args.skip_cv,
+        hidden=args.hidden,
+        fixed_epochs=args.fixed_epochs,
         only_folds=args.only_folds,
         surprisal=args.surprisal,
     )

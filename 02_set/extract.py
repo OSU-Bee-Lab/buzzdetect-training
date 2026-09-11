@@ -633,6 +633,21 @@ class WorkerExtract:
         self.framelength_samples = int(self.embedder.framelength_s * self.embedder.samplerate)
         self.chunklength_samples = cfg.CHUNK_FRAMES * self.framelength_samples
 
+        # A context embedder needs to see contiguous audio: it must be handed a whole
+        # chunk in time order, and its output bucketed by label afterwards. Embedding
+        # the label buckets instead (the default path below) would give every frame
+        # neighbours that share its own label, which is not what neighbouring audio
+        # looks like. 0 = ordinary embedder, nothing on this path changes.
+        self.context_frames = int(getattr(self.embedder, 'context_frames', 0) or 0)
+        if self.context_frames and self.config_extract.framehop_prop != 1:
+            # The contiguous buffer handed to embed() is np.concatenate(frames), which
+            # only reconstructs the chunk's audio when the frames tile it without
+            # overlap. At framehop_prop < 1 it would splice duplicated audio — and the
+            # frame count would still come out right, so nothing downstream would notice.
+            raise NotImplementedError(
+                f'{self.embedder.embeddername} needs contiguous audio; '
+                f'framehop_prop must be 1, got {self.config_extract.framehop_prop}')
+
     def read_range(self, track: sf.SoundFile, audiorange: tuple[float, float]):
         start_sample = round(track.samplerate * audiorange[0])
         samples_to_read = round(track.samplerate * (audiorange[1] - audiorange[0]))
@@ -642,7 +657,66 @@ class WorkerExtract:
             audio_data = np.mean(audio_data, axis=1)
         return librosa.resample(y=audio_data, orig_sr=track.samplerate, target_sr=self.embedder.samplerate)
 
+    def _read_pad_frame(self, track, start_s, snip_duration):
+        """One frame of real audio starting at start_s, or None if it isn't there.
+
+        The padding that keeps a kept frame from ever being edge-clamped. Snips
+        carry SNIP_BUFFER_S (30 s) of real audio either side of their annotation
+        cluster, so this is available for every chunk except one butted against
+        a true edge of the source recording — which is the one place a live
+        deployment also has no neighbour.
+        """
+        end_s = start_s + self.embedder.framelength_s
+        if start_s < 0 or end_s > snip_duration:
+            return None
+        # read a hair wide, then truncate: resampling the exact frame length can
+        # land a sample short depending on the source rate
+        audio = self.read_range(
+            track, (start_s, min(end_s + 0.01, snip_duration))
+        )[:self.framelength_samples]
+        if len(audio) < self.framelength_samples:
+            return None
+        return audio
+
+    def _embed_with_context(self, track, frames, first_start_s, snip_duration):
+        """Embeddings for `frames`, each carrying its real temporal neighbours.
+
+        `frames` tile the audio from first_start_s at framelength_s (framehop_prop
+        is 1 on this path). They are handed to embed() as ONE contiguous buffer
+        padded by context_frames frames of real audio on each side, and the pad
+        rows are dropped. The kept rows are byte-identical audio to the default
+        path — the pad only changes what the embedder can see around them.
+        """
+        k = self.context_frames
+        L = self.embedder.framelength_s
+        buf, n_pad_lo = [], 0
+        for j in range(k, 0, -1):
+            pad = self._read_pad_frame(track, first_start_s - j * L, snip_duration)
+            if pad is not None:
+                buf.append(pad)
+                n_pad_lo += 1
+        buf.extend(frames)
+        last_end = first_start_s + len(frames) * L
+        for j in range(k):
+            pad = self._read_pad_frame(track, last_end + j * L, snip_duration)
+            if pad is None:
+                break
+            buf.append(pad)
+
+        embedded = self.embedder.embed(np.concatenate(buf))
+        if len(embedded) != len(buf):
+            raise ValueError(
+                f'extractor {self.name}: {self.embedder.embeddername} returned '
+                f'{len(embedded)} embeddings for {len(buf)} frames')
+        return embedded[n_pad_lo: n_pad_lo + len(frames)]
+
     def extract_ident_embeddings(self, a_ident: AssignIdent):
+        if self.context_frames:
+            # The cached audio is grouped by label, so the order within a file is not
+            # the order in the recording and the frames either side of a frame are
+            # missing. Context has to come from the snips.
+            raise NotImplementedError(
+                f'{self.embedder.embeddername} needs contiguous audio; rebuild from snips')
         paths_audio = glob.glob(os.path.join(glob.escape(a_ident.dir_out_audio), '*.pickle'))
 
         _mark_incomplete(a_ident.dir_out_embeddings)
@@ -685,6 +759,10 @@ class WorkerExtract:
             )
 
         frames_by_label = {}
+        # Parallel to frames_by_label, populated only on the context path: those
+        # embeddings must be computed from contiguous audio here, not re-derived
+        # from the label buckets at write time.
+        embeddings_by_label = {}
         # Parallel to frames_by_label: the source-coordinate start time of every
         # frame, in the same append order. Persisted as frametimes.csv so stage 3
         # can map an embedding row back to a timestamp in the original audio
@@ -753,7 +831,15 @@ class WorkerExtract:
 
                     frames_rel += [(f[0] - snip_start, f[1] - snip_start) for f in frametimes]
 
-                    for frame, frame_range in zip(frames, frametimes):
+                    # One call for the whole chunk, in time order and padded with real
+                    # audio either side, so every frame kept below carries the frames
+                    # that really sat beside it in the recording.
+                    embeddings_chunk = None
+                    if self.context_frames:
+                        embeddings_chunk = self._embed_with_context(
+                            track, frames, chunk[0], snip_duration)
+
+                    for i_frame, (frame, frame_range) in enumerate(zip(frames, frametimes)):
                         events_frame = events_in_frame(
                             range_frame=frame_range,
                             annotations=annotations_sub,
@@ -781,6 +867,9 @@ class WorkerExtract:
                             continue
                         frames_by_label.setdefault(labels_collapse, []).append(frame)
                         starts_by_label.setdefault(labels_collapse, []).append(frame_range[0])
+                        if self.context_frames:
+                            embeddings_by_label.setdefault(labels_collapse, []).append(
+                                embeddings_chunk[i_frame])
 
                 # Rescue annotations the frame grid missed. Frames are cut on a grid anchored
                 # at each chunk's start, and with framehop_prop=1 they do not overlap each
@@ -827,6 +916,14 @@ class WorkerExtract:
 
                     frames_by_label.setdefault(labels_collapse, []).append(audio_data)
                     starts_by_label.setdefault(labels_collapse, []).append(frame_range[0])
+                    if self.context_frames:
+                        # A rescue frame is cut alone and off-grid, so without this it
+                        # would be clamped on BOTH sides — and rescue frames are by
+                        # construction the frames that carry a labelled event, which is
+                        # exactly how a clamp becomes a label-correlated feature.
+                        embeddings_by_label.setdefault(labels_collapse, []).append(
+                            self._embed_with_context(
+                                track, [audio_data], frame_range_rel[0], snip_duration)[0])
                     frames_rel.append(frame_range_rel)
 
                     if self.verbose:
@@ -845,13 +942,22 @@ class WorkerExtract:
                 for s in samples:
                     pickle.dump(s, file)
 
-            samples_flat = np.concatenate(samples)
-
             with open(path_out_embedding, 'wb') as file:
-                for start in range(0, len(samples_flat), self.chunklength_samples):
-                    chunk = samples_flat[start: start + self.chunklength_samples]
-                    for e in self.embedder.embed(chunk):
+                if self.context_frames:
+                    embedded = embeddings_by_label[labels_collapse]
+                    if len(embedded) != len(samples):
+                        raise ValueError(
+                            f'extractor {self.name}: {len(embedded)} embeddings for '
+                            f'{len(samples)} frames of {labels_collapse!r} in '
+                            f'{a_ident.ident}')
+                    for e in embedded:
                         pickle.dump(e, file)
+                else:
+                    samples_flat = np.concatenate(samples)
+                    for start in range(0, len(samples_flat), self.chunklength_samples):
+                        chunk = samples_flat[start: start + self.chunklength_samples]
+                        for e in self.embedder.embed(chunk):
+                            pickle.dump(e, file)
 
         # frametimes.csv: one row per emitted frame -- (label, row, start) where
         # `label` is the collapsed-label pickle stem, `row` is the frame's 0-based
