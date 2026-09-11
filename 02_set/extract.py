@@ -1033,6 +1033,10 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
     dir_embeddings_base = config_extract.dir_out_embeddings(embeddername)
 
     idents_todo = []
+    # ident -> the embeddings directory it must end up populating. The queue
+    # carries bare ident strings (it crosses a process boundary), so the
+    # post-run verification below needs the paths recorded here.
+    dirs_todo = {}
     # Every ident lands in exactly one of these. They are genuinely different
     # outcomes -- two are normal, two mean something is wrong -- so they are
     # counted and reported separately rather than lumped into one "skipped".
@@ -1075,6 +1079,7 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
                     _write_fingerprint(dir_done, fingerprint)
         else:
             idents_todo.append(ident)
+            dirs_todo[ident] = a_ident.dir_out_embeddings
             n_stale += bool(stale)
             n_new += not stale
 
@@ -1157,11 +1162,12 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
     # pickles on disk and a stamped fingerprint; anything else is a failure, and
     # it is louder to stop here than to discover it in a fold table.
     incomplete = []
-    for a in idents_todo:
-        if not _has_pickles(a.dir_out_embeddings):
-            incomplete.append((a.ident, 'no embeddings written'))
-        elif _is_incomplete(a.dir_out_embeddings):
-            incomplete.append((a.ident, 'fingerprint never stamped'))
+    for ident in idents_todo:
+        dir_out = dirs_todo[ident]
+        if not _has_pickles(dir_out):
+            incomplete.append((ident, 'no embeddings written'))
+        elif _is_incomplete(dir_out):
+            incomplete.append((ident, 'fingerprint never stamped'))
     if incomplete:
         listing = '\n  '.join(f'{i} — {why}' for i, why in incomplete)
         raise RuntimeError(
