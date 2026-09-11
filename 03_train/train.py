@@ -19,7 +19,7 @@ from dataset import (
     survey_untranslated, ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT,
 )
 from train_utils import (build_weights, build_classes, can_write,
-                         weighted_bce_loss, Sample)
+                         weighted_bce_loss, pairwise_rank_loss, Sample)
 from embedders.embedding import load_embedder
 from plot_history import plot_history, plot_sens_history
 from write_model_py import write_model_py
@@ -273,7 +273,7 @@ def _consensus_epoch(summary_rows, tol):
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs_max, aug_dirnames, verbose,
                held_out_fold, save_binary, epochs_fixed=None, patience=50,
-               stop_tol=None):
+               stop_tol=None, hidden=0, fixed_epochs=None, rank_lam=0.0, rank_confuser='mech_auto', rank_margin=1.0):
     """Train one model. Returns (result_row, model); (None, None) if the model
     directory is already populated."""
     if not can_write(dir_model):
@@ -297,6 +297,13 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     model = tf.keras.Sequential(name=tf_name)
     model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
     model.add(tf.keras.layers.Dropout(0.2))
+    # --hidden 0 (the default) is the shipped head: one Dense straight off the
+    # embedding, i.e. n_classes decoupled logistic regressions that share only
+    # the dropout mask. With --hidden h>0 the classes read one learned
+    # representation, so a mech_auto error can finally reach W[:, ins_buzz].
+    if hidden:
+        model.add(tf.keras.layers.Dense(hidden, activation='relu', name='trunk'))
+        model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.Dense(len(data.classes)))
 
     # Per-class weights go in the loss, not in fit(class_weight=). Keras'
@@ -305,8 +312,19 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     # a buzz frame co-occurring with an earlier-indexed class never gets
     # ins_buzz's weight at all. See train_utils.weighted_bce_loss.
     weights_ordered = [data.weight_dict[i] for i in range(len(data.classes))]
+    if rank_lam:
+        if rank_confuser not in data.classes:
+            raise ValueError(
+                f'--rank-confuser {rank_confuser!r} is not a class under this '
+                f'translation; have {sorted(data.classes)}')
+        loss_fn = pairwise_rank_loss(
+            weights_ordered, data.classes.index('ins_buzz'),
+            data.classes.index(rank_confuser), lam=rank_lam,
+            margin=rank_margin, label_smoothing=0.2)
+    else:
+        loss_fn = weighted_bce_loss(weights_ordered, label_smoothing=0.2)
     model.compile(
-        loss=weighted_bce_loss(weights_ordered, label_smoothing=0.2),
+        loss=loss_fn,
         optimizer=tf.keras.optimizers.Adam(learning_rate=0.002),
         metrics=['accuracy'],
     )
@@ -332,29 +350,50 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             'frames_train': data.frames_train,
         }
     else:
-        callback = RestoreTrueBest(
-            monitor='val_loss', patience=patience, min_delta=0.002, restore_best_weights=True,
-        )
-        # Reporting only, and listed first so its keys are in `logs` before
-        # EarlyStopping and History see them. Stopping still happens on
-        # val_loss; these curves are the evidence for whether it should.
+        # Reporting only, and listed first so its keys are in `logs` before the
+        # other callbacks see them.
         sens_callback = SensAtFPR(
             *data.val_eval, data.classes.index('ins_buzz'), FPR_TARGETS,
             batch_size=data.size_batch,
         )
-        history = model.fit(
-            data.train_tf,
-            epochs=epochs_max,
-            validation_data=data.val_tf,
-            callbacks=[sens_callback, callback, tf.keras.callbacks.TerminateOnNaN()],
-            shuffle=False,  # _to_tf already shuffles; see the fixed-epochs fit above
-            # --verbose is for a human watching: 1 = live progress bar. Agents
-            # leave the flag off (0) so per-epoch lines don't fill their context.
-            verbose=1 if verbose else 0,
-        )
+        if fixed_epochs is not None:
+            # --fixed-epochs: no early stopping, no restore-best. Every rotation
+            # trains exactly fixed_epochs and ships its final weights, so all
+            # arms of a comparison are scored at one identical epoch. Used to
+            # measure a capacity/normalisation change without the val_loss
+            # stopping rule confounding it (a wider head reaches its val_loss
+            # argmin sooner and would otherwise ship undertrained). The sens
+            # curves are still persisted, so an offline cross-fold epoch rule
+            # (tools/honest_epoch.py) can pick a shared epoch < fixed_epochs.
+            history = model.fit(
+                data.train_tf,
+                epochs=fixed_epochs,
+                validation_data=data.val_tf,
+                callbacks=[sens_callback, tf.keras.callbacks.TerminateOnNaN()],
+                shuffle=False,
+                verbose=1 if verbose else 0,
+            )
+            best_epoch = len(history.history['val_loss']) - 1
+            best_val_loss = float(history.history['val_loss'][best_epoch])
+        else:
+            callback = RestoreTrueBest(
+                monitor='val_loss', patience=patience, min_delta=0.002, restore_best_weights=True,
+            )
+            # Stopping still happens on val_loss; these curves are the evidence
+            # for whether it should.
+            history = model.fit(
+                data.train_tf,
+                epochs=epochs_max,
+                validation_data=data.val_tf,
+                callbacks=[sens_callback, callback, tf.keras.callbacks.TerminateOnNaN()],
+                shuffle=False,  # _to_tf already shuffles; see the fixed-epochs fit above
+                # --verbose is for a human watching: 1 = live progress bar. Agents
+                # leave the flag off (0) so per-epoch lines don't fill their context.
+                verbose=1 if verbose else 0,
+            )
+            best_epoch = callback.best_epoch
+            best_val_loss = float(callback.best)
 
-        best_epoch = callback.best_epoch
-        best_val_loss = float(callback.best)
         result = {
             'n_epochs': len(history.history['val_loss']),
             'best_epoch': best_epoch + 1,
@@ -490,7 +529,8 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
               assume_yes=False, stop_tol=0.01, skip_cv=False, train_shipped=False,
-              only_folds=None, surprisal=True):
+              only_folds=None, surprisal=True, hidden=0, fixed_epochs=None,
+              rank_lam=0.0, rank_confuser='mech_auto', rank_margin=1.0):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -564,7 +604,9 @@ def train_set(name, embeddername, setname, name_translation,
         result, model = _train_one(
             dir_model, modelname, embeddername, setname, name_translation,
             data, epochs_max, aug_dirnames, verbose,
-            held_out, save_binary=False, patience=patience,
+            held_out, save_binary=False, patience=patience, hidden=hidden,
+            fixed_epochs=fixed_epochs, rank_lam=rank_lam,
+            rank_confuser=rank_confuser, rank_margin=rank_margin,
         )
         if result is None:
             continue
@@ -654,7 +696,8 @@ def train_set(name, embeddername, setname, name_translation,
         dir_model_full, name, embeddername, setname, name_translation,
         data, epochs_max, aug_dirnames, verbose,
         None, save_binary=True, epochs_fixed=epochs_fixed, patience=patience,
-        stop_tol=stop_tol,
+        stop_tol=stop_tol, hidden=hidden, rank_lam=rank_lam,
+        rank_confuser=rank_confuser, rank_margin=rank_margin,
     )
 
     if result is None:

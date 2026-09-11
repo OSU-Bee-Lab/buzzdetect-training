@@ -54,6 +54,37 @@ if __name__ == '__main__':
                              'epoch count is read from the fold curves on disk, so '
                              'a later run with the same --name plus --skip-cv '
                              'produces the same model. Implied by --skip-cv.')
+    parser.add_argument('--hidden', type=int, default=0,
+                        help='width of a shared ReLU hidden layer between the '
+                             'input dropout and the class logits (default 0 = '
+                             'no hidden layer, the shipped decoupled head). '
+                             'h>0 gives all classes one learned representation, '
+                             'so auxiliary-class supervision reaches the buzz '
+                             'neuron.')
+    parser.add_argument('--fixed-epochs', type=int, default=None, dest='fixed_epochs',
+                        help='train every rotation for exactly this many epochs '
+                             'with no early stopping and no restore-best, '
+                             'shipping the final weights. All arms of a '
+                             'comparison are then scored at one identical epoch, '
+                             'so a capacity or normalisation change is not '
+                             'confounded by the val_loss stopping rule. Sens '
+                             'curves are still persisted for an offline '
+                             'cross-fold epoch rule (tools/honest_epoch.py).')
+    parser.add_argument('--rank-lam', type=float, default=0.0, dest='rank_lam',
+                        help='weight on a pairwise buzz-above-confuser ranking '
+                             'term added to the loss (default 0 = off, exactly '
+                             'the stock weighted BCE). The successor mech-margin '
+                             'named: that hinge was ABSOLUTE and the metric reads '
+                             'RANK only. USE ONLY WITH --fixed-epochs; a '
+                             'batch-local ranking loss is invalid as val_loss, '
+                             'which is what actually sank tail-loss in E2.')
+    parser.add_argument('--rank-confuser', default='mech_auto', dest='rank_confuser',
+                        help='class the ranking term pushes buzz above '
+                             '(default mech_auto: 32 of 35 threshold-setting '
+                             'frames at 1_95).')
+    parser.add_argument('--rank-margin', type=float, default=1.0, dest='rank_margin',
+                        help='logit gap a pair must clear before it stops '
+                             'contributing (default 1.0).')
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
@@ -78,6 +109,11 @@ if __name__ == '__main__':
         skip_cv=args.skip_cv,
         # --skip-cv means 'shipped model only', so it has to turn it on.
         train_shipped=args.train_shipped or args.skip_cv,
+        hidden=args.hidden,
+        fixed_epochs=args.fixed_epochs,
+        rank_lam=args.rank_lam,
+        rank_confuser=args.rank_confuser,
+        rank_margin=args.rank_margin,
         only_folds=args.only_folds,
         surprisal=args.surprisal,
     )
