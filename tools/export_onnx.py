@@ -76,6 +76,12 @@ NAME_IN = 'waveform'
 NAME_OUT = 'predictions'
 DIM_SAMPLES = 'samples'
 
+# The trunk and the head are exported separately now (see build_trunk_onnx()
+# and head_to_onnx()) and then onnx.compose'd together, which requires them to
+# share an opset. Pinned rather than left to each exporter's default so a
+# future embedder's to_onnx() and this file agree without coordinating.
+OPSET = 17
+
 # The reduced-precision sibling. buzzdetect loads it instead of model.onnx when
 # a run sets BUZZDETECT_GPU_FP16=1 and the provider can act on it -- today only
 # CoreML, where it reaches the Neural Engine and is worth 1.9x end to end at
@@ -130,53 +136,129 @@ def load_head(dir_src, n_embeddings):
     raise SystemExit(f'no model.keras and no saved_model.pb in {dir_src}')
 
 
-def build_combined(modelname, dir_src, embeddername):
-    """One Keras model, waveform -> predictions.
+def build_trunk_onnx(embeddername):
+    """The embedder's own waveform -> embeddings ONNX graph.
 
-    The embedder is loaded through its own plugin rather than by reaching for
+    Loaded through the embedder plugin interface rather than by reaching for
     a .keras path, so whatever that plugin does at load time -- retuning the
-    patch hop, in yamnet's case -- is done here too, and a new embedder needs
-    no change in this file.
+    patch hop, in yamnet's case -- is done here too. The actual ONNX-building
+    is the embedder's own job (BaseEmbedder.to_onnx(), overridden per
+    embedder as needed -- see embedders/yamnet_aves/embedder.py for a trunk
+    spanning two frameworks); a new embedder, however it's built, needs no
+    change in this file, only in its own to_onnx().
     """
-    import keras
-
     from embedders.embedding import load_embedder
 
     # framehop_prop=1: the graph is exported with the patch hop welded to the
     # patch window. An overlapping framehop would have to be a graph parameter,
     # and buzzdetect's ONNX path has never supported one.
     embedder = load_embedder(embeddername, framehop_prop=1, initialize=True)
-    trunk = embedder.model
-    if not isinstance(trunk, keras.Model):
+    try:
+        trunk_onnx = embedder.to_onnx(opset=OPSET)
+    except NotImplementedError as e:
+        raise SystemExit(str(e))
+
+    trunk_onnx = flatten_trunk_output(trunk_onnx, embedder)
+    return trunk_onnx, embedder
+
+
+def flatten_trunk_output(trunk_onnx, embedder):
+    """Make sure the trunk graph's output is (frames, n_embeddings).
+
+    A trunk-fine-tune embedder (yamnet_trunk, yamnet_trunk11, ...) hands back
+    its frozen layers' raw spatial map -- e.g. (frames, 6, 4, 512) -- because
+    that's the trunk's own graph; flattening to n_embeddings only happens in
+    the embedder's *numpy* embed() path used at extraction time, and the head
+    was trained on that flat vector. Checked and fixed here by actually
+    running the graph on a throwaway input rather than by trusting any one
+    framework's static shape, since to_onnx() may come from a framework (or a
+    hand-built graph, per embedders/yamnet_aves) that doesn't expose one.
+    """
+    import onnx
+    import onnxruntime as ort
+
+    session = ort.InferenceSession(trunk_onnx.SerializeToString(),
+                                   providers=['CPUExecutionProvider'])
+    dummy = np.zeros(int(embedder.framelength_s * embedder.samplerate) * 3,
+                     dtype=np.float32)
+    name_in = session.get_inputs()[0].name
+    out = session.run(None, {name_in: dummy})[0]
+
+    if out.ndim > 2:
+        flat_dim = int(np.prod(out.shape[1:]))
+        output_name = trunk_onnx.graph.output[0].name
+        flat_name = output_name + '_flattened'
+        shape_init = onnx.helper.make_tensor(
+            f'{output_name}_flatten_shape', onnx.TensorProto.INT64, [2], [0, -1])
+        trunk_onnx.graph.initializer.append(shape_init)
+        trunk_onnx.graph.node.append(onnx.helper.make_node(
+            'Reshape', [output_name, shape_init.name], [flat_name],
+            name='export_flatten_trunk'))
+        trunk_onnx.graph.output[0].name = flat_name
+        del trunk_onnx.graph.output[0].type.tensor_type.shape.dim[:]
+        print(f'  trunk output {out.shape[1:]} flattened to ({flat_dim},)')
+    else:
+        flat_dim = out.shape[-1]
+
+    if flat_dim != embedder.n_embeddings:
         raise SystemExit(
-            f"embedder '{embeddername}' does not load a Keras model "
-            f'({type(trunk).__name__}), so it cannot be exported to ONNX here.')
+            f"embedder '{embedder.embeddername}' trunk output flattens to "
+            f'{flat_dim}, but n_embeddings is {embedder.n_embeddings}')
+    return trunk_onnx
 
-    head = load_head(dir_src, embedder.n_embeddings)
 
-    # A trunk-fine-tune embedder (yamnet_trunk, yamnet_trunk11, ...) hands back
-    # its frozen layers' raw spatial map -- e.g. (None, 6, 4, 512) -- because
-    # that's the Keras graph; flattening to n_embeddings only happens in the
-    # embedder's *numpy* embed() path used at extraction time. The head was
-    # trained on that flat vector (it Reshapes back internally), so match it
-    # here with the same row-major Flatten numpy's reshape(n, -1) used.
-    trunk_out = trunk.output
-    if len(trunk_out.shape) > 2:
-        trunk_out = keras.layers.Flatten()(trunk_out)
-    if trunk_out.shape[-1] != embedder.n_embeddings:
-        raise SystemExit(
-            f"embedder '{embeddername}' trunk output flattens to "
-            f'{trunk_out.shape[-1]}, but n_embeddings is {embedder.n_embeddings}')
+def head_to_onnx(head, n_embeddings):
+    """The trained classifier alone, as its own ONNX graph: embeddings in,
+    predictions out. Wrapping it in a throwaway keras.Model first is what
+    makes this work for both a model.keras head (already a keras.Model, so
+    this is a no-op wrapper) and the legacy SavedModel/TFSMLayer head (which
+    has no .export() of its own but can still be called inside one)."""
+    import keras
+    import onnx
+    import tempfile
 
-    predictions = head(trunk_out)
+    inp = keras.Input((n_embeddings,), dtype='float32', name='embeddings')
+    out = head(inp)
     # A SavedModel hands its outputs back in a dict keyed by layer name.
-    if isinstance(predictions, dict):
-        (predictions,) = predictions.values()
+    if isinstance(out, dict):
+        (out,) = out.values()
+    head_model = keras.Model(inp, out, name='head')
+    head_model(np.zeros((1, n_embeddings), dtype=np.float32))
 
-    combined = keras.Model(trunk.input, predictions, name=modelname)
-    combined(np.zeros(int(embedder.framelength_s * embedder.samplerate) * 3,
-                      dtype=np.float32))
-    return combined, embedder, head
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, 'head.onnx')
+        head_model.export(path, format='onnx', verbose=False, opset_version=OPSET)
+        return onnx.load(path)
+
+
+def merge_trunk_head(trunk_onnx, head_onnx):
+    """One graph: the trunk's embeddings feed straight into the head.
+
+    onnx.compose does the actual wiring and the name-collision avoidance
+    (prefix1/prefix2) -- this just satisfies its precondition that both
+    graphs agree on IR version and opset, which they do by construction here
+    (both exported at OPSET) but might not for a trunk graph that was built
+    or cached some other way, so it's checked rather than assumed.
+    """
+    from onnx import compose
+
+    if trunk_onnx.ir_version != head_onnx.ir_version:
+        target = max(trunk_onnx.ir_version, head_onnx.ir_version)
+        trunk_onnx.ir_version = target
+        head_onnx.ir_version = target
+
+    trunk_ops = {i.domain: i.version for i in trunk_onnx.opset_import}
+    head_ops = {i.domain: i.version for i in head_onnx.opset_import}
+    if trunk_ops != head_ops:
+        raise SystemExit(
+            f'trunk and head were exported at different opsets ({trunk_ops} vs '
+            f'{head_ops}); export both at the same opset before merging.')
+
+    trunk_out = trunk_onnx.graph.output[0].name
+    head_in = head_onnx.graph.input[0].name
+    return compose.merge_models(
+        trunk_onnx, head_onnx, io_map=[(trunk_out, head_in)],
+        prefix1='trunk_', prefix2='head_')
 
 
 def rename_io(model):
@@ -194,14 +276,11 @@ def rename_io(model):
     return model
 
 
-def export_graph(combined, path_onnx):
-    """Keras -> ONNX -> folded and fused, written to path_onnx."""
+def export_graph(model, path_onnx):
+    """The merged trunk+head graph -> folded and fused, written to path_onnx."""
     import onnx
 
     print(f'exporting {path_onnx}')
-    combined.export(path_onnx, format='onnx', verbose=False)
-
-    model = onnx.load(path_onnx)
     n_before = len(model.graph.node)
     model, n_folded, n_fused, n_dropped = optimize(model)
     model = rename_io(model)
@@ -232,13 +311,21 @@ def export_graph(combined, path_onnx):
     return model
 
 
-def verify(path_onnx, combined, embedder, path_audio):
-    """Run the ONNX graph against the Keras model it was built from.
+def verify(path_onnx, embedder, head, path_audio):
+    """Run the ONNX graph against embed() and the trained head it was built from.
+
+    embed() -- not a fused Keras model -- is the ground truth here because
+    it's the one thing every embedder already has and already agrees with its
+    own to_onnx(): whatever framework or combination of frameworks a trunk
+    uses, embed() is its numpy-in/numpy-out reference implementation. This is
+    also what makes the check meaningful for a multi-framework trunk like
+    yamnet_aves, which has no single fused model to compare against.
 
     Real audio first, then synthetic lengths chosen to cover the ragged cases:
-    several whole frames, exactly one, one sample under the padding floor, a
+    several whole frames, exactly one, one sample under the framing floor, a
     ragged tail, and a clip too short to make a frame at all. Those last three
-    exercise the front end's padding, which is inside the graph now.
+    exercise the front end's framing rule (padding or truncating), which is
+    inside the graph now.
     """
     import librosa
     import onnxruntime as ort
@@ -247,6 +334,13 @@ def verify(path_onnx, combined, embedder, path_audio):
     name_in = session.get_inputs()[0].name
     print(f'  {os.path.getsize(path_onnx) / 1e6:.2f} MB, '
           f'in {session.get_inputs()[0].shape} out {session.get_outputs()[0].shape}')
+
+    def reference(samples):
+        embeddings = np.asarray(embedder.embed(samples), dtype=np.float32)
+        predictions = head(embeddings)
+        if isinstance(predictions, dict):
+            (predictions,) = predictions.values()
+        return np.asarray(predictions)
 
     cases = []
     if path_audio is not None:
@@ -261,7 +355,7 @@ def verify(path_onnx, combined, embedder, path_audio):
 
     worst = 0.0
     for label, samples in cases:
-        expected = np.asarray(combined(samples))
+        expected = reference(samples)
         got = session.run(None, {name_in: samples})[0]
         if expected.shape != got.shape:
             raise SystemExit(f'{label}: shape mismatch, keras {expected.shape} '
@@ -278,53 +372,89 @@ def verify(path_onnx, combined, embedder, path_audio):
     return worst
 
 
-def frames_for(n_samples, samples_hop, samples_min):
+def frames_for(n_samples, samples_hop, samples_min, floor_nonzero, float32_quotient):
     """How many frames the graph returns for n_samples of audio.
 
-    Two things here are not what they look like.
+    Three things here are not what they look like.
 
-    The first frame needs more samples than the hop -- the front end pads up to
-    a whole patch plus the STFT window's overhang -- so this is not
-    ceil(n_samples / samples_hop).
+    Below floor_nonzero, the answer is 0, not 1 -- for a front end that pads a
+    short clip up to a frame (YAMNet: the patch window plus the STFT window's
+    overhang) floor_nonzero is 1 and this never bites; for one that only ever
+    returns whole frames (embedders/yamnet_aves's embed(), which truncates a
+    ragged tail rather than padding it) floor_nonzero is samples_hop, and a
+    clip shorter than one frame really does yield nothing.
 
-    And the hop division is a float32 multiply by the reciprocal of the hop,
-    not a division. tf2onnx emits it that way, and it matters: 1/15360 is not
-    exact in float32, so at some exact multiples of the hop the quotient lands
-    just above the integer and the ceil returns one more frame than real
-    arithmetic would. Doing it in float64, or as an honest division, is wrong
-    by one frame at those lengths -- 61680 samples and 3210480 samples are two
-    of them. probe_framing() checks this against the graph before shipping.
+    Above that, the first frame needs samples_min samples rather than exactly
+    samples_hop -- for a padding front end that's the padding floor described
+    above; for a truncating one it's the largest input that still rounds down
+    to one whole frame -- so this is not ceil(n_samples / samples_hop) either.
+
+    And the hop division past that floor is not always an honest integer
+    division. tf2onnx emits YAMNet's patch framing as a float32 multiply by
+    the reciprocal of the hop, and 1/15360 is not exact in float32, so at some
+    exact multiples of the hop the quotient lands just above the integer and
+    the ceil returns one more frame than real arithmetic would (61680 samples
+    and 3210480 samples are two of them). A hand-built bridge doesn't have to
+    share that quirk -- embedders/yamnet_aves's front end does the division in
+    int64, which is exact -- so which one applies is a property of how a given
+    embedder's to_onnx() computes it, not a constant. probe_framing() decides
+    which by testing both against the graph, rather than assuming either.
     """
-    if n_samples <= 0:
+    if n_samples < floor_nonzero:
         return 0
-    after = np.float32(max(0, n_samples - samples_min))
-    return 1 + int(np.ceil(after * (np.float32(1.0) / np.float32(samples_hop))))
+    after = max(0, n_samples - samples_min)
+    if float32_quotient:
+        q = np.ceil(np.float32(after) * (np.float32(1.0) / np.float32(samples_hop)))
+        return 1 + int(q)
+    return 1 + -(-after // samples_hop)  # exact ceiling division, no float roundoff
 
 
 def probe_framing(path_onnx, embedder):
     """Find the graph's framing rule by asking it, rather than by assuming it.
 
-    samples_hop follows from the frame length, but the floor below which the
-    front end pads up to a single frame is a property of that front end -- for
-    YAMNet it is the patch window plus the STFT window's overhang, which is not
-    something the engine should be expected to know. Binary-searching for it
+    samples_hop follows from the frame length, but whether -- and how far --
+    the front end pads a short clip up to a frame, versus just returning
+    nothing, is a property of that front end, not something this file or the
+    engine should be expected to know per embedder. Binary-searching for it
     costs a handful of runs on inputs under two frames long, and the result is
     checked against the graph at awkward lengths before it is shipped.
     """
+    import time
+
     import onnxruntime as ort
 
     session = ort.InferenceSession(path_onnx, providers=['CPUExecutionProvider'])
+    call_seconds = []
 
     def n_frames(n):
         x = np.zeros(n, dtype=np.float32)
-        return session.run(None, {NAME_IN: x})[0].shape[0]
+        t0 = time.perf_counter()
+        out = session.run(None, {NAME_IN: x})[0].shape[0]
+        call_seconds.append(time.perf_counter() - t0)
+        return out
 
     samples_hop = int(round(embedder.framelength_s * embedder.samplerate))
-    # The largest input that still yields exactly one frame.
-    lo, hi = 1, 4 * samples_hop
-    if n_frames(hi) < 2:
-        raise SystemExit(f'{hi} samples still gives one frame; framing is not '
+    hi_check = 4 * samples_hop
+    if n_frames(hi_check) < 2:
+        raise SystemExit(f'{hi_check} samples still gives one frame; framing is not '
                          f'what this assumes')
+
+    # The smallest input that yields at least one frame: 1 for a front end
+    # that pads, samples_hop for one that only ever returns whole frames.
+    if n_frames(1) >= 1:
+        floor_nonzero = 1
+    else:
+        lo, hi = 1, hi_check
+        while lo < hi - 1:
+            mid = (lo + hi) // 2
+            if n_frames(mid) >= 1:
+                hi = mid
+            else:
+                lo = mid
+        floor_nonzero = hi
+
+    # The largest input that still yields exactly one frame.
+    lo, hi = floor_nonzero, hi_check
     while lo < hi - 1:
         mid = (lo + hi) // 2
         if n_frames(mid) == 1:
@@ -334,26 +464,67 @@ def probe_framing(path_onnx, embedder):
     samples_min = lo
 
     # Every exact multiple of the hop, either side of it, plus a few ragged
-    # lengths. The multiples are the ones that matter: that is where the
-    # float32 reciprocal in frames_for() disagrees with real arithmetic, and
-    # checking a handful of round numbers would miss it.
-    checks = [1, samples_min - 1, samples_min, samples_min + 1]
-    for m in range(0, 220):
+    # lengths and the floor itself. The multiples are the ones that matter:
+    # that is where a float32 reciprocal would disagree with exact integer
+    # arithmetic, and checking a handful of round numbers would miss it.
+    #
+    # How many multiples to check is scaled to how expensive one graph call
+    # actually is, rather than fixed at the 220 that suits a small conv net
+    # like YAMNet's: an embedder whose trunk includes a full transformer (see
+    # embedders/yamnet_aves) can be three orders of magnitude slower per call
+    # on CPU, and 220 * 3 calls of that would turn a export into a
+    # multi-minute wait for a check that's only ever caught one specific
+    # class of bug. The budget below keeps this step to roughly ten seconds
+    # regardless of how heavy the trunk is, while still checking dozens of
+    # multiples -- plenty to catch a systematic rounding quirk, which shows
+    # up at every multiple it affects, not one in a thousand.
+    avg_call_s = (sum(call_seconds) / len(call_seconds)) if call_seconds else 0.0
+    budget_s = 10.0
+    n_multiples = max(5, min(220, int(budget_s / (3 * max(avg_call_s, 1e-6)))))
+    if n_multiples < 220:
+        print(f'  trunk call ~{avg_call_s * 1e3:.1f} ms; checking {n_multiples} '
+              f'hop multiples instead of 220 to keep this under {budget_s:g}s')
+
+    checks = [floor_nonzero - 1, floor_nonzero, samples_min - 1, samples_min,
+             samples_min + 1]
+    for m in range(0, n_multiples):
         base = samples_min + samples_hop * m
         checks += [base - 1, base, base + 1]
     checks += [samples_hop * 7 + 137, samples_hop * 40 + 1]
-    for n in sorted({n for n in checks if n >= 1}):
-        expected = frames_for(n, samples_hop, samples_min)
-        got = n_frames(n)
-        if expected != got:
-            raise SystemExit(f'framing rule wrong at n={n}: predicted {expected} '
-                             f'frames, graph returned {got}')
-    print(f'framing rule checked at {len(set(checks))} lengths')
-    print(f'framing: hop {samples_hop} samples, first frame needs {samples_min}')
-    return samples_hop, samples_min
+    checks = sorted({n for n in checks if n >= 1})
+
+    # Which arithmetic the graph actually uses is decided empirically -- try
+    # exact integer division first (it's what most hand-built bridges will
+    # use), fall back to the float32-reciprocal quirk (what tf2onnx emits for
+    # YAMNet's patch framing), and refuse to ship if neither matches
+    # everywhere, since that means something else is wrong.
+    graph_counts = {n: n_frames(n) for n in checks}
+    float32_quotient = None
+    for candidate in (False, True):
+        if all(frames_for(n, samples_hop, samples_min, floor_nonzero, candidate)
+              == graph_counts[n] for n in checks):
+            float32_quotient = candidate
+            break
+    if float32_quotient is None:
+        n = next(n for n in checks if frames_for(
+            n, samples_hop, samples_min, floor_nonzero, False) != graph_counts[n])
+        raise SystemExit(f'framing rule wrong at n={n}: predicted '
+                         f'{frames_for(n, samples_hop, samples_min, floor_nonzero, False)} '
+                         f'frames, graph returned {graph_counts[n]}')
+
+    print(f'framing rule checked at {len(checks)} lengths '
+          f'({"float32-reciprocal" if float32_quotient else "exact integer"} division)')
+    if floor_nonzero == 1:
+        print(f'framing: hop {samples_hop} samples, first frame needs '
+              f'{samples_min} (pads a short clip up to one frame)')
+    else:
+        print(f'framing: hop {samples_hop} samples, first frame needs '
+              f'{floor_nonzero} (no padding: a shorter clip returns zero frames)')
+    return samples_hop, samples_min, floor_nonzero, float32_quotient
 
 
-def verify_fixed_length(path_onnx, embedder, samples_hop, samples_min, seconds=200):
+def verify_fixed_length(path_onnx, embedder, samples_hop, samples_min, floor_nonzero,
+                        float32_quotient, seconds=200):
     """Check the graph still agrees with itself once its input length is pinned.
 
     This is how buzzdetect runs it. CoreML's MLProgram format cannot compile a
@@ -383,7 +554,8 @@ def verify_fixed_length(path_onnx, embedder, samples_hop, samples_min, seconds=2
         samples = (rng.standard_normal(n) * 0.1).astype(np.float32)
         padded = np.zeros(n_fixed, dtype=np.float32)
         padded[:n] = samples
-        got = fixed.run(None, {NAME_IN: padded})[0][:frames_for(n, samples_hop, samples_min)]
+        n_expected = frames_for(n, samples_hop, samples_min, floor_nonzero, float32_quotient)
+        got = fixed.run(None, {NAME_IN: padded})[0][:n_expected]
         expected = dynamic.run(None, {NAME_IN: samples})[0]
         if expected.shape != got.shape:
             raise SystemExit(f'padded n={n}: {got.shape} against '
@@ -394,17 +566,26 @@ def verify_fixed_length(path_onnx, embedder, samples_hop, samples_min, seconds=2
 
 
 def write_fp16(path_onnx, path_fp16, samples):
-    """Convert the trunk and head to fp16, leaving the front end alone.
+    """Convert the trunk and head to fp16, leaving the front end -- and every
+    explicit Cast node, wherever it sits -- alone.
 
     Two reasons the front end stays in fp32. It is where the dynamic range is
-    -- a log of a mel spectrogram, before any normalisation -- and it is cheap,
-    so converting it would buy little. It also breaks the converter, which
-    mistypes an explicit Cast in the framing code and produces a graph
-    onnxruntime refuses to load.
+    -- a log of a mel spectrogram, before any normalisation -- and it is
+    cheap, so converting it would buy little. "Everything from the first
+    convolution on" is the rule for what to convert; it is a rule about this
+    shape of model -- a signal front end followed by a convolutional trunk --
+    rather than about YAMNet specifically.
 
-    "Everything from the first convolution on" is the rule for what to convert.
-    It is a rule about this shape of model -- a signal front end followed by a
-    convolutional trunk -- rather than about YAMNet specifically.
+    Every Cast node is excluded for a different, narrower reason: the
+    converter mistypes them, producing a node whose declared output type
+    doesn't match what it actually writes, and a graph onnxruntime refuses to
+    load. First seen in YAMNet's framing code (hence catching it by cutting
+    the front end off at the first Conv), then again inside embedders/aves's
+    attention blocks -- unrelated code, same converter bug -- which is why
+    this excludes Cast nodes everywhere rather than by position. A Cast's
+    output dtype is already explicit in its `to` attribute; converting it is
+    also the one case where leaving a node in fp32 changes nothing about
+    memory or speed, since it was never doing arithmetic.
     """
     import onnx
     import onnxruntime as ort
@@ -417,30 +598,39 @@ def write_fp16(path_onnx, path_fp16, samples):
     if first_conv is None:
         raise SystemExit('no convolution in the graph; fp16 conversion has no '
                          'sensible boundary to stop at')
-    frontend = [n.name for n in nodes[:first_conv]]
+    frontend = {n.name for n in nodes[:first_conv]}
+    casts = {n.name for n in nodes if n.op_type == 'Cast'}
+    node_block_list = sorted(frontend | casts)
 
     converted = float16.convert_float_to_float16(
-        model, keep_io_types=True, node_block_list=frontend)
+        model, keep_io_types=True, node_block_list=node_block_list)
     onnx.save(converted, path_fp16)
 
-    # It loads, it runs, and it still resembles the model it came from. The
-    # fixed length is what the engine will use, so check it at that shape.
+    # It loads, it runs, and it still resembles the model it came from. Run
+    # both sessions on their native dynamic shape rather than pinning
+    # DIM_SAMPLES via SessionOptions.add_free_dimension_override_by_name --
+    # verify_fixed_length() already checked that fixing the shape doesn't
+    # change the fp32 graph's output, so this doesn't need to repeat that at
+    # fp16. It emphatically should not repeat it: on a trunk with attention
+    # layers (embedders/yamnet_aves), pinning the shape on a converted fp16
+    # session measured 5+ minutes for a forward pass that takes 70s on the
+    # same session left dynamic -- some onnxruntime interaction between a
+    # fixed batch dimension and fp16 attention ops, triggered by either
+    # add_free_dimension_override_by_name or the graph-level
+    # make_dim_param_fixed used elsewhere in this file. Root cause not
+    # chased further since the fix is the same either way: don't fix the
+    # shape here, there is no need to.
     rng = np.random.default_rng(2)
     x = (rng.standard_normal(samples) * 0.1).astype(np.float32)
-    so32 = ort.SessionOptions()
-    so32.add_free_dimension_override_by_name(DIM_SAMPLES, samples)
-    reference = ort.InferenceSession(path_onnx, so32,
-                                     providers=['CPUExecutionProvider'])
-    so16 = ort.SessionOptions()
-    so16.add_free_dimension_override_by_name(DIM_SAMPLES, samples)
-    session = ort.InferenceSession(path_fp16, so16,
-                                   providers=['CPUExecutionProvider'])
+    reference = ort.InferenceSession(path_onnx, providers=['CPUExecutionProvider'])
+    session = ort.InferenceSession(path_fp16, providers=['CPUExecutionProvider'])
     expected = reference.run(None, {NAME_IN: x})[0]
     got = session.run(None, {NAME_IN: x})[0]
     d = float(np.abs(expected - got).max())
     agree = float((expected.argmax(1) == got.argmax(1)).mean())
     print(f'  {os.path.getsize(path_fp16) / 1e6:.2f} MB, '
-          f'{len(frontend)} of {len(nodes)} nodes left in fp32, '
+          f'{len(node_block_list)} of {len(nodes)} nodes left in fp32 '
+          f'({len(frontend)} front end, {len(casts - frontend)} Cast), '
           f'max|d|={d:.2e}, top-class agreement={agree:.4f}')
     # Both bounds are loose on purpose. This is not a parity check -- reduced
     # precision is a deliberate trade the operator opts into -- it is a check
@@ -487,15 +677,20 @@ def export(modelname, dir_dest, force=False, path_audio=None,
     os.makedirs(dir_stage)
 
     print(f"building {modelname} from {dir_src} on embedder '{embeddername}'")
-    combined, embedder, _ = build_combined(modelname, dir_src, embeddername)
+    trunk_onnx, embedder = build_trunk_onnx(embeddername)
+    head = load_head(dir_src, embedder.n_embeddings)
+    head_onnx = head_to_onnx(head, embedder.n_embeddings)
+    model = merge_trunk_head(trunk_onnx, head_onnx)
 
     path_onnx = os.path.join(dir_stage, 'model.onnx')
-    export_graph(combined, path_onnx)
+    export_graph(model, path_onnx)
 
-    print('checking the graph against the keras model it came from')
-    verify(path_onnx, combined, embedder, path_audio)
-    samples_hop, samples_min = probe_framing(path_onnx, embedder)
-    n_session = verify_fixed_length(path_onnx, embedder, samples_hop, samples_min)
+    print('checking the graph against embed() and the head it came from')
+    verify(path_onnx, embedder, head, path_audio)
+    samples_hop, samples_min, floor_nonzero, float32_quotient = probe_framing(
+        path_onnx, embedder)
+    n_session = verify_fixed_length(path_onnx, embedder, samples_hop, samples_min,
+                                    floor_nonzero, float32_quotient)
 
     print('writing the reduced-precision sibling')
     write_fp16(path_onnx, os.path.join(dir_stage, FNAME_FP16), n_session)
@@ -508,6 +703,16 @@ def export(modelname, dir_dest, force=False, path_audio=None,
         'digits_results': config['digits_results'],
         'samples_hop': samples_hop,
         'samples_min': samples_min,
+        # New key, from probe_framing()'s generalisation for a front end that
+        # truncates a ragged tail instead of padding it (embedders/yamnet_aves
+        # is the first of these): samples_min alone no longer says what a
+        # chunk shorter than one frame returns. samples_min == floor_nonzero
+        # (== 1) reproduces every existing model's engine-side behaviour
+        # exactly, so this is additive -- but the engine's chunking logic
+        # (src/inference/models.py) needs to read it once a model ships with
+        # floor_nonzero > 1, or it will assume a padded single frame where
+        # the graph actually returns none.
+        'samples_floor_nonzero': floor_nonzero,
     }
     with open(os.path.join(dir_stage, 'config_model.json'), 'w') as f:
         json.dump(config_out, f, indent=2)
