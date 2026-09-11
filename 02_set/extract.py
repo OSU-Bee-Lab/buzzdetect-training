@@ -1024,20 +1024,28 @@ class WorkerExtract:
             print(f'{time.time()-self.t0:.1f}s - extractor {self.name}: [{self.n_done+1}] {ident} — '
                   f'starting ({a_ident.handle})', flush=True)
         t_ident = time.time()
+        handle = a_ident.handle
+        if self.context_frames and handle == 'embeddings':
+            # The framed-audio cache is keyed only by (samplerate, framelength), so a
+            # context embedder finds the one a NON-context embedder left on the same
+            # grid (yamnet_aves is sr16000_fl1, and so is this). That cache is grouped
+            # by label, so it cannot supply neighbours — rebuild from the snips rather
+            # than re-embedding it.
+            handle = 'both'
         try:
-            if a_ident.handle == 'both':
+            if handle == 'both':
                 msg = self.extract_ident_both(a_ident)
                 self._log_ident(ident, msg, t_ident)
-            elif a_ident.handle == 'embeddings':
+            elif handle == 'embeddings':
                 msg = self.extract_ident_embeddings(a_ident)
                 self._log_ident(ident, msg, t_ident)
-            elif a_ident.handle == 'no_snips':
+            elif handle == 'no_snips':
                 warnings.warn(f'extractor {self.name}: skipping {ident}; {a_ident.handle_msg}')
                 return
-            elif a_ident.handle == 'skip':
+            elif handle == 'skip':
                 self._log_ident(ident, f'skipped — {a_ident.handle_msg}', t_ident)
             else:
-                raise ValueError(f'extractor {self.name}: unknown handle {a_ident.handle} for ident {ident}')
+                raise ValueError(f'extractor {self.name}: unknown handle {handle} for ident {ident}')
         except ValueError:
             raise  # integrity violations must not be swallowed
         except Exception as e:

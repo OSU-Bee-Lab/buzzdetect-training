@@ -136,4 +136,89 @@ price the artifact that `context-embedder` still carries.
 
 ## Results
 
+`yavx_h1024` (honest `yamnet_context_aves`, h1024, fixed-150) vs the matched
+control `yavf_h1024` / `yavf_h1024_r2` (`yamnet_aves`, h1024, fixed-150):
+
+| fold | buzz frames | ctrl r1 | ctrl r2 | this exp | delta vs r1 | delta vs r2 | boot SD |
+|---|---|---|---|---|---|---|---|
+| 1_29 | 2144 | 0.464 | 0.450 | **0.566** | **+0.102** | **+0.116** | 0.024 |
+| 53 (Fit+Fast) | 1031 | 0.491 | 0.476 | 0.502 | +0.011 | +0.026 | 0.025 |
+| willard | 305 | 0.294 | 0.287 | 0.274 | -0.020 | -0.013 | 0.032 |
+| 1_150 | 146 | 0.236 | 0.215 | 0.201 | -0.035 | -0.014 | 0.035 |
+| 1_95 | 433 | 0.078 | 0.071 | 0.062 | -0.016 | -0.009 | 0.014 |
+
+- mean sens@fpr0.005: control two-draw mean 0.307 → **0.321** (+0.015)
+- 2 folds up / 3 down against both draws; the up/down split is identical
+  against each draw, so it is not one noisy control.
+
+Stable under every epoch rule (all arms are fixed-150, so this is a formality,
+but it rules out the `recorder-center` failure mode):
+
+| rule | yavf_h1024 | yavf_h1024_r2 | ctrl mean | yavx_h1024 | delta |
+|---|---|---|---|---|---|
+| own-peak | 0.319 | 0.305 | 0.312 | 0.330 | +0.018 |
+| shipped | 0.313 | 0.300 | 0.307 | 0.321 | +0.015 |
+| xfold-median | 0.301 | 0.290 | 0.296 | 0.318 | +0.023 |
+| xfold-pooled | 0.312 | 0.303 | 0.308 | 0.318 | +0.011 |
+
+Headline eval-sampling SD 0.012 (`tools/eval_sampling_sd.py`).
+
+### What the clamp was actually worth
+
+The killed clamped run (`yavc_h1024`) completed 2 folds before it was stopped,
+on the same head, epoch budget and folds — so those two are a matched
+clamped-vs-honest pair:
+
+| fold | clamped | honest | diff |
+|---|---|---|---|
+| 1_29 | 0.561 | 0.566 | +0.004 |
+| 53 | 0.486 | 0.502 | +0.015 |
+
+**The honest cache is slightly better, not worse.** The clamp was a genuine
+defect — the folds did not look like a deployment — but on this metric it was
+worth approximately nothing, which is what the a-priori argument predicted: at
+`fpr 0.005` the threshold admits ~30 negative frames per fold, and a 2-bit
+feature flagging 7% of all negatives cannot clear that bar. Both folds here are
+buzz-rich; the thin folds, where the clamp rate is the same but the threshold
+rests on fewer frames, were never reached. So this **bounds** the artifact
+rather than closing it.
+
 ## Conclusion
+
+**THE COMPOSITION IS NOT ADDITIVE — the pre-registered falsifier fired.**
+Context was +0.058 xfold-pooled on plain YAMNet; on top of `yamnet_aves` it is
++0.011 to +0.023 depending on rule, every value inside `probe-grid`'s ~0.027
+MDE. The two levers overlap: AVES's 1.0 s wav2vec2 receptive field is already
+supplying much of what the neighbour frames supply, which is the reading the
+hypothesis named in advance as the falsifier. Do not budget context and a
+second backbone as independent gains.
+
+**The fold pattern is the result, and it points the wrong way.** The gain is
+entirely the two buzz-rich folds — 1_29 +0.102/+0.116, about 4x its 0.024
+bootstrap SD and reproducible against both control draws, which is the largest
+single-fold movement in the era — while **all three hard folds go down against
+both draws** (willard, 1_150, 1_95; -0.009 to -0.035, each within or near its
+own SD but consistent in direction, 6/6 across the two comparisons). LOOP's
+standing rule is that hard folds are the target because the endpoint is a new,
+possibly quiet deployment. A lever that buys +0.11 where buzz is dense and
+costs a little everywhere it is sparse is not progress toward that endpoint,
+whatever it does to the mean. **Do not adopt on the +0.015 headline.**
+
+**The clamp finding is the durable part**, and it is instrumentation rather
+than a gain: `yamnet_context`'s cache carries a label-correlated artificial
+feature (14.0% of buzz frames vs 6.7% of negatives), the mechanism is
+structural (buzz events are short, so buzz frames sit at chunk edges), and
+`02_set/extract.py` now removes it for any context embedder. Measured cost of
+the artifact where it could be measured: ~0. That does not retro-invalidate
+`context-embedder` or the `context-monitor` pair — if anything it argues they
+were fine — but it does mean any future context cache should be built with the
+padded path, and that the thin-fold half of the question is still open.
+
+**Shipping note for any context embedder:** `predict()` hands `embed()`
+whatever buffer the analysis tool supplies, so at deployment every buffer
+boundary clamps 2 frames, not just the recording's first and last. The training
+data now has ~0% clamped frames, so a short analysis buffer would show the
+model a frame type it has barely seen. The deployment reader should overlap
+consecutive buffers by `context_frames` frames and discard the pad rows — the
+same trick the extraction fix uses. That is a change in the buzzdetect analysis
+tool, not in this repo, and it has not been checked there.
