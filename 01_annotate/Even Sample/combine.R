@@ -75,36 +75,7 @@ annotations_combined <- paths_annotations %>%
 
 
 annotations_combined <- annotations_combined %>% 
-  mutate(
-    label = str_trim(label),
-
-    # for now, let's just ignore the volume tags
-    label = str_remove(label, '_faint$'),
-    label = str_remove(label, '_quiet$'),
-
-    label = case_when(
-      str_detect(label, 'ins_buzz_pollination') ~ 'ins_buzz_pollination',
-      str_detect(label, 'ins_buzz_medium') ~ 'ins_buzz_medium',
-      str_detect(label, 'ins_buzz_high') ~ 'ins_buzz_high',
-      str_detect(label, 'ins_buzz_low') ~ 'ins_buzz_low',
-
-      # remove, e.g., 'ambient_music_windchime'
-      str_detect(label, 'ambient_music') ~ 'ambient_music',
-
-      str_detect(label, 'ins_trill') ~ 'ins_trill',
-
-      label == 'animal_bird' ~ 'ambient_background',
-      label == 'mech_farm' ~ '',
-      label == 'happy 4th :)' ~ '', # :)
-      label == 'unknown_rasp' ~ '',
-
-      #  ??
-      label == 'mech_hum_construction' ~ '',
-      label == 'unknown' ~ '',
-
-      T ~ label
-    )
-  ) %>% 
+  mutate(label = str_trim(label)) %>% 
   filter(label != '')
 
 unique(annotations_combined$label) %>% sort()
@@ -115,7 +86,7 @@ write.csv(
   'annotations_combined.csv',
   row.names=F
 )
-
+ 
 # Assign folds ----
 #
 annotation_counts <- paths_annotations %>% 

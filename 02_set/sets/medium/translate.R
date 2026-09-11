@@ -78,10 +78,8 @@ translation_general <- translation_blank %>%
       # Mechanical
       str_detect(from, '^mech_auto') ~ 'mech_auto',
       from %in% c('mech_siren', 'mech_train', 'mech_combine') ~ 'mech_auto',
-      # testing shows that mech_plane usually cannibalizes mech_auto - cars will activate mech_plane instead of mech_auto;
-        # I believe this is because they're close enough that the model finds the easy win of just "when in doubt, always pick one"
-        # and perhaps we have more planes in the training set than cars. That's fine, let's just conflate these.
-      str_detect(from, '^mech_plane') ~ 'mech_auto',
+
+      str_detect(from, '^mech_plane') ~ 'mech_plane',
       
       # Weird hums; mostly these appear to be from traffic road noise - not for anything that's hummy
       from %in% c('mech_hum', 'mech_hum_auto', 'ambient_hum_traffic', 'mech_hum_RECLASSIFY', 'mech_hum_traffic') ~ 'mech_hum',
@@ -98,6 +96,7 @@ translation_general <- translation_blank %>%
     )
   )
 
+translation_general$from %>% unique() %>% sort()
 translation_general$to %>% unique() %>% sort()
 
 write.csv(
