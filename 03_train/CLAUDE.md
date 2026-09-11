@@ -50,6 +50,18 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
   — `metrics.py`
 - Per-epoch sens@FPR monitor (reporting only; stopping is still on `val_loss`) —
   `callbacks.py`, plotted by `plot_history.py::plot_sens_history`
+- **The stopping rule is not neutral, and main does not yet carry the fix.**
+  `val_loss` early stopping shows no measurable *selection* optimism here
+  (-0.002 over 17 runs) but it **undertrains unevenly**: `1_150` hits its
+  `val_loss` argmin at epoch 5-32 under every embedder tried while its buzz
+  curve climbs to e120-185, so that fold is scored on a barely-trained probe.
+  Removing it is worth +0.031 to +0.040 headline. `--fixed-epochs N` (no early
+  stop, no restore-best — the preferred fix, it selects no epoch at all) lives
+  on `exp/yamnet-aves-head-fixed`; `--epoch-rule xfold` (a diagnostic) on
+  `exp/xfold-epoch`. Until one is merged, **compare only against a control run
+  under the same rule**, and re-score both arms offline with
+  `tools/honest_epoch.py` whenever a treatment moved `best_epoch`. Evidence:
+  `exp/pairwise-rank:notes/new-era-audit.md`.
 - Per-frame class activations + multi-label loss for finding bad annotations and
   hard negatives, on by default (`--no-surprisal`) — `surprisal.py`, written to
   `<model>/surprisal/<ident>_surprisal.csv`

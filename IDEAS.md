@@ -6,10 +6,26 @@ its section** — the verdict, the mechanism and the "don't rerun this" live in
 that run's `log.jsonl` entry and its `notes.md` on `exp/<slug>`. This file grew
 to 1047 lines, 46% of it closed material, before that rule was enforced.
 
-**State as of 2026-09-11.** Baseline `cv_baseline` = 0.218. Best config is
-`yamnet_context` (concat `[t-1, t, t+1]`, 3072-d) at **0.258** shipped /
-**0.288** under `--epoch-rule xfold`. That embedder is the only representation
-change that has ever paid, and `xfold-epoch` is the only scoring fix that has.
+**State as of 2026-09-11.** Baseline `cv_baseline` = 0.218 (early-stopped; a
+fixed-budget re-anchor is owed). Best config is **`yavf_h1024`** — `yamnet_aves`
+concat + a 1024-wide hidden layer at `--fixed-epochs 150` — at **0.307** over
+two draws. `yamnet_context` (3072-d) is 0.258 shipped / 0.288 under
+`--epoch-rule xfold` / 0.294 replayed at a plain fixed e250. Representation
+levers that have paid: `yamnet_context`, `yamnet_aves`, a wide hidden head.
+Scoring fixes that have paid: **removing early stopping** — `--fixed-epochs`,
+worth +0.031 to +0.040 and measured twice.
+
+**Read the epoch rule before you read any number here.** The audit of
+2026-09-11 (`exp/pairwise-rank:notes/new-era-audit.md`) found the era's
+distortion is **undertraining, not leakage**: `val_loss` early stopping carries
+no measurable selection optimism (-0.002 mean over 17 runs) but stops `1_150`
+at epoch 5-32 on every embedder tried, scoring it on a barely-trained probe.
+So: **always run a matched control under the same epoch rule as your arm** —
+that, not a log boundary, is what makes these numbers comparable, and it is
+what the last three entries did. `--fixed-epochs` is preferred over
+`--epoch-rule xfold` (no selection at all, and within 0.006 of it everywhere);
+250 is a floor for the budget, because every 150-epoch run on disk is still
+rising at its cap.
 
 ## Which era a number came from
 
@@ -31,7 +47,16 @@ became the largest gain in the log. **E1/E2 negatives are leads, not answers.**
 - **Never pass `--monitor val_sens`.** The held-out fold *is* the early-stopping
   monitor, so it reports `max`-over-epochs of the statistic it is scored on.
   `monitor-leakage` marked three entries `artifact` over this. Use
-  `--epoch-rule xfold`, or check offline with `tools/honest_epoch.py`.
+  `--fixed-epochs`, or `--epoch-rule xfold`, or check offline with
+  `tools/honest_epoch.py`. The inflation is **budget-dependent** — +0.021 when
+  the argmax ranges over 400 epochs, mean +0.006 over the five 150-epoch runs
+  on disk — so quote it with its budget rather than as a constant.
+- **The stopping rule is worth more than most levers, and it is not leakage.**
+  `val_loss` early stopping shows no measurable selection optimism (-0.002 over
+  17 runs) but undertrains: `1_150` stops at epoch 5-32 under every embedder.
+  Removing it measured **+0.031** (`yamnet_context`) and **+0.040**
+  (`yamnet_aves` linear). Run `--fixed-epochs`, and compare only against a
+  control under the same rule.
 - **Don't quote a noise figure from this file** — run
   `tools/eval_sampling_sd.py <model dir>` (seconds, no training). Current
   per-fold bootstrap SD 0.010-0.037, headline 0.007-0.012. Note `1_150`'s
@@ -76,7 +101,7 @@ have been fold variance.
 
 Context is the only lever that has ever paid, and it has been tested at exactly
 one width on this data. Run k=2 against `context_embedder` (not `cv_baseline`),
-under `--epoch-rule xfold` so a wide input's stopping failure doesn't confound
+under `--fixed-epochs` so a wide input's stopping failure doesn't confound
 it — `1_150` reached its `val_loss` argmin at epoch 5 on 3072-d, and 5120-d will
 be worse. Ladder k=1/2/3 if the first fold's ETA allows; a single k=2 run has
 the ~0.027 MDE problem that made the E2 number ambiguous in the first place.
@@ -283,8 +308,12 @@ opposite ways and should not be treated as one item:**
   mislabelling, not a phantom — a genuine low-SNR detection problem. Do not
   reopen it as an annotation-quality question. `context-embedder` pushed its
   threshold *down* (-1.819 → -2.107) without helping, so a better representation
-  alone does not touch it. `--epoch-rule xfold` does (+0.185) — its early
-  stopping was broken, not its model.
+  alone does not touch it. **Dropping early stopping does** — `+0.172` under
+  `--epoch-rule xfold` on `yamnet_context`, `+0.160` under `--fixed-epochs 150`
+  on `yamnet_aves`. Its early stopping was broken, not its model: `val_loss`
+  bottoms out at epoch 5-32 there under every embedder tried while its buzz
+  curve climbs to e120-185. Any `1_150` result measured under early stopping is
+  confounded by this and most of the era's are.
 
 Ruled out (2026-09-05, re-confirmed 2026-09-08): it is **not**
 leave-one-concept-out. r = 0.013 between sublabel coverage and per-fold

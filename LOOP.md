@@ -382,8 +382,22 @@ Prints the per-fold delta table, the up/down count, and the two headline means.
 Either argument can be a bare name under `models/` or a path — an experiment's
 model usually lives in its worktree's own (unsymlinked) `models/` dir.
 
-Two cautions that apply to every conclusion you write:
+Three cautions that apply to every conclusion you write:
 
+- **Your comparator must have run under the same epoch rule.** The log now
+  holds runs under three (`val_loss` early stopping, `--epoch-rule xfold`,
+  `--fixed-epochs`), and the rule is worth **+0.031 to +0.040** on its own —
+  larger than most levers being tested. Early stopping on `val_loss` carries
+  no measurable *selection* optimism (-0.002 over 17 runs, measured
+  2026-09-11) but it **undertrains unevenly**: `1_150` stops at epoch 5-32
+  under every embedder tried while its buzz curve climbs to e120-185, so a
+  config whose stopping happens to fail is scored on a barely-trained probe.
+  Run a **matched control** — same rule, same budget, your one variable — and
+  compare to that, not to `cv_baseline`. This is what makes a stopping-rule
+  change survivable inside one era, and it is what the entries from 2026-09-10
+  on already do. Prefer `--fixed-epochs` (it selects no epoch at all);
+  `--epoch-rule xfold` is a diagnostic. Background:
+  `exp/pairwise-rank:notes/new-era-audit.md`.
 - **Fold-to-fold spread is not a confidence interval.** Training pools overlap
   ~90% across rotations, so fold models are correlated and the spread
   understates uncertainty about a genuinely new deployment.
