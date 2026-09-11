@@ -161,6 +161,15 @@ headline.
 against -1.4 to -1.9 everywhere else — the jet-flyover pathology, carried
 intact across the cutover.
 
+**The headline misranks `1_29` and `53`, and you need to know that before
+reading any per-fold table.** They are the only two folds carrying `_background`
+annotations, and on ordinary discrete buzz they are the two *easiest*
+deployments in the set by a wide margin — `untagged` 0.564 and 0.651, against
+0.250-0.402 everywhere else. Their middling headlines (0.441, 0.429) are
+produced entirely by the `background` component (0.363, 0.282) dragging them
+down. So do not read `1_29 0.441` as "mid-difficulty": read the `untagged`
+column, and treat those two folds as carrying a second task no other fold has.
+
 **On the budget**: fold peaks scatter 116-398 and
 `mean(last 21 epochs) - mean(e300-320)` is -0.003 to +0.013, so 400 is not
 obviously short. This is *not* last era, where every fixed-budget run was still

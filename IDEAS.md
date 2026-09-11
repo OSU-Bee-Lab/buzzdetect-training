@@ -20,18 +20,14 @@ is now an E3 lead, not a target.**
 they are not ideas, they are the anchor:
 
 1. ~~`cv_baseline_v3`~~ — **done 2026-09-11: 0.330 excl-quiet / 0.269 inclusive,
-   8/8 folds.** It is the comparator for everything below.
-2. **Re-verify last era's wins against it** (see 3). The budget ladder dropped
-   in priority: fold peaks scatter 116-398 and the end-of-run drift is
-   -0.003 to +0.013, so 400 is not obviously short — unlike last era, where
-   every run was still climbing at its cap. Still worth one run eventually.
-3. **Re-verify last era's three wins, one at a time, against the anchor**:
-   `yamnet_context` (3072-d), `yamnet_aves` concat, a wide hidden head. They
-   were worth 0.218 → 0.321 *together*, under the old data and the old rule.
-   They are the likeliest positives to survive a data change, and they are the
-   only ones worth re-establishing before anything new.
-4. **Dropout is now an experiment too.** It was 0.2 and hardcoded for three
-   eras and never tested against the current head on the current data.
+   8/8 folds.** It is the comparator for everything below, and the only number
+   in this file you can beat.
+2. **Items 1a-1c below: re-verify last era's three wins, one at a time.** They
+   were worth 0.218 → 0.321 *together*, under different data, a 5-fold roster,
+   dropout, and a different stopping rule. Large one-directional structural
+   results are the likeliest positives to survive a data change — but "likeliest
+   to survive" is not "survived", and nothing else in the queue is worth running
+   before they are re-established.
 
 Per-tier sensitivity is **already built in** — it is not an idea and not a
 queued experiment. Every run prints it and every `folds_sx.csv` carries it.
@@ -165,12 +161,83 @@ answers.**
 Ranked. **Run item 1 first** — every comparison after it is budget-limited by
 an unknown amount until it lands, and it is cheap.
 
-## 1. Fix the epoch budget: one long fixed-budget run
+## 1a. Re-verify `yamnet_context` against the anchor
 
-*Evidence: **E3** — `exp/pairwise-rank:notes/new-era-audit.md`, recommendation 5,
-measured offline from every fixed-budget run on disk.*
+*Evidence: **E3** — `context-embedder` +0.022 `clean`, the honest rebuild of
+`context-stack`'s inflated +0.050.*
 
-**Every `--fixed-epochs 150` run on disk is still rising at its cap.** Pooled
+The cheapest of the three re-verifications: `yamnet_context` is 3072-d, already
+extracted for `medium`, and needs no new embedder work. Flags live on
+`exp/yamnet-aves-context` (`--context-frames` / `--context-dims`, train-time
+stacking over the existing cache) — **rebase onto `main` first**, or you inherit
+the old default head and the old scoring.
+
+Run it against `cv_baseline_v3` at the same `--fixed-epochs 400`, `--dropout 0`.
+**Read the tier row, not just the headline**: the anchor is already at 0.778 on
+`loud`, so a context gain has to show up in `untagged` to be a detection gain
+rather than a shuffle among frames nobody was promised.
+
+*Falsifier:* no movement in `untagged` or `loud`, whatever the headline does.
+
+## 1b. Re-verify `yamnet_aves` concat against the anchor
+
+*Evidence: **E3** — `yamnet-aves` +0.025 honest over two draws, 4/5 folds up,
+and the only intervention that has ever moved `1_95` (+0.014 / +0.024).*
+
+1792-d. Needs a re-extraction for the revised annotations — budget it
+deliberately (`--workers 0 BUZZDETECT_NO_GPU=1`, ~1 h for `medium` at the
+5-fold roster, so expect more at 8 folds), and note the extraction now verifies
+its own product and will refuse rather than leave empty folds.
+
+**The `1_95` claim is the interesting part.** That fold sits at 0.052 in the
+anchor with a threshold of -0.137 against -1.4 to -1.9 everywhere else — the
+jet-flyover pathology, intact across the cutover, and four other interventions
+have failed on it. If `yamnet_aves` moves it again on new data, that is the
+strongest lead in the file.
+
+## 1c. Re-verify the wide hidden head against the anchor
+
+*Evidence: **E3** — `yamnet-aves-head-fixed`, h1024 worth ~+0.030 over h0 at a
+matched budget.*
+
+`--hidden` lives on `exp/yamnet-aves-head-fixed`; rebase onto `main`. Run it on
+plain YAMNet against `cv_baseline_v3` **before** stacking it on 1a or 1b —
+LOOP.md's change-one-thing rule, and the E3 result was measured on `yamnet_aves`
+rather than on YAMNet, so it does not transfer for free.
+
+Cost anchor: h1024 was ~7x h0 per epoch in E3, and the anchor CV is ~25 min at
+8 folds / 400 epochs — so **measure the first fold before quoting an ETA**, as
+always.
+
+## 1d. Dropout, now that it is an experiment rather than a premise
+
+*Evidence: none on the current data — that is the point.*
+
+`Dropout(0.2)` was hardcoded for three eras and was never tested against the
+current head, the current data, or a fixed budget. The anchor runs at
+`--dropout 0`. One run at `--dropout 0.2` settles whether three eras of results
+were carrying a regulariser that helps, hurts, or does nothing.
+
+Cheap, and it is a *hyperparameter*, so it does not survive the next data
+change — run it once, record it, do not bank it.
+
+## 1e. Fix the epoch budget — DEMOTED 2026-09-11, premise weakened
+
+*Evidence: **E3** — `exp/pairwise-rank:notes/new-era-audit.md`, recommendation 5.
+**Partly superseded by `cv_baseline_v3`.***
+
+> **Read this first.** The urgency below came from every E3 run being capped at
+> 150 and still climbing. The anchor runs at **400** and is *not* obviously
+> short: per-fold peaks scatter 116-398 and
+> `mean(last 21 epochs) - mean(e300-320)` is -0.003 to +0.013 across all eight
+> folds. So the era's default budget is defensible as it stands, and this drops
+> below the re-verifications. It is still worth one run eventually — 400 was
+> chosen by argument, not measurement, and a wide hidden head (1c) may well move
+> the optimum — but it is no longer the thing blocking everything else.
+
+The E3 evidence, for whoever runs it:
+
+**Every `--fixed-epochs 150` run on disk was still rising at its cap.** Pooled
 mean sensitivity over the last 21 epochs minus e100-120: `yavf_h0` +0.009,
 `yavf_h256` +0.005, `yavf_h1024` **+0.014**, `yavf_h1024_r2` +0.011,
 `yavx_h1024` +0.008. Pooled argmax is the final epoch for `yavf_h0` and
@@ -256,7 +323,15 @@ real context each side, so a rich-fold-only gain may be `context-embedder`
 again rather than Perch. Check the per-fold signature against `yamnet_context`
 before crediting the embedder.
 
-## 3. Sub-frame pooling of the AVES block — aimed at `1_150`'s quiet positives
+## 3. Sub-frame pooling of the AVES block — RE-AIM BEFORE RUNNING
+
+> **Its target moved on 2026-09-11.** This was written to rescue `1_150`'s
+> *quiet* positives, and quiet buzz is now **out of the headline** — catching it
+> earns nothing. Do not run this as written. The mechanism (a mean over ~49
+> tokens washing out a short faint event) is still sound and still worth
+> testing; re-aim it at `untagged` and `loud` frames in the folds that are
+> actually weak on audible buzz, and say up front which tier you expect to move.
+> Check the anchor's tier row per fold before writing the hypothesis.
 
 *Evidence: **untagged proposal**, resting on **E3** (`yamnet-aves` clean) and a
 checkable property of `embedders/aves/embedder.py`.*
@@ -401,7 +476,10 @@ cached embeddings and the per-frame activations in
 `<model>/surprisal/<ident>_surprisal.csv`.
 
 One script, two ranked lists per deployment:
-1. **Nearest neighbours of `1_150`'s confirmed quiet positives** in unannotated
+1. **Nearest neighbours of `1_150`'s confirmed positives** in unannotated
+   — note the original wording said *quiet* positives, and quiet buzz no longer
+   scores; target the tiers that do, or target *untagged* frames specifically to
+   grow the tagged pool
    audio — the low-SNR positives that fold needs.
 2. **High-buzz-activation frames the embedding neighbourhood says are not
    buzz** — candidate hard negatives. `1_95`'s jet minutes should top this list;
@@ -519,17 +597,40 @@ than `recorder-center`'s median shift, which moved only 86 of 1024 dims and
 still shifted `best_epoch` up to 8x. Fixed budget from the start or the number
 is confounded exactly as `recorder-center`'s was.
 
-## 11. The residue nobody has asked about: `1_29` vs `53` trade consistently
+## 11. ~~`1_29` vs `53` trade consistently~~ — LARGELY ANSWERED 2026-09-11
 
-*Evidence: **E3** — `shared-trunk-head`'s three-width ladder.*
+*Evidence: **E3** for the original observation (`shared-trunk-head`'s
+three-width ladder); **E4** `cv_baseline_v3`'s tier columns for the answer.*
 
-Across h = 64 / 256 / 1024, `1_29` gains ~+0.03 at **all three** widths while
-`Fit+Fast/53` loses at all three — both above the ~0.019 repeat movement for
-folds with >1000 buzz frames, neither flipping sign across three runs. The mean
-was null because they cancel. Both are rich folds, so this is not thin-fold
-noise, and a systematic trade between the two richest deployments is a fact
-about the data nobody has explained. `DEPLOYMENTS.md`: mustard 2024 vs soybean
-Marysville 2023. Diagnostic, no training, an afternoon.
+**Do not spend an afternoon on the original framing.** The free check it asked
+for has been run, off `models/cv_baseline_v3/folds_sx.csv`:
+
+| fold | headline | `background` | `untagged` | bg frames |
+|---|---|---|---|---|
+| `1_29` | 0.441 | 0.363 | **0.564** | 1256 |
+| `53` | 0.429 | 0.282 | **0.651** | 618 |
+| every other fold | 0.052-0.461 | — (none) | 0.250-0.402 | 0 |
+
+**On discrete buzz, `1_29` and `53` are by a wide margin the two EASIEST folds
+in the set** — 0.564 and 0.651 against 0.250-0.402 everywhere else. Their
+middling headline is produced entirely by the `background` component dragging
+them down, and they are the only two folds that have one.
+
+Two consequences that matter more than the original question:
+
+1. **The headline silently misranks those two folds.** Anyone reading
+   `1_29 0.441` as "a mid-difficulty deployment" is wrong; it is the second
+   easiest deployment for the thing the tool is actually for, carrying a large
+   second task nobody else carries. Read their `untagged` column instead.
+2. **The E3 trade now has an obvious mechanism to test.** A capacity change
+   moving one shared background component in opposite directions across two
+   folds with different background character is a far more specific hypothesis
+   than "unexplained residue". If anyone revives this, that is the version to
+   test — and it costs one re-read of an existing `folds_sx.csv` per run, not an
+   afternoon.
+
+What remains genuinely open is only whether the *E3* ladder's trade survives on
+E4 data at all. Check it in passing on 1c's ladder; do not run anything for it.
 
 ## 12. The `binary` control is confounded — read before running it
 
