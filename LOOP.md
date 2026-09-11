@@ -43,23 +43,45 @@ They do **not** leave training. They are ordinary `ins_buzz` positives in the
 training pool, because calling faint buzz a negative would teach the model that
 faint buzz is background — worse than either scoring choice.
 
-`folds_sx.csv` carries both readings **at one identical threshold**: quiet
-frames are positives, so dropping them touches neither the negative pool nor
-the FPR sweep, and only the sensitivity numerator and denominator move. Report
-both. `sensitivity` (every buzz frame) is the companion figure, logged under
-`sens_at_fpr0.005_persite_inclquiet`, and the *pair* is informative: a gain
-that shows up in `sensitivity` but not in `sensitivity_exclquiet` is a gain on
-buzzes nobody was promised.
+### Read the loudness tiers. They are part of every result, not an add-on.
 
-**Interim state (as of 2026-09-11):** loudness tagging is still in progress.
-The end state is a quiet/normal/loud tag on every buzz, across all 24
-subsamples of every ident in `01_annotate/Even Sample`. Until then an untagged
-buzz counts as non-quiet, which is the right default — `quiet_only_buzz` keys
-on the `_quiet` marker alone, so `_normal` and `_loud` tags land as ordinary
-positives and nothing changes when tagging completes. But the headline's
-denominator **will keep shrinking as tagging proceeds**, so a run from early in
-the era is not cleanly comparable to a later one on this column. Say which
-commit of the set a run used.
+`folds_sx.csv` carries the whole family at **one identical threshold per
+fold** — restricting which positives count leaves the negative pool and the FPR
+sweep untouched, so every column below is directly comparable to every other:
+
+| column | what it counts |
+|---|---|
+| `sensitivity_exclquiet` | **the headline** — every buzz frame but the quiet-only ones |
+| `sensitivity` | the inclusive companion — every annotated buzz frame |
+| `sensitivity_loud` / `_normal` / `_untagged` / `_quiet` | one tier each, with `<tier>_frames` counts |
+
+Every training run prints the tier block, and `tools/log_entry.py` records the
+headline plus the inclusive figure (`sens_at_fpr0.005_persite_inclquiet`).
+
+**What the tiers are for, and why they are not optional.** The standing
+question about `1_150` and `1_95` — both near chance across three eras — is
+whether they are hard *because* their buzz is faint, or hard on audible buzz
+too. Those are different problems with different fixes, and no headline can
+tell them apart. The tier row answers it directly, for free, on every run.
+So when you write up a result, say **which tiers moved**: a lever that lifts
+`loud` and `normal` is a detection gain; one that only lifts `quiet` is a gain
+on buzzes nobody was promised; one that only lifts `untagged` is probably
+telling you about annotation coverage rather than about the model.
+
+**Tier semantics.** `train_utils.buzz_tier` takes the **maximum** over a
+frame's buzz labels under `quiet < untagged < normal < loud` — a frame is only
+as hard as its most audible buzz. `untagged` sits above `quiet` so "quiet"
+keeps meaning *every* buzz label was marked quiet, and below `normal` so an
+unknown never promotes a frame past a known one.
+
+**Interim state (as of 2026-09-11):** tagging is in progress. The end state is
+a quiet/normal/loud tag on every buzz, across all 24 subsamples of every ident
+in `01_annotate/Even Sample`; until then most frames land in `untagged`, and
+the report says how many. Two consequences. The headline's denominator **keeps
+shrinking as tagging proceeds**, so an early-era run is not cleanly comparable
+to a later one on that column — say which commit of the set a run used. And
+`untagged` shrinking toward zero is the progress bar: when it is empty, the
+`quiet`/`normal`/`loud` split is the real decomposition.
 
 Each deployment counts once because the goal is a new deployment, and a new
 deployment is one site — not a weighted blend. A buzz-weighted mean would let a
@@ -470,14 +492,15 @@ Three cautions that apply to every conclusion you write:
   A run under `--early-stop` is not a comparator for anything in this era; it
   is worth +0.031 to +0.040 less on its own. Background:
   `exp/pairwise-rank:notes/new-era-audit.md` and the archived era's README.
-- **Report both sensitivities, and say which one you are claiming on.**
-  `folds_sx.csv` carries `sensitivity` and `sensitivity_exclquiet` at one
-  identical threshold. A lever that moves only the quiet frames and a lever
-  that moves only the audible ones are different results, and the pair is what
-  distinguishes them — a gain that appears in `sensitivity` but not in
-  `sensitivity_exclquiet` is a gain on buzzes no operator was promised.
-  `tools/compare_folds.py` and `tools/log_entry.py` read the headline column;
-  quote the other alongside it in `conclusion`.
+- **Say which loudness tiers moved.** The headline is
+  `sensitivity_exclquiet`, but `folds_sx.csv` carries the inclusive figure and
+  a per-tier breakdown at the same threshold, and the decomposition is usually
+  the more informative half of a result. A lever that lifts `loud`/`normal` is
+  a detection gain; one that only lifts `quiet` is a gain on buzzes no operator
+  was promised; one that only lifts `untagged` may be about annotation
+  coverage. `tools/compare_folds.py` and `tools/log_entry.py` read the headline
+  column; put the tier reading in `conclusion`, where a later agent will find
+  it.
 - **Fold-to-fold spread is not a confidence interval.** Training pools overlap
   ~90% across rotations, so fold models are correlated and the spread
   understates uncertainty about a genuinely new deployment.

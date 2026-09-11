@@ -82,19 +82,35 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
   dense signed code (AVES, Perch) it is heavy multiplicative noise instead. It
   is now something an experiment turns on, so that the anchor every result is
   read against is the simplest thing that could work.
-- **Sensitivity is reported twice, at one identical threshold.** `sensitivity`
-  counts every annotated buzz frame; `sensitivity_exclquiet` drops frames whose
-  buzz is only `_quiet`-tagged. A `_quiet` buzz is really there but needs
-  filtering and an expert ear to perceive — below what an operator can ask of
-  the tool — so missing one is not a false negative and catching one is not a
-  credit. **They still train, as ordinary positives**: calling them negative
-  would teach the model that faint buzz is background, which is worse than
-  either scoring choice. The threshold does not move between the two readings
-  (quiet frames are positives, so the negative pool and the FPR sweep are
-  untouched); only the sensitivity numerator and denominator change.
-  `train_utils.quiet_only_buzz` is the definition, `predictions.csv` carries
-  the per-frame `quiet` flag, and runs from before 2026-09-11 get NaN in that
-  column rather than a number pretending the split was made.
+- **Every sensitivity in `folds_sx.csv` shares that fold's one threshold.**
+  Restricting *which positives count* leaves the negative pool and the FPR
+  sweep untouched, so the whole family of columns is one operating point scored
+  against different targets — directly comparable to each other, row by row.
+  - `sensitivity_exclquiet` — **the headline.** Every buzz frame except the
+    ones whose buzz is only `_quiet`-tagged.
+  - `sensitivity` — the inclusive companion: every annotated buzz frame.
+  - `sensitivity_<tier>` for `quiet` / `untagged` / `normal` / `loud`, with
+    `<tier>_frames` counts beside them.
+- **The loudness tiers are core instrumentation, not a diagnostic to opt into.**
+  Every run prints them and every `folds_sx.csv` carries them. They are what
+  says whether a hard fold is hard *because* its buzz is faint or hard on
+  audible buzz too — different problems with different fixes, which the
+  headline alone cannot distinguish. `1_150` and `1_95` sit near chance and
+  that question has been open across three eras.
+- **`train_utils.buzz_tier` is the definition.** A sample's tier is the
+  **maximum** over its buzz labels under `quiet < untagged < normal < loud` — a
+  frame is only as hard as its most audible buzz. `untagged` ranks above
+  `quiet` so that "quiet" keeps meaning *every* buzz label on the frame was
+  marked quiet (an untagged label is unknown, not faint), and below `normal` so
+  an unknown never promotes a frame past a known one. Tagging is in progress,
+  so the `untagged` bucket is how much of the corpus is not worked up yet; it
+  should shrink to nothing. `predictions.csv` carries the per-frame `loudness`
+  column, and runs from before 2026-09-11 get NaN in every tier column rather
+  than a number pretending the split was made.
+- **A `_quiet` buzz still trains, as an ordinary positive.** It is really
+  there; calling faint buzz a negative would teach the model that faint buzz is
+  background, which is worse than either scoring choice. The tier steers
+  scoring only.
 - Per-frame class activations + multi-label loss for finding bad annotations and
   hard negatives, on by default (`--no-surprisal`) — `surprisal.py`, written to
   `<model>/surprisal/<ident>_surprisal.csv`

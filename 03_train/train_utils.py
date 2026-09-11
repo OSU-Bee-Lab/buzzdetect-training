@@ -106,31 +106,71 @@ def labels_from_path(path_in):
 
 BUZZ_CLASS = 'ins_buzz'
 
-# A raw label carrying this marker is a buzz the annotator could only hear with
-# filtering and an expert ear — genuinely present, far below what an operator
-# could reasonably expect buzzdetect to catch. Matched case-insensitively
-# anywhere in the raw label, so ins_buzz_quiet, ins_buzz_Bombus_quiet and
-# ins_buzz_quiet_low all count.
-QUIET_MARKER = '_quiet'
+# How loud the annotator judged a buzz, read off a marker in the raw label.
+# Matched case-insensitively anywhere in the label, so ins_buzz_quiet,
+# ins_buzz_Bombus_quiet and ins_buzz_quiet_low all read as quiet.
+#
+# TIER_QUIET is the one with consequences for the score: such a buzz is really
+# there, but it needs audio filtering and an expert ear to perceive — below
+# what an operator could reasonably ask buzzdetect for. Missing one is not a
+# false negative and catching one is not a credit, so those frames leave the
+# scored set. They still TRAIN as ordinary ins_buzz positives; calling faint
+# buzz a negative would teach the model that faint buzz is background.
+TIER_QUIET = 'quiet'
+TIER_UNTAGGED = 'untagged'
+TIER_NORMAL = 'normal'
+TIER_LOUD = 'loud'
+
+# Ascending by how audible the frame is, which is also the order the tiers are
+# reported in. A frame is only as hard as its most audible buzz, so a sample
+# carrying several buzz labels takes the MAXIMUM tier over them:
+#
+#   quiet < untagged < normal < loud
+#
+# `untagged` sits above quiet so that "quiet" keeps meaning *every* buzz label
+# on the frame was marked quiet — an untagged label is unknown, not faint —
+# and below normal so an unknown never promotes a frame past a known one.
+# Tagging is still in progress (the end state is a tier on every buzz), so the
+# untagged bucket is how much of the corpus has not been worked up yet; it
+# should shrink to nothing.
+TIERS = (TIER_QUIET, TIER_UNTAGGED, TIER_NORMAL, TIER_LOUD)
+_TIER_RANK = {t: i for i, t in enumerate(TIERS)}
+
+# Marker -> tier. Order matters only in that each is tested independently;
+# a label carrying two markers is a bad annotation and takes the louder.
+TIER_MARKERS = (('_quiet', TIER_QUIET), ('_normal', TIER_NORMAL), ('_loud', TIER_LOUD))
+
+# What a frame with no buzz at all gets. Kept out of TIERS: it is not a tier of
+# buzz, it is the absence of one, and it must never enter a per-tier mean.
+TIER_NONE = ''
+
+
+def label_tier(label):
+    """The loudness tier one raw buzz label declares, or TIER_UNTAGGED."""
+    low = str(label).lower()
+    hits = [t for marker, t in TIER_MARKERS if marker in low]
+    return max(hits, key=_TIER_RANK.__getitem__) if hits else TIER_UNTAGGED
+
+
+def buzz_tier(labels_raw, labels_translate, buzz_class=BUZZ_CLASS):
+    """This sample's loudness tier: the max over its buzz labels, or TIER_NONE.
+
+    `labels_raw` and `labels_translate` are the parallel lists dataset.py
+    builds — translate_labels preserves order and length — so this reads the
+    raw label (which carries the marker) while deciding buzz-ness from the
+    translated one (which is what `correct` is built from).
+    """
+    tiers = [label_tier(r) for r, t in zip(labels_raw, labels_translate) if t == buzz_class]
+    return max(tiers, key=_TIER_RANK.__getitem__) if tiers else TIER_NONE
 
 
 def quiet_only_buzz(labels_raw, labels_translate, buzz_class=BUZZ_CLASS):
     """True if this sample's buzz comes *only* from `_quiet`-marked labels.
 
-    Such frames are trained on as ordinary ins_buzz positives — they are real
-    buzz, and calling them negative would teach the model that faint buzz is
-    background. They are dropped from the *scored* positives instead, in the
-    excl-quiet reading: missing one is not a false negative and catching one is
-    not a false positive, so they simply leave the sensitivity equation.
-
-    A sample with any non-quiet buzz label is an ordinary positive; quiet is a
-    property of the whole frame's buzz evidence, not of one label on it.
-
-    `labels_raw` and `labels_translate` are the parallel lists dataset.py
-    builds — translate_labels preserves order and length.
+    Equivalently: its tier is TIER_QUIET, since the tier is the max and quiet
+    is the minimum. These are the frames the headline sensitivity drops.
     """
-    buzz_raw = [r for r, t in zip(labels_raw, labels_translate) if t == buzz_class]
-    return bool(buzz_raw) and all(QUIET_MARKER in str(r).lower() for r in buzz_raw)
+    return buzz_tier(labels_raw, labels_translate, buzz_class) == TIER_QUIET
 
 
 def can_write(dir_model):

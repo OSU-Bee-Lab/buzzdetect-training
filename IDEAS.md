@@ -29,6 +29,9 @@ they are not ideas, they are the anchor:
 4. **Dropout is now an experiment too.** It was 0.2 and hardcoded for three
    eras and never tested against the current head on the current data.
 
+Per-tier sensitivity is **already built in** — it is not an idea and not a
+queued experiment. Every run prints it and every `folds_sx.csv` carries it.
+
 **Read the epoch rule before you read any number here.** The audit of
 2026-09-11 (`exp/pairwise-rank:notes/new-era-audit.md`) found the last era's
 distortion was **undertraining, not leakage**: `val_loss` early stopping
@@ -71,10 +74,15 @@ answers.**
   this fact is: **the budget N is a free parameter nobody has tuned**, and it
   moves the score at least that much.
 - **`_quiet` buzz leaves the score, not the training pool.** The headline is
-  `sensitivity_exclquiet`; `sensitivity` counts every buzz frame, at the same
-  threshold. A lever that moves one and not the other is a different result
-  from one that moves both — quote the pair. Loudness tagging is still in
-  progress, so the headline's denominator shrinks as it proceeds.
+  `sensitivity_exclquiet`. `folds_sx.csv` also carries the inclusive figure and
+  a per-tier breakdown (`sensitivity_loud` / `_normal` / `_untagged` /
+  `_quiet`), all at the same per-fold threshold, and every run prints them.
+  **Read the tiers before proposing anything aimed at a hard fold** — they say
+  whether `1_150` and `1_95` are hard because their buzz is faint or hard on
+  audible buzz too, which is the difference between an SNR problem and a
+  discrimination problem, and several of the ideas below assume one or the
+  other. Loudness tagging is in progress, so most frames still read `untagged`
+  and the headline's denominator shrinks as it proceeds.
 - **`main` now carries `--fixed-epochs` and `--dropout`, but not the rest.**
   `--hidden` lives on `exp/yamnet-aves-head-fixed`; `exp/yamnet-aves-context`
   has `--context-frames` / `--context-dims` (train-time context stacking over an
@@ -152,40 +160,6 @@ answers.**
 
 Ranked. **Run item 1 first** — every comparison after it is budget-limited by
 an unknown amount until it lands, and it is cheap.
-
-## 0. Sensitivity by loudness tier — free, and it tells Luke what to annotate
-
-**Once loudness tagging is complete** (quiet/normal/loud on every buzz, all 24
-subsamples of every ident in `01_annotate/Even Sample` — in progress as of
-2026-09-11), `sensitivity_exclquiet` is one cut of a curve nobody has drawn.
-The natural report is sensitivity per tier at the fold's own threshold: what
-fraction of *loud* buzz gets caught, *normal*, *quiet*.
-
-Why it is worth doing the moment the data allows:
-
-- It is **offline and free** — `predictions.csv` already carries a per-frame
-  `quiet` flag (`train_utils.quiet_only_buzz`); extending it to a `loudness`
-  column is one line in `_eval_arrays`, and the tiers recompute from any
-  existing run's predictions with no training.
-- It **decomposes the hard folds**. `1_150` and `1_95` sit near chance, and the
-  standing question is whether that is a detection failure or an SNR floor.
-  Luke listened to `1_150` on 2026-09-09: "Most of them are very quiet, but
-  still legitimate targets." A tier breakdown answers directly whether those
-  folds are hard *because* their buzz is faint, or hard on loud buzz too —
-  which are completely different problems with different fixes.
-- It is **instrumentation, so it survives every data change** (LOOP.md's
-  standing rule on what to weight the rotation toward), and it tells Luke where
-  more annotation buys the most.
-
-Implementation sketch: add `loudness` alongside `quiet` in `_eval_arrays`,
-derived the same way (parallel `labels_raw` / `labels_translate`), and add a
-`sensitivity_<tier>` column set in `sx.py::_fold_sens` — same threshold, the
-positive set restricted to each tier in turn. Nothing about the sweep or the
-negatives changes, exactly as with the quiet split.
-
-*Falsifier:* if every fold's per-tier curve has the same shape, loudness is not
-where the fold-to-fold difficulty lives and the hard folds need a different
-explanation.
 
 ## 1. Fix the epoch budget: one long fixed-budget run
 

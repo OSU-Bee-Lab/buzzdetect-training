@@ -427,15 +427,15 @@ models/<name>/
 `model.py` is generated so `models.load_model('<name>')` works for inference.
 
 **`folds_sx.csv` is the whole metrics summary.** Columns: `fold`, `fpr`,
-`threshold`, `sensitivity`, `sensitivity_exclquiet`, `precision`,
-`buzz_frames`, `quiet_frames`, `neg_frames`, `frames_val`, `best_epoch`. One
-row per (fold, FPR target), then a row with `fold` = `total`, where the counts
-are summed and threshold/sensitivity/precision are the plain mean over the
-folds that could reach the target. **`sensitivity_exclquiet` in that row is the
-headline number**; `sensitivity` is the same operating point counting the
-`_quiet` buzz frames too, and `quiet_frames` says how many there were. Models
-trained before 2026-09-11 have no quiet flag, so those two columns are blank
-for them. A fold that couldn't reach the target keeps its
+`threshold`, `sensitivity`, `sensitivity_exclquiet`, `sensitivity_<tier>` for
+each of quiet/untagged/normal/loud, `precision`, `buzz_frames`,
+`<tier>_frames`, `neg_frames`, `frames_val`, `best_epoch`. One row per (fold,
+FPR target), then a row with `fold` = `total`, where the counts are summed and
+every sensitivity is the plain mean over the folds that could reach the target.
+**`sensitivity_exclquiet` in that row is the headline number**; see *Reading the
+results* for the rest of the family and why they are comparable. Models trained
+before 2026-09-11 have no loudness column, so every tier column is blank for
+them. A fold that couldn't reach the target keeps its
 row with blanks and is not averaged in, so counting the non-blank rows tells
 you what the total rests on.
 
@@ -518,23 +518,37 @@ It is an oracle: putting a fold at exactly 0.5% FPR uses that fold's labels,
 which an operator doesn't have. Read it as the ceiling on operator tuning. Both
 models in a comparison get the same ceiling, so it is fair for ranking.
 
-**Two sensitivities, one threshold.** Some buzz annotations carry a `_quiet`
-tag: the buzz is genuinely there, but it takes audio filtering and an expert ear
-to hear — fainter than anything an operator could reasonably expect buzzdetect
-to catch. Missing one is not a false negative and catching one is not a credit,
-so `sensitivity_exclquiet` drops those frames from the scored set, and that is
-the headline. `sensitivity` beside it counts every buzz frame.
+**Sensitivity is reported by loudness, at one threshold.** Buzz annotations
+carry a loudness tag — `_quiet`, `_normal`, `_loud`. A *quiet* buzz is genuinely
+there, but it takes audio filtering and an expert ear to hear, fainter than
+anything an operator could reasonably expect buzzdetect to catch: missing one is
+not a false negative and catching one is not a credit. So the headline,
+`sensitivity_exclquiet`, drops those frames from the scored set, and
+`folds_sx.csv` reports the rest of the family beside it:
 
-The two share an operating point exactly: quiet frames are positives, so
-removing them changes neither the negative pool nor the FPR sweep — only the
-sensitivity numerator and denominator. Read the pair. A gain that appears in
-`sensitivity` but not in `sensitivity_exclquiet` is a gain on buzzes nobody was
-promised.
+| column | counts |
+|---|---|
+| `sensitivity_exclquiet` | **headline** — every buzz frame but the quiet-only ones |
+| `sensitivity` | every annotated buzz frame |
+| `sensitivity_loud`, `_normal`, `_untagged`, `_quiet` | one tier each, with `<tier>_frames` beside them |
+
+**They all share the fold's one threshold.** Restricting which positives count
+leaves the negative pool and the FPR sweep untouched — only the sensitivity
+numerator and denominator move — so every column is directly comparable to
+every other, row by row.
+
+Read the decomposition, not just the headline. It is what says whether a hard
+deployment is hard *because* its buzz is faint, or hard on audible buzz too;
+those are different problems with different fixes.
+
+A frame's tier is the **maximum** over its buzz labels (`quiet < untagged <
+normal < loud`) — a frame is only as hard as its most audible buzz. Loudness
+tagging is in progress, so most frames currently read `untagged`; the report
+says how many, and that bucket shrinking to nothing is the progress bar.
 
 Quiet buzz still **trains**, as an ordinary `ins_buzz` positive. Labelling faint
 buzz as background would be a worse error than either scoring choice. The
-per-frame flag lives in `predictions.csv`; `quiet_frames` in `folds_sx.csv`
-says how many of each fold's buzz frames it covers.
+per-frame tier lives in `predictions.csv` as a `loudness` column.
 
 Two readings deliberately *not* reported, both of which have misled here before:
 

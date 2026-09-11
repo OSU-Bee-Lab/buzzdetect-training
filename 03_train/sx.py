@@ -54,6 +54,7 @@ import numpy as np
 import pandas as pd
 
 from metrics import metrics_by_group, metrics_at_fpr
+from train_utils import TIERS, TIER_QUIET
 
 # The training path's target, deliberately one number. metrics.py keeps a
 # three-target default of its own; everything here passes this instead.
@@ -63,19 +64,50 @@ FNAME_SX_SUMMARY = 'folds_sx.csv'
 FNAME_PREDICTIONS = 'predictions.csv'
 
 
-QUIET_COL = 'quiet'
+LOUDNESS_COL = 'loudness'
 SENS_EXCL = 'sensitivity_exclquiet'
 
 
-def _has_quiet(df):
-    """Whether this prediction table carries the quiet flag at all.
+def tier_col(tier):
+    """Column name for one loudness tier's sensitivity."""
+    return f'sensitivity_{tier}'
+
+
+def tier_frames_col(tier):
+    """Column name for one loudness tier's buzz-frame count."""
+    return f'{tier}_frames'
+
+
+SENS_TIER_COLS = tuple(tier_col(t) for t in TIERS)
+TIER_FRAMES_COLS = tuple(tier_frames_col(t) for t in TIERS)
+
+
+def _has_loudness(df):
+    """Whether this prediction table carries the loudness tier at all.
 
     Runs from before 2026-09-11 have no such column, and predictions.csv is the
     only per-fold artifact kept, so resummarize.py has to read them. Those
-    models simply get NaN in the excl-quiet column rather than a number that
-    pretends the split was made.
+    models get NaN in every tier column rather than a number that pretends the
+    split was made.
     """
-    return QUIET_COL in df.columns
+    return LOUDNESS_COL in df.columns
+
+
+def _sens_over(df, positives, fprs):
+    """Sensitivity at each target FPR over a restricted set of positives.
+
+    The negatives are untouched, so the sweep and the threshold are identical
+    to the full read — only the sensitivity numerator and denominator change.
+    That is what makes every column in this table readable against every other
+    one: they are one operating point scored against different targets, not
+    different operating points.
+    """
+    keep = df[(~df['correct'].astype(bool)) | positives]
+    if not positives.any():
+        return pd.Series({f: np.nan for f in fprs})
+    return metrics_at_fpr(
+        metrics_by_group(keep[['activation_ins_buzz', 'correct']]), fprs,
+    ).set_index('fpr')['sensitivity']
 
 
 def _fold_sens(df, fprs):
@@ -118,15 +150,23 @@ def _fold_sens(df, fprs):
     at_fpr = metrics_at_fpr(metrics_by_group(df[['activation_ins_buzz', 'correct']]), fprs)
     cols = at_fpr.set_index('fpr')[['threshold', 'sensitivity', 'precision']]
 
-    # The excl-quiet reading: same negatives, same sweep, quiet positives gone.
-    if _has_quiet(df):
-        loud = df[~df[QUIET_COL].astype(bool)]
-        excl = metrics_at_fpr(
-            metrics_by_group(loud[['activation_ins_buzz', 'correct']]), fprs,
-        ).set_index('fpr')['sensitivity']
+    # Every reading below shares the threshold computed above: quiet and every
+    # other tier are positives, so restricting the positives touches neither
+    # the negative pool nor the FPR sweep.
+    buzz = df['correct'].astype(bool)
+    if _has_loudness(df):
+        tier = df[LOUDNESS_COL].fillna('').astype(str)
+        # The headline: everything except the quiet-only frames. Set before
+        # the tiers so it sits next to `sensitivity` in the written table.
+        excl = _sens_over(df, buzz & (tier != TIER_QUIET), fprs)
+        cols[SENS_EXCL] = [excl.get(f, np.nan) for f in cols.index]
+        for t in TIERS:
+            per = _sens_over(df, buzz & (tier == t), fprs)
+            cols[tier_col(t)] = [per.get(f, np.nan) for f in cols.index]
     else:
-        excl = pd.Series({f: np.nan for f in fprs})
-    cols[SENS_EXCL] = [excl.get(f, np.nan) for f in cols.index]
+        cols[SENS_EXCL] = np.nan
+        for t in TIERS:
+            cols[tier_col(t)] = np.nan
 
     neg_frames = {f: int(np.floor(f * n_neg)) for f in fprs}
     for f in fprs:
@@ -166,28 +206,34 @@ def summarize_folds(predictions, fold_facts=None, fprs=FPR_TARGETS):
     for fold, df in predictions.groupby('fold'):
         cols, neg_frames = _fold_sens(df, fprs)
         buzz = df['correct'].astype(bool)
-        quiet = df[QUIET_COL].astype(bool) if _has_quiet(df) else None
+        tier = df[LOUDNESS_COL].fillna('').astype(str) if _has_loudness(df) else None
+        counts = {
+            tier_frames_col(t): (int((buzz & (tier == t)).sum()) if tier is not None else np.nan)
+            for t in TIERS
+        }
         for f in fprs:
             rows.append({
                 'fold': fold,
                 'fpr': f,
                 **cols.loc[f].to_dict(),
                 'buzz_frames': int(buzz.sum()),
-                'quiet_frames': int((buzz & quiet).sum()) if quiet is not None else np.nan,
+                **counts,
                 'neg_frames': neg_frames[f],
                 **(fold_facts or {}).get(fold, {}),
             })
 
     table = pd.DataFrame(rows)
-    means = ['threshold', 'sensitivity', SENS_EXCL, 'precision']
-    sums = [c for c in ('buzz_frames', 'quiet_frames', 'neg_frames', 'frames_val') if c in table]
+    means = (['threshold', 'sensitivity', SENS_EXCL]
+             + [c for c in SENS_TIER_COLS if c in table] + ['precision'])
+    sums = [c for c in ('buzz_frames',) + TIER_FRAMES_COLS + ('neg_frames', 'frames_val')
+            if c in table]
 
     totals = []
     for f in fprs:
         here = table[table['fpr'] == f]
         total = {'fold': TOTAL_ROW, 'fpr': f}
         total.update(here[means].mean().round(3).to_dict())
-        # A column that is NaN everywhere (quiet_frames on a pre-2026-09-11
+        # A column that is NaN everywhere (the tier counts on a pre-2026-09-11
         # run) must stay NaN in the total rather than summing to 0.
         total.update({c: (np.nan if here[c].isna().all() else int(here[c].sum()))
                       for c in sums})
@@ -202,6 +248,40 @@ def summarize_folds(predictions, fold_facts=None, fprs=FPR_TARGETS):
 
 def _num(v):
     return 'n/a' if pd.isna(v) else f'{v:.3f}'
+
+
+def _tier_block(folds, total):
+    """Sensitivity by loudness tier, at the same per-fold thresholds.
+
+    This is the decomposition of the headline, and it is the point of tagging
+    buzz by loudness at all: it says whether a hard fold is hard *because* its
+    buzz is faint, or hard on audible buzz too. Those are different problems
+    with different fixes, and the headline alone cannot tell them apart.
+
+    Every column here shares each fold's own threshold with the headline —
+    restricting the positives leaves the negatives and the sweep untouched —
+    so the tiers are directly comparable to each other and to the total.
+    """
+    if not any(tier_col(t) in folds for t in TIERS):
+        return []
+    present = [t for t in TIERS
+               if pd.notna(total.get(tier_frames_col(t))) and total.get(tier_frames_col(t))]
+    if not present:
+        return []
+
+    lines = ['  by loudness tier, same thresholds — sensitivity (buzz frames, folds scored):']
+    for t in present:
+        col, fcol = tier_col(t), tier_frames_col(t)
+        n_scored = int(folds[col].notna().sum()) if col in folds else 0
+        mark = '  <- dropped from the headline' if t == TIER_QUIET else ''
+        lines.append(f'    {t:<9} {_num(total.get(col))}  '
+                     f'({int(total[fcol])} frames, {n_scored}/{len(folds)} folds){mark}')
+
+    untagged = total.get(tier_frames_col("untagged"))
+    if pd.notna(untagged) and untagged:
+        lines.append(f'    ({int(untagged)} buzz frames carry no loudness tag yet — tagging is '
+                     f'in progress. They count in the headline, as "not known to be quiet".)')
+    return lines
 
 
 def format_sx_report(name, table):
@@ -230,12 +310,7 @@ def format_sx_report(name, table):
                          f'sensitivity {_num(r.get(SENS_EXCL))} '
                          f'(incl. quiet {_num(r["sensitivity"])}) '
                          f'(~{int(r["neg_frames"])} negative frames)')
-        quiet_total = total.get('quiet_frames')
-        if pd.notna(quiet_total) and quiet_total:
-            lines.append(f'  {int(quiet_total)} of {int(total["buzz_frames"])} buzz frames are '
-                         f'_quiet-only: audible to an expert ear with filtering, below what an '
-                         f'operator can ask for. They train as positives; the headline '
-                         f'drops them from the score at the same threshold.')
+        lines.extend(_tier_block(folds, total))
 
     lines.append("  an oracle: each threshold is placed using that fold's labels, so read this "
                  "as the ceiling on operator tuning")

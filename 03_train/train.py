@@ -19,7 +19,7 @@ from dataset import (
     survey_untranslated, ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT,
 )
 from train_utils import (build_weights, build_classes, can_write,
-                         weighted_bce_loss, Sample, quiet_only_buzz)
+                         weighted_bce_loss, Sample, buzz_tier)
 from embedders.embedding import load_embedder
 from plot_history import plot_history, plot_sens_history
 from write_model_py import write_model_py
@@ -77,19 +77,21 @@ def _eval_arrays(samples, classes):
     Scoring pairs each frame's activation with its own label, so unlike
     _to_tf's training pipeline this must not shuffle.
 
-    `quiet` marks frames whose buzz is only ever `_quiet`-tagged. They are
-    ordinary positives in `correct` — they train, and they count in the
-    inclusive reading — and sx.py drops them to produce the excl-quiet one.
-    See train_utils.quiet_only_buzz.
+    `loudness` is how audible the frame's buzz was judged to be — one of
+    quiet/untagged/normal/loud, empty for a non-buzz frame. Every buzz frame is
+    an ordinary positive in `correct` and every one of them trains; the tier
+    only steers *scoring*, in sx.py, which drops the quiet ones from the
+    headline and reports sensitivity per tier beside it. See
+    train_utils.buzz_tier.
     """
     buzz_index = classes.index('ins_buzz')
     embeddings = np.concatenate([np.array(s.embeddings, dtype=np.float32) for s in samples])
     correct = np.concatenate([np.full(s.frames, bool(s.target_array[buzz_index])) for s in samples])
-    quiet = np.concatenate([
-        np.full(s.frames, quiet_only_buzz(s.labels_raw, s.labels_translate))
+    loudness = np.concatenate([
+        np.full(s.frames, buzz_tier(s.labels_raw, s.labels_translate))
         for s in samples
     ])
-    return embeddings, correct, quiet
+    return embeddings, correct, loudness
 
 
 def _load_data(setname, embeddername, folds_train, name_translation, aug_dirnames,
@@ -124,10 +126,10 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
         )
         frames_val = sum(s.frames for s in data_val)
         if data_val:
-            # The per-epoch monitor stays on the inclusive reading (all buzz).
-            # It steers nothing under the fixed-budget rule; it is a curve, and
-            # changing what it counts would break comparison with the curves
-            # already on disk.
+            # The per-epoch monitor stays on the inclusive reading (all buzz,
+            # every tier). It steers nothing under the fixed-budget rule; it is
+            # a curve, and changing what it counts would break comparison with
+            # the curves already on disk.
             val_eval = _eval_arrays(data_val, classes)[:2]
 
     if aug_dirnames:
@@ -177,11 +179,11 @@ def _score_fold(model, setname, embeddername, fold, translation, classes):
     if not samples:
         return None
 
-    embeddings, correct, quiet = _eval_arrays(samples, classes)
+    embeddings, correct, loudness = _eval_arrays(samples, classes)
     activation = model(embeddings, training=False)[:, classes.index('ins_buzz')].numpy()
 
     return pd.DataFrame({
-        'activation_ins_buzz': activation, 'correct': correct, 'quiet': quiet,
+        'activation_ins_buzz': activation, 'correct': correct, 'loudness': loudness,
     })
 
 
