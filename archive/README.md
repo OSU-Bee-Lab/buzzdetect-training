@@ -67,3 +67,6 @@ git diff main refs/archive/<name>       # what the experiment changed
 These refs are **local only** — `git push` does not carry them by default.
 Push them with `git push origin 'refs/archive/*:refs/archive/*'` if this
 machine's disk is the single point of failure.
+
+<!-- added by archive_era.py -->
+| [`2026-09-08_cv-medium-v2`](2026-09-08_cv-medium-v2/) | 24 | 2026-09-08 → 09-11 | mean per-fold sens@fpr0.005, 5 rotating folds on `medium`, three epoch rules | Annotation revision + the `_quiet` scoring split + `--fixed-epochs` as the default rule, 2026-09-11 |
