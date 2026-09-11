@@ -7,6 +7,24 @@ agent context. **Read this before changing the stopping rule or the monitor.**
 
 ---
 
+> **AUDITED 2026-09-11** (`exp/pairwise-rank:notes/new-era-audit.md`). What
+> survives, what does not, section by section — details are inline below.
+>
+> | § | status |
+> |---|---|
+> | 2 — smoothing a curve cannot estimate argmax inflation | **confirmed, keep** |
+> | 3 — Cawley & Talbot variance-not-bias | argument sound; **practical conclusion overtaken** by `buzz-selector-curves` |
+> | 4 — "same regime" as C&T's benchmark bias | **not supported**: measured `val_loss` optimism here is **-0.002**, not ~0.027 |
+> | 5 — the truncation confound in `honest_epoch.py` | **confirmed, keep** (4-5 of 5 folds capped in 13 of 17 runs) |
+> | 6 — Luke's arbitrariness objection, and the two residuals | **keep**; residual 1 is the argument that retires `xfold` for `--fixed-epochs` |
+> | 7 — the buzz-only selector lead | **closed negative** by `buzz-selector-curves` |
+>
+> The one-line correction: **the era's problem was undertraining, not
+> leakage.** `val_loss` early stopping carries no measurable selection
+> optimism on this data; what it does is stop at epoch 5-32 on `1_150` and
+> score that fold on a barely-trained probe. A fixed epoch budget fixes that
+> and performs no selection at all.
+
 ## 1. The question
 
 Every rotating fold is its own early-stopping monitor. So the epoch that produced
@@ -45,6 +63,21 @@ it is the same order as the 0.027 gap the grouped re-scoring found.
 > need the sampling variability of that statistic under a *fresh draw of the
 > evaluation data*. Never estimate it from the smoothness of the curve.
 
+**2026-09-11: this section is confirmed and is the best thing in the file.**
+The rule of thumb is right and the retraction of the smoothing estimate is
+right. One thing to add, measured since: the inflation an argmax can buy also
+scales with **how many epochs it ranges over**. `own-peak − xfold-pooled` is
++0.021 on a 400-epoch budget and +0.006 averaged over the five 150-epoch runs
+on disk. A leak figure quoted without its budget is not a number.
+
+**But note what §2 does *not* license.** Showing that selection *could* inflate
+by ~0.027 is not showing that it *did*. Measured directly across all 17
+`val_loss`-stopped runs on disk, `shipped − xfold-pooled` averages **-0.002**
+(8 up, 9 down, range -0.038 to +0.075). "Wrong answer A" above is correct that
+`val_loss` selection is not literally unbiased; it is wrong to conclude from
+that alone that README's "bounded, and small" was mistaken. On this data it was
+right.
+
 ## 3. The actual reason to prefer `val_loss` as a *selector*
 
 Not "it is unbiased" — it is a biased proxy, and Luke's objection is exactly
@@ -79,6 +112,14 @@ epoch 17 and epoch 226 (0.465 vs 0.520). A steadily climbing curve does not move
 its argmax 200 epochs between draws. That instability is the selector's variance,
 visible directly.
 
+> **2026-09-11: the argument is sound, the practical conclusion is moot.** See
+> §7 — `buzz-selector-curves` measured all four candidate selectors and they
+> return **identical** per-fold sensitivities, because the pooled sens plateau
+> is wide enough that every in-plateau selector scores the same. A
+> high-variance selector cannot hurt you where the objective is flat. The
+> variance framing was the right thing to reason about and is not where this
+> pipeline's sensitivity lives; the **budget** is.
+
 ## 4. Why the size of the leak matters so much here
 
 Cawley & Talbot's headline finding, on their benchmarks:
@@ -94,6 +135,26 @@ This log's effects are 0.02–0.04. The selection bias measured here is ~0.027.
 **Same regime.** And the bias is not applied evenly: it only rewards configs that
 stop late, which is itself a config choice. That is the mechanism by which it
 manufactures a winner.
+
+> **SUPERSEDED 2026-09-11 — the "same regime" inference does not hold for
+> `val_loss`.** The ~0.027 quoted here is §5's grouped-re-scoring figure for the
+> **four `val_sens` runs**, carried over to the whole log by analogy with
+> Cawley & Talbot's benchmarks. Measured directly instead of inferred, across
+> all 17 `val_loss`-stopped runs on disk, `shipped − xfold-pooled` averages
+> **-0.002** (8 up, 9 down, range -0.038 to +0.075) — two orders below the
+> effects being compared, and scattered in sign rather than one-directional.
+>
+> The paragraph's *own* mechanism is why: "it only rewards configs that stop
+> late." Under `val_loss` the configs do not stop late — they stop **early**,
+> at epoch 5-32 on `1_150` under every embedder tried, which costs
+> sensitivity rather than manufacturing it. The real distortion in this log
+> runs the opposite way from the one this section feared: **undertraining,
+> unevenly distributed across configs**, worth up to +0.040 when removed
+> (`yav_h0` 0.236 → `yavf_h0` 0.276 at a fixed 150-epoch budget).
+>
+> The section's warning is still exactly right **for `--monitor val_sens`**,
+> where the selection statistic is the reported one, and acting on it there
+> was correct.
 
 This is the answer to "I'm not taking the numbers as strictly true, I'm just
 using them to get an idea." That is sound for an *absolute* number and dangerous
@@ -121,6 +182,20 @@ capped on 4 of 5 folds in every run on disk.
 `exp/xfold-epoch` exists to remove that confound: a fixed 400-epoch budget with
 no early stopping, so all five curves span the same epochs and the pooled argmax
 is unconstrained.
+
+> **2026-09-11: confirmed, with the census.** `tools/honest_epoch.py`'s `*`
+> marker binds on **4 or 5 of 5 folds in 13 of the 17** early-stopped runs
+> (`cv_baseline` 5/5, `context_embedder` 4/5, `harmonic_comb_r2` 5/5,
+> `perch_probe` 5/5). `perch_probe` is the worst case: 0.244 shipped → 0.169
+> re-scored, almost all of it the cap. Read the `*` every time; a capped row is
+> a lower bound, not a measurement. The 400-epoch run did remove the confound
+> and its numbers are the trustworthy ones.
+>
+> Two things the fixed budget then showed that this section could not:
+> • the untruncated `val_loss` optimism is **-0.002**, not the +0.000 this
+>   table reports under truncation — same conclusion, now unconfounded;
+> • the "+0.018 own-peak − shipped" below is the *undertraining*, and it is
+>   the whole story. A fixed budget claims it without selecting anything.
 
 **Also true, and independent of the confound:** `own-peak − shipped` averages
 **+0.018** across the 14 `val_loss` runs (up to +0.044). Stopping on `val_loss`
@@ -160,6 +235,19 @@ pumpkin-validates-mustard-versus-blueberry scenario cannot arise.
    Untested; worth doing only if the effect under study is smaller than the
    suspected residual.
 
+   > **2026-09-11: this residual is now avoidable for free.** `--fixed-epochs`
+   > (2026-09-10, `exp/yamnet-aves-head-fixed`) trains every rotation for
+   > exactly N epochs with no early stopping and no restore-best, and scores
+   > the final weights. **No curve is consulted, so there is nothing to nest.**
+   > It costs nothing in score: on every fixed-budget run on disk the final
+   > epoch is within 0.006 of the `xfold` pooled argmax, and ahead on 4 of 6
+   > (`xfold_context` 0.294 at e250 vs 0.288; `yavf_h1024` 0.313 vs 0.312;
+   > `yavx_h1024` 0.321 vs 0.318). What it costs instead is **a budget chosen
+   > up front**, where `xfold` adapts per config — a real trade, but a cheap
+   > one while every curve on disk still rises to the end of its budget.
+   > `xfold` earns its keep only against a config that overfits *within* the
+   > budget, and none does yet. See `new-era.md`'s 2026-09-11 notes.
+
 2. **Which folds exist at all is unfixable.** Cawley & Talbot's remedy for
    partition arbitrariness is "multiple randomised partitionings," but that
    averages over partitions of the folds you *have*; it cannot average over crops
@@ -174,7 +262,25 @@ report it. Do not answer the objection by adding recorders inside an existing
 deployment — those are not independent folds, which is the same point as
 `03_train/CLAUDE.md`'s "validation is always a whole fold."
 
-## 7. The open lead this produced
+## 7. The open lead this produced — CLOSED NEGATIVE
+
+> **Closed 2026-09-11 (by `buzz-selector-curves`, committed `549c1e5` on
+> 2026-09-09, 71 seconds after this file).** The lead below is kept for the
+> record; do not pick it up.
+>
+> `buzz-selector-curves` built the instrumentation this section asked for and
+> ran the comparison. Under a non-leaking cross-fold rule, all four
+> candidates — `val_loss`, `sens@fpr0.005`, `auc_buzz`, `ce_buzz` — return
+> **identical per-fold sensitivities** `[0.20, 0.41, 0.38, 0.04, 0.09]` and the
+> same mean, because the pooled sens curve is flat over e129-164 and any
+> in-plateau selector lands on the same score. The premise (buzz AUC is
+> lower-variance) had already failed IDEAS' bootstrap.
+>
+> The corollary is the part worth carrying forward, and it reframes §3:
+> **on this data the choice of selection statistic does not move the score at
+> all. The epoch budget does.** §3's variance argument is sound in general and
+> was the right thing to reason about; it is simply not where this pipeline's
+> sensitivity lives. The curves are kept (cheap, survive data revisions).
 
 Combining Luke's objection (don't dilute across 15 classes) with Cawley &
 Talbot's principle (the selector must be low-variance) points at a monitor that
