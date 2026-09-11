@@ -1146,6 +1146,30 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
             f'(exit codes: {[w.exitcode for w in failed]})'
         )
 
+    # A worker exiting 0 does NOT mean every ident extracted. run_worker catches
+    # per-ident exceptions and turns them into warnings, deliberately, so one bad
+    # ident cannot cost a ten-minute run. The cost of that is silence: on
+    # 2026-09-11 a NaN label crashed three idents this way, left three empty
+    # directories, and the CV downstream simply scored 5 of 8 rotating folds and
+    # reported a healthy-looking mean. Nothing in the pipeline noticed.
+    #
+    # So verify the actual product. Every ident we set out to extract must have
+    # pickles on disk and a stamped fingerprint; anything else is a failure, and
+    # it is louder to stop here than to discover it in a fold table.
+    incomplete = []
+    for a in idents_todo:
+        if not _has_pickles(a.dir_out_embeddings):
+            incomplete.append((a.ident, 'no embeddings written'))
+        elif _is_incomplete(a.dir_out_embeddings):
+            incomplete.append((a.ident, 'fingerprint never stamped'))
+    if incomplete:
+        listing = '\n  '.join(f'{i} — {why}' for i, why in incomplete)
+        raise RuntimeError(
+            f'{len(incomplete)}/{len(idents_todo)} ident(s) did not extract. Every '
+            f'worker exited cleanly, so look for a per-ident warning above:\n  '
+            f'{listing}'
+        )
+
     print(f'{time.time()-t0:.1f}s - all extractions complete\n:)\n:D\n:O')
     return True
 
