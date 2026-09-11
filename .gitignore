@@ -65,6 +65,16 @@ embeddings/
 # per-machine paths (buzzdetect export dest, external audio drives, ...);
 # see paths.local.example.json for the shape
 paths.local.json
-# Scratch diagnostic scripts kept on disk for posterity, not versioned.
-# Nothing tracked may cite these paths -- see CLAUDE.md on gitignored artifacts.
-diagnostics/
+# Diagnostic scripts and artifacts: on disk for posterity, not versioned.
+# The README.md write-ups ARE versioned, so a tracked file may cite one.
+# Changed 2026-09-11: the rule was "nothing tracked may cite these paths", and
+# it had already been broken -- IDEAS.md cites 2026-09-09_jet_1_95/README.md as
+# the E3 evidence for its top-ranked idea, and that file was untracked, i.e. one
+# `git clean` from the evaporation CLAUDE.md describes. Versioning the prose is
+# the cheaper fix than policing the citations.
+# Diagnostics: keep the write-ups, drop the artifacts. A gitignored diagnostic is
+# a citation waiting to break -- IDEAS.md cites 2026-09-09_jet_1_95 as the E3
+# evidence for its top-ranked idea, and that file was untracked until 2026-09-11.
+diagnostics/**
+!diagnostics/**/
+!diagnostics/**/*.md
