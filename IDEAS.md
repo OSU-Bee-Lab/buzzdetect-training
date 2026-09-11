@@ -6,9 +6,11 @@ its section** — the verdict, the mechanism and the "don't rerun this" live in
 that run's `log.jsonl` entry and its `notes.md` on `exp/<slug>`. This file grew
 to 1047 lines, 46% of it closed material, before that rule was enforced.
 
-**State as of 2026-09-11 — the era just turned over, and there is no live
-number in this file.** Everything below is an E3 claim, i.e. from the era now
-in `archive/2026-09-08_cv-medium-v2/`. Three things moved at the cutover — the
+**State as of 2026-09-11.** The anchor is **`cv_baseline_v3` = 0.330**
+(excl-quiet; 0.269 inclusive) over 8 rotating folds — a bare linear probe on
+frozen YAMNet, no dropout, `--fixed-epochs 400`. Everything else below is still
+an E3 claim, i.e. from the era now archived in
+`archive/2026-09-08_cv-medium-v2/`. Three things moved at the cutover — the
 annotations were revised again (loudness tagging, still in progress), scoring
 split into `sensitivity_exclquiet` (the headline) and `sensitivity`, and
 `--fixed-epochs` became the default rule with dropout off. **Every float here
@@ -17,10 +19,12 @@ is now an E3 lead, not a target.**
 **The first jobs of the era, in order.** They are not in the queue below because
 they are not ideas, they are the anchor:
 
-1. **`cv_baseline_v3`** — the bare linear probe on frozen YAMNet, no dropout, no
-   hidden layer, `--fixed-epochs`. Nothing else has a comparator until it runs.
-2. **The budget ladder.** Every fixed-budget run from last era was still rising
-   at its cap; 400 is a provisional default and this sets it for the era.
+1. ~~`cv_baseline_v3`~~ — **done 2026-09-11: 0.330 excl-quiet / 0.269 inclusive,
+   8/8 folds.** It is the comparator for everything below.
+2. **Re-verify last era's wins against it** (see 3). The budget ladder dropped
+   in priority: fold peaks scatter 116-398 and the end-of-run drift is
+   -0.003 to +0.013, so 400 is not obviously short — unlike last era, where
+   every run was still climbing at its cap. Still worth one run eventually.
 3. **Re-verify last era's three wins, one at a time, against the anchor**:
    `yamnet_context` (3072-d), `yamnet_aves` concat, a wide hidden head. They
    were worth 0.218 → 0.321 *together*, under the old data and the old rule.

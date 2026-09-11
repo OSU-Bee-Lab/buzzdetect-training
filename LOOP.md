@@ -132,7 +132,9 @@ a different base rate; it is not a target on this metric.
 
 ## Baseline
 
-**There is no baseline yet. Running one is the first job of this era.**
+**`cv-baseline-v3` in `log.jsonl`, model at `models/cv_baseline_v3/`:
+0.330 mean sens@fpr0.005 excl. quiet (0.269 inclusive), 8/8 folds.**
+Join against its `folds_sx.csv` for a paired per-fold comparison.
 
 The anchor is the simplest thing that could work: **a bare linear probe on
 frozen YAMNet** — one `Dense(15)` straight off the 1024-d embedding, *no
@@ -145,7 +147,28 @@ be justified against it.
                  --translation general --verbose -y
 ```
 
-That is deliberately *not* where the last era finished (0.321, on
+**Its tier breakdown is the most useful thing in it**, and it is monotonic in
+audibility at one shared threshold: `loud` 0.778 (122 frames, 5/8 folds) >
+`untagged` 0.350 > `background` 0.322 > `quiet` 0.070 > `faint` 0.000. Two
+readings follow. The scoring split is vindicated — quiet buzz is caught 7% of
+the time and faint never, so counting them as misses measured a target the tool
+was never promised to hit. And the model is not broadly weak: on buzz an
+operator would call audible it is already at 0.78. **A lever that does not move
+`untagged` or `loud` is not a detection gain**, whatever it does to the
+headline.
+
+`1_95` is still the known failure at **0.052**, with a threshold of -0.137
+against -1.4 to -1.9 everywhere else — the jet-flyover pathology, carried
+intact across the cutover.
+
+**On the budget**: fold peaks scatter 116-398 and
+`mean(last 21 epochs) - mean(e300-320)` is -0.003 to +0.013, so 400 is not
+obviously short. This is *not* last era, where every fixed-budget run was still
+climbing at its cap. The ladder is still worth one run to settle the era's
+budget, but it is no longer urgent — which moves it below the win
+re-verifications in priority.
+
+That anchor is deliberately *not* where the last era finished (0.321, on
 `yamnet_aves` + `yamnet_context` concatenated with a 1024-wide hidden head).
 Building the new era on that config would carry three unverified assumptions
 into every number. The era's first few loops should instead **re-verify the
