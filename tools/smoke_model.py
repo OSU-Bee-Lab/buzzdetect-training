@@ -37,10 +37,11 @@ import keras
 import numpy as np
 
 
-def smoke_test_loss(loss, n_embeddings=8, n_classes=3, n_samples=20, dropout=0.2,
+def smoke_test_loss(loss, n_embeddings=8, n_classes=3, n_samples=20, dropout=0.0,
                      optimizer=None, verbose=False):
-    """Build the same architecture 03_train/train.py does (Input -> Dropout ->
-    Dense(n_classes), logits out), compile with `loss`, fit one step on random
+    """Build the same architecture 03_train/train.py does (Input -> Dense(
+    n_classes), logits out — plus a Dropout when `dropout` is nonzero, matching
+    train.py's --dropout default of 0.0), compile with `loss`, fit one step on random
     multi-hot dummy data, then run the exact round trip production uses:
     `model.save(..., include_optimizer=True)` followed by
     `keras.saving.load_model(..., compile=False)` (write_model_py.py's load
@@ -50,11 +51,11 @@ def smoke_test_loss(loss, n_embeddings=8, n_classes=3, n_samples=20, dropout=0.2
     correctness check of the loss's math (test that separately with known
     inputs/outputs before calling this).
     """
-    model = keras.Sequential([
-        keras.layers.Input(shape=(n_embeddings,), dtype='float32'),
-        keras.layers.Dropout(dropout),
-        keras.layers.Dense(n_classes),
-    ])
+    layers = [keras.layers.Input(shape=(n_embeddings,), dtype='float32')]
+    if dropout:
+        layers.append(keras.layers.Dropout(dropout))
+    layers.append(keras.layers.Dense(n_classes))
+    model = keras.Sequential(layers)
     model.compile(
         loss=loss,
         optimizer=optimizer or keras.optimizers.Adam(learning_rate=0.002),

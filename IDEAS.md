@@ -6,26 +6,37 @@ its section** — the verdict, the mechanism and the "don't rerun this" live in
 that run's `log.jsonl` entry and its `notes.md` on `exp/<slug>`. This file grew
 to 1047 lines, 46% of it closed material, before that rule was enforced.
 
-**State as of 2026-09-11.** Baseline `cv_baseline` = 0.218 (early-stopped; a
-fixed-budget re-anchor is owed). Best config is **`yavf_h1024`** — `yamnet_aves`
-concat + a 1024-wide hidden layer at `--fixed-epochs 150` — at **0.307** over
-two draws. `yamnet_context` (3072-d) is 0.258 shipped / 0.288 under
-`--epoch-rule xfold` / 0.294 replayed at a plain fixed e250. Representation
-levers that have paid: `yamnet_context`, `yamnet_aves`, a wide hidden head.
-Scoring fixes that have paid: **removing early stopping** — `--fixed-epochs`,
-worth +0.031 to +0.040 and measured twice.
+**State as of 2026-09-11 — the era just turned over, and there is no live
+number in this file.** Everything below is an E3 claim, i.e. from the era now
+in `archive/2026-09-08_cv-medium-v2/`. Three things moved at the cutover — the
+annotations were revised again (loudness tagging, still in progress), scoring
+split into `sensitivity_exclquiet` (the headline) and `sensitivity`, and
+`--fixed-epochs` became the default rule with dropout off. **Every float here
+is now an E3 lead, not a target.**
+
+**The first jobs of the era, in order.** They are not in the queue below because
+they are not ideas, they are the anchor:
+
+1. **`cv_baseline_v3`** — the bare linear probe on frozen YAMNet, no dropout, no
+   hidden layer, `--fixed-epochs`. Nothing else has a comparator until it runs.
+2. **The budget ladder.** Every fixed-budget run from last era was still rising
+   at its cap; 400 is a provisional default and this sets it for the era.
+3. **Re-verify last era's three wins, one at a time, against the anchor**:
+   `yamnet_context` (3072-d), `yamnet_aves` concat, a wide hidden head. They
+   were worth 0.218 → 0.321 *together*, under the old data and the old rule.
+   They are the likeliest positives to survive a data change, and they are the
+   only ones worth re-establishing before anything new.
+4. **Dropout is now an experiment too.** It was 0.2 and hardcoded for three
+   eras and never tested against the current head on the current data.
 
 **Read the epoch rule before you read any number here.** The audit of
-2026-09-11 (`exp/pairwise-rank:notes/new-era-audit.md`) found the era's
-distortion is **undertraining, not leakage**: `val_loss` early stopping carries
-no measurable selection optimism (-0.002 mean over 17 runs) but stops `1_150`
-at epoch 5-32 on every embedder tried, scoring it on a barely-trained probe.
-So: **always run a matched control under the same epoch rule as your arm** —
-that, not a log boundary, is what makes these numbers comparable, and it is
-what the last three entries did. `--fixed-epochs` is preferred over
-`--epoch-rule xfold` (no selection at all, and within 0.006 of it everywhere);
-250 is a floor for the budget, because every 150-epoch run on disk is still
-rising at its cap. **Item 1 below fixes this; run it first.**
+2026-09-11 (`exp/pairwise-rank:notes/new-era-audit.md`) found the last era's
+distortion was **undertraining, not leakage**: `val_loss` early stopping
+carried no measurable selection optimism (-0.002 mean over 17 runs) but stopped
+`1_150` at epoch 5-32 on every embedder tried, scoring it on a barely-trained
+probe. That is fixed at the source now — `--fixed-epochs` is the default and
+selects no epoch at all. The rule that survives: **a different budget N is a
+different rule**, so still run a matched control.
 
 ## Which era a number came from
 
@@ -35,33 +46,43 @@ An untagged claim is a proposal, not a measurement.
 |---|---|---|
 | **E1** | `archive/2026-06_fixed-test` — 29 runs | Different metric, different data, two revisions ago. **Not a verdict.** Re-establish or don't cite. |
 | **E2** | `archive/2026-08_cv-medium-v1` — 30 runs | Right metric, wrong data and roster. Directions survive; numbers don't. |
-| **E3** | current `log.jsonl` — 2026-09-08 on | Directly comparable. The only numbers you can beat. |
+| **E3** | `archive/2026-09-08_cv-medium-v2` — 24 runs | Right metric family, but pre-revision data, `Dropout(0.2)`, and a mix of three epoch rules. Directions survive; numbers don't. |
+| **E4** | current `log.jsonl` — 2026-09-11 on | Directly comparable. The only numbers you can beat — and as of now there are none. |
 
 `temporal-context` was a clear E1 negative and, rerun as `context-stack` in E2,
-became the largest gain in the log. **E1/E2 negatives are leads, not answers.**
+became the largest gain in the log. **E1/E2/E3 negatives are leads, not
+answers.**
 
 ## Standing facts a proposer needs
 
 - **MDE is ~0.027** at n=1 (`probe-grid`: baseline SD 0.0095 over n=3). Anything
   smaller is unreadable from one run. Prefer dose ladders to single comparisons.
-- **Never pass `--monitor val_sens`.** The held-out fold *is* the early-stopping
-  monitor, so it reports `max`-over-epochs of the statistic it is scored on.
-  `monitor-leakage` marked three entries `artifact` over this. Use
-  `--fixed-epochs`, or `--epoch-rule xfold`, or check offline with
-  `tools/honest_epoch.py`. The inflation is **budget-dependent** — +0.021 when
-  the argmax ranges over 400 epochs, mean +0.006 over the five 150-epoch runs
-  on disk — so quote it with its budget rather than as a constant.
-- **The stopping rule is worth more than most levers, and it is not leakage.**
+- **Never select an epoch on the held-out fold.** `main` no longer offers a way
+  to — there is no `--monitor` flag, and `--fixed-epochs` selects nothing. The
+  hazard is reintroducing one: any rule that reads the scored fold's own curve
+  reports `max`-over-epochs of the statistic it is graded on. `monitor-leakage`
+  marked three E3 entries `artifact` over this, and the inflation was
+  **budget-dependent** (+0.021 over a 400-epoch argmax, ~+0.006 over 150), so
+  quote it with its budget if you ever quote it. A cross-fold rule stays
+  available offline via `tools/honest_epoch.py`.
+- **The stopping rule was worth more than most levers, and it was not leakage.**
   Removing it measured **+0.031** (`yamnet_context`) and **+0.040**
-  (`yamnet_aves` linear). Run `--fixed-epochs`, and compare only against a
-  control under the same rule.
-- **`main` does not carry the flags every current idea needs.** `--hidden` and
-  `--fixed-epochs` live on `exp/yamnet-aves-head-fixed`;
-  `exp/yamnet-aves-context` has those **plus** `--context-frames` /
-  `--context-dims` (train-time context stacking over an existing cache, no
-  extraction); `--standardize` is on `exp/standardize-blocks`; `--epoch-rule`
-  on `exp/xfold-epoch`; the probe hyperparameter flags on `exp/probe-grid`.
-  Branch from the one that already has your flag rather than re-implementing it.
+  (`yamnet_aves` linear) in E3. It is now the default, so the live version of
+  this fact is: **the budget N is a free parameter nobody has tuned**, and it
+  moves the score at least that much.
+- **`_quiet` buzz leaves the score, not the training pool.** The headline is
+  `sensitivity_exclquiet`; `sensitivity` counts every buzz frame, at the same
+  threshold. A lever that moves one and not the other is a different result
+  from one that moves both — quote the pair. Loudness tagging is still in
+  progress, so the headline's denominator shrinks as it proceeds.
+- **`main` now carries `--fixed-epochs` and `--dropout`, but not the rest.**
+  `--hidden` lives on `exp/yamnet-aves-head-fixed`; `exp/yamnet-aves-context`
+  has `--context-frames` / `--context-dims` (train-time context stacking over an
+  existing cache, no extraction); `--standardize` on `exp/standardize-blocks`;
+  `--epoch-rule xfold` on `exp/xfold-epoch`; the probe hyperparameter flags on
+  `exp/probe-grid`. Branch from the one that already has your flag rather than
+  re-implementing it — but note those branches predate the era cutover, so
+  rebase onto `main` or you inherit the old default head and the old scoring.
 - **Cost anchors for *budgeting a run you have not launched*** (mtimes of
   `folds/*/summary.json`, `medium`, CPU, `--fixed-epochs 150`): `yavf_h0`
   (1792-d linear) **~160 s/fold, ~13 min CV**; `yavf_h1024` (1792-d + 1024
@@ -131,6 +152,40 @@ became the largest gain in the log. **E1/E2 negatives are leads, not answers.**
 
 Ranked. **Run item 1 first** — every comparison after it is budget-limited by
 an unknown amount until it lands, and it is cheap.
+
+## 0. Sensitivity by loudness tier — free, and it tells Luke what to annotate
+
+**Once loudness tagging is complete** (quiet/normal/loud on every buzz, all 24
+subsamples of every ident in `01_annotate/Even Sample` — in progress as of
+2026-09-11), `sensitivity_exclquiet` is one cut of a curve nobody has drawn.
+The natural report is sensitivity per tier at the fold's own threshold: what
+fraction of *loud* buzz gets caught, *normal*, *quiet*.
+
+Why it is worth doing the moment the data allows:
+
+- It is **offline and free** — `predictions.csv` already carries a per-frame
+  `quiet` flag (`train_utils.quiet_only_buzz`); extending it to a `loudness`
+  column is one line in `_eval_arrays`, and the tiers recompute from any
+  existing run's predictions with no training.
+- It **decomposes the hard folds**. `1_150` and `1_95` sit near chance, and the
+  standing question is whether that is a detection failure or an SNR floor.
+  Luke listened to `1_150` on 2026-09-09: "Most of them are very quiet, but
+  still legitimate targets." A tier breakdown answers directly whether those
+  folds are hard *because* their buzz is faint, or hard on loud buzz too —
+  which are completely different problems with different fixes.
+- It is **instrumentation, so it survives every data change** (LOOP.md's
+  standing rule on what to weight the rotation toward), and it tells Luke where
+  more annotation buys the most.
+
+Implementation sketch: add `loudness` alongside `quiet` in `_eval_arrays`,
+derived the same way (parallel `labels_raw` / `labels_translate`), and add a
+`sensitivity_<tier>` column set in `sx.py::_fold_sens` — same threshold, the
+positive set restricted to each tier in turn. Nothing about the sweep or the
+negatives changes, exactly as with the quiet split.
+
+*Falsifier:* if every fold's per-tier curve has the same shape, loudness is not
+where the fold-to-fold difficulty lives and the hard folds need a different
+explanation.
 
 ## 1. Fix the epoch budget: one long fixed-budget run
 

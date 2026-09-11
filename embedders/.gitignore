@@ -45,3 +45,5 @@ yamnet_doublerate/*.pb
 yamnet_doublerate/*.keras
 yamnet_doublerate/variables/
 yamnet_doublerate/weights_keras2/
+# Exported ONNX bundles are build products of tools/export_onnx.py, not source.
+*.onnx

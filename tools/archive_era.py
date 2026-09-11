@@ -453,7 +453,11 @@ Not done for you — these need judgment:
      new row in archive/README.md. The prose is the point of the archive.
   2. Rewrite LOOP.md's Baseline section — there is no baseline until one is
      rerun on the new data, and the old model is no longer a valid comparator.
-  3. Prune worktrees:  git worktree remove --force .local/worktrees/<slug>
+  3. Do NOT prune the worktrees. LOOP.md's step 6 is explicit about why:
+     a worktree that only trained is ~50 MB, and removing them has
+     repeatedly destroyed the only copy of something (an embedder a
+     gitignore gap never captured; thirty-one branches' notes.md).
+     The branch is the durable record; the worktree is a free second copy.
   4. Commit, and push main plus 'refs/archive/*:refs/archive/*'.
 """)
 

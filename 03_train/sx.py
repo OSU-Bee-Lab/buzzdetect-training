@@ -31,6 +31,17 @@ Only fpr 0.005 is reported. 0.01 is too loose to be operationally useful, and
 0.001 is not measurable on sets this size — it rests on a handful of negative
 frames per fold, and some folds cannot reach it at all.
 
+Every sensitivity is reported twice, at one identical threshold: `sensitivity`
+counts every annotated buzz frame, and `sensitivity_exclquiet` drops the frames
+whose buzz is only `_quiet`-tagged. A `_quiet` buzz is really there but needs
+filtering and an expert ear to hear, so failing to catch it is not a failure of
+the tool and catching it is not a credit; it simply leaves the equation. Those
+frames still train, as ordinary positives. **The headline is `sensitivity_exclquiet`** (LOOP.md "Goal"): quiet buzz leaves
+the equation, and the inclusive figure is its companion at the same threshold.
+This module computes both and imposes neither; the policy lives in LOOP.md and
+in the two tools that read this file (`tools/compare_folds.py`,
+`tools/log_entry.py`).
+
 summarize_folds writes all of this to one file, folds_sx.csv: a row per fold,
 then a total. Three files used to carry the same per-fold sensitivity under
 three different NaN policies; see _fold_sens for the policy that survived.
@@ -52,9 +63,43 @@ FNAME_SX_SUMMARY = 'folds_sx.csv'
 FNAME_PREDICTIONS = 'predictions.csv'
 
 
+QUIET_COL = 'quiet'
+SENS_EXCL = 'sensitivity_exclquiet'
+
+
+def _has_quiet(df):
+    """Whether this prediction table carries the quiet flag at all.
+
+    Runs from before 2026-09-11 have no such column, and predictions.csv is the
+    only per-fold artifact kept, so resummarize.py has to read them. Those
+    models simply get NaN in the excl-quiet column rather than a number that
+    pretends the split was made.
+    """
+    return QUIET_COL in df.columns
+
+
 def _fold_sens(df, fprs):
     """One fold's threshold, sensitivity and precision at each target FPR, the
     threshold set within the fold, plus how many negative frames it rests on.
+
+    Two sensitivities are reported, over one identical threshold:
+
+      `sensitivity`     — every annotated buzz frame counts as a positive.
+      `sensitivity_exclquiet` — frames whose buzz is only `_quiet`-tagged are
+                          dropped from the scored set entirely. Those buzzes
+                          need audio filtering and an expert ear to perceive,
+                          which is below what an operator could reasonably ask
+                          of the tool: missing one is not a false negative, and
+                          catching one is not a credit. They still train, as
+                          ordinary positives — they are really there, and
+                          teaching the model they are background would be worse
+                          than either scoring choice.
+
+    The threshold does not move between the two. Quiet frames are positives, so
+    dropping them changes neither the negative pool nor the FPR sweep; only the
+    sensitivity numerator and denominator change. That is what makes the pair
+    readable side by side — it is one operating point scored against two
+    definitions of the target, not two models.
 
     All three are NaN where the fold cannot reach the target. Two ways that
     happens: no buzz frames to be sensitive about, and — the one metrics_at_fpr
@@ -72,6 +117,17 @@ def _fold_sens(df, fprs):
     n_neg = int((~correct).sum())
     at_fpr = metrics_at_fpr(metrics_by_group(df[['activation_ins_buzz', 'correct']]), fprs)
     cols = at_fpr.set_index('fpr')[['threshold', 'sensitivity', 'precision']]
+
+    # The excl-quiet reading: same negatives, same sweep, quiet positives gone.
+    if _has_quiet(df):
+        loud = df[~df[QUIET_COL].astype(bool)]
+        excl = metrics_at_fpr(
+            metrics_by_group(loud[['activation_ins_buzz', 'correct']]), fprs,
+        ).set_index('fpr')['sensitivity']
+    else:
+        excl = pd.Series({f: np.nan for f in fprs})
+    cols[SENS_EXCL] = [excl.get(f, np.nan) for f in cols.index]
+
     neg_frames = {f: int(np.floor(f * n_neg)) for f in fprs}
     for f in fprs:
         # Blank the whole row together, not just the column that went NaN on
@@ -109,26 +165,32 @@ def summarize_folds(predictions, fold_facts=None, fprs=FPR_TARGETS):
     rows = []
     for fold, df in predictions.groupby('fold'):
         cols, neg_frames = _fold_sens(df, fprs)
+        buzz = df['correct'].astype(bool)
+        quiet = df[QUIET_COL].astype(bool) if _has_quiet(df) else None
         for f in fprs:
             rows.append({
                 'fold': fold,
                 'fpr': f,
                 **cols.loc[f].to_dict(),
-                'buzz_frames': int(df['correct'].sum()),
+                'buzz_frames': int(buzz.sum()),
+                'quiet_frames': int((buzz & quiet).sum()) if quiet is not None else np.nan,
                 'neg_frames': neg_frames[f],
                 **(fold_facts or {}).get(fold, {}),
             })
 
     table = pd.DataFrame(rows)
-    means = ['threshold', 'sensitivity', 'precision']
-    sums = [c for c in ('buzz_frames', 'neg_frames', 'frames_val') if c in table]
+    means = ['threshold', 'sensitivity', SENS_EXCL, 'precision']
+    sums = [c for c in ('buzz_frames', 'quiet_frames', 'neg_frames', 'frames_val') if c in table]
 
     totals = []
     for f in fprs:
         here = table[table['fpr'] == f]
         total = {'fold': TOTAL_ROW, 'fpr': f}
         total.update(here[means].mean().round(3).to_dict())
-        total.update(here[sums].sum().astype(int).to_dict())
+        # A column that is NaN everywhere (quiet_frames on a pre-2026-09-11
+        # run) must stay NaN in the total rather than summing to 0.
+        total.update({c: (np.nan if here[c].isna().all() else int(here[c].sum()))
+                      for c in sums})
         if 'best_epoch' in here:
             # the median is what the shipped model's fixed epoch count is set to
             total['best_epoch'] = int(round(here['best_epoch'].median()))
@@ -150,7 +212,9 @@ def format_sx_report(name, table):
         total = here[here['fold'] == TOTAL_ROW].iloc[0]
         scored = folds['sensitivity'].notna().sum()
 
-        lines.append(f'\n[{name}] sens@fpr{fpr:.1%} per deployment: {_num(total["sensitivity"])}')
+        lines.append(f'\n[{name}] sens@fpr{fpr:.1%} per deployment: '
+                     f'{_num(total.get(SENS_EXCL))}'
+                     f'  (incl. _quiet buzz: {_num(total["sensitivity"])})')
         lines.append(f'  mean over {scored}/{len(folds)} held-out fold(s), each tuned to '
                      f'{fpr:.1%} FPR on its own audio '
                      f'(~{int(folds["neg_frames"].median())} negative frames set each threshold)')
@@ -163,8 +227,15 @@ def format_sx_report(name, table):
                          f'of {int(folds["buzz_frames"].sum())} buzz frames')
         for _, r in folds.sort_values('fold').iterrows():
             lines.append(f'    {r["fold"]}: threshold {_num(r["threshold"])}, '
-                         f'sensitivity {_num(r["sensitivity"])} '
+                         f'sensitivity {_num(r.get(SENS_EXCL))} '
+                         f'(incl. quiet {_num(r["sensitivity"])}) '
                          f'(~{int(r["neg_frames"])} negative frames)')
+        quiet_total = total.get('quiet_frames')
+        if pd.notna(quiet_total) and quiet_total:
+            lines.append(f'  {int(quiet_total)} of {int(total["buzz_frames"])} buzz frames are '
+                         f'_quiet-only: audible to an expert ear with filtering, below what an '
+                         f'operator can ask for. They train as positives; the headline '
+                         f'drops them from the score at the same threshold.')
 
     lines.append("  an oracle: each threshold is placed using that fold's labels, so read this "
                  "as the ceiling on operator tuning")

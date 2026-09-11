@@ -48,6 +48,13 @@ every "hard fold" conclusion is really a conclusion about a crop.
 Kept as artifacts, never as comparators:
 
 - `models/model_general_v3/` — predates the CV rework.
+- `models/cv_baseline/` and every other model from the 2026-09 era — they
+  predate the 2026-09-11 annotation revision, the `_quiet` scoring split and
+  the `--fixed-epochs` rule, so their `folds_sx.csv` has no
+  `sensitivity_exclquiet` column and their folds no longer hold the same audio.
+  `tools/compare_folds.py` warns rather than silently pairing on the wrong
+  column. Per-fold numbers are preserved at
+  `archive/2026-09-08_cv-medium-v2/`.
 - `models/yamnet_medium_general/` — the 2026-08 era's `cv-baseline` (0.206).
   Trained under `general_v1` on the pre-2026-09-08 annotations, so a paired
   per-fold join against it is invalid: its folds no longer hold the same audio.

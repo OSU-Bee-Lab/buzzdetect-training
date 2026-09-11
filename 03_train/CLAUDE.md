@@ -48,20 +48,53 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
   TensorFlow
 - Threshold sweeps (`metrics_by_group`, `metrics_at_fpr`, `metrics_at_precision`)
   — `metrics.py`
-- Per-epoch sens@FPR monitor (reporting only; stopping is still on `val_loss`) —
-  `callbacks.py`, plotted by `plot_history.py::plot_sens_history`
-- **The stopping rule is not neutral, and main does not yet carry the fix.**
-  `val_loss` early stopping shows no measurable *selection* optimism here
-  (-0.002 over 17 runs) but it **undertrains unevenly**: `1_150` hits its
-  `val_loss` argmin at epoch 5-32 under every embedder tried while its buzz
-  curve climbs to e120-185, so that fold is scored on a barely-trained probe.
-  Removing it is worth +0.031 to +0.040 headline. `--fixed-epochs N` (no early
-  stop, no restore-best — the preferred fix, it selects no epoch at all) lives
-  on `exp/yamnet-aves-head-fixed`; `--epoch-rule xfold` (a diagnostic) on
-  `exp/xfold-epoch`. Until one is merged, **compare only against a control run
-  under the same rule**, and re-score both arms offline with
-  `tools/honest_epoch.py` whenever a treatment moved `best_epoch`. Evidence:
+- Per-epoch sens@FPR monitor (reporting only; nothing stops on it) —
+  `callbacks.py`, plotted by `plot_history.py::plot_sens_history`. It counts
+  every buzz frame, quiet included, so the curves stay comparable with the ones
+  already on disk.
+- **The stopping rule is `--fixed-epochs`, and it is the default.** Every
+  rotation trains exactly `--fixed-epochs` (400) with no early stopping and no
+  restore-best, and ships its final weights — no epoch selection of any kind,
+  so every arm of a comparison is scored at one identical epoch. This replaced
+  `val_loss` early stopping on 2026-09-11. That rule carried no measurable
+  *selection* optimism (-0.002 over 17 runs) but **undertrained unevenly**:
+  `1_150` hit its `val_loss` argmin at epoch 2-32 under every embedder tried
+  while its buzz curve climbed to e120-185, so that fold shipped a
+  barely-trained probe. Removing it measured **+0.031 and +0.040** on two
+  embedders. Evidence: `archive/2026-09-08_cv-medium-v2/README.md` and
   `exp/pairwise-rank:notes/new-era-audit.md`.
+
+  **400 is provisional.** Every fixed-budget run from the last era is *still
+  rising at its cap* — all but one capped at 150, and the one 400-epoch run
+  peaked at e234 and cost 0.003 by running to 400. Whether a wide head keeps
+  gaining past 250 was never tested. The budget ladder is an early experiment
+  of this era, and it sets the number for everything after it.
+
+  `--early-stop` restores the old rule, kept so the archived era reproduces.
+  **Never mix the two rules in one comparison.** Each run records which it used
+  in `config_model.json`'s `epoch_rule`. A cross-fold epoch rule stays
+  available offline via `tools/honest_epoch.py`; on a fixed-budget run every
+  fold's curve runs the full length, so that tool's truncation caveat does not
+  bind.
+- **The head is a bare linear probe — no dropout, no hidden layer.** `--dropout`
+  defaults to 0.0. Dropout was 0.2 and hardcoded through the 2026-09 era; it is
+  a regulariser tuned on YAMNet's 89.6%-sparse non-negative code, and on a
+  dense signed code (AVES, Perch) it is heavy multiplicative noise instead. It
+  is now something an experiment turns on, so that the anchor every result is
+  read against is the simplest thing that could work.
+- **Sensitivity is reported twice, at one identical threshold.** `sensitivity`
+  counts every annotated buzz frame; `sensitivity_exclquiet` drops frames whose
+  buzz is only `_quiet`-tagged. A `_quiet` buzz is really there but needs
+  filtering and an expert ear to perceive — below what an operator can ask of
+  the tool — so missing one is not a false negative and catching one is not a
+  credit. **They still train, as ordinary positives**: calling them negative
+  would teach the model that faint buzz is background, which is worse than
+  either scoring choice. The threshold does not move between the two readings
+  (quiet frames are positives, so the negative pool and the FPR sweep are
+  untouched); only the sensitivity numerator and denominator change.
+  `train_utils.quiet_only_buzz` is the definition, `predictions.csv` carries
+  the per-frame `quiet` flag, and runs from before 2026-09-11 get NaN in that
+  column rather than a number pretending the split was made.
 - Per-frame class activations + multi-label loss for finding bad annotations and
   hard negatives, on by default (`--no-surprisal`) — `surprisal.py`, written to
   `<model>/surprisal/<ident>_surprisal.csv`

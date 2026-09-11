@@ -19,7 +19,7 @@ from dataset import (
     survey_untranslated, ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT,
 )
 from train_utils import (build_weights, build_classes, can_write,
-                         weighted_bce_loss, Sample)
+                         weighted_bce_loss, Sample, quiet_only_buzz)
 from embedders.embedding import load_embedder
 from plot_history import plot_history, plot_sens_history
 from write_model_py import write_model_py
@@ -71,15 +71,25 @@ def _to_tf(data, size_batch, size_shuffle):
 
 
 def _eval_arrays(samples, classes):
-    """Frame-level (embeddings, is_buzz) for a fold, in sample order.
+    """Frame-level (embeddings, is_buzz, is_quiet_buzz) for a fold, in sample
+    order.
 
     Scoring pairs each frame's activation with its own label, so unlike
     _to_tf's training pipeline this must not shuffle.
+
+    `quiet` marks frames whose buzz is only ever `_quiet`-tagged. They are
+    ordinary positives in `correct` — they train, and they count in the
+    inclusive reading — and sx.py drops them to produce the excl-quiet one.
+    See train_utils.quiet_only_buzz.
     """
     buzz_index = classes.index('ins_buzz')
     embeddings = np.concatenate([np.array(s.embeddings, dtype=np.float32) for s in samples])
     correct = np.concatenate([np.full(s.frames, bool(s.target_array[buzz_index])) for s in samples])
-    return embeddings, correct
+    quiet = np.concatenate([
+        np.full(s.frames, quiet_only_buzz(s.labels_raw, s.labels_translate))
+        for s in samples
+    ])
+    return embeddings, correct, quiet
 
 
 def _load_data(setname, embeddername, folds_train, name_translation, aug_dirnames,
@@ -114,7 +124,11 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
         )
         frames_val = sum(s.frames for s in data_val)
         if data_val:
-            val_eval = _eval_arrays(data_val, classes)
+            # The per-epoch monitor stays on the inclusive reading (all buzz).
+            # It steers nothing under the fixed-budget rule; it is a curve, and
+            # changing what it counts would break comparison with the curves
+            # already on disk.
+            val_eval = _eval_arrays(data_val, classes)[:2]
 
     if aug_dirnames:
         data_train += load_augmented(setname, embeddername, aug_dirnames, translation, folds_train)
@@ -163,10 +177,12 @@ def _score_fold(model, setname, embeddername, fold, translation, classes):
     if not samples:
         return None
 
-    embeddings, correct = _eval_arrays(samples, classes)
+    embeddings, correct, quiet = _eval_arrays(samples, classes)
     activation = model(embeddings, training=False)[:, classes.index('ins_buzz')].numpy()
 
-    return pd.DataFrame({'activation_ins_buzz': activation, 'correct': correct})
+    return pd.DataFrame({
+        'activation_ins_buzz': activation, 'correct': correct, 'quiet': quiet,
+    })
 
 
 def _format_sens(sens):
@@ -273,7 +289,7 @@ def _consensus_epoch(summary_rows, tol):
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs_max, aug_dirnames, verbose,
                held_out_fold, save_binary, epochs_fixed=None, patience=50,
-               stop_tol=None):
+               stop_tol=None, fixed_epochs=None, dropout=0.0):
     """Train one model. Returns (result_row, model); (None, None) if the model
     directory is already populated."""
     if not can_write(dir_model):
@@ -296,7 +312,15 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     tf_name = re.sub(r'[^A-Za-z0-9_.>-]', '_', modelname)
     model = tf.keras.Sequential(name=tf_name)
     model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
-    model.add(tf.keras.layers.Dropout(0.2))
+    # The era's baseline is the bare linear probe: one Dense straight off the
+    # frozen embedding, no dropout, no hidden layer. Dropout was 0.2 and
+    # hardcoded through 2026-09-11; it is a regulariser tuned on YAMNet's
+    # 89.6%-sparse non-negative code, and on a dense signed code it is heavy
+    # multiplicative noise instead. It is now an experiment (--dropout), not a
+    # premise, so that the anchor every result is read against is the simplest
+    # thing that could work.
+    if dropout:
+        model.add(tf.keras.layers.Dropout(dropout))
     model.add(tf.keras.layers.Dense(len(data.classes)))
 
     # Per-class weights go in the loss, not in fit(class_weight=). Keras'
@@ -332,29 +356,64 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             'frames_train': data.frames_train,
         }
     else:
-        callback = RestoreTrueBest(
-            monitor='val_loss', patience=patience, min_delta=0.002, restore_best_weights=True,
-        )
-        # Reporting only, and listed first so its keys are in `logs` before
-        # EarlyStopping and History see them. Stopping still happens on
-        # val_loss; these curves are the evidence for whether it should.
+        # Reporting only, and listed first so its keys are in `logs` before any
+        # other callback or History sees them.
         sens_callback = SensAtFPR(
             *data.val_eval, data.classes.index('ins_buzz'), FPR_TARGETS,
             batch_size=data.size_batch,
         )
-        history = model.fit(
-            data.train_tf,
-            epochs=epochs_max,
-            validation_data=data.val_tf,
-            callbacks=[sens_callback, callback, tf.keras.callbacks.TerminateOnNaN()],
-            shuffle=False,  # _to_tf already shuffles; see the fixed-epochs fit above
-            # --verbose is for a human watching: 1 = live progress bar. Agents
-            # leave the flag off (0) so per-epoch lines don't fill their context.
-            verbose=1 if verbose else 0,
-        )
-
-        best_epoch = callback.best_epoch
-        best_val_loss = float(callback.best)
+        if fixed_epochs is not None:
+            # THE DEFAULT RULE. Every rotation trains exactly fixed_epochs and
+            # ships its final weights: no early stopping, no restore-best, no
+            # epoch selection of any kind. All arms of a comparison are scored
+            # at one identical epoch, so a capacity or normalisation change
+            # cannot be confounded by the stopping rule — and there is no
+            # nesting residual to apologise for, because no curve is consulted.
+            #
+            # It replaced val_loss early stopping on 2026-09-11. That rule
+            # carried no measurable *selection* optimism (-0.002 over 17 runs)
+            # but undertrained unevenly: 1_150 hit its val_loss argmin at epoch
+            # 2-32 under every embedder tried while its buzz curve climbed to
+            # e120-185, so that fold shipped a barely-trained probe. Removing
+            # it measured +0.031 and +0.040 on two embedders. Evidence:
+            # archive/2026-09-08_cv-medium-v2/ and
+            # exp/pairwise-rank:notes/new-era-audit.md.
+            #
+            # The sens curves are still persisted, so an offline cross-fold
+            # epoch rule (tools/honest_epoch.py) can pick a shared epoch below
+            # the budget as a diagnostic. On a fixed-budget run every fold's
+            # curve runs the full length, so that tool's truncation caveat does
+            # not bind.
+            history = model.fit(
+                data.train_tf,
+                epochs=fixed_epochs,
+                validation_data=data.val_tf,
+                callbacks=[sens_callback, tf.keras.callbacks.TerminateOnNaN()],
+                shuffle=False,  # _to_tf already shuffles
+                # --verbose is for a human watching: 1 = live progress bar.
+                # Agents leave the flag off (0) so per-epoch lines don't fill
+                # their context.
+                verbose=1 if verbose else 0,
+            )
+            best_epoch = len(history.history['val_loss']) - 1
+            best_val_loss = float(history.history['val_loss'][best_epoch])
+        else:
+            # --early-stop: the pre-2026-09-11 rule, kept so the archived era's
+            # runs stay reproducible. Do not mix it with fixed-budget runs in
+            # one comparison; it is worth +0.031 to +0.040 on its own.
+            callback = RestoreTrueBest(
+                monitor='val_loss', patience=patience, min_delta=0.002, restore_best_weights=True,
+            )
+            history = model.fit(
+                data.train_tf,
+                epochs=epochs_max,
+                validation_data=data.val_tf,
+                callbacks=[sens_callback, callback, tf.keras.callbacks.TerminateOnNaN()],
+                shuffle=False,  # _to_tf already shuffles; see the fixed-epochs fit above
+                verbose=1 if verbose else 0,
+            )
+            best_epoch = callback.best_epoch
+            best_val_loss = float(callback.best)
         result = {
             'n_epochs': len(history.history['val_loss']),
             'best_epoch': best_epoch + 1,
@@ -408,6 +467,13 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         'epochs_fixed': epochs_fixed,
         'patience': patience,
         'stop_tol': stop_tol,
+        # Which stopping rule produced these weights. Recorded because a
+        # comparison across rules is not a comparison — it is worth more than
+        # most levers being tested (+0.031 to +0.040), and a run's rule was
+        # previously only inferable from whether best_epoch hit the cap.
+        'epoch_rule': 'fixed' if fixed_epochs is not None else 'early',
+        'fixed_epochs': fixed_epochs,
+        'dropout': dropout,
     }
     # 'w' for the same reason as write_model_py's — can_write() is the gate
     with open(os.path.join(dir_model, 'config_model.json'), 'w') as f:
@@ -490,7 +556,7 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
               assume_yes=False, stop_tol=0.01, skip_cv=False, train_shipped=False,
-              only_folds=None, surprisal=True):
+              only_folds=None, surprisal=True, fixed_epochs=400, dropout=0.0):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -565,6 +631,7 @@ def train_set(name, embeddername, setname, name_translation,
             dir_model, modelname, embeddername, setname, name_translation,
             data, epochs_max, aug_dirnames, verbose,
             held_out, save_binary=False, patience=patience,
+            fixed_epochs=fixed_epochs, dropout=dropout,
         )
         if result is None:
             continue
@@ -630,8 +697,17 @@ def train_set(name, embeddername, setname, name_translation,
     # out, so there is nothing clean left to monitor — the epoch count is read
     # off the pooled rotation val_loss curves (_consensus_epoch), falling back
     # to the median per-fold best epoch. Only model saved with a binary.
+    #
+    # Under the fixed-budget rule there is nothing to read: every rotation
+    # trained the whole budget, so the shipped model trains it too.
+    # _consensus_epoch reads val_loss argmins, which is the rule that was
+    # removed — consulting it here would reintroduce it through the back door.
     epochs_fixed = epochs_max
-    if summary_rows:
+    if fixed_epochs is not None:
+        epochs_fixed = fixed_epochs
+        print(f'[{name}] shipped epoch count {epochs_fixed} '
+              f'(--fixed-epochs; the same budget every rotation ran)')
+    elif summary_rows:
         n_curves = sum(1 for r in summary_rows if r.get('val_loss_curve'))
         epochs_fixed = _consensus_epoch(summary_rows, stop_tol)
         if epochs_fixed is not None:
@@ -654,7 +730,7 @@ def train_set(name, embeddername, setname, name_translation,
         dir_model_full, name, embeddername, setname, name_translation,
         data, epochs_max, aug_dirnames, verbose,
         None, save_binary=True, epochs_fixed=epochs_fixed, patience=patience,
-        stop_tol=stop_tol,
+        stop_tol=stop_tol, fixed_epochs=fixed_epochs, dropout=dropout,
     )
 
     if result is None:

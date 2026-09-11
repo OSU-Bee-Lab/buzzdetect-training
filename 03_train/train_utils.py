@@ -104,6 +104,35 @@ def labels_from_path(path_in):
     return labels
 
 
+BUZZ_CLASS = 'ins_buzz'
+
+# A raw label carrying this marker is a buzz the annotator could only hear with
+# filtering and an expert ear — genuinely present, far below what an operator
+# could reasonably expect buzzdetect to catch. Matched case-insensitively
+# anywhere in the raw label, so ins_buzz_quiet, ins_buzz_Bombus_quiet and
+# ins_buzz_quiet_low all count.
+QUIET_MARKER = '_quiet'
+
+
+def quiet_only_buzz(labels_raw, labels_translate, buzz_class=BUZZ_CLASS):
+    """True if this sample's buzz comes *only* from `_quiet`-marked labels.
+
+    Such frames are trained on as ordinary ins_buzz positives — they are real
+    buzz, and calling them negative would teach the model that faint buzz is
+    background. They are dropped from the *scored* positives instead, in the
+    excl-quiet reading: missing one is not a false negative and catching one is
+    not a false positive, so they simply leave the sensitivity equation.
+
+    A sample with any non-quiet buzz label is an ordinary positive; quiet is a
+    property of the whole frame's buzz evidence, not of one label on it.
+
+    `labels_raw` and `labels_translate` are the parallel lists dataset.py
+    builds — translate_labels preserves order and length.
+    """
+    buzz_raw = [r for r, t in zip(labels_raw, labels_translate) if t == buzz_class]
+    return bool(buzz_raw) and all(QUIET_MARKER in str(r).lower() for r in buzz_raw)
+
+
 def can_write(dir_model):
     if not os.path.exists(os.path.join(dir_model, 'config_model.json')):
         return True

@@ -28,9 +28,32 @@ if __name__ == '__main__':
     parser.add_argument('--set', default='medium', dest='setname')
     parser.add_argument('--embedder', default='yamnet')
     parser.add_argument('--translation', default='general')
-    parser.add_argument('--epochs', type=int, default=400)
+    parser.add_argument('--dropout', type=float, default=0.0,
+                        help='input dropout rate before the class logits '
+                             '(default 0.0 = none). The era baseline is the '
+                             'bare linear probe; dropout was 0.2 and hardcoded '
+                             'through the 2026-09 era, and is now something an '
+                             'experiment turns on rather than a premise.')
+    parser.add_argument('--fixed-epochs', type=int, default=400, dest='fixed_epochs',
+                        help='THE STOPPING RULE (default 400). Train every '
+                             'rotation for exactly this many epochs, with no '
+                             'early stopping and no restore-best, and ship the '
+                             'final weights. No epoch selection of any kind '
+                             'happens, so every arm of a comparison is scored '
+                             'at one identical epoch. Vary it to run a budget '
+                             'ladder; 400 is provisional — see 03_train/CLAUDE.md.')
+    parser.add_argument('--early-stop', action='store_true', dest='early_stop',
+                        help='the pre-2026-09-11 rule: stop on the val_loss '
+                             'argmin with --patience, restoring the true best. '
+                             'Kept so the archived era stays reproducible. It '
+                             'undertrains the hard folds and is worth -0.031 to '
+                             '-0.040 against a fixed budget, so never mix the '
+                             'two rules in one comparison.')
+    parser.add_argument('--epochs', type=int, default=400,
+                        help='epoch cap under --early-stop only; ignored '
+                             'otherwise (--fixed-epochs is the budget).')
     parser.add_argument('--patience', type=int, default=50,
-                        help='EarlyStopping patience for the per-fold submodels')
+                        help='EarlyStopping patience under --early-stop only')
     parser.add_argument('--stop-tol', type=float, default=0.01, dest='stop_tol',
                         help='shipped-model epoch count: fraction of the consensus '
                              'val_loss curve span to stop short of its floor '
@@ -76,6 +99,9 @@ if __name__ == '__main__':
         assume_yes=args.assume_yes,
         stop_tol=args.stop_tol,
         skip_cv=args.skip_cv,
+        # --early-stop turns the fixed budget off; they are one rule, not two.
+        fixed_epochs=None if args.early_stop else args.fixed_epochs,
+        dropout=args.dropout,
         # --skip-cv means 'shipped model only', so it has to turn it on.
         train_shipped=args.train_shipped or args.skip_cv,
         only_folds=args.only_folds,

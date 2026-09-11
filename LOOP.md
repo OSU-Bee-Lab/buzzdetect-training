@@ -1,15 +1,23 @@
 # Autoresearch Loop
 
-> **The slate was cleared on 2026-09-08, when the training data was revised.**
-> The 59 runs before that are in `archive/`, one directory per era, each with a
-> README stating what made its numbers comparable and what ended that. Nothing
-> in there is a number you can beat — a data change moves every float.
+> **The slate was cleared on 2026-09-11.** The 24 runs of the previous era are
+> in `archive/2026-09-08_cv-medium-v2/`, with a README stating what made them
+> comparable and what ended that; 59 more are in the two eras before it.
+> **Nothing in there is a number you can beat** — three things moved at once at
+> this cutover, and any one of them moves every float:
+>
+> 1. **The annotations were revised again**, including a new `_quiet` tag.
+> 2. **Scoring split in two.** `sensitivity` counts every buzz frame;
+>    `sensitivity_exclquiet` drops the frames whose buzz is only `_quiet`-tagged.
+> 3. **The stopping rule changed.** `--fixed-epochs` is now the default and
+>    early stopping is opt-in — worth +0.031 to +0.040 on its own, i.e. more
+>    than most levers being tested.
 >
 > **Old verdicts are leads, not settled answers.** `temporal-context` was logged
-> as a clear negative in the first era and, rerun as `context-stack` in the
-> second, was the largest gain in the log. A verdict inverted on an eval change
-> alone; this cutover changed the data as well. Read `IDEAS.md` for the
-> distilled version, and rerun rather than defer.
+> as a clear negative in era 1 and, rerun as `context-stack`, was the largest
+> gain in era 2. A verdict inverted on an eval change alone. Read `IDEAS.md` for
+> the distilled version and the archived era's "Reading these forward", and
+> **rerun rather than defer**.
 
 Read `README.md` first — [Reading the results](README.md#reading-the-results)
 is where the metric choices below come from.
@@ -19,10 +27,39 @@ is where the metric choices below come from.
 Improve `ins_buzz` sensitivity at a fixed false-positive rate on **held-out
 deployments**, with each deployment's threshold set on its own audio.
 
-**The number: the `total` row's `sensitivity` at `fpr` 0.005, from
+**The number: the `total` row's `sensitivity_exclquiet` at `fpr` 0.005, from
 `models/<name>/folds_sx.csv`.** Every rotating fold is tuned to 0.5% FPR on its
 own held-out audio; the primary figure is the plain mean of those
-sensitivities, each deployment counted once. A training run prints it.
+sensitivities, each deployment counted once. A training run prints it, and
+`tools/log_entry.py` reads it straight off the file.
+
+**Quiet buzz is out of the equation.** A buzz whose annotation carries a
+`_quiet` tag is really there, but it needs audio filtering and an expert ear to
+perceive — well below what an operator could reasonably ask buzzdetect for. So
+missing one is not a false negative and catching one is not a credit: those
+frames leave the *scored* set entirely.
+
+They do **not** leave training. They are ordinary `ins_buzz` positives in the
+training pool, because calling faint buzz a negative would teach the model that
+faint buzz is background — worse than either scoring choice.
+
+`folds_sx.csv` carries both readings **at one identical threshold**: quiet
+frames are positives, so dropping them touches neither the negative pool nor
+the FPR sweep, and only the sensitivity numerator and denominator move. Report
+both. `sensitivity` (every buzz frame) is the companion figure, logged under
+`sens_at_fpr0.005_persite_inclquiet`, and the *pair* is informative: a gain
+that shows up in `sensitivity` but not in `sensitivity_exclquiet` is a gain on
+buzzes nobody was promised.
+
+**Interim state (as of 2026-09-11):** loudness tagging is still in progress.
+The end state is a quiet/normal/loud tag on every buzz, across all 24
+subsamples of every ident in `01_annotate/Even Sample`. Until then an untagged
+buzz counts as non-quiet, which is the right default — `quiet_only_buzz` keys
+on the `_quiet` marker alone, so `_normal` and `_loud` tags land as ordinary
+positives and nothing changes when tagging completes. But the headline's
+denominator **will keep shrinking as tagging proceeds**, so a run from early in
+the era is not cleanly comparable to a later one on this column. Say which
+commit of the set a run used.
 
 Each deployment counts once because the goal is a new deployment, and a new
 deployment is one site — not a weighted blend. A buzz-weighted mean would let a
@@ -54,27 +91,46 @@ a different base rate; it is not a target on this metric.
 
 ## Baseline
 
-`cv-baseline` in `log.jsonl`, model at `models/cv_baseline/`:
-**0.218 mean sens@fpr0.005** over 5 rotating folds. Join against its
-`folds_sx.csv` for a paired per-fold comparison.
+**There is no baseline yet. Running one is the first job of this era.**
 
-Config: a linear probe on frozen YAMNet, `Dropout(0.2)`, label smoothing 0.2,
-Adam 0.002, `medium`, `general` — plus two correctness fixes carried over from
-the archive: per-class weights inside the loss (`weighted_bce_loss`, since
-Keras' `fit(class_weight=)` collapses a multi-hot target to `argmax`) and
-restoring the true `val_loss` argmin (`RestoreTrueBest`).
+The anchor is the simplest thing that could work: **a bare linear probe on
+frozen YAMNet** — one `Dense(15)` straight off the 1024-d embedding, *no
+dropout*, no hidden layer, label smoothing 0.2, Adam 0.002, `medium`,
+`general`, `--fixed-epochs`. Everything else in the pipeline is an addition to
+be justified against it.
 
-**Those two fixes measured -0.006 here, folds 1 up / 2 down / 2 flat** — inside
-the noise floor, and opposite in sign to the +0.013 and +0.008 the archive
-recorded on the pre-revision 11-fold set. They are kept because both are
-correctness fixes independent of the metric, not because they helped. The
-pre-fix control is `models/yamnet_medium_general_v2/` (0.224, same data and
-folds) if anyone wants to revisit that call.
+```bash
+03_train/main.py --name cv_baseline_v3 --set medium --embedder yamnet \
+                 --translation general --verbose -y
+```
 
-Worth rerunning early: the `binary` translation control. The `general`/`binary`
-pair at 0.206/0.203 is why the endpoint is per-deployment rather than pooled,
-and that argument should be re-established on live numbers rather than
-inherited from the archive.
+That is deliberately *not* where the last era finished (0.321, on
+`yamnet_aves` + `yamnet_context` concatenated with a 1024-wide hidden head).
+Building the new era on that config would carry three unverified assumptions
+into every number. The era's first few loops should instead **re-verify the
+last era's wins against this anchor, one at a time** — the concatenated
+embedder, the wide hidden head, and dropout itself are now three separate
+experiments, not premises.
+
+Two things to know before quoting the old numbers at all:
+
+- **The archived `cv-baseline` 0.218 is not comparable to this anchor** — it
+  early-stopped, it had `Dropout(0.2)`, and it ran on the pre-revision
+  annotations. Expect the fixed-budget change alone to be worth +0.02 to +0.04,
+  chiefly at `1_150`.
+- **The flags the era's leads need are not all in `main`.** `--hidden` lives on
+  `exp/yamnet-aves-head-fixed`, and `--context-frames` plus the fused
+  `yamnet_context_aves` extraction on `exp/yamnet-aves-context`. A
+  re-verification experiment should branch from the one it needs, or port the
+  flag deliberately, rather than rediscovering that main can't express the
+  config.
+
+Worth running early alongside the anchor: the **`binary` translation control**.
+It is why the endpoint is per-deployment rather than pooled, and it has never
+been rerun cleanly. Two confounds unrelated to the taxonomy: `ins_buzz`'s
+positive weight moves ~5.4x (`build_weights` puts the class *count* in every
+denominator), and `val_loss`'s composition goes from ~1/15 buzz to ~1/2 — the
+second disappears under a fixed budget, which is a reason to run it now.
 
 ## Constraints
 
@@ -108,20 +164,29 @@ inherited from the archive.
   absolutely: they cost one cheap run, recompute for free whenever the data
   moves, and they tell Luke what to annotate next, which is the standing
   bottleneck. Weight the rotation accordingly.
-- **Err against hyperparameter tuning.** We're looking for structural gains;
-  hyperparameters can be tuned in one sweep once a good structure is found.
-  **Exception: a new embedder does not inherit the probe config's validity.**
-  See below.
-- **The probe config is YAMNet-tuned, and it is hardcoded.**
-  `03_train/train.py` builds `Dropout(0.2) -> Dense(n_classes)` with
-  `label_smoothing=0.2`, Adam at 0.002 and no weight decay, with no CLI flag to
-  vary any of it. Those values were tuned on YAMNet, whose embedding is 89.6%
-  exact zeros, non-negative, and already linearly separable — it is the
-  penultimate layer of a supervised classifier whose 521 AudioSet classes
-  include `Buzz` and `Bee, wasp, etc.`. Input dropout on a code like that is
-  mild; on a dense, signed, zero-centred code it is heavy multiplicative noise,
-  and with no weight decay a 768-dimension distributed representation overfits
-  the training sites instead of transferring.
+- **The stopping rule is `--fixed-epochs`, and every arm of a comparison must
+  share it.** It is the default: train exactly N epochs, no early stopping, no
+  restore-best, no epoch selection of any kind. `--early-stop` restores the
+  pre-2026-09-11 rule and exists only so the archived era reproduces. The rule
+  is worth **+0.031 to +0.040** on its own — more than most levers being tested
+  — so a run under one rule tells you nothing about a run under the other, and
+  `config_model.json`'s `epoch_rule` records which each used.
+
+  **The budget itself is unsettled.** 400 is the default because every
+  fixed-budget run from the last era was still rising at its cap, and the one
+  400-epoch run cost 0.003 against its own peak at e234. Whether a wider head
+  keeps gaining past 250 was never tested. **Run the budget ladder early** — it
+  is cheap, and it sets the number every later run is scored at.
+- **The head is a bare linear probe, and that is now the anchor, not a
+  hardcoded premise.** `Dropout -> Dense(n_classes)` with `label_smoothing=0.2`
+  and Adam 0.002 was the fixed config through 2026-09-11; dropout is now
+  `--dropout`, defaulting to **0.0**. Those values were tuned on YAMNet, whose
+  embedding is 89.6% exact zeros, non-negative, and already linearly separable
+  — it is the penultimate layer of a supervised classifier whose 521 AudioSet
+  classes include `Buzz` and `Bee, wasp, etc.`. Input dropout on a code like
+  that is mild; on a dense, signed, zero-centred code it is heavy
+  multiplicative noise, and with no weight decay a wide distributed
+  representation overfits the training sites instead of transferring.
 
   **So when an embedder swap comes back negative, that number is
   `embedder + this head`, and the head may be doing the damage.** Before logging
@@ -130,12 +195,15 @@ inherited from the archive.
   extraction, seconds per configuration — and say which part of the loss you
   measured. `aves-probe` (2026-09-09) did not do this, logged
   0.218 -> 0.074 as an embedder verdict, and an offline L2 sweep on the *same*
-  embeddings then recovered most of it. The follow-up is `exp/aves-readout`;
-  if that entry has not been amended, the amendment is still owed.
+  embeddings then recovered most of it.
 
   This is not licence to tune. It is one diagnostic sweep to attribute a
   negative before it becomes a verdict, and it stays offline unless it changes
   the reading.
+- **Err against hyperparameter tuning.** We're looking for structural gains;
+  hyperparameters can be tuned in one sweep once a good structure is found.
+  **Exception: a new embedder does not inherit the probe config's validity** —
+  see the bullet above.
 - **Change one thing.** Layering a change on another risks interaction effects
   that obscure whether the change itself helped.
 - **Look for clear signals; don't try to measure the noise floor.** There is no
@@ -238,7 +306,8 @@ cd .local/worktrees/<slug>
 # Stage 2 — only if the embedder or extraction changed
 02_set/main.py   --set medium --embedder yamnet --workers 2 --verbose
 # Stage 3 — the whole CV, one model per rotating fold
-03_train/main.py --name <modelname> --set medium --embedder yamnet --translation general -y
+03_train/main.py --name <modelname> --set medium --embedder yamnet --translation general -y --verbose
+#   the stopping rule is --fixed-epochs 400 by default; match your control's budget exactly
 # or root main.py --model <name> ... to chain both in one process
 ```
 
@@ -298,8 +367,16 @@ lands.
 
 | config | per epoch | one CV |
 |---|---|---|
-| frozen probe, 1024-d YAMNet (the baseline) | ~1 s | **~9 min** for 5 folds (2026-09-08) |
+| frozen probe, 1024-d YAMNet, early-stopped | ~1 s | **~9 min** for 5 folds (2026-09-08) |
+| frozen probe, 1792-d, `--fixed-epochs 150` | ~1 s | **~13 min** for 5 folds (2026-09-10) |
+| 1792-d + 1024-wide hidden, `--fixed-epochs 150` | ~7 s | **~92 min** for 5 folds (2026-09-10) |
 | trunk fine-tune, 12288-d + unfrozen layers | ~80 s | **~24 h** for 11 folds (2026-09-05) |
+
+**Note the top two rows and the era's new default.** A fixed budget runs every
+epoch it is given — there is no early exit — so a CV at `--fixed-epochs 400` is
+roughly 2.7x the 150-epoch rows above, and the budget ladder is the single
+biggest lever on how long your run takes. That is arithmetic for *budgeting*,
+not a measurement of your run.
 
 Two ends orders of magnitude apart, and **your run's place between them is
 measured, never assumed.** "A frozen-probe CV is foreground-scale" is a
@@ -348,7 +425,7 @@ one place it always is) and end your turn. Keep it short; it needs four things:
    quit. No tailing the log on a timer, no Monitor, no reading the rest of the
    repo — everything read while waiting is paid for twice.
 3. **What to do when it finishes** — which model is the comparator (rarely
-   `cv-baseline`; usually the matched control), which folds are too thin to
+   the era anchor; usually the matched control), which folds are too thin to
    trust, then notes.md → `log.jsonl` → commit.
 4. **What to do if it died** — how to tell a self-healing restart from a real
    crash, and the exact relaunch command.
@@ -384,20 +461,23 @@ model usually lives in its worktree's own (unsymlinked) `models/` dir.
 
 Three cautions that apply to every conclusion you write:
 
-- **Your comparator must have run under the same epoch rule.** The log now
-  holds runs under three (`val_loss` early stopping, `--epoch-rule xfold`,
-  `--fixed-epochs`), and the rule is worth **+0.031 to +0.040** on its own —
-  larger than most levers being tested. Early stopping on `val_loss` carries
-  no measurable *selection* optimism (-0.002 over 17 runs, measured
-  2026-09-11) but it **undertrains unevenly**: `1_150` stops at epoch 5-32
-  under every embedder tried while its buzz curve climbs to e120-185, so a
-  config whose stopping happens to fail is scored on a barely-trained probe.
-  Run a **matched control** — same rule, same budget, your one variable — and
-  compare to that, not to `cv_baseline`. This is what makes a stopping-rule
-  change survivable inside one era, and it is what the entries from 2026-09-10
-  on already do. Prefer `--fixed-epochs` (it selects no epoch at all);
-  `--epoch-rule xfold` is a diagnostic. Background:
-  `exp/pairwise-rank:notes/new-era-audit.md`.
+- **Your comparator must have run under the same rule and the same budget.**
+  This era starts with one rule — `--fixed-epochs`, no selection at all — so
+  the trap is narrower than last era's, but it is still there: **a different
+  `--fixed-epochs` N is a different rule.** Every fixed-budget run on disk from
+  last era was still rising at its cap, so N moves the score. Run a **matched
+  control** — same rule, same N, your one variable — and compare to that.
+  A run under `--early-stop` is not a comparator for anything in this era; it
+  is worth +0.031 to +0.040 less on its own. Background:
+  `exp/pairwise-rank:notes/new-era-audit.md` and the archived era's README.
+- **Report both sensitivities, and say which one you are claiming on.**
+  `folds_sx.csv` carries `sensitivity` and `sensitivity_exclquiet` at one
+  identical threshold. A lever that moves only the quiet frames and a lever
+  that moves only the audible ones are different results, and the pair is what
+  distinguishes them — a gain that appears in `sensitivity` but not in
+  `sensitivity_exclquiet` is a gain on buzzes no operator was promised.
+  `tools/compare_folds.py` and `tools/log_entry.py` read the headline column;
+  quote the other alongside it in `conclusion`.
 - **Fold-to-fold spread is not a confidence interval.** Training pools overlap
   ~90% across rotations, so fold models are correlated and the spread
   understates uncertainty about a genuinely new deployment.
@@ -413,7 +493,7 @@ Three cautions that apply to every conclusion you write:
   It was an 11-fold-roster number from before equalization. Re-measured
   2026-09-09 (`tools/eval_sampling_sd.py`, seconds, no training): per-fold
   bootstrap SD is **0.010-0.037**, worst case `1_150` at 0.037, headline SD from
-  eval sampling 0.007 (`cv_baseline`) to 0.012 (`context_monitor`). Run the tool
+  eval sampling 0.007 to 0.012 on last era's runs. Run the tool
   rather than quoting any figure from these docs — it is cheap and the roster
   moves.
 
@@ -547,7 +627,7 @@ hand) and fills in `branch`/`date`/`main_commit`:
 python tools/log_entry.py \
   --name <slug> \
   --model <experiment model dir, e.g. .local/worktrees/<slug>/models/<modelname>> \
-  --baseline-model models/cv_baseline \
+  --baseline-model models/<your matched control> \
   --hypothesis "..." --trust clean --conclusion "..." \
   --write   # omit to preview without appending
 ```
@@ -573,7 +653,7 @@ and were recovered from dangling commits by luck.
 `summary.json`** — `models/.gitignore` re-includes those two, and only those two
 (~4 KB per model). That is deliberate: `models/` is otherwise gitignored, so
 pruning used to destroy the only copy of an experiment's per-fold numbers, which
-is exactly what a later paired comparison needs. `standardize-blocks`' 0.261 —
+is exactly what a later paired comparison needs. The archived `standardize-blocks`' 0.261 —
 cited in `IDEAS.md` as the ceiling — cannot be joined against today for that
 reason. Weights, `predictions.csv` and plots stay ignored; if your experiment's
 predictions are the point (surprisal, annotation triage), `git add -f` them

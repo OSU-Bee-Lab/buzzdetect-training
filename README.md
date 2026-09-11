@@ -289,7 +289,8 @@ default.
 ```bash
 conda run -n buzzdetect-train python 03_train/main.py \
   --name <name> --set <set> --embedder <emb> --translation <t> \
-  [--epochs 400] [--patience 50] [--stop-tol 0.01] [--skip-cv] [--augment <aug_dir> ...] [-y] [--verbose]
+  [--fixed-epochs 400] [--dropout 0.0] [--early-stop [--epochs 400] [--patience 50]] \
+  [--stop-tol 0.01] [--skip-cv] [--augment <aug_dir> ...] [-y] [--verbose]
 ```
 
 | flag | default | meaning |
@@ -298,9 +299,12 @@ conda run -n buzzdetect-train python 03_train/main.py \
 | `--set` | `medium` | set to train on |
 | `--embedder` | `yamnet` | must already be extracted for this set |
 | `--translation` | `general` | CSV under the set's `translations/`, falling back to the project-wide `translations/` |
-| `--epochs` | `400` | max epochs per fold model |
-| `--patience` | `50` | `EarlyStopping` patience (`min_delta` 0.002) |
-| `--stop-tol` | `0.01` | shipped-model epoch count: stop this fraction short of the consensus val_loss floor (larger = fewer epochs) |
+| `--fixed-epochs` | `400` | **the stopping rule.** Train every rotation exactly this many epochs — no early stopping, no restore-best, no epoch selection of any kind. Every arm of a comparison is then scored at one identical epoch |
+| `--dropout` | `0.0` | input dropout before the class logits. The baseline head is a bare linear probe; dropout is an experiment, not a premise |
+| `--early-stop` | — | the pre-2026-09-11 rule: stop at the `val_loss` argmin. Kept so archived runs reproduce. Never mix it with fixed-budget runs in one comparison — it is worth 0.031 to 0.040 on its own |
+| `--epochs` | `400` | epoch cap under `--early-stop` only |
+| `--patience` | `50` | `EarlyStopping` patience (`min_delta` 0.002), `--early-stop` only |
+| `--stop-tol` | `0.01` | shipped-model epoch count under `--early-stop`: stop this fraction short of the consensus val_loss floor (larger = fewer epochs). Ignored under a fixed budget, which ships the same budget |
 | `--skip-cv` | — | train no rotations; build only the shipped model, epoch count from the fold results already on disk |
 | `--augment` | — | augmentation subdirectory names to include |
 | `-y` / `--yes` | — | accept untranslated labels without prompting |
@@ -354,8 +358,12 @@ frames would translate to nothing and be dropped silently.
 ### What actually gets trained
 
 Per rotation: hold out one `rotate` fold, train on every other `rotate` fold
-plus all `train` folds, early-stop on the held-out fold, then score it. Fold
-model binaries are not kept — only their scores and training artifacts.
+plus all `train` folds for exactly `--fixed-epochs` epochs, then score the
+held-out fold. The held-out fold is still evaluated every epoch, but only to
+record curves — **nothing stops on it and no epoch is selected**, so every arm
+of a comparison is scored at one identical epoch. `--early-stop` restores the
+old `val_loss` rule for reproducing archived runs. Fold model binaries are not
+kept — only their scores and training artifacts.
 
 The **shipped model** is a separate, opt-in step: `--train-shipped` during the
 run, or a later run with `--skip-cv`. It is off by default because `folds_sx.csv`
@@ -363,16 +371,16 @@ is built entirely from the rotations, so nothing an experiment is measured on
 depends on it — it is a deliverable, wanted once at the end of a search rather
 than in every run of one.
 
-When it does run it trains on `rotate` + `train` pooled. Nothing is held
-out, so there's nothing clean to monitor: it runs for a fixed epoch count read
-off the rotations' pooled `val_loss` curves (`train._consensus_epoch`) — each
-fold's "best so far" trace, min-max normalised, averaged with weight by
-validation-frame count, stopped `--stop-tol` short of the averaged floor. On a
-frozen-embedding probe the per-fold `val_loss` argmins scatter by 100+ epochs
-in a flat basin, so their `median` lurches with fold composition; the pooled
-curve is steadier. Falls back to `median(best_epoch)` for a model resumed from
-summaries written before the curves were stored. It's the only model saved with
-a binary, and it gets scored on each `holdout` fold.
+When it does run it trains on `rotate` + `train` pooled. Nothing is held out,
+so there's nothing to monitor — and under the default rule nothing needs
+monitoring: it trains the same `--fixed-epochs` budget every rotation ran.
+Under `--early-stop` the budget is instead read off the rotations' pooled
+`val_loss` curves (`train._consensus_epoch`) — each fold's "best so far" trace,
+min-max normalised, averaged with weight by validation-frame count, stopped
+`--stop-tol` short of the averaged floor; on a frozen-embedding probe the
+per-fold argmins scatter by 100+ epochs in a flat basin, so their `median`
+lurches with fold composition and the pooled curve is steadier. It's the only
+model saved with a binary, and it gets scored on each `holdout` fold.
 
 The CV loop resumes — folds with a `config_model.json` are skipped — so a
 re-run after an interruption only trains what's missing. `--skip-cv` is the
@@ -384,9 +392,12 @@ same model. It errors if no fold has run yet, and `folds_sx.csv` from a partial
 CV is a partial CV. `--only-folds` scores a named subset of rotations and cannot
 supply a shipped epoch count at all.
 
-Class weights are inverse-frequency over the training pool. Loss is
-`BinaryCrossentropy(from_logits=True, label_smoothing=0.2)`; the architecture is
-`Dropout(0.2)` → `Dense(n_classes)` on the frozen embedding.
+Class weights are inverse-frequency over the training pool, applied inside the
+loss rather than through `fit(class_weight=)`, which collapses a multi-hot
+target to its argmax. Loss is `BinaryCrossentropy(from_logits=True,
+label_smoothing=0.2)`; the architecture is a bare `Dense(n_classes)` on the
+frozen embedding, with a `Dropout` in front only when `--dropout` is nonzero
+(it defaults to 0).
 
 Needs at least two `rotate` folds, or it errors out.
 
@@ -416,11 +427,15 @@ models/<name>/
 `model.py` is generated so `models.load_model('<name>')` works for inference.
 
 **`folds_sx.csv` is the whole metrics summary.** Columns: `fold`, `fpr`,
-`threshold`, `sensitivity`, `precision`, `buzz_frames`, `neg_frames`,
-`frames_val`, `best_epoch`. One row per (fold, FPR target), then a row with
-`fold` = `total`, where the counts are summed and threshold/sensitivity/
-precision are the plain mean over the folds that could reach the target. That
-mean is the headline number. A fold that couldn't reach the target keeps its
+`threshold`, `sensitivity`, `sensitivity_exclquiet`, `precision`,
+`buzz_frames`, `quiet_frames`, `neg_frames`, `frames_val`, `best_epoch`. One
+row per (fold, FPR target), then a row with `fold` = `total`, where the counts
+are summed and threshold/sensitivity/precision are the plain mean over the
+folds that could reach the target. **`sensitivity_exclquiet` in that row is the
+headline number**; `sensitivity` is the same operating point counting the
+`_quiet` buzz frames too, and `quiet_frames` says how many there were. Models
+trained before 2026-09-11 have no quiet flag, so those two columns are blank
+for them. A fold that couldn't reach the target keeps its
 row with blanks and is not averaged in, so counting the non-blank rows tells
 you what the total rests on.
 
@@ -455,16 +470,18 @@ submodel during CV, or the shipped model for a holdout fold — it never trained
 on the frames it scores.
 
 `sens_curves.svg` plots sens@fpr0.005 on the held-out fold per epoch, with
-val_loss on a twin axis and a line at the epoch EarlyStopping restored to. It's
-a diagnostic, not a control: stopping is still on val_loss, and nothing reads
-these curves back. What they're for is the question of whether it *should* be —
-if the sens@FPR peak sits far from the restored epoch, run after run, val_loss
-is a poor proxy for the number the model is judged by. Three keys in that
-fold's `summary.json` say the same thing numerically:
-`val_sens_fpr0.005_at_best` (sensitivity at the restored epoch — it should
-equal that fold's `sensitivity` in `folds_sx.csv`, since they score the same
-weights on the same frames), `val_sens_fpr0.005_peak`, and
-`val_sens_fpr0.005_peak_epoch`.
+val_loss on a twin axis and a line at the shipped epoch. It's a diagnostic, not
+a control — nothing stops on it, and under the default fixed budget nothing
+selects an epoch at all. **The curve counts every buzz frame, quiet included**,
+so it stays comparable with the curves already on disk; the headline's
+excl-quiet split happens after training, in `sx.py`. What the curve is for is
+whether the budget is right: if it is still climbing at the last epoch, the
+budget is too short — which is exactly how the previous era's fixed-150 runs
+were caught. Three keys in that fold's `summary.json` say the same thing
+numerically: `val_sens_fpr0.005_at_best` (sensitivity at the shipped epoch — it
+should equal that fold's `sensitivity` in `folds_sx.csv`, the inclusive column,
+since they score the same weights on the same frames),
+`val_sens_fpr0.005_peak`, and `val_sens_fpr0.005_peak_epoch`.
 
 All of them are blank on a fold that never reaches 0.005 FPR at any epoch — too
 few negative frames for the target to correspond to even one of them. Small
@@ -490,9 +507,9 @@ property of a model on its own — it is what the model catches once a line is
 drawn, and where that line goes is a deployment decision. buzzdetect ships no
 threshold: operators are told to find their own. So every fold is scored at a
 threshold set on its own held-out audio, and the headline is the plain mean
-across folds — the `total` row's `sensitivity` in `folds_sx.csv`, at fpr 0.005.
-Each deployment counts once, because the question is what a new deployment
-gets, and a new deployment is one fold. The same row's `threshold` is what a
+across folds — the `total` row's `sensitivity_exclquiet` in `folds_sx.csv`, at
+fpr 0.005. Each deployment counts once, because the question is what a new
+deployment gets, and a new deployment is one fold. The same row's `threshold` is what a
 typical fold's own audio set, i.e. what to actually try shipping, and the
 per-fold rows above it show how much folds disagree rather than just the
 average.
@@ -500,6 +517,24 @@ average.
 It is an oracle: putting a fold at exactly 0.5% FPR uses that fold's labels,
 which an operator doesn't have. Read it as the ceiling on operator tuning. Both
 models in a comparison get the same ceiling, so it is fair for ranking.
+
+**Two sensitivities, one threshold.** Some buzz annotations carry a `_quiet`
+tag: the buzz is genuinely there, but it takes audio filtering and an expert ear
+to hear — fainter than anything an operator could reasonably expect buzzdetect
+to catch. Missing one is not a false negative and catching one is not a credit,
+so `sensitivity_exclquiet` drops those frames from the scored set, and that is
+the headline. `sensitivity` beside it counts every buzz frame.
+
+The two share an operating point exactly: quiet frames are positives, so
+removing them changes neither the negative pool nor the FPR sweep — only the
+sensitivity numerator and denominator. Read the pair. A gain that appears in
+`sensitivity` but not in `sensitivity_exclquiet` is a gain on buzzes nobody was
+promised.
+
+Quiet buzz still **trains**, as an ordinary `ins_buzz` positive. Labelling faint
+buzz as background would be a worse error than either scoring choice. The
+per-frame flag lives in `predictions.csv`; `quiet_frames` in `folds_sx.csv`
+says how many of each fold's buzz frames it covers.
 
 Two readings deliberately *not* reported, both of which have misled here before:
 
@@ -518,7 +553,7 @@ Two readings deliberately *not* reported, both of which have misled here before:
   `metrics_at_precision` read.
 
 **Check what a number rests on.** Count the per-fold rows in `folds_sx.csv`
-with a `sensitivity`, and read their `neg_frames`: how many folds could reach
+with a sensitivity, and read their `neg_frames`: how many folds could reach
 the target at all, and how many non-buzz frames sat above each fold's
 threshold. At fpr 0.001 on a
 set this size that is about four frames per fold, and some folds can't reach it
@@ -625,11 +660,13 @@ re-extraction.
 
 ### There is no `validate` role
 
-Each rotation's held-out fold *is* its early-stopping monitor. A separate
-`validate` role would cost a second deployment per rotation, and which
-deployment drew the short straw would swing the stopping epoch — several folds
-here hold only a few dozen seconds of buzz, where `val_loss` is mostly a measure
-of ambient reconstruction.
+Each rotation's held-out fold *is* its validation set. A separate `validate`
+role would cost a second deployment per rotation, and which deployment drew the
+short straw would swing everything read off it — several folds here hold only a
+few dozen seconds of buzz, where `val_loss` is mostly a measure of ambient
+reconstruction. Under the default fixed budget this costs nothing at all,
+because no decision is taken from that fold's curve; the argument below is what
+matters under `--early-stop`.
 
 **Never split within a fold to make a validation set.** Snips from one
 deployment share a recorder, a site, a background, and a species assemblage, so
