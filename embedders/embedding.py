@@ -1,4 +1,5 @@
 import importlib.util
+import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 import config as cfg
@@ -40,6 +41,53 @@ class BaseEmbedder(ABC):
     def embed(self, samples):
         """Generate embeddings for audio data"""
         pass
+
+    def to_onnx(self, opset=17):
+        """Export this embedder's trunk to ONNX: waveform in, embeddings out.
+
+        Used by tools/export_onnx.py to fuse the trunk with a trained
+        classifier head into buzzdetect's shipped graph. Contract for the
+        returned onnx.ModelProto: exactly one graph input, a 1-D float32
+        tensor of arbitrary length (raw samples at self.samplerate), and
+        exactly one graph output, (n_frames, self.n_embeddings) -- using
+        whatever framing/padding rule this embedder's own embed() uses.
+        export_onnx.py probes that rule empirically (tools/export_onnx.py
+        probe_framing()) rather than assuming one, so any rule is fine as
+        long as embed() and this graph agree; that agreement is what
+        export_onnx.py's parity check (verify()) is checking.
+
+        The default here covers a trunk that is one Keras model (self.model):
+        export it with Keras's own ONNX exporter. A trunk that spans more
+        than one framework or more than one model -- see
+        embedders/yamnet_aves/embedder.py for an example combining a Keras
+        model and a PyTorch model -- overrides this and builds the ONNX graph
+        itself, typically by exporting each piece through its own framework's
+        exporter and stitching them together with onnx.compose (see that
+        module for the pattern: a waveform-to-frames reshape, a crop or split
+        per sub-model, the sub-models' own exported graphs, a Concat on their
+        outputs). Nothing outside this method needs to change to support a
+        new combination of embedders; only this method does.
+        """
+        import keras
+
+        if not isinstance(self.model, keras.Model):
+            raise NotImplementedError(
+                f'{type(self).__name__} has no Keras trunk (self.model is '
+                f'{type(self.model).__name__}) and has not overridden '
+                f'to_onnx(); ONNX export needs one or the other.')
+
+        import tempfile
+
+        import onnx
+
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, 'trunk.onnx')
+            # self.model must already have been called once (initialize()
+            # does this for every embedder that owns a Keras trunk) -- Keras
+            # refuses to export a model it has never seen called.
+            self.model.export(path, format='onnx', verbose=False,
+                              opset_version=opset)
+            return onnx.load(path)
 
 
 def load_embedder(embeddername: str, framehop_prop: float, initialize: bool):
