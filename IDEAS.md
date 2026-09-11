@@ -22,12 +22,19 @@ they are not ideas, they are the anchor:
 1. ~~`cv_baseline_v3`~~ — **done 2026-09-11: 0.330 excl-quiet / 0.269 inclusive,
    8/8 folds.** It is the comparator for everything below, and the only number
    in this file you can beat.
-2. **Items 1a-1c below: re-verify last era's three wins, one at a time.** They
-   were worth 0.218 → 0.321 *together*, under different data, a 5-fold roster,
-   dropout, and a different stopping rule. Large one-directional structural
-   results are the likeliest positives to survive a data change — but "likeliest
-   to survive" is not "survived", and nothing else in the queue is worth running
-   before they are re-established.
+2. ~~1a~~ — **done 2026-09-11 (`exp/context-verify`): `yamnet_context` confirmed
+   and larger than its E3 lead, 0.330 → 0.415 (+0.085), 6/8 folds up,
+   `untagged`/`loud` both moved — a real detection gain, not a quiet-buzz
+   shuffle. `1_95` and `1_114` went down; see `log.jsonl` for the per-fold
+   table and the (unverified) jet mechanism. **Items 1b-1c below: re-verify the
+   remaining two of last era's three wins, one at a time.** They were worth
+   0.218 → 0.321 *together*, under different data, a 5-fold roster, dropout,
+   and a different stopping rule. Large one-directional structural results are
+   the likeliest positives to survive a data change — but "likeliest to
+   survive" is not "survived", and nothing else in the queue is worth running
+   before they are re-established. **1b and 1c should now be run against
+   `yamnet_context` as well as against plain `yamnet`**, since 1a just became
+   the best single representation on disk for this era.
 
 Per-tier sensitivity is **already built in** — it is not an idea and not a
 queued experiment. Every run prints it and every `folds_sx.csv` carries it.
@@ -160,24 +167,6 @@ answers.**
 
 Ranked. **Run item 1 first** — every comparison after it is budget-limited by
 an unknown amount until it lands, and it is cheap.
-
-## 1a. Re-verify `yamnet_context` against the anchor
-
-*Evidence: **E3** — `context-embedder` +0.022 `clean`, the honest rebuild of
-`context-stack`'s inflated +0.050.*
-
-The cheapest of the three re-verifications: `yamnet_context` is 3072-d, already
-extracted for `medium`, and needs no new embedder work. Flags live on
-`exp/yamnet-aves-context` (`--context-frames` / `--context-dims`, train-time
-stacking over the existing cache) — **rebase onto `main` first**, or you inherit
-the old default head and the old scoring.
-
-Run it against `cv_baseline_v3` at the same `--fixed-epochs 400`, `--dropout 0`.
-**Read the tier row, not just the headline**: the anchor is already at 0.778 on
-`loud`, so a context gain has to show up in `untagged` to be a detection gain
-rather than a shuffle among frames nobody was promised.
-
-*Falsifier:* no movement in `untagged` or `loud`, whatever the headline does.
 
 ## 1b. Re-verify `yamnet_aves` concat against the anchor
 
