@@ -382,8 +382,14 @@ def _sync_snips_ident(ident: str, annotations_sub: pd.DataFrame, path_audio: str
 
             # Write then rename: a kill mid-write would otherwise leave a truncated
             # .flac that the `os.path.exists` skip above accepts on the next run.
+            # The .part suffix hides the real extension, and soundfile infers the
+            # container from it — so pass the format explicitly or every new snip
+            # raises TypeError. (This guard shipped in 688ad44 and sat unexercised
+            # until the 2026-09-11 annotation revision asked for the first new
+            # snips since; nothing had been written through it before.)
             path_part = path_out + '.part'
-            sf.write(path_part, audio_data, sr)
+            sf.write(path_part, audio_data, sr,
+                     format=os.path.splitext(path_out)[1].lstrip('.').upper())
             os.replace(path_part, path_out)
             n_written += 1
 

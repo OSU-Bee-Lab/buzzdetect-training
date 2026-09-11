@@ -78,3 +78,9 @@ paths.local.json
 diagnostics/**
 !diagnostics/**/
 !diagnostics/**/*.md
+
+# Stage 2/3 run logs. Three were committed historically (one at 60k lines);
+# they are build output, not source.
+/extract_*.log
+/train_*.log
+/cv_*.log

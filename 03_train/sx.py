@@ -54,7 +54,7 @@ import numpy as np
 import pandas as pd
 
 from metrics import metrics_by_group, metrics_at_fpr
-from train_utils import TIERS, TIER_QUIET
+from train_utils import TIERS, TIERS_EXCLUDED_FROM_HEADLINE, TIER_UNTAGGED
 
 # The training path's target, deliberately one number. metrics.py keeps a
 # three-target default of its own; everything here passes this instead.
@@ -156,9 +156,13 @@ def _fold_sens(df, fprs):
     buzz = df['correct'].astype(bool)
     if _has_loudness(df):
         tier = df[LOUDNESS_COL].fillna('').astype(str)
-        # The headline: everything except the quiet-only frames. Set before
-        # the tiers so it sits next to `sensitivity` in the written table.
-        excl = _sens_over(df, buzz & (tier != TIER_QUIET), fprs)
+        # The headline: every buzz frame whose tier is not excluded by policy.
+        # train_utils.TIERS_EXCLUDED_FROM_HEADLINE is the single definition;
+        # changing it and rerunning resummarize.py re-scores every model on
+        # disk without retraining, which is why predictions.csv stores the
+        # observed tier and not a scored/not-scored boolean.
+        # Set before the tiers so it sits next to `sensitivity` in the table.
+        excl = _sens_over(df, buzz & ~tier.isin(TIERS_EXCLUDED_FROM_HEADLINE), fprs)
         cols[SENS_EXCL] = [excl.get(f, np.nan) for f in cols.index]
         for t in TIERS:
             per = _sens_over(df, buzz & (tier == t), fprs)
@@ -273,11 +277,11 @@ def _tier_block(folds, total):
     for t in present:
         col, fcol = tier_col(t), tier_frames_col(t)
         n_scored = int(folds[col].notna().sum()) if col in folds else 0
-        mark = '  <- dropped from the headline' if t == TIER_QUIET else ''
+        mark = '  <- dropped from the headline' if t in TIERS_EXCLUDED_FROM_HEADLINE else ''
         lines.append(f'    {t:<9} {_num(total.get(col))}  '
                      f'({int(total[fcol])} frames, {n_scored}/{len(folds)} folds){mark}')
 
-    untagged = total.get(tier_frames_col("untagged"))
+    untagged = total.get(tier_frames_col(TIER_UNTAGGED))
     if pd.notna(untagged) and untagged:
         lines.append(f'    ({int(untagged)} buzz frames carry no loudness tag yet — tagging is '
                      f'in progress. They count in the headline, as "not known to be quiet".)')
