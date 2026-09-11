@@ -89,8 +89,8 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
   - `sensitivity_exclquiet` — **the headline.** Every buzz frame except the
     ones whose buzz is only `_quiet`-tagged.
   - `sensitivity` — the inclusive companion: every annotated buzz frame.
-  - `sensitivity_<tier>` for `quiet` / `untagged` / `normal` / `loud`, with
-    `<tier>_frames` counts beside them.
+  - `sensitivity_<tier>` for `faint` / `quiet` / `background` / `untagged` /
+    `normal` / `loud`, with `<tier>_frames` counts beside them.
 - **The loudness tiers are core instrumentation, not a diagnostic to opt into.**
   Every run prints them and every `folds_sx.csv` carries them. They are what
   says whether a hard fold is hard *because* its buzz is faint or hard on
@@ -98,15 +98,32 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
   headline alone cannot distinguish. `1_150` and `1_95` sit near chance and
   that question has been open across three eras.
 - **`train_utils.buzz_tier` is the definition.** A sample's tier is the
-  **maximum** over its buzz labels under `quiet < untagged < normal < loud` — a
-  frame is only as hard as its most audible buzz. `untagged` ranks above
-  `quiet` so that "quiet" keeps meaning *every* buzz label on the frame was
-  marked quiet (an untagged label is unknown, not faint), and below `normal` so
-  an unknown never promotes a frame past a known one. Tagging is in progress,
-  so the `untagged` bucket is how much of the corpus is not worked up yet; it
-  should shrink to nothing. `predictions.csv` carries the per-frame `loudness`
-  column, and runs from before 2026-09-11 get NaN in every tier column rather
-  than a number pretending the split was made.
+  **maximum** over its buzz labels under
+  `faint < quiet < background < untagged < normal < loud` — a frame is only as
+  hard as its most audible buzz. `untagged` sits above the faint end so an
+  unknown is never mistaken for a faint one, and below `normal`/`loud` so an
+  unknown never promotes a frame past a known one. `predictions.csv` carries
+  the per-frame `loudness` column, and runs from before 2026-09-11 get NaN in
+  every tier column rather than a number pretending the split was made.
+- **The vocabulary is what the annotations use, not what you would guess.**
+  Surveyed 2026-09-11 over 1842 buzz annotations: `_quiet` (406), `_loud` (39),
+  `_background` (14), `_faint` (8), and **1375 with no loudness suffix**.
+  There is no `_normal` — the constant exists for the day one appears. And
+  `_high`/`_medium`/`_low` are **pitch**, so `ins_buzz_medium_quiet` is a
+  medium-pitch buzz that is quiet. Tagging is in progress; `untagged` shrinking
+  toward nothing is the progress bar.
+- **`TIERS_EXCLUDED_FROM_HEADLINE` is the single policy line**, currently
+  `faint` and `quiet`. It stays revisable for free because `predictions.csv`
+  stores the observed tier, not a scored/not-scored boolean: change the line,
+  rerun `resummarize.py`, and every model on disk is re-scored without
+  retraining. Do not reintroduce a boolean here.
+- **`_background` scores as buzz (Luke, 2026-09-11), and it is not a rounding
+  error.** 14 annotations at a **254 s median duration** against ~1 s for every
+  other tier — **51% of all scored buzz seconds**, entirely within `1_29` (11)
+  and `53` (3). Those two folds' sensitivity is therefore substantially a
+  measure of continuous background buzz rather than of discrete events. Check
+  `sensitivity_background` against `sensitivity_untagged` before drawing any
+  conclusion about either fold.
 - **A `_quiet` buzz still trains, as an ordinary positive.** It is really
   there; calling faint buzz a negative would teach the model that faint buzz is
   background, which is worse than either scoring choice. The tier steers

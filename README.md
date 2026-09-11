@@ -428,7 +428,7 @@ models/<name>/
 
 **`folds_sx.csv` is the whole metrics summary.** Columns: `fold`, `fpr`,
 `threshold`, `sensitivity`, `sensitivity_exclquiet`, `sensitivity_<tier>` for
-each of quiet/untagged/normal/loud, `precision`, `buzz_frames`,
+each of faint/quiet/background/untagged/normal/loud, `precision`, `buzz_frames`,
 `<tier>_frames`, `neg_frames`, `frames_val`, `best_epoch`. One row per (fold,
 FPR target), then a row with `fold` = `total`, where the counts are summed and
 every sensitivity is the plain mean over the folds that could reach the target.
@@ -530,7 +530,7 @@ not a false negative and catching one is not a credit. So the headline,
 |---|---|
 | `sensitivity_exclquiet` | **headline** — every buzz frame but the quiet-only ones |
 | `sensitivity` | every annotated buzz frame |
-| `sensitivity_loud`, `_normal`, `_untagged`, `_quiet` | one tier each, with `<tier>_frames` beside them |
+| `sensitivity_loud`, `_normal`, `_untagged`, `_background`, `_quiet`, `_faint` | one tier each, with `<tier>_frames` beside them |
 
 **They all share the fold's one threshold.** Restricting which positives count
 leaves the negative pool and the FPR sweep untouched — only the sensitivity
@@ -541,10 +541,15 @@ Read the decomposition, not just the headline. It is what says whether a hard
 deployment is hard *because* its buzz is faint, or hard on audible buzz too;
 those are different problems with different fixes.
 
-A frame's tier is the **maximum** over its buzz labels (`quiet < untagged <
-normal < loud`) — a frame is only as hard as its most audible buzz. Loudness
-tagging is in progress, so most frames currently read `untagged`; the report
-says how many, and that bucket shrinking to nothing is the progress bar.
+A frame's tier is the **maximum** over its buzz labels
+(`faint < quiet < background < untagged < normal < loud`) — a frame is only as
+hard as its most audible buzz. The suffixes `_high`/`_medium`/`_low` are pitch,
+not loudness. Tagging is in progress, so most frames currently read `untagged`;
+the report says how many, and that bucket shrinking to nothing is the progress
+bar. Which tiers leave the headline is one constant,
+`train_utils.TIERS_EXCLUDED_FROM_HEADLINE` (currently `faint` and `quiet`);
+because `predictions.csv` stores the observed tier, changing it and rerunning
+`03_train/resummarize.py` re-scores finished models with no retraining.
 
 Quiet buzz still **trains**, as an ordinary `ins_buzz` positive. Labelling faint
 buzz as background would be a worse error than either scoring choice. The

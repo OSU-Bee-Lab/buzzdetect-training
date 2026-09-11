@@ -53,35 +53,54 @@ sweep untouched, so every column below is directly comparable to every other:
 |---|---|
 | `sensitivity_exclquiet` | **the headline** — every buzz frame but the quiet-only ones |
 | `sensitivity` | the inclusive companion — every annotated buzz frame |
-| `sensitivity_loud` / `_normal` / `_untagged` / `_quiet` | one tier each, with `<tier>_frames` counts |
+| `sensitivity_loud` / `_normal` / `_untagged` / `_background` / `_quiet` / `_faint` | one tier each, with `<tier>_frames` counts |
 
 Every training run prints the tier block, and `tools/log_entry.py` records the
 headline plus the inclusive figure (`sens_at_fpr0.005_persite_inclquiet`).
 
 **What the tiers are for, and why they are not optional.** The standing
-question about `1_150` and `1_95` — both near chance across three eras — is
-whether they are hard *because* their buzz is faint, or hard on audible buzz
-too. Those are different problems with different fixes, and no headline can
-tell them apart. The tier row answers it directly, for free, on every run.
-So when you write up a result, say **which tiers moved**: a lever that lifts
-`loud` and `normal` is a detection gain; one that only lifts `quiet` is a gain
-on buzzes nobody was promised; one that only lifts `untagged` is probably
-telling you about annotation coverage rather than about the model.
+question about the near-chance folds is whether they are hard *because* their
+buzz is faint, or hard on audible buzz too. Those are different problems with
+different fixes, and no headline can tell them apart. The tier row answers it
+directly, for free, on every run. So when you write up a result, say **which
+tiers moved**: a lever that lifts `loud` and `untagged` is a detection gain;
+one that only lifts `quiet`/`faint` is a gain on buzzes nobody was promised.
 
 **Tier semantics.** `train_utils.buzz_tier` takes the **maximum** over a
-frame's buzz labels under `quiet < untagged < normal < loud` — a frame is only
-as hard as its most audible buzz. `untagged` sits above `quiet` so "quiet"
-keeps meaning *every* buzz label was marked quiet, and below `normal` so an
-unknown never promotes a frame past a known one.
+frame's buzz labels under `faint < quiet < background < untagged < normal <
+loud` — a frame is only as hard as its most audible buzz. `untagged` sits above
+the faint end so an unknown is never mistaken for a faint one, and below
+`normal`/`loud` so an unknown never promotes a frame past a known one.
 
-**Interim state (as of 2026-09-11):** tagging is in progress. The end state is
-a quiet/normal/loud tag on every buzz, across all 24 subsamples of every ident
-in `01_annotate/Even Sample`; until then most frames land in `untagged`, and
-the report says how many. Two consequences. The headline's denominator **keeps
-shrinking as tagging proceeds**, so an early-era run is not cleanly comparable
-to a later one on that column — say which commit of the set a run used. And
-`untagged` shrinking toward zero is the progress bar: when it is empty, the
-`quiet`/`normal`/`loud` split is the real decomposition.
+**The vocabulary is what the annotations actually use**, surveyed 2026-09-11
+over 1842 buzz annotations: `_quiet` (406), `_loud` (39), `_background` (14),
+`_faint` (8), and **1375 with no loudness suffix at all**. There is no
+`_normal`. Note `_high`/`_medium`/`_low` are **pitch**, not loudness — so
+`ins_buzz_medium_quiet` is a medium-pitch buzz that is quiet.
+
+**`train_utils.TIERS_EXCLUDED_FROM_HEADLINE` is the one line that decides which
+tiers leave the score**, and it is revisable for free: `predictions.csv` stores
+the observed tier rather than a scored/not-scored boolean, so changing that line
+and rerunning `03_train/resummarize.py` re-scores every model on disk with no
+retraining. Currently `faint` and `quiet`.
+
+**`_background` is scored as buzz, and you should know what that costs.** Luke's
+call, 2026-09-11. Those 14 annotations have a **254 s median duration** against
+~1 s for every other tier, and they are **51% of all scored buzz seconds** —
+concentrated entirely in `1_29` (11) and `53` (3). So those two folds'
+sensitivity is substantially a measure of *continuous background buzz*, not of
+discrete pollination events. Read their per-fold numbers with that in mind, and
+check `sensitivity_background` against `sensitivity_untagged` before concluding
+anything about either fold.
+
+**Interim state (as of 2026-09-11):** tagging is in progress — 1375 of 1842
+buzz annotations carry no loudness suffix yet. The end state is a tag on every
+buzz, across all 24 subsamples of every ident in `01_annotate/Even Sample`.
+Two consequences. The headline's denominator **keeps shrinking as tagging
+proceeds**, so an early-era run is not cleanly comparable to a later one on that
+column — say which commit of the set a run used. And `untagged` shrinking
+toward zero is the progress bar: when it is empty, the tier split is the real
+decomposition.
 
 Each deployment counts once because the goal is a new deployment, and a new
 deployment is one site — not a weighted blend. A buzz-weighted mean would let a
@@ -159,7 +178,9 @@ second disappears under a fixed budget, which is a reason to run it now.
 - **Embedder: YAMNet only, unless the experiment *is* the embedder.** Those need
   a re-extraction and should be run deliberately, not incidentally.
 - **Set: `medium`** — day-long annotated recordings across a diversity of
-  environments, 5 rotating folds. `lite` is for troubleshooting and `tiny` for
+  environments, **8 rotating folds** as of the 2026-09-11 revision (up from 5;
+  new are `wooster/2024-07-26/1_143`, `2025-07-03/1_37`, `2025-08-12/1_114`).
+  `lite` is for troubleshooting and `tiny` for
   smoke-testing the pipeline; neither is a place to draw conclusions.
   Annotation is ongoing, so folds gain data and old numbers drift; say which
   commit of the set a run used if it matters. Every `log.jsonl` entry is
@@ -504,8 +525,9 @@ Three cautions that apply to every conclusion you write:
 - **Fold-to-fold spread is not a confidence interval.** Training pools overlap
   ~90% across rotations, so fold models are correlated and the spread
   understates uncertainty about a genuinely new deployment.
-- **Per-fold sensitivity is less certain where there's little buzz — but check
-  the current number before quoting one.** Folds no longer differ in *audio*:
+- **Per-fold sensitivity is less certain where there's little buzz — and every
+  figure in this bullet is from the 5-fold roster, so re-measure before quoting
+  any of it.** Folds no longer differ in *audio*:
   snip equalization has `frames_val` within ~1.5x (4947-7617) and `neg_frames`,
   the negative sample the threshold rests on, at 24-35 across all five. What
   cannot be equalized is buzz *density*, which is ecology — `buzz_frames` still
