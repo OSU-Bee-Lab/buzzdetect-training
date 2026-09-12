@@ -170,23 +170,34 @@ answers.**
 Ranked. **Run item 1 first** — every comparison after it is budget-limited by
 an unknown amount until it lands, and it is cheap.
 
-## 1c. Re-verify the wide hidden head against the anchor
+## 1c. The wide hidden head, on top of a concat — not on plain YAMNet
 
 *Evidence: **E3** — `yamnet-aves-head-fixed`, h1024 worth ~+0.030 over h0 at a
-matched budget.*
+matched budget. **E4** (`hidden-head-verify`, 2026-09-12): null on plain
+YAMNet.*
 
-`--hidden` lives on `exp/yamnet-aves-head-fixed`; rebase onto `main`. Run it on
-plain YAMNet against `cv_baseline_v3` **first** — LOOP.md's change-one-thing
-rule, and the E3 result was measured on `yamnet_aves` rather than on YAMNet, so
-it does not transfer for free. **Both `yamnet_context` (+0.085) and
-`yamnet_aves` (+0.024) are now confirmed structural gains for this era**
-(`log.jsonl`: `context-verify`, `yamnet-aves-verify`), so once the plain-YAMNet
-run is in, test the hidden head against both concats too before combining any
-of them.
+**Plain-YAMNet leg done, and it didn't reproduce.** `--hidden 1024` on plain
+YAMNet against `cv_baseline_v3`: +0.012 headline, inside the ~0.027 MDE, 5/3
+folds split, and the one named hard fold it should help (`1_150`) went
+*down* -0.053. Full breakdown in `log.jsonl`'s `hidden-head-verify` entry and
+`exp/hidden-head-verify:notes.md`. Reads as "no clear effect on plain YAMNet,"
+consistent with the E3 number being specific to `yamnet_aves`'s representation
+rather than a property of the hidden layer itself — which was always the
+open question this leg was for.
 
-Cost anchor: h1024 was ~7x h0 per epoch in E3, and the anchor CV is ~25 min at
-8 folds / 400 epochs — so **measure the first fold before quoting an ETA**, as
-always.
+**So the hidden head's real test is still open: run `--hidden 1024` against
+`yamnet_context` (+0.085, the era's best) and `yamnet_aves` (+0.024) before
+concluding anything about it either way.** `--hidden` now lives on `main`
+directly (ported in `hidden-head-verify`, not on the old
+`exp/yamnet-aves-head-fixed` branch — that branch predates the era cutover and
+reverts the tier/fixed-epochs machinery, don't rebase from it). Same recipe:
+`--embedder yamnet_context` (or `yamnet_aves`) `--hidden 1024 --dropout 0
+--fixed-epochs 400`, against that embedder's own `*-verify` run as the
+matched control, not against `cv_baseline_v3` directly.
+
+Cost anchor: h1024 was ~7x h0 per epoch in E3, and the plain-YAMNet CV just run
+was ~27 min/fold, ~3.7 h total at 8 folds / 400 epochs — so **measure the
+first fold before quoting an ETA**, as always.
 
 ## 1d. Dropout, now that it is an experiment rather than a premise
 
