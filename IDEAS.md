@@ -26,15 +26,17 @@ they are not ideas, they are the anchor:
    and larger than its E3 lead, 0.330 → 0.415 (+0.085), 6/8 folds up,
    `untagged`/`loud` both moved — a real detection gain, not a quiet-buzz
    shuffle. `1_95` and `1_114` went down; see `log.jsonl` for the per-fold
-   table and the (unverified) jet mechanism. **Items 1b-1c below: re-verify the
-   remaining two of last era's three wins, one at a time.** They were worth
-   0.218 → 0.321 *together*, under different data, a 5-fold roster, dropout,
-   and a different stopping rule. Large one-directional structural results are
-   the likeliest positives to survive a data change — but "likeliest to
-   survive" is not "survived", and nothing else in the queue is worth running
-   before they are re-established. **1b and 1c should now be run against
-   `yamnet_context` as well as against plain `yamnet`**, since 1a just became
-   the best single representation on disk for this era.
+   table and the (unverified) jet mechanism.
+3. ~~1b~~ — **done 2026-09-11 (`exp/yamnet-aves-verify`): `yamnet_aves`
+   confirmed at almost the same magnitude as its E3 lead, 0.330 → 0.354
+   (+0.024), 7/8 folds up. `1_95` moved again (+0.046, 0.052 → 0.098) — the
+   4th confirmation across two eras that this is the only intervention to
+   touch that fold. `untagged`/`background` tiers broadly up; `loud` dipped
+   but on a thin tier (115-122 frames). `1_114` down, no mechanism. See
+   `log.jsonl` for the per-fold table. **Item 1c is next**, and per the E3
+   evidence it should now be run against `yamnet_context` and `yamnet_aves`
+   as well as against plain `yamnet`, since both concats are now confirmed
+   structural gains for this era and 1c was never tested on either.
 
 Per-tier sensitivity is **already built in** — it is not an idea and not a
 queued experiment. Every run prints it and every `folds_sx.csv` carries it.
@@ -168,31 +170,19 @@ answers.**
 Ranked. **Run item 1 first** — every comparison after it is budget-limited by
 an unknown amount until it lands, and it is cheap.
 
-## 1b. Re-verify `yamnet_aves` concat against the anchor
-
-*Evidence: **E3** — `yamnet-aves` +0.025 honest over two draws, 4/5 folds up,
-and the only intervention that has ever moved `1_95` (+0.014 / +0.024).*
-
-1792-d. Needs a re-extraction for the revised annotations — budget it
-deliberately (`--workers 0 BUZZDETECT_NO_GPU=1`, ~1 h for `medium` at the
-5-fold roster, so expect more at 8 folds), and note the extraction now verifies
-its own product and will refuse rather than leave empty folds.
-
-**The `1_95` claim is the interesting part.** That fold sits at 0.052 in the
-anchor with a threshold of -0.137 against -1.4 to -1.9 everywhere else — the
-jet-flyover pathology, intact across the cutover, and four other interventions
-have failed on it. If `yamnet_aves` moves it again on new data, that is the
-strongest lead in the file.
-
 ## 1c. Re-verify the wide hidden head against the anchor
 
 *Evidence: **E3** — `yamnet-aves-head-fixed`, h1024 worth ~+0.030 over h0 at a
 matched budget.*
 
 `--hidden` lives on `exp/yamnet-aves-head-fixed`; rebase onto `main`. Run it on
-plain YAMNet against `cv_baseline_v3` **before** stacking it on 1a or 1b —
-LOOP.md's change-one-thing rule, and the E3 result was measured on `yamnet_aves`
-rather than on YAMNet, so it does not transfer for free.
+plain YAMNet against `cv_baseline_v3` **first** — LOOP.md's change-one-thing
+rule, and the E3 result was measured on `yamnet_aves` rather than on YAMNet, so
+it does not transfer for free. **Both `yamnet_context` (+0.085) and
+`yamnet_aves` (+0.024) are now confirmed structural gains for this era**
+(`log.jsonl`: `context-verify`, `yamnet-aves-verify`), so once the plain-YAMNet
+run is in, test the hidden head against both concats too before combining any
+of them.
 
 Cost anchor: h1024 was ~7x h0 per epoch in E3, and the anchor CV is ~25 min at
 8 folds / 400 epochs — so **measure the first fold before quoting an ETA**, as
