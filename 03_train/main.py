@@ -77,6 +77,15 @@ if __name__ == '__main__':
                              'epoch count is read from the fold curves on disk, so '
                              'a later run with the same --name plus --skip-cv '
                              'produces the same model. Implied by --skip-cv.')
+    parser.add_argument('--hidden', type=int, default=0,
+                        help='width of a shared ReLU hidden layer between the '
+                             'input dropout and the class logits (default 0 = '
+                             'no hidden layer, the era anchor\'s decoupled '
+                             'head). h>0 gives all classes one learned '
+                             'representation, so auxiliary-class supervision '
+                             'can reach the buzz neuron. exp/hidden-head-verify, '
+                             'porting exp/yamnet-aves-head-fixed onto the '
+                             'cv-medium-v3 era.')
     parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME')
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
@@ -102,6 +111,7 @@ if __name__ == '__main__':
         # --early-stop turns the fixed budget off; they are one rule, not two.
         fixed_epochs=None if args.early_stop else args.fixed_epochs,
         dropout=args.dropout,
+        hidden=args.hidden,
         # --skip-cv means 'shipped model only', so it has to turn it on.
         train_shipped=args.train_shipped or args.skip_cv,
         only_folds=args.only_folds,

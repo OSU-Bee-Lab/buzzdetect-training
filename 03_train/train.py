@@ -291,7 +291,7 @@ def _consensus_epoch(summary_rows, tol):
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs_max, aug_dirnames, verbose,
                held_out_fold, save_binary, epochs_fixed=None, patience=50,
-               stop_tol=None, fixed_epochs=None, dropout=0.0):
+               stop_tol=None, fixed_epochs=None, dropout=0.0, hidden=0):
     """Train one model. Returns (result_row, model); (None, None) if the model
     directory is already populated."""
     if not can_write(dir_model):
@@ -323,6 +323,15 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     # thing that could work.
     if dropout:
         model.add(tf.keras.layers.Dropout(dropout))
+    # --hidden h>0 gives every class one learned representation instead of the
+    # decoupled head's n_classes independent logistic regressions, so
+    # auxiliary-class supervision (e.g. mech_auto) can reach W[:, ins_buzz].
+    # exp/hidden-head-verify, porting exp/yamnet-aves-head-fixed's --hidden
+    # onto the cv-medium-v3 era anchor.
+    if hidden:
+        model.add(tf.keras.layers.Dense(hidden, activation='relu', name='trunk'))
+        if dropout:
+            model.add(tf.keras.layers.Dropout(dropout))
     model.add(tf.keras.layers.Dense(len(data.classes)))
 
     # Per-class weights go in the loss, not in fit(class_weight=). Keras'
@@ -476,6 +485,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         'epoch_rule': 'fixed' if fixed_epochs is not None else 'early',
         'fixed_epochs': fixed_epochs,
         'dropout': dropout,
+        'hidden': hidden,
     }
     # 'w' for the same reason as write_model_py's — can_write() is the gate
     with open(os.path.join(dir_model, 'config_model.json'), 'w') as f:
@@ -558,7 +568,8 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
               assume_yes=False, stop_tol=0.01, skip_cv=False, train_shipped=False,
-              only_folds=None, surprisal=True, fixed_epochs=400, dropout=0.0):
+              only_folds=None, surprisal=True, fixed_epochs=400, dropout=0.0,
+              hidden=0):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -633,7 +644,7 @@ def train_set(name, embeddername, setname, name_translation,
             dir_model, modelname, embeddername, setname, name_translation,
             data, epochs_max, aug_dirnames, verbose,
             held_out, save_binary=False, patience=patience,
-            fixed_epochs=fixed_epochs, dropout=dropout,
+            fixed_epochs=fixed_epochs, dropout=dropout, hidden=hidden,
         )
         if result is None:
             continue
@@ -732,7 +743,7 @@ def train_set(name, embeddername, setname, name_translation,
         dir_model_full, name, embeddername, setname, name_translation,
         data, epochs_max, aug_dirnames, verbose,
         None, save_binary=True, epochs_fixed=epochs_fixed, patience=patience,
-        stop_tol=stop_tol, fixed_epochs=fixed_epochs, dropout=dropout,
+        stop_tol=stop_tol, fixed_epochs=fixed_epochs, dropout=dropout, hidden=hidden,
     )
 
     if result is None:
