@@ -37,6 +37,20 @@ Environment: `conda run -n buzzdetect-train python <script>`.
   `MAKE.R` discovers efforts by that file, not by `.Rproj`, which is gitignored.
   Do not modify `01_annotate/` — changing the data under an experiment makes it
   incomparable to everything else in the log.
+- **`IDEAS.md` holds untried ideas only — nothing else.** Once an idea has been
+  run (a CV, or a free analysis that settles it), **delete its entire section**.
+  Do not leave a strikethrough heading, a "LARGELY ANSWERED" or "DONE" writeup,
+  or a `## Closed:` summary in its place — the verdict, the mechanism, and the
+  "don't rerun this" belong in that run's `log.jsonl` entry and its branch's
+  `notes.md`, not in the queue. `IDEAS.md` says this about itself already, and
+  agents (including this one) have repeatedly edited a tested item into a
+  closed-writeup shape instead of deleting it, which is exactly what the rule
+  forbids — restating it here is deliberate redundancy, not a hint that the
+  first copy was unclear. If an idea is only *partly* tested (some legs run,
+  one still open), trim the section down to the untested leg alone; do not
+  narrate the legs that are already closed — that narrative belongs in
+  `log.jsonl`, which is cached nowhere near as expensively as a growing
+  `IDEAS.md` that every future agent re-reads uncached.
 
 Embedder interface — `embedders/embedding.py`; model loader — `models/models.py`.
 

@@ -1,10 +1,18 @@
 # Experiment Ideas
 
-**A queue. Candidate experiments, nothing else.** Results go in `log.jsonl`,
-protocol in `LOOP.md`, closed eras in `archive/`. When you run an idea, **delete
-its section** — the verdict, the mechanism and the "don't rerun this" live in
-that run's `log.jsonl` entry and its `notes.md` on `exp/<slug>`. This file grew
-to 1047 lines, 46% of it closed material, before that rule was enforced.
+**A queue of untried ideas. Candidate experiments, nothing else — closed items
+do not belong here in any form.** Results go in `log.jsonl`, protocol in
+`LOOP.md`, closed eras in `archive/`. When you run an idea, **delete its
+section entirely** — the verdict, the mechanism and the "don't rerun this" live
+in that run's `log.jsonl` entry and its `notes.md` on `exp/<slug>`. **A
+strikethrough heading, "DONE"/"ANSWERED" writeup, or `## Closed:` summary left
+in its place is the same violation as not deleting it** — it still costs every
+future agent an uncached re-read for a verdict that's already durably recorded
+elsewhere. This file grew to 1047 lines, 46% of it closed material, before that
+rule was enforced, and it has been re-violated since (writeup-in-place, not
+outright non-deletion) — see `CLAUDE.md`'s Invariants for the standing note. If
+only part of an idea is tested, trim to the untested remainder; don't narrate
+the tested part here.
 
 **State as of 2026-09-11.** The anchor is **`cv_baseline_v3` = 0.330**
 (excl-quiet; 0.269 inclusive) over 8 rotating folds — a bare linear probe on
@@ -170,41 +178,24 @@ answers.**
 Ranked. **Run item 1 first** — every comparison after it is budget-limited by
 an unknown amount until it lands, and it is cheap.
 
-## 1c. ~~The wide hidden head~~ — two legs run, both null, third leg still open
+## 1c. The wide hidden head on `yamnet_aves` — third leg, weak prior
 
 *Evidence: **E3** — `yamnet-aves-head-fixed`, h1024 worth ~+0.030 over h0 at a
-matched budget. **E4**: null on plain YAMNet (`hidden-head-verify`) and null
-on `yamnet_context` (`hidden-context-verify`), both 2026-09-12.*
+matched budget. **E4** — null on the other two representations tried
+(`log.jsonl`: `hidden-head-verify`, `hidden-context-verify`, 2026-09-12); see
+those entries for the mechanism (both runs hurt `1_150` specifically, on its
+`untagged` tier).*
 
-**Neither leg run so far reproduces the E3 lead.** Plain YAMNet against
-`cv_baseline_v3`: +0.012, inside the ~0.027 MDE, 5/3 folds. On top of
-`yamnet_context` against `context_verify_v1`: +0.001, dead flat, 5/3 folds the
-other way. Full breakdown in both `log.jsonl` entries and
-`exp/hidden-head-verify:notes.md` / `exp/hidden-context-verify:notes.md`.
+Plain YAMNet and `yamnet_context` legs are done and both null. Only
+`yamnet_aves` is untested. Given the pattern on the other two, the working
+prediction is another null headline with `1_150` down — run it expecting
+confirmation, not a surprise reversal. Same recipe: `--embedder yamnet_aves
+--hidden 1024 --dropout 0 --fixed-epochs 400`, against `yamnet-aves-verify`'s
+model as the matched control.
 
-**The one consistent, repeatable finding across both runs: `--hidden 1024`
-costs `1_150` specifically.** -0.053 on plain YAMNet, -0.047 on
-`yamnet_context`, both times entirely on the `untagged` tier (genuine audible
-apple-bloom foraging buzz — confirmed zero `ins_buzz_pollination` tags in this
-fold, so it isn't a sonication-signature question). `1_95` did the opposite
-each time it moved (flat then +0.041), so the two named hard folds have never
-moved the same direction under this lever. Read as: whatever extra capacity
-the hidden layer buys, it costs the fold with the thinnest, quietest positives
-first — the predictable failure mode of a wider unregularized head on a
-small-N fold, not something specific to either representation tried.
-
-**Third leg (`yamnet_aves`) not run** — closed out early per Luke's
-instruction rather than left implying momentum. If revived: same recipe,
-`--embedder yamnet_aves --hidden 1024 --dropout 0 --fixed-epochs 400`,
-against `yamnet-aves-verify`'s model as the matched control. Given the pattern
-above, the working prediction is another null headline with `1_150` down —
-worth stating up front so a third confirmation is read as confirmation, not
-surprise.
-
-Cost anchor: h1024 was ~7x h0 per epoch in E3. Plain-YAMNet CV was ~27
-min/fold (~3.7 h); `yamnet_context` CV was ~78 min/fold (~10 h, 3072-d input) —
-**measure the first fold before quoting an ETA**, as always, cost scales with
-input width.
+Cost anchor: h1024 was ~7x h0 per epoch in E3; cost scales with input width
+(plain YAMNet ~27 min/fold, `yamnet_context`'s 3072-d ~78 min/fold) — **measure
+the first fold before quoting an ETA**, as always.
 
 ## 1d. Dropout, now that it is an experiment rather than a premise
 
@@ -593,41 +584,6 @@ YAMNet's code is 89.6% exact zeros and non-negative — a larger regime change
 than `recorder-center`'s median shift, which moved only 86 of 1024 dims and
 still shifted `best_epoch` up to 8x. Fixed budget from the start or the number
 is confounded exactly as `recorder-center`'s was.
-
-## 11. ~~`1_29` vs `53` trade consistently~~ — LARGELY ANSWERED 2026-09-11
-
-*Evidence: **E3** for the original observation (`shared-trunk-head`'s
-three-width ladder); **E4** `cv_baseline_v3`'s tier columns for the answer.*
-
-**Do not spend an afternoon on the original framing.** The free check it asked
-for has been run, off `models/cv_baseline_v3/folds_sx.csv`:
-
-| fold | headline | `background` | `untagged` | bg frames |
-|---|---|---|---|---|
-| `1_29` | 0.441 | 0.363 | **0.564** | 1256 |
-| `53` | 0.429 | 0.282 | **0.651** | 618 |
-| every other fold | 0.052-0.461 | — (none) | 0.250-0.402 | 0 |
-
-**On discrete buzz, `1_29` and `53` are by a wide margin the two EASIEST folds
-in the set** — 0.564 and 0.651 against 0.250-0.402 everywhere else. Their
-middling headline is produced entirely by the `background` component dragging
-them down, and they are the only two folds that have one.
-
-Two consequences that matter more than the original question:
-
-1. **The headline silently misranks those two folds.** Anyone reading
-   `1_29 0.441` as "a mid-difficulty deployment" is wrong; it is the second
-   easiest deployment for the thing the tool is actually for, carrying a large
-   second task nobody else carries. Read their `untagged` column instead.
-2. **The E3 trade now has an obvious mechanism to test.** A capacity change
-   moving one shared background component in opposite directions across two
-   folds with different background character is a far more specific hypothesis
-   than "unexplained residue". If anyone revives this, that is the version to
-   test — and it costs one re-read of an existing `folds_sx.csv` per run, not an
-   afternoon.
-
-What remains genuinely open is only whether the *E3* ladder's trade survives on
-E4 data at all. Check it in passing on 1c's ladder; do not run anything for it.
 
 ## 12. The `binary` control is confounded — read before running it
 
