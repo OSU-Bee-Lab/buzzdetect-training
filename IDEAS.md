@@ -170,34 +170,41 @@ answers.**
 Ranked. **Run item 1 first** — every comparison after it is budget-limited by
 an unknown amount until it lands, and it is cheap.
 
-## 1c. The wide hidden head, on top of a concat — not on plain YAMNet
+## 1c. ~~The wide hidden head~~ — two legs run, both null, third leg still open
 
 *Evidence: **E3** — `yamnet-aves-head-fixed`, h1024 worth ~+0.030 over h0 at a
-matched budget. **E4** (`hidden-head-verify`, 2026-09-12): null on plain
-YAMNet.*
+matched budget. **E4**: null on plain YAMNet (`hidden-head-verify`) and null
+on `yamnet_context` (`hidden-context-verify`), both 2026-09-12.*
 
-**Plain-YAMNet leg done, and it didn't reproduce.** `--hidden 1024` on plain
-YAMNet against `cv_baseline_v3`: +0.012 headline, inside the ~0.027 MDE, 5/3
-folds split, and the one named hard fold it should help (`1_150`) went
-*down* -0.053. Full breakdown in `log.jsonl`'s `hidden-head-verify` entry and
-`exp/hidden-head-verify:notes.md`. Reads as "no clear effect on plain YAMNet,"
-consistent with the E3 number being specific to `yamnet_aves`'s representation
-rather than a property of the hidden layer itself — which was always the
-open question this leg was for.
+**Neither leg run so far reproduces the E3 lead.** Plain YAMNet against
+`cv_baseline_v3`: +0.012, inside the ~0.027 MDE, 5/3 folds. On top of
+`yamnet_context` against `context_verify_v1`: +0.001, dead flat, 5/3 folds the
+other way. Full breakdown in both `log.jsonl` entries and
+`exp/hidden-head-verify:notes.md` / `exp/hidden-context-verify:notes.md`.
 
-**So the hidden head's real test is still open: run `--hidden 1024` against
-`yamnet_context` (+0.085, the era's best) and `yamnet_aves` (+0.024) before
-concluding anything about it either way.** `--hidden` now lives on `main`
-directly (ported in `hidden-head-verify`, not on the old
-`exp/yamnet-aves-head-fixed` branch — that branch predates the era cutover and
-reverts the tier/fixed-epochs machinery, don't rebase from it). Same recipe:
-`--embedder yamnet_context` (or `yamnet_aves`) `--hidden 1024 --dropout 0
---fixed-epochs 400`, against that embedder's own `*-verify` run as the
-matched control, not against `cv_baseline_v3` directly.
+**The one consistent, repeatable finding across both runs: `--hidden 1024`
+costs `1_150` specifically.** -0.053 on plain YAMNet, -0.047 on
+`yamnet_context`, both times entirely on the `untagged` tier (genuine audible
+apple-bloom foraging buzz — confirmed zero `ins_buzz_pollination` tags in this
+fold, so it isn't a sonication-signature question). `1_95` did the opposite
+each time it moved (flat then +0.041), so the two named hard folds have never
+moved the same direction under this lever. Read as: whatever extra capacity
+the hidden layer buys, it costs the fold with the thinnest, quietest positives
+first — the predictable failure mode of a wider unregularized head on a
+small-N fold, not something specific to either representation tried.
 
-Cost anchor: h1024 was ~7x h0 per epoch in E3, and the plain-YAMNet CV just run
-was ~27 min/fold, ~3.7 h total at 8 folds / 400 epochs — so **measure the
-first fold before quoting an ETA**, as always.
+**Third leg (`yamnet_aves`) not run** — closed out early per Luke's
+instruction rather than left implying momentum. If revived: same recipe,
+`--embedder yamnet_aves --hidden 1024 --dropout 0 --fixed-epochs 400`,
+against `yamnet-aves-verify`'s model as the matched control. Given the pattern
+above, the working prediction is another null headline with `1_150` down —
+worth stating up front so a third confirmation is read as confirmation, not
+surprise.
+
+Cost anchor: h1024 was ~7x h0 per epoch in E3. Plain-YAMNet CV was ~27
+min/fold (~3.7 h); `yamnet_context` CV was ~78 min/fold (~10 h, 3072-d input) —
+**measure the first fold before quoting an ETA**, as always, cost scales with
+input width.
 
 ## 1d. Dropout, now that it is an experiment rather than a premise
 
