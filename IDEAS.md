@@ -78,8 +78,19 @@ answers.**
 
 ## Standing facts a proposer needs
 
-- **MDE is ~0.027** at n=1 (`probe-grid`: baseline SD 0.0095 over n=3). Anything
-  smaller is unreadable from one run. Prefer dose ladders to single comparisons.
+- **MDE is ~0.027 on the headline** at n=1 (`probe-grid`: baseline SD 0.0095
+  over n=3). Anything smaller is unreadable from one run. Prefer dose ladders to
+  single comparisons.
+- **A single fold resolves ~0.09, not ~0.027** — roughly 4x coarser than the
+  headline, so a per-fold delta is an investigation, not a result. The reason is
+  that `buzz_frames` is not the sample size: a buzz event spans many frames, and
+  the folds hold 5-23 events each (`1_29`: 1972 scored frames, 14 events; `53`:
+  900 in 9, one of them 79% of the total). `folds_sx.csv` carries
+  `buzz_events_exclquiet`, and `tools/eval_sampling_sd.py <control> --other
+  <exp>` gives each fold's delta its own SD in seconds — 0.017-0.052 from eval
+  sampling, with training stochasticity larger again on top. Propose against the
+  headline; use the folds to ask where an effect lives, and say "unsure" when
+  the fold cannot answer. Measured 2026-09-13 (`hidden-aves-verify` r1/r2).
 - **Never select an epoch on the held-out fold.** `main` no longer offers a way
   to — there is no `--monitor` flag, and `--fixed-epochs` selects nothing. The
   hazard is reintroducing one: any rule that reads the scored fold's own curve

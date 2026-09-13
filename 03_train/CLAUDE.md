@@ -25,6 +25,14 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
   code, stop and flag it rather than "fixing" it into a better score.**
 - **Roles are training-time policy only** (`dataset.py::read_fold_roles`).
   `02_set` embeds every fold regardless, including `exclude`.
+- **`buzz_frames` is not a sample size; `buzz_events_exclquiet` is.** Every
+  frame of an annotation snip shares one `correct` (`train.py::_eval_arrays`),
+  so a buzz sample is one buzz event spanning many frames. Any n, bootstrap or
+  standard error on this metric has to resample events —
+  `sx.py::buzz_event_blocks` is the one definition, reading the `sample` column
+  predictions.csv has carried since 2026-09-13 and falling back to row
+  adjacency for older runs. `tools/eval_sampling_sd.py` bootstrapped frames
+  until then and understated per-fold SD by up to ~8x.
 - **`folds_sx.csv` is the only metrics summary**, one row per (fold, FPR target)
   plus a `total` row, written by `sx.py::summarize_folds`. It replaced three
   files reporting the same per-fold sensitivity under three different NaN

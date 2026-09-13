@@ -530,9 +530,23 @@ away, and a headline gap that vanishes under pairing was never a capability gap.
 python tools/compare_folds.py <baseline model dir> <exp model dir>
 ```
 
-Prints the per-fold delta table, the up/down count, and the two headline means.
-Either argument can be a bare name under `models/` or a path — an experiment's
-model usually lives in its worktree's own (unsymlinked) `models/` dir.
+Prints the per-fold delta table, the up/down count, the event count each fold's
+delta rests on, and the two headline means. Either argument can be a bare name
+under `models/` or a path — an experiment's model usually lives in its
+worktree's own (unsymlinked) `models/` dir.
+
+**Then put an error bar on it**, before you write a word of interpretation:
+
+```bash
+python tools/eval_sampling_sd.py <baseline model dir> --other <exp model dir>
+```
+
+Seconds, no training, no model loaded. It gives each fold's delta its own
+standard deviation and the headline delta's, by resampling buzz *events* — the
+unit the metric actually rests on. Expect ~0.012 on the headline delta and
+0.017-0.052 per fold. Those two numbers are what separate a result from a
+story, and they are the reason the mean is the estimate and a single fold is an
+investigation.
 
 Three cautions that apply to every conclusion you write:
 
@@ -566,20 +580,34 @@ Three cautions that apply to every conclusion you write:
   spans 146 to 2144 (14.7x), because annotating more of a quiet site buys mostly
   negatives.
 
-  **The "±0.25 or worse" figure this bullet used to carry was ~7x too large.**
-  It was an 11-fold-roster number from before equalization. Re-measured
-  2026-09-09 (`tools/eval_sampling_sd.py`, seconds, no training): per-fold
-  bootstrap SD is **0.010-0.037**, worst case `1_150` at 0.037, headline SD from
-  eval sampling 0.007 to 0.012 on last era's runs. Run the tool
-  rather than quoting any figure from these docs — it is cheap and the roster
-  moves.
+  **`buzz_frames` is not the sample size. `buzz_events_exclquiet` is.** A buzz
+  event spans many frames — one bee heard for 26 seconds is one observation,
+  not 26 — so the n behind a fold's number is single-digit to low-tens, whatever
+  its frame count says. `1_29` carries 1972 scored buzz frames in **14** events;
+  `53` has 900 in **9**, one of which is 79% of them; `1_37` has **5**.
+  `folds_sx.csv` and `tools/compare_folds.py` both carry the event count now, so
+  it is in front of you when you read a delta.
 
-  Two limits on that number. The bootstrap resamples frames independently while
-  frames inside one buzz event are correlated, so it is a **floor**. And it
-  measures eval sampling only: `1_150` moved **0.055** between two identical runs
-  against a 0.012 eval-sampling SD, so its run-to-run noise is dominated by
-  **training stochasticity**, not by its buzz count. More annotation will not fix
-  that; a seed control or seed averaging would.
+  **Two earlier figures in this bullet were wrong, in the same direction.** The
+  "±0.25" it originally carried was ~7x too large (an 11-fold-roster number
+  from before equalization). Its 2026-09-09 replacement, **0.010-0.037**, was
+  then ~3-8x too *small*: `tools/eval_sampling_sd.py` resampled frames as if
+  they were independent. Re-measured 2026-09-13 with the bootstrap blocked by
+  event, per-fold SD is **0.029-0.135** (`1_29` 0.115, not 0.015), and the
+  paired per-fold *delta* SD — which is tighter, because both models score the
+  same resampled events — is **0.017-0.052**. The headline is the number that
+  holds up: its delta SD is **~0.012**, because eight folds' independent wobbles
+  partly cancel in the mean. Run the tool rather than quoting any figure from
+  these docs.
+
+  And that is still eval sampling only. Training stochasticity is the larger
+  term per fold: `1_150` moved **0.105** between two identical `--hidden 1024`
+  runs (`hidden-aves-verify` r1/r2) against a 0.041 eval-sampling delta SD, and
+  **0.055** between two identical baseline runs. More annotation will not fix
+  that — 5x the labels on `1_150` only takes its eval SD from 0.042 to 0.021 —
+  and grouping deployments into fatter folds buys nothing the headline mean does
+  not already buy, at the cost of the per-site structure that makes a hard fold
+  legible at all. A seed control or seed averaging is the only lever on it.
 
 ### The thin-fold caution is about magnitude. It is not permission to discount a hard-fold gain.
 
@@ -592,6 +620,20 @@ concentrated in `1_150`, `1_95` or `willard`, that concentration is the
 discount it. Read a delta table as: which way did the hard folds move, and are
 the losses elsewhere material? A -0.005 does not cancel a +0.068, and calling
 that "3 up, 2 down, inconclusive" is bad accounting.
+
+**How to write a per-fold number down.** The headline mean is the estimate; a
+single fold is an *investigation*. That is not a licence to discount a hard-fold
+gain — see the paragraph above, it stands — it is an instruction about what to
+claim. Report the delta **with its uncertainty attached** (`+0.061 ± 0.041`,
+from `tools/eval_sampling_sd.py <control> --other <exp>`), and treat **"unsure"
+as a normal, expected verdict for a fold**. What it forbids is the move both
+`hidden-aves-verify` entries made in opposite directions on the same data:
+building a mechanism on one fold's +0.061, then reading the next draw's -0.044
+as a refutation, when both are single samples from a distribution ~0.05 wide.
+Do not collapse a magnitude to its sign either — a +0.061 ± 0.041 is weak
+evidence *for* a positive effect, and weak evidence is not no evidence. It is
+evidence you report as weak, and let the headline mean and the next experiment
+update.
 
 **The specific error to avoid — a repeat spread bounds noise WITHIN a treatment,
 not a difference BETWEEN two.** `1_150` moved 0.007 → 0.062 across two identical
@@ -656,13 +698,19 @@ touching code; fill in the rest after. Commit it.
 ## Hypothesis
 ## Changes
 ## Results
-| fold | baseline sens@fpr0.005 | this exp | delta | val frames |
-|---|---|---|---|---|
-- mean sens@fpr0.005: baseline <val> → this <val>
-<interpretation: how many folds moved which way? are the movers folds with
-enough buzz to trust? did any fold fail to reach the target FPR?>
+| fold | baseline sens@fpr0.005 | this exp | delta | ± SD | buzz events |
+|---|---|---|---|---|---|
+- mean sens@fpr0.005: baseline <val> → this <val> (± <headline delta SD>)
+<interpretation: how many folds moved which way? how does each mover compare to
+its own SD — and say "unsure" where it is within it, that is a normal verdict.
+did any fold fail to reach the target FPR?>
 ## Conclusion
 ```
+
+The `± SD` column is `tools/eval_sampling_sd.py --other`'s `delta_sd`, and it is
+eval sampling only — training stochasticity is larger again per fold and is not
+in it. Quote the number; do not quietly drop the column because every fold came
+back uncertain. That *is* the finding, most of the time.
 
 Append one line to `log.jsonl` in **main** and commit it. Be very brief; the log
 only guides later agents toward where to dig. Keep `"method": "cv"` — it is what

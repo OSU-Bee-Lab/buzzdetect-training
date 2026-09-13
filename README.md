@@ -429,7 +429,8 @@ models/<name>/
 **`folds_sx.csv` is the whole metrics summary.** Columns: `fold`, `fpr`,
 `threshold`, `sensitivity`, `sensitivity_exclquiet`, `sensitivity_<tier>` for
 each of faint/quiet/background/untagged/normal/loud, `precision`, `buzz_frames`,
-`<tier>_frames`, `neg_frames`, `frames_val`, `best_epoch`. One row per (fold,
+`buzz_events`, `buzz_events_exclquiet`, `<tier>_frames`, `neg_frames`,
+`frames_val`, `best_epoch`. One row per (fold,
 FPR target), then a row with `fold` = `total`, where the counts are summed and
 every sensitivity is the plain mean over the folds that could reach the target.
 **`sensitivity_exclquiet` in that row is the headline number**; see *Reading the
@@ -579,6 +580,18 @@ set this size that is about four frames per fold, and some folds can't reach it
 — which is why only 0.005 is reported. A fold too small for the target is
 dropped from the mean rather than interpolated inside a single frame. No amount
 of data elsewhere fixes a per-fold read on one small fold.
+
+**And read `buzz_events_exclquiet`, not `buzz_frames`, as the fold's n.** A buzz
+event spans many frames — one bee heard for 26 seconds is one observation, not
+26 — so frames inside an event are anything but independent, and a fold's number
+rests on single-digit-to-low-tens of events however many frames it reports.
+`1_29` carries 1972 scored buzz frames in 14 events; `53` has 900 in 9, one of
+which is 79% of them. `tools/eval_sampling_sd.py` turns that into a standard
+deviation by resampling events: ~0.03-0.13 per fold, ~0.01 on the headline mean,
+and with `--other <model>` the paired per-fold *delta* SD (0.017-0.052) that a
+comparison should actually be read against. It holds the model fixed, so it
+measures evaluation sampling only; training stochasticity is larger again per
+fold and only repeat draws measure it.
 
 Don't reweight the training set to equalize folds. How many *hours* a fold
 contributes is an artifact of annotation effort; how much *buzz* those hours

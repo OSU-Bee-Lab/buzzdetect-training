@@ -71,8 +71,8 @@ def _to_tf(data, size_batch, size_shuffle):
 
 
 def _eval_arrays(samples, classes):
-    """Frame-level (embeddings, is_buzz, is_quiet_buzz) for a fold, in sample
-    order.
+    """Frame-level (embeddings, is_buzz, is_quiet_buzz, sample_id) for a fold,
+    in sample order.
 
     Scoring pairs each frame's activation with its own label, so unlike
     _to_tf's training pipeline this must not shuffle.
@@ -83,6 +83,13 @@ def _eval_arrays(samples, classes):
     only steers *scoring*, in sx.py, which drops the quiet ones from the
     headline and reports sensitivity per tier beside it. See
     train_utils.buzz_tier.
+
+    `sample_id` numbers the snip each frame came from. Every frame of a sample
+    shares one `correct`, so a buzz sample is one buzz event — which is the
+    unit any honest n, bootstrap or standard error on this metric has to
+    resample, frames within an event being anything but independent. sx.py
+    reads it (buzz_event_blocks) and falls back to row adjacency for the runs
+    written before this column existed.
     """
     buzz_index = classes.index('ins_buzz')
     embeddings = np.concatenate([np.array(s.embeddings, dtype=np.float32) for s in samples])
@@ -91,7 +98,8 @@ def _eval_arrays(samples, classes):
         np.full(s.frames, buzz_tier(s.labels_raw, s.labels_translate))
         for s in samples
     ])
-    return embeddings, correct, loudness
+    sample_id = np.concatenate([np.full(s.frames, i) for i, s in enumerate(samples)])
+    return embeddings, correct, loudness, sample_id
 
 
 def _load_data(setname, embeddername, folds_train, name_translation, aug_dirnames,
@@ -179,11 +187,14 @@ def _score_fold(model, setname, embeddername, fold, translation, classes):
     if not samples:
         return None
 
-    embeddings, correct, loudness = _eval_arrays(samples, classes)
+    embeddings, correct, loudness, sample_id = _eval_arrays(samples, classes)
     activation = model(embeddings, training=False)[:, classes.index('ins_buzz')].numpy()
 
+    # `sample` goes last: tools/eval_sampling_sd.py reads this file by column
+    # index, and older models' predictions.csv has to stay readable beside it.
     return pd.DataFrame({
         'activation_ins_buzz': activation, 'correct': correct, 'loudness': loudness,
+        'sample': sample_id,
     })
 
 

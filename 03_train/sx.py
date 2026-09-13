@@ -82,6 +82,57 @@ SENS_TIER_COLS = tuple(tier_col(t) for t in TIERS)
 TIER_FRAMES_COLS = tuple(tier_frames_col(t) for t in TIERS)
 
 
+
+SAMPLE_COL = 'sample'
+
+
+def buzz_event_blocks(df):
+    """Positional index blocks, one per buzz event — the metric's real sample unit.
+
+    A buzz event spans many frames: a 26-frame run is one bee heard for 26
+    seconds, not 26 independent observations. So anything that treats frames as
+    independent — a bootstrap, an n, a standard error — overstates the evidence
+    by roughly the mean event length, which on this set is ~7x and on some folds
+    far more (`1_29` carries 1972 buzz frames in 14 events). **`buzz_frames` is
+    not the sample size. This is.**
+
+    Blocks come from the `sample` column where predictions.csv carries it: one
+    annotation snip is one sample, and _eval_arrays gives every frame of a
+    sample the same `correct`, so sample identity is the exact unit. Runs
+    written before that column existed fall back to row adjacency, which is
+    sound as far as it goes — _eval_arrays writes frames in sample order — but
+    it merges two buzz samples that happen to be adjacent, so on those runs the
+    count reads as a lower bound and the blocks as an upper bound on event
+    length. Both err toward *less* certainty, never more.
+    """
+    correct = df['correct'].astype(bool).to_numpy()
+    if not correct.any():
+        return []
+    # notna(): a run resumed across this change has old folds without the column
+    # and new folds with it, and concatenating them leaves NaN on the old rows.
+    # NaN != NaN would then cut every frame into its own event -- the one way
+    # this could silently report *more* certainty than there is. Fall back
+    # wholesale rather than trust a partial column.
+    if SAMPLE_COL in df.columns and df[SAMPLE_COL].notna().all():
+        sample = df[SAMPLE_COL].to_numpy()
+        cut = np.flatnonzero(sample[1:] != sample[:-1]) + 1
+    else:
+        cut = np.flatnonzero(correct[1:] != correct[:-1]) + 1
+    blocks = np.split(np.arange(len(correct)), cut)
+    return [b for b in blocks if correct[b].any()]
+
+
+def count_buzz_events(df, scored=None):
+    """How many buzz events a fold holds; `scored` restricts to events carrying
+    at least one frame that counts toward the headline (the excl-quiet read).
+    An event whose every frame is `_quiet` leaves the equation entirely, so it
+    is not part of the n the headline rests on."""
+    blocks = buzz_event_blocks(df)
+    if scored is None:
+        return len(blocks)
+    keep = np.asarray(scored)
+    return sum(1 for b in blocks if keep[b].any())
+
 def _has_loudness(df):
     """Whether this prediction table carries the loudness tier at all.
 
@@ -215,12 +266,21 @@ def summarize_folds(predictions, fold_facts=None, fprs=FPR_TARGETS):
             tier_frames_col(t): (int((buzz & (tier == t)).sum()) if tier is not None else np.nan)
             for t in TIERS
         }
+        # The n the fold's number actually rests on. Reported beside
+        # buzz_frames rather than instead of it because the two say different
+        # things: frames are how much audio, events are how much evidence.
+        scored = (buzz & ~tier.isin(TIERS_EXCLUDED_FROM_HEADLINE)) if tier is not None else buzz
+        events = {
+            'buzz_events': count_buzz_events(df),
+            'buzz_events_exclquiet': count_buzz_events(df, scored.to_numpy()),
+        }
         for f in fprs:
             rows.append({
                 'fold': fold,
                 'fpr': f,
                 **cols.loc[f].to_dict(),
                 'buzz_frames': int(buzz.sum()),
+                **events,
                 **counts,
                 'neg_frames': neg_frames[f],
                 **(fold_facts or {}).get(fold, {}),
@@ -229,7 +289,8 @@ def summarize_folds(predictions, fold_facts=None, fprs=FPR_TARGETS):
     table = pd.DataFrame(rows)
     means = (['threshold', 'sensitivity', SENS_EXCL]
              + [c for c in SENS_TIER_COLS if c in table] + ['precision'])
-    sums = [c for c in ('buzz_frames',) + TIER_FRAMES_COLS + ('neg_frames', 'frames_val')
+    sums = [c for c in ('buzz_frames', 'buzz_events', 'buzz_events_exclquiet')
+            + TIER_FRAMES_COLS + ('neg_frames', 'frames_val')
             if c in table]
 
     totals = []
@@ -310,16 +371,22 @@ def format_sx_report(name, table):
                          f'{int(folds.loc[folds["sensitivity"].notna(), "buzz_frames"].sum())} '
                          f'of {int(folds["buzz_frames"].sum())} buzz frames')
         for _, r in folds.sort_values('fold').iterrows():
+            ev = (f', {int(r["buzz_events_exclquiet"])} buzz events'
+                  if pd.notna(r.get('buzz_events_exclquiet')) else '')
             lines.append(f'    {r["fold"]}: threshold {_num(r["threshold"])}, '
                          f'sensitivity {_num(r.get(SENS_EXCL))} '
                          f'(incl. quiet {_num(r["sensitivity"])}) '
-                         f'(~{int(r["neg_frames"])} negative frames)')
+                         f'(~{int(r["neg_frames"])} negative frames{ev})')
         lines.extend(_tier_block(folds, total))
 
     lines.append("  an oracle: each threshold is placed using that fold's labels, so read this "
                  "as the ceiling on operator tuning")
     lines.append('  per-fold spread understates uncertainty about a new deployment '
-                 '(training pools overlap heavily)\n')
+                 '(training pools overlap heavily)')
+    lines.append('  a fold\'s own number rests on its buzz *events*, not its frames — single-digit '
+                 'to low-tens. Read one fold as an investigation, not a result:')
+    lines.append('  tools/eval_sampling_sd.py puts a standard deviation on it, and it is wide '
+                 '(~0.03-0.13 per fold vs ~0.01 on the mean above).\n')
     return '\n'.join(lines)
 
 

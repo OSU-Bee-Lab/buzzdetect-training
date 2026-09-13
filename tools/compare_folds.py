@@ -109,8 +109,14 @@ def compare_folds(baseline, exp, fpr=0.005):
               f'_quiet split and is not a valid comparator for this era.',
               file=sys.stderr)
 
+    # buzz_events_exclquiet is the n the fold's delta rests on, and it is the
+    # column that stops `1_29`'s 1972 buzz frames from reading as 1972 pieces
+    # of evidence when they are 14. Absent on models summarized before
+    # 2026-09-13; resummarize.py adds it without retraining.
     # frames_val is absent for models resummarized without their summary.json
-    cols = ['fold', col] + (['frames_val'] if 'frames_val' in base else [])
+    cols = (['fold', col]
+            + (['buzz_events_exclquiet'] if 'buzz_events_exclquiet' in base else [])
+            + (['frames_val'] if 'frames_val' in base else []))
     merged = base[cols].merge(
         other[['fold', col]], on='fold', suffixes=('_base', '_exp'),
     )
@@ -132,6 +138,15 @@ def format_report(merged, baseline, exp, fpr):
         f'{n_up} folds up, {n_down} down, {n_flat} flat '
         f'(mean delta {merged["delta"].mean():+.4f})'
     )
+    if 'buzz_events_exclquiet' in merged:
+        lines.append(
+            f'  each fold\'s delta rests on '
+            f'{int(merged["buzz_events_exclquiet"].min())}-'
+            f'{int(merged["buzz_events_exclquiet"].max())} buzz events, so its own sampling SD is '
+            f'~0.02-0.05 and training stochasticity adds more again. The mean is the '
+            f'estimate; a single fold is an investigation. For the SD on each delta: '
+            f'tools/eval_sampling_sd.py <baseline> --other <exp>'
+        )
 
     col = merged.attrs.get('sens_col', SENS_COL)
     head_base = read_headline(baseline, fpr, col)
