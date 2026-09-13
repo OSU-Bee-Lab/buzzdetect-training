@@ -506,10 +506,13 @@ failing in the same ten minutes.
 The automatic path needs it. **How much** is a dose-response (0x / 1x / 4x the
 fold's existing negatives), not one volume.
 
-## 10. Asymmetric context — feed the contrast, not the concat
+## 10. Asymmetric context — feed the contrast, not the concat, as an embedder
 
 *Evidence: **untagged proposal**, resting on **E3**'s `context-embedder`
-(+0.061 honest) and the decoupled-head arithmetic.*
+(+0.061 honest) and the decoupled-head arithmetic. **Narrowed 2026-09-13**
+(`exp/asymmetric-context`) after the originally-proposed form turned out
+undeployable — read the constraint below before reproposing the train-time
+version.*
 
 A linear readout of `[e_{t-1}, e_t, e_{t+1}]` can only take a fixed weighted
 sum — it **cannot** compute "this frame stands out from its own neighbours",
@@ -518,19 +521,28 @@ quantity. Yet that contrast is close to the definition of a buzz: a transient
 against a locally stationary background. Feed the difference explicitly:
 `[e_t, e_t - mean(e_{t±1})]` (2048-d), or
 `[e_t, mean(e_{t±k}), e_t - mean(e_{t±k})]` (3072-d, matching the incumbent on
-parameter count). It adds **no information and no capacity** — only changes
-what is linearly available, which makes it the one input-side move that
-directly attacks `mech-margin`'s and `shared-trunk-head`'s shared conclusion
-that a linear readout of frozen YAMNet has no room here.
+parameter count).
+
+**Must be built as an embedder, not a `03_train`-side transform.** The obvious
+implementation — a `dataset.py` transform that joins a frame's neighbour out of
+`frametimes.csv` and a sibling label-pickle at train time — has no deployment
+equivalent: the shipped artifact is one ONNX graph, raw waveform in, no cache,
+no cross-pickle index, nothing to look a neighbour up in. It also measured a
+train/deploy mismatch on its own terms (real-neighbour rate ~99% on train folds
+vs 62-95% on eval folds). The only deployable form is a fixed linear map living
+*inside* an embedder — subclass `embedders/yamnet_context/`'s `stack_context()`
+so the difference is computed from the embedder's own contiguous-audio buffer,
+same mechanism `yamnet_pitchshift` already ships. That also means the extraction
+is no longer free — this needs its own cache under a new embedder name.
 
 **Demoted 2026-09-11:** `yamnet-aves-context` found context and AVES **overlap**
 (context was +0.058 on plain YAMNet, +0.011 to +0.015 on top of `yamnet_aves`)
-and all three hard folds went down. Run this as a YAMNet-side question over the
-`yamnet_context` cache; do not expect it to add to the current best config.
+and all three hard folds went down. Run this as a YAMNet-side question over
+`yamnet_context`'s mechanism; do not expect it to add to the current best
+config (`yamnet_pitchshift`).
 
-*Cost:* **no extraction** — an input transform in `03_train` over the existing
-cache (`exp/yamnet-aves-context` already has `--context-frames` /
-`--context-dims` for this shape). One CV.
+*Cost:* one extraction under a new embedder name (context_frames padding
+already on main since `context-frames-fix`), then one CV.
 
 *Falsifier / caveat:* the difference channel is signed and zero-centred where
 YAMNet's code is 89.6% exact zeros and non-negative — a larger regime change
