@@ -42,6 +42,15 @@ if __name__ == '__main__':
                              'happens, so every arm of a comparison is scored '
                              'at one identical epoch. Vary it to run a budget '
                              'ladder; 400 is provisional — see 03_train/CLAUDE.md.')
+    parser.add_argument('--pin-buzz-weight', type=float, default=None, dest='pin_buzz_weight',
+                        help='override ins_buzz\'s loss weight to this value '
+                             'instead of build_weights\' class-count-dependent '
+                             'one. exp/binary-control (IDEAS item 12): '
+                             'build_weights puts n_classes_present in every '
+                             'denominator, so ins_buzz\'s weight moves ~5.4x '
+                             'between --translation general and binary for a '
+                             'reason unrelated to the taxonomy question a '
+                             'general/binary comparison is trying to ask.')
     parser.add_argument('--early-stop', action='store_true', dest='early_stop',
                         help='the pre-2026-09-11 rule: stop on the val_loss '
                              'argmin with --patience, restoring the true best. '
@@ -102,6 +111,7 @@ if __name__ == '__main__':
         # --early-stop turns the fixed budget off; they are one rule, not two.
         fixed_epochs=None if args.early_stop else args.fixed_epochs,
         dropout=args.dropout,
+        pin_buzz_weight=args.pin_buzz_weight,
         # --skip-cv means 'shipped model only', so it has to turn it on.
         train_shipped=args.train_shipped or args.skip_cv,
         only_folds=args.only_folds,

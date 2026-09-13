@@ -95,7 +95,7 @@ def _eval_arrays(samples, classes):
 
 
 def _load_data(setname, embeddername, folds_train, name_translation, aug_dirnames,
-               val_fold=None):
+               val_fold=None, pin_buzz_weight=None):
     """Pool folds_train for training; val_fold, if given, is a whole separate
     deployment used as the early-stopping monitor.
 
@@ -143,6 +143,13 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
         )
 
     weights = build_weights(data_train, classes)
+    # IDEAS item 12: build_weights puts the class *count* in every denominator,
+    # so ins_buzz's weight moves ~5.4x between translations (general's 15
+    # classes vs binary's 2) for a reason unrelated to the taxonomy question
+    # being tested. Pin it to the value it would get under general so a
+    # general/binary comparison isolates the label structure, not the weight.
+    if pin_buzz_weight is not None and 'ins_buzz' in set(weights['class']):
+        weights.loc[weights['class'] == 'ins_buzz', 'weight'] = pin_buzz_weight
     weight_dict = {i: w for i, w in enumerate(weights['weight'])}
 
     size_batch = 65568
@@ -558,7 +565,8 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
 def train_set(name, embeddername, setname, name_translation,
               epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
               assume_yes=False, stop_tol=0.01, skip_cv=False, train_shipped=False,
-              only_folds=None, surprisal=True, fixed_epochs=400, dropout=0.0):
+              only_folds=None, surprisal=True, fixed_epochs=400, dropout=0.0,
+              pin_buzz_weight=None):
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -621,7 +629,7 @@ def train_set(name, embeddername, setname, name_translation,
             continue
 
         data = _load_data(setname, embeddername, folds_train, name_translation,
-                          aug_dirnames, val_fold=held_out)
+                          aug_dirnames, val_fold=held_out, pin_buzz_weight=pin_buzz_weight)
         if data.frames_val == 0:
             # Nothing to early-stop on or score against — a legitimate state if
             # every label in this deployment is ignored or excluded, but it
@@ -727,7 +735,7 @@ def train_set(name, embeddername, setname, name_translation,
 
     folds_shipped = folds_rotate + folds_train_always
     data = _load_data(setname, embeddername, folds_shipped, name_translation,
-                      aug_dirnames, val_fold=None)
+                      aug_dirnames, val_fold=None, pin_buzz_weight=pin_buzz_weight)
     result, model = _train_one(
         dir_model_full, name, embeddername, setname, name_translation,
         data, epochs_max, aug_dirnames, verbose,
