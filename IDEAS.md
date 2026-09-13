@@ -557,29 +557,6 @@ than `recorder-center`'s median shift, which moved only 86 of 1024 dims and
 still shifted `best_epoch` up to 8x. Fixed budget from the start or the number
 is confounded exactly as `recorder-center`'s was.
 
-## 12. The `binary` control is confounded — read before running it
-
-*Evidence: **E3** — read off `train_utils.build_weights` and `train.py`.
-Arithmetic, not a measurement.*
-
-`LOOP.md` flags the `general`/`binary` pair as worth rerunning early. It is, but
-**a naive rerun measures two things unrelated to the taxonomy**: (1) `ins_buzz`'s
-positive weight moves ~5.4x, because `build_weights` puts the class *count* in
-every denominator (**0.76 under `general`, 4.10 under `binary`**); and (2)
-`val_loss` is the mean over neurons, so the stopping signal's composition goes
-~1/15 buzz -> ~1/2. Confound (2) disappears under `--fixed-epochs`, which is a
-reason to run it now. Pin `ins_buzz`'s `pos_weight` to `general`'s value and
-hold the budget fixed, or the number is uninterpretable.
-
-**Free prediction that tests the framing.** The head is `Dropout -> Dense(15)`
-into `weighted_cross_entropy_with_logits` — 15 independent sigmoids, no softmax,
-so `W[:, buzz]` sees gradient only from the `ins_buzz` term. The 15-class head's
-buzz neuron therefore *is* the binary probe up to label mapping, and this
-control should come back **near null**; a large effect either way means the
-decoupling reasoning is missing something. Partly confirmed already:
-`shared-trunk-head` gave the auxiliary classes a shared representation and was
-null at every width.
-
 ## 13. Context width k=2 — its negative rests on a mechanism that failed to reproduce
 
 *Evidence: **E2** negative (`context-width`), whose stated cause **failed in
