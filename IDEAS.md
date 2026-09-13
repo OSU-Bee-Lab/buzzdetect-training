@@ -479,28 +479,6 @@ failing in the same ten minutes.
 The automatic path needs it. **How much** is a dose-response (0x / 1x / 4x the
 fold's existing negatives), not one volume.
 
-## 9. yamnet_aves per-block standardization
-
-*Evidence: **E3** — `yamnet-aves` (+0.025 honest, two draws, 4/5 folds up,
-`clean`). Cache is on disk (1792-d, shared tree); needs no extraction.*
-
-The AVES block is ~3.8x the YAMNet block in per-dim |mean| (0.306 vs 0.080) and
-0% zeros vs 91.6%, so under one Adam LR the small block is likely
-underweighted — the one place `standardize-blocks` has a real motive (the blocks
-genuinely differ, unlike YAMNet+sigmoid). `--standardize` exists on
-`exp/standardize-blocks`, off by default; it needs merging with
-`exp/yamnet-aves-head-fixed`'s `--hidden`/`--fixed-epochs`. Pair with a fixed
-epoch budget from the start (every input normalisation to date moved
-`best_epoch`).
-
-*Cost:* no extraction, one CV at 1792-d h1024 (~92 min at e150). Cheapest live
-idea in the queue after 6 and 7.
-
-*Falsifier:* `standardize-blocks` cost ~6x the epochs for no gain on
-`yamnet_combined`. If this one also multiplies the epochs needed, the fixed
-budget makes it *look* worse rather than confounding it — re-score both arms at
-a common epoch before concluding, and read the pooled curve's slope at the cap.
-
 ## 10. Asymmetric context — feed the contrast, not the concat
 
 *Evidence: **untagged proposal**, resting on **E3**'s `context-embedder`
