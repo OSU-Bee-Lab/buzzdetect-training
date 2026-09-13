@@ -192,55 +192,46 @@ answers.**
 Ranked. **Run item 1 first** — every comparison after it is budget-limited by
 an unknown amount until it lands, and it is cheap.
 
-## 5b. Pitch shift by real time-window resampling, not tile/crop — needs extract.py surgery
+## 5b. Up-shift by real time-window decimation, not tile — needs extract.py surgery
 
-*Evidence: **untagged proposal** (Luke, 2026-09-13), a cleaner alternative
-construction for the mechanism `yamnet_pitchshift`'s x2/x4 rungs and
-`yamnet_pitchshift_down` (its down-shift sibling, running as of this writing)
-already validate/are testing.*
+*Evidence: **untagged proposal** (Luke, 2026-09-13), narrowed same-day after
+walking through the sample arithmetic — the down direction turned out not to
+need any of this, see below.*
 
-Every pitch-shift variant so far keeps YAMNet's declared frame at exactly
-`framelength_s` (0.96 s) of nominal audio and forces a resampled version of
-*that same window* back to 15360 samples via **tiling** (x2/x4: compress to
-fewer samples, then repeat to refill the buffer — creates a hard seam at the
-repeat boundary) or **cropping** (the down rung: read more native-rate samples
-than fit, then discard everything after the first 15360 — throws away real
-signal that was captured). Both are real-audio-honest (no fabricated samples)
-but both introduce an artifact: a seam that isn't in the source audio, or a
-discarded second half of the frame's content.
+`yamnet_pitchshift`'s x2/x4 rungs create a real artifact: to shift up, they
+resample the 0.96 s frame down to fewer samples then **tile** it back to
+15360, which repeats the same compressed content twice with a hard seam at
+the midpoint. `yamnet_pitchshift_down` avoids that on the way down for a
+structural reason, not a cleverer trick: it declares a higher native
+`samplerate` (32000, vs the pipeline's usual 16000) so one 0.96 s frame
+already contains 30720 real samples, and the down-shift just **feeds the
+first 15360 of them to YAMNet as-is, no resample call** — same sample count,
+a genuinely shorter real span, YAMNet told it's the full 0.96 s. No wider
+buffer, no extraction change beyond the `samplerate` bump; that embedder is
+already extracting.
 
-The cleaner construction: instead of resampling a *fixed-duration* window and
-force-fitting the result into 15360 samples, read a **different-duration**
-window of real audio centred on the same frame — wider for a down-shift
-(e.g. 1.92 s, reaching into the frame's temporal neighbours), narrower for an
-up-shift (0.48 s) — and resample *that* window directly into exactly 15360
-samples in one pass. That's a genuine, smooth time-stretch: every output
-sample derives from real audio spanning proportionally more or less time, no
-seam, no discard.
-
-**Why this is a bigger lift than it looks.** `02_set/extract.py` hands every
-embedder pre-sliced, non-overlapping `framelength_s`-long frames (concatenated
-per label group, not necessarily contiguous in time — see the standing fact on
-`context-stack`). There is no live mechanism today for an embedder to request
-*more* real audio than its own declared frame boundary; the `context_frames`
-padding described in `yamnet_context_aves`'s docstring is not implemented
-anywhere in current `extract.py` (checked 2026-09-13 — grepping the file for
-`context_frames` returns nothing; that docstring claim is stale or was never
-landed). Getting a genuinely wider real-time window per frame means changing
-how `extract.py` slices audio for a frame at all — closer to the AVES-style
-"wider window, same hop" scheme than to a train-time trick — and needs care
-with `overlap_event_s`/labelling semantics (`framelength-changes-labels`) and
-with `frametimes.csv` (a wider window has a different, ambiguous "start").
-That is real shared-infrastructure surgery, not a self-contained embedder, so
-treat it as its own dedicated loop rather than folding it into the current
+**The up direction can't be fixed the same way, and the reason is arithmetic,
+not implementation.** Feeding YAMNet 15360 *real, non-repeated* samples that
+span *more* than 0.96 s (so compressing them raises the pitch instead of
+lowering it) requires more unique real audio than a single 0.96 s frame ever
+contains, at any native rate. That audio exists only in the frame's temporal
+*neighbours* — so removing the tile-seam on the up side means reading real
+audio from outside the current frame's boundary, which `02_set/extract.py`
+has no live mechanism for today (the `context_frames` padding described in
+`yamnet_context_aves`'s docstring isn't implemented anywhere in current
+`extract.py` — checked 2026-09-13, grep returns nothing; that docstring claim
+is stale or never landed). Getting there means changing how `extract.py`
+slices audio for a frame at all, with the same care `context-stack` already
+flagged around `overlap_event_s`/labelling and `frametimes.csv`. That's real
+shared-infrastructure surgery, not a self-contained embedder, so treat it as
+its own dedicated loop rather than folding it into the current
 pitch-shift rungs.
 
-*Falsifier:* if the tile/crop rungs' hard-fold pattern (particularly the
-mechanism read on `1_95`/`1_114`) doesn't change once the seam/discard artifact
-is removed, the artifact wasn't doing the work and the resample-window
-construction is a purity improvement, not a result mover — worth knowing
-either way before spending the extraction surgery on a third pitch-shift
-family.
+*Falsifier:* if the x2/x4 rungs' hard-fold pattern (particularly the mechanism
+read on `1_95`/`1_114`) doesn't change once the tile-seam is removed, the seam
+wasn't doing the work and the decimation construction is a purity improvement,
+not a result mover — worth knowing either way before spending the extraction
+surgery on a third up-shift family.
 
 ## 1e. Fix the epoch budget — DEMOTED 2026-09-11, premise weakened
 
