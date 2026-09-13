@@ -1,0 +1,127 @@
+
+=== List A: hard negatives / missing annotations (top 50 by activation_ins_buzz, label != buzz) ===
+                                                   ident        start                 wall_clock                          label  activation_ins_buzz
+                     Luke - Diel Drivers/2026-05-06/1_95  95849.47968 2026-05-07 22:01:29.479680                     mech_plane             0.758128
+                     Luke - Diel Drivers/2026-05-06/1_95  88630.27968 2026-05-07 20:01:10.279680                      mech_auto             0.700919
+                     Luke - Diel Drivers/2026-05-06/1_95  88753.15968 2026-05-07 20:03:13.159680                     mech_plane             0.695283
+                     Luke - Diel Drivers/2026-05-06/1_95  95811.07968 2026-05-07 22:00:51.079680                     mech_plane             0.686852
+                     Luke - Diel Drivers/2026-05-06/1_95  88632.19968 2026-05-07 20:01:12.199680             ambient_background             0.658427
+                     Luke - Diel Drivers/2026-05-06/1_95  95850.43968 2026-05-07 22:01:30.439680                     mech_plane             0.641853
+                     Luke - Diel Drivers/2026-05-06/1_95  95836.99968 2026-05-07 22:01:16.999680                     mech_plane             0.640914
+                     Luke - Diel Drivers/2026-05-06/1_95  95810.11968 2026-05-07 22:00:50.119680                     mech_plane             0.639167
+                     Luke - Diel Drivers/2026-05-06/1_95  63636.67968 2026-05-07 13:04:36.679680                     mech_plane             0.638824
+                     Luke - Diel Drivers/2026-05-06/1_95  95839.87968 2026-05-07 22:01:19.879680                     mech_plane             0.638737
+                     Luke - Diel Drivers/2026-05-06/1_95  88629.31968 2026-05-07 20:01:09.319680                      mech_auto             0.637934
+                   Lily - Fit+Fast/2023_R3_Marysville/53  85971.44128 2023-08-09 12:00:51.441280             ambient_background             0.623926
+                     Luke - Diel Drivers/2026-05-06/1_95  74334.02278 2026-05-07 16:02:54.022780                      mech_auto             0.623589
+                     Luke - Diel Drivers/2026-05-06/1_95  95848.51968 2026-05-07 22:01:28.519680                     mech_plane             0.619146
+                     Luke - Diel Drivers/2026-05-06/1_95  95809.15968 2026-05-07 22:00:49.159680                     mech_plane             0.616818
+                     Luke - Diel Drivers/2026-05-06/1_95  95843.71968 2026-05-07 22:01:23.719680                     mech_plane             0.609895
+                     Luke - Diel Drivers/2026-05-06/1_95  88742.59968 2026-05-07 20:03:02.599680                     mech_plane             0.604387
+                     Luke - Diel Drivers/2026-05-06/1_95  95823.55968 2026-05-07 22:01:03.559680                     mech_plane             0.593779
+                     Luke - Diel Drivers/2026-05-06/1_95  95855.23968 2026-05-07 22:01:35.239680                     mech_plane             0.581409
+                     Luke - Diel Drivers/2026-05-06/1_95  88642.75968 2026-05-07 20:01:22.759680             ambient_background             0.569781
+                     Luke - Diel Drivers/2026-05-06/1_95  95832.19968 2026-05-07 22:01:12.199680                     mech_plane             0.569033
+                     Luke - Diel Drivers/2026-05-06/1_95  88747.39968 2026-05-07 20:03:07.399680                     mech_plane             0.568548
+Luke - Various Opportunistic Recordings/2025-08-12/1_114 110248.03968 2025-08-13 19:02:28.039680  ins_trill;mech_hum;mech_plane             0.564378
+                     Luke - Diel Drivers/2026-05-06/1_95  95859.07968 2026-05-07 22:01:39.079680                     mech_plane             0.563409
+                     Luke - Diel Drivers/2026-05-06/1_95  95798.59968 2026-05-07 22:00:38.599680                     mech_plane             0.559852
+                     Luke - Diel Drivers/2026-05-06/1_95  88752.19968 2026-05-07 20:03:12.199680                     mech_plane             0.559282
+                     Luke - Diel Drivers/2026-05-06/1_95  95845.63968 2026-05-07 22:01:25.639680                     mech_plane             0.555925
+                     Luke - Diel Drivers/2026-05-06/1_95  88743.55968 2026-05-07 20:03:03.559680                     mech_plane             0.553178
+Luke - Various Opportunistic Recordings/2025-08-12/1_114  92368.03968 2025-08-13 14:04:28.039680                      ins_trill             0.550443
+                     Luke - Diel Drivers/2026-05-06/1_95  95841.79968 2026-05-07 22:01:21.799680                     mech_plane             0.544873
+ Luke - Various Opportunistic Recordings/2025-07-03/1_37  91701.79968 2025-07-04 18:03:21.799680                     mech_plane             0.541950
+                     Luke - Diel Drivers/2026-05-06/1_95  95829.31968 2026-05-07 22:01:09.319680                     mech_plane             0.535571
+Luke - Various Opportunistic Recordings/2025-08-12/1_114 110162.59968 2025-08-13 19:01:02.599680  ins_trill;mech_hum;mech_plane             0.518292
+                     Luke - Diel Drivers/2026-05-06/1_95  88751.23968 2026-05-07 20:03:11.239680                     mech_plane             0.518007
+                     Luke - Diel Drivers/2026-05-06/1_95  95857.15968 2026-05-07 22:01:37.159680                     mech_plane             0.517758
+                     Luke - Diel Drivers/2026-05-06/1_95  88746.43968 2026-05-07 20:03:06.439680                     mech_plane             0.516059
+                     Luke - Diel Drivers/2026-05-06/1_95  74286.02278 2026-05-07 16:02:06.022780 ambient_music;human;mech_plane             0.506489
+ Lily Adam - One Hive/recorders/wooster/2024-07-26/1_143 109037.95968 2024-07-27 21:03:17.959680            ins_trill;mech_auto             0.501717
+                     Luke - Diel Drivers/2026-05-06/1_95  95804.35968 2026-05-07 22:00:44.359680                     mech_plane             0.500597
+                   Lily - Fit+Fast/2023_R3_Marysville/53  85947.44128 2023-08-09 12:00:27.441280             ambient_background             0.500516
+                   Lily - Fit+Fast/2023_R3_Marysville/53  85936.88128 2023-08-09 12:00:16.881280             ambient_background             0.484311
+Luke - Various Opportunistic Recordings/2025-08-12/1_114 110258.59968 2025-08-13 19:02:38.599680  ins_trill;mech_hum;mech_plane             0.480849
+                            JamesU - MustardBumbler/1_29  96180.19968 2024-09-04 16:02:00.199680                      ins_trill             0.477340
+                     Luke - Diel Drivers/2026-05-06/1_95  95808.19968 2026-05-07 22:00:48.199680                     mech_plane             0.473193
+                     Luke - Diel Drivers/2026-05-06/1_95  95853.31968 2026-05-07 22:01:33.319680                     mech_plane             0.470861
+                     Luke - Diel Drivers/2026-05-06/1_95  88776.19968 2026-05-07 20:03:36.199680                     mech_plane             0.465345
+                     Luke - Diel Drivers/2026-05-06/1_95  95852.35968 2026-05-07 22:01:32.359680                     mech_plane             0.463423
+                     Luke - Diel Drivers/2026-05-06/1_95  95851.39968 2026-05-07 22:01:31.399680                     mech_plane             0.462810
+                     Luke - Diel Drivers/2026-05-06/1_95  95865.79968 2026-05-07 22:01:45.799680                     mech_plane             0.461089
+                     Luke - Diel Drivers/2026-05-06/1_95  74166.98278 2026-05-07 16:00:06.982780           mech_auto;mech_plane             0.453016
+
+ident counts in list A:
+ident
+Luke - Diel Drivers/2026-05-06/1_95                         40
+Luke - Various Opportunistic Recordings/2025-08-12/1_114     4
+Lily - Fit+Fast/2023_R3_Marysville/53                        3
+Luke - Various Opportunistic Recordings/2025-07-03/1_37      1
+Lily Adam - One Hive/recorders/wooster/2024-07-26/1_143      1
+JamesU - MustardBumbler/1_29                                 1
+
+=== List B: hard positives / mislabels (bottom 50 by activation_ins_buzz, label == buzz) ===
+                                                   ident        start                 wall_clock                                   label  activation_ins_buzz
+                   Lily - Fit+Fast/2023_R3_Marysville/53  93171.07968 2023-08-09 14:00:51.079680                     ins_buzz;mech_plane             0.006021
+Luke - Various Opportunistic Recordings/2025-08-12/1_114 113827.87968 2025-08-13 20:02:07.879680                      ins_buzz;ins_trill             0.006807
+  Lily Adam - One Hive/recorders/willard/2024-08-07/1_11 110800.51968 2024-08-08 17:02:40.519680             ambient_background;ins_buzz             0.009847
+                     Luke - Diel Drivers/2026-05-06/1_95  88576.51968 2026-05-07 20:00:16.519680                                ins_buzz             0.009883
+                            JamesU - MustardBumbler/1_29  74551.39968 2024-09-04 10:01:31.399680           ins_buzz;mech_auto;mech_plane             0.010642
+                            JamesU - MustardBumbler/1_29  74561.95968 2024-09-04 10:01:41.959680           ins_buzz;mech_auto;mech_plane             0.011499
+                     Luke - Diel Drivers/2026-05-06/1_95  49083.12318 2026-05-07 09:02:03.123180             ambient_background;ins_buzz             0.011710
+                            JamesU - MustardBumbler/1_29  74562.91968 2024-09-04 10:01:42.919680           ins_buzz;mech_auto;mech_plane             0.012265
+                            JamesU - MustardBumbler/1_29  85390.75968 2024-09-04 13:02:10.759680                      ins_buzz;ins_trill             0.012664
+Luke - Various Opportunistic Recordings/2025-08-12/1_114 113756.83968 2025-08-13 20:00:56.839680                      ins_buzz;ins_trill             0.012754
+                     Luke - Diel Drivers/2026-05-06/1_95  49085.04318 2026-05-07 09:02:05.043180             ambient_background;ins_buzz             0.012884
+                    Luke - Diel Drivers/2026-04-08/1_150  73083.17478 2026-04-09 16:00:03.174780             ambient_background;ins_buzz             0.012979
+                            JamesU - MustardBumbler/1_29  85346.59968 2024-09-04 13:01:26.599680                      ins_buzz;ins_trill             0.013405
+                            JamesU - MustardBumbler/1_29  96277.15968 2024-09-04 16:03:37.159680                      ins_buzz;ins_trill             0.013538
+                            JamesU - MustardBumbler/1_29  81925.15968 2024-09-04 12:04:25.159680        ambient_noise;ins_buzz;ins_trill             0.013548
+                            JamesU - MustardBumbler/1_29  74537.95968 2024-09-04 10:01:17.959680           ins_buzz;mech_auto;mech_plane             0.013709
+Luke - Various Opportunistic Recordings/2025-08-12/1_114 113979.55968 2025-08-13 20:04:39.559680                      ins_buzz;ins_trill             0.014087
+                            JamesU - MustardBumbler/1_29  81789.79968 2024-09-04 12:02:09.799680                                ins_buzz             0.015016
+                    Luke - Diel Drivers/2026-04-08/1_150  66158.59968 2026-04-09 14:04:38.599680                      ins_buzz;mech_auto             0.015181
+                            JamesU - MustardBumbler/1_29  88874.59968 2024-09-04 14:00:14.599680                      ins_buzz;ins_trill             0.015419
+                            JamesU - MustardBumbler/1_29  74556.19968 2024-09-04 10:01:36.199680           ins_buzz;mech_auto;mech_plane             0.015997
+                     Luke - Diel Drivers/2026-05-06/1_95  88694.59968 2026-05-07 20:02:14.599680                                ins_buzz             0.016264
+Luke - Various Opportunistic Recordings/2025-08-12/1_114  67079.23800 2025-08-13 07:02:59.238000                      ins_buzz;ins_trill             0.016303
+                            JamesU - MustardBumbler/1_29  81875.23968 2024-09-04 12:03:35.239680        ambient_noise;ins_buzz;ins_trill             0.016381
+                     Luke - Diel Drivers/2026-05-06/1_95  88575.55968 2026-05-07 20:00:15.559680             ambient_background;ins_buzz             0.016409
+Luke - Various Opportunistic Recordings/2025-08-12/1_114  67026.91968 2025-08-13 07:02:06.919680                      ins_buzz;ins_trill             0.016472
+ Lily Adam - One Hive/recorders/wooster/2024-07-26/1_143  87420.67968 2024-07-27 15:03:00.679680                      ins_buzz;mech_auto             0.016510
+                    Luke - Diel Drivers/2026-04-08/1_150  66166.27968 2026-04-09 14:04:46.279680             ambient_background;ins_buzz             0.016513
+                     Luke - Diel Drivers/2026-05-06/1_95  59985.06148 2026-05-07 12:03:45.061480                                ins_buzz             0.016565
+ Luke - Various Opportunistic Recordings/2025-07-03/1_37  66336.67968 2025-07-04 11:00:36.679680                                ins_buzz             0.016639
+                            JamesU - MustardBumbler/1_29  85362.91968 2024-09-04 13:01:42.919680                      ins_buzz;ins_trill             0.016649
+                            JamesU - MustardBumbler/1_29  74553.31968 2024-09-04 10:01:33.319680           ins_buzz;mech_auto;mech_plane             0.017166
+  Lily Adam - One Hive/recorders/willard/2024-08-07/1_11  89328.14608 2024-08-08 11:04:48.146080             ambient_background;ins_buzz             0.017191
+                     Luke - Diel Drivers/2026-05-06/1_95  78049.42398 2026-05-07 17:04:49.423980             ambient_background;ins_buzz             0.017364
+                            JamesU - MustardBumbler/1_29  85311.07968 2024-09-04 13:00:51.079680                      ins_buzz;ins_trill             0.017522
+                     Luke - Diel Drivers/2026-05-06/1_95  88593.79968 2026-05-07 20:00:33.799680             ambient_background;ins_buzz             0.017821
+                            JamesU - MustardBumbler/1_29  74552.35968 2024-09-04 10:01:32.359680           ins_buzz;mech_auto;mech_plane             0.017981
+                            JamesU - MustardBumbler/1_29  85418.59968 2024-09-04 13:02:38.599680                      ins_buzz;ins_trill             0.018248
+                   Lily - Fit+Fast/2023_R3_Marysville/53  86206.64128 2023-08-09 12:04:46.641280                     ins_buzz;mech_plane             0.018448
+                     Luke - Diel Drivers/2026-05-06/1_95  60003.30148 2026-05-07 12:04:03.301480                  ambient_music;ins_buzz             0.018616
+Luke - Various Opportunistic Recordings/2025-08-12/1_114 103015.39968 2025-08-13 17:01:55.399680   ins_buzz;ins_trill;mech_auto;mech_hum             0.018672
+                     Luke - Diel Drivers/2026-05-06/1_95  78025.73848 2026-05-07 17:04:25.738480                                ins_buzz             0.018814
+                     Luke - Diel Drivers/2026-05-06/1_95  66971.71968 2026-05-07 14:00:11.719680                                ins_buzz             0.019107
+                   Lily - Fit+Fast/2023_R3_Marysville/53  86136.56128 2023-08-09 12:03:36.561280                                ins_buzz             0.019130
+                            JamesU - MustardBumbler/1_29  74559.07968 2024-09-04 10:01:39.079680 ins_buzz;ins_trill;mech_auto;mech_plane             0.019145
+                            JamesU - MustardBumbler/1_29  92501.47968 2024-09-04 15:00:41.479680                      ins_buzz;ins_trill             0.019159
+                            JamesU - MustardBumbler/1_29  88872.67968 2024-09-04 14:00:12.679680                      ins_buzz;ins_trill             0.019200
+ Lily Adam - One Hive/recorders/wooster/2024-07-26/1_143  69298.75968 2024-07-27 10:00:58.759680                                ins_buzz             0.019484
+                     Luke - Diel Drivers/2026-05-06/1_95  49084.08318 2026-05-07 09:02:04.083180             ambient_background;ins_buzz             0.019500
+                     Luke - Diel Drivers/2026-05-06/1_95  49082.16318 2026-05-07 09:02:02.163180             ambient_background;ins_buzz             0.019593
+
+ident counts in list B:
+ident
+JamesU - MustardBumbler/1_29                                20
+Luke - Diel Drivers/2026-05-06/1_95                         13
+Luke - Various Opportunistic Recordings/2025-08-12/1_114     6
+Lily - Fit+Fast/2023_R3_Marysville/53                        3
+Luke - Diel Drivers/2026-04-08/1_150                         3
+Lily Adam - One Hive/recorders/willard/2024-08-07/1_11       2
+Lily Adam - One Hive/recorders/wooster/2024-07-26/1_143      2
+Luke - Various Opportunistic Recordings/2025-07-03/1_37      1
+

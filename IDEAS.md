@@ -404,39 +404,32 @@ the unshifted block's and the headline is inside MDE, YAMNet reads nothing new
 from the shifted copy. Run the x4 rung too if x2 is directionally positive —
 MDE says one rung is not readable.
 
-## 7. Annotation triage by embedding search — tells Luke what to annotate next
+## 7. Annotation triage by embedding search into genuinely unannotated audio
 
-*Evidence: **untagged proposal.** Both halves it needs are **E3** and on disk.*
+*Evidence: **untagged proposal**, narrowed 2026-09-13
+(`diagnostics/2026-09-13_annotation-triage/`) after the surprisal-only half of
+this idea turned out to be feasible for free and got run.*
 
-Annotation is the standing bottleneck, and LOOP.md weights instrumentation
-highest because it costs one cheap run and recomputes free forever. The field
-has converged on an answer to "what should I label next": **agile modeling** —
-vector search over a frozen embedding database plus active learning, producing
-a usable recogniser for a novel concept in under an hour (`perch-hoplite`; "The
-Search for Squawk", arXiv:2505.03071, 2025; hybrid disagreement-diversity
-active learning for bioacoustic SED, arXiv:2505.20956, 2025). We have the
-cached embeddings and the per-frame activations in
-`<model>/surprisal/<ident>_surprisal.csv`.
+**The activation-ranking half of this idea is done, and it was cheaper than
+expected: zero extraction, using `<model>/surprisal/**/*_surprisal.csv`
+directly.** `tools/annotation_triage.py <model dir>` ranks already-annotated
+held-out frames by `activation_ins_buzz`, both directions. The high-activation
+non-buzz list is dominated (27/30, all of the top 23) by `1_95`'s jet minutes —
+the pre-registered correctness check — so the ranking is sound. See the
+diagnostic's README for the full read, including why List B skews toward
+`1_29`'s long `_background` spans.
 
-One script, two ranked lists per deployment:
-1. **Nearest neighbours of `1_150`'s confirmed positives** in unannotated
-   — note the original wording said *quiet* positives, and quiet buzz no longer
-   scores; target the tiers that do, or target *untagged* frames specifically to
-   grow the tagged pool
-   audio — the low-SNR positives that fold needs.
-2. **High-buzz-activation frames the embedding neighbourhood says are not
-   buzz** — candidate hard negatives. `1_95`'s jet minutes should top this list;
-   that is the correctness check on the script.
-
-Output an audition-ready CSV: ident, snip, offset, wall clock, score, nearest
-labelled neighbour. No training, no extraction, no fold-safety question — it
-produces a *reading list*, and anything Luke labels re-enters through
-`01_annotate/` normally.
-
-*Falsifier:* if the top-50 of list 1 is dominated by frames Luke judges
-obviously non-buzz, the embedding neighbourhood is not carrying the concept at
-low SNR, and the whole "better representation" branch of this queue is weaker
-than it looks. Worth knowing for half a day's work.
+**What that script cannot do, and what's still open:** it only ever ranks
+frames that are already annotated (the surprisal file only covers held-out
+*labeled* frames). `02_set` extracts embeddings **only for annotated audio** —
+pickle filenames are the label combination present in that snip — so there is
+currently no cached embedding for a single frame of genuinely unlabeled audio,
+anywhere on disk. The original goal, a true "what to annotate next" reading
+list built from nearest-neighbour search into audio nobody has heard yet,
+needs one extraction pass over full-day recordings first (not the free op this
+idea assumed). That extraction, plus the vector-search half over its output,
+is the remaining, untested piece — scope it as its own item when full-day raw
+audio access is worth spending an extraction on.
 
 ## 8. night-negatives — blocked on a data decision from Luke
 
