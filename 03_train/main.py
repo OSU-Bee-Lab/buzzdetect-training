@@ -42,6 +42,15 @@ if __name__ == '__main__':
                              'happens, so every arm of a comparison is scored '
                              'at one identical epoch. Vary it to run a budget '
                              'ladder; 400 is provisional — see 03_train/CLAUDE.md.')
+    parser.add_argument('--hidden', type=int, default=0,
+                        help='width of a shared ReLU hidden layer between the '
+                             'input dropout and the class logits (default 0 = '
+                             'no hidden layer, the era anchor\'s decoupled '
+                             'head). h>0 gives all classes one learned '
+                             'representation, so auxiliary-class supervision '
+                             'can reach the buzz neuron. exp/hidden-head-verify, '
+                             'porting exp/yamnet-aves-head-fixed onto the '
+                             'cv-medium-v3 era.')
     parser.add_argument('--early-stop', action='store_true', dest='early_stop',
                         help='the pre-2026-09-11 rule: stop on the val_loss '
                              'argmin with --patience, restoring the true best. '
@@ -102,6 +111,7 @@ if __name__ == '__main__':
         # --early-stop turns the fixed budget off; they are one rule, not two.
         fixed_epochs=None if args.early_stop else args.fixed_epochs,
         dropout=args.dropout,
+        hidden=args.hidden,
         # --skip-cv means 'shipped model only', so it has to turn it on.
         train_shipped=args.train_shipped or args.skip_cv,
         only_folds=args.only_folds,
