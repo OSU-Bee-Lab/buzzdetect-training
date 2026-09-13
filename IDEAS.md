@@ -371,38 +371,32 @@ MDE, the final layer is the right read and this closes for real.
 `yamnet_aves`-shaped cache and would be indistinguishable. Run whichever fits
 the box first; the loser is still worth a run.
 
-## 5. Pitch-shifted YAMNet block — move the buzz into the band the models know
+## 5. Pitch-shifted YAMNet block, x4 rung — the x2 rung was the era's largest clean gain
 
-*Evidence: **untagged proposal.** The nearest E1 relatives (`yamnet-bandpass`
--0.047, `yamnet-mask` -0.143) are why this must be a **concat**, not a
-replacement.*
+*Evidence: **E4**, `exp/yamnet-pitchshift` (bare linear probe, no hidden
+layer). x2 confirmed at +0.069 +/- 0.011 headline, 8/8 folds up — see
+`log.jsonl`.*
 
-Honey-bee flight is ~230 Hz with harmonics. YAMNet's mel starts at 125 Hz and
-is near-linear below 1 kHz, and AudioSet's, BirdNET's and Perch's training mass
-sits at 1-8 kHz — a buzz's fundamental and first harmonics are at the bottom
-edge of every encoder we have. EarthChirp (2026) makes the inverse move
-deliberately, time-expanding **ultrasonic** insects down into a 16 kHz model's
-range with a frozen Perch and no retraining: direct evidence that shifting a
-target into a frozen model's trained band is a lever, not a distortion.
+The x2 rung (resample each 0.96 s frame 16k->8k, relabel as 16k so playback
+doubles every frequency, tile 2x back to a full patch, concat with the
+unshifted YAMNet block -> 2048-d) is done and is the largest, cleanest
+headline gain logged this era: **8/8 folds up**, both hard folds up
+(`1_150` +0.086 +/- 0.050, `1_95` +0.025 +/- 0.019), `1_114` the standout
+(+0.181 +/- 0.038). `embedders/yamnet_pitchshift/embedder.py` is the
+implementation to extend, not `yamnet_doublerate/` (wrong framelength_s —
+see the module docstring for why).
 
-Resample each frame's audio x2 (pitch up an octave, duration halved), tile back
-to the full patch length so YAMNet sees 0.96 s of signal, embed, and **concat
-with the unshifted block** -> 2048-d. Harmonics land at 460/920/1380 Hz, where
-the filterbank is log-spaced and AudioSet is dense.
+**Untested remainder, per the original falsifier:** "run the x4 rung too if
+x2 is directionally positive — MDE says one rung is not readable." It clearly
+is positive, so a third 1024-d block (resample 16k->4k this time, pitch up
+two octaves, harmonics at 920/1840/2760 Hz) concatenated onto the existing
+2048-d cache is the next cheap step: no re-extraction of the x2 block, one
+new resample ratio in a `yamnet_pitchshift_x4` variant, one CV at 3072-d.
 
-`embedders/yamnet_doublerate/` exists and **has never been run in any era** —
-but do not use it as-is: it declares `framelength_s = 0.48`, changing the frame
-grid, frame count and `overlap_event_s`, i.e. reproducing the confound that
-sank `perch-probe` and `framehop-overlap`. Resample **inside `embed()`** at
-`framelength_s = 0.96` so grid and labels are untouched.
-
-*Cost:* one YAMNet extraction (the cheap embedder) + one CV at 2048-d h1024,
-~1.1x `yavf_h1024`.
-
-*Falsifier:* if the shifted block's learned per-dim weight norm is under ~0.7x
-the unshifted block's and the headline is inside MDE, YAMNet reads nothing new
-from the shifted copy. Run the x4 rung too if x2 is directionally positive —
-MDE says one rung is not readable.
+*Falsifier:* if x4's own hard-fold pattern doesn't track x2's (particularly
+`1_114`, the standout fold) the win may be about *a* shift rather than
+specifically the octave chosen — worth knowing before picking a final ratio
+for the shipped model.
 
 ## 7. Annotation triage by embedding search into genuinely unannotated audio
 
