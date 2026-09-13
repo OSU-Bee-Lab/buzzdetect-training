@@ -85,7 +85,24 @@ if __name__ == '__main__':
                         help='skip the per-frame surprisal CSVs under '
                              '<model>/surprisal/ (written by default, one file '
                              'per source ident, for finding bad annotations)')
+    parser.add_argument('--context-frames', type=int, default=0, dest='context_frames',
+                        help='train-time temporal context: widen each frame with '
+                             'this many real neighbours each side, looked up by '
+                             'source time via frametimes.csv (default 0 = off).')
+    parser.add_argument('--context-dims', type=int, default=0, dest='context_dims',
+                        help='restrict --context-frames to the leading DIMS of '
+                             'the embedding (0 = the whole embedding).')
+    parser.add_argument('--context-mode', default='concat', dest='context_mode',
+                        choices=['concat', 'asymmetric'],
+                        help="'concat' widens with [neighbours..., centre] "
+                             "(reproduces yamnet-aves-context); 'asymmetric' "
+                             "(IDEAS.md item 10) feeds [centre, centre - "
+                             "mean(neighbours)] instead.")
     args = parser.parse_args()
+
+    if args.context_frames:
+        import dataset
+        dataset.set_context(args.context_frames, args.context_dims, args.context_mode)
 
     train_set(
         name=args.name,

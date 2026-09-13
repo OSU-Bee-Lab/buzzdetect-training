@@ -15,7 +15,7 @@ import tensorflow as tf
 import config as cfg
 
 from dataset import (
-    build_fold_dataset, load_augmented, read_fold_roles, folds_by_role,
+    build_fold_dataset, context_width, load_augmented, read_fold_roles, folds_by_role,
     survey_untranslated, ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT,
 )
 from train_utils import (build_weights, build_classes, can_write,
@@ -324,7 +324,9 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     # strip separators here rather than relying on the caller's naming.
     tf_name = re.sub(r'[^A-Za-z0-9_.>-]', '_', modelname)
     model = tf.keras.Sequential(name=tf_name)
-    model.add(tf.keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input'))
+    # context_width(): --context-frames widens the cached embedding at load
+    # time (dataset.apply_context); a no-op (returns n_embeddings) otherwise.
+    model.add(tf.keras.layers.Input(shape=(context_width(embedder.n_embeddings),), dtype=tf.float32, name='input'))
     # The era's baseline is the bare linear probe: one Dense straight off the
     # frozen embedding, no dropout, no hidden layer. Dropout was 0.2 and
     # hardcoded through 2026-09-11; it is a regulariser tuned on YAMNet's

@@ -140,7 +140,9 @@ def build_fold_dataset(dir_samples, translation, labels_keep_raw=None, exclusive
                 f'all {len(samples)} embedding file(s) under {dir_samples} were '
                 f'dropped by the translation; raw label(s) present: {labels_raw}'
             )
-    return samples_out
+    # Train-time temporal context, if any — see "Train-time temporal context"
+    # at the bottom of this file. A no-op unless set_context() was called.
+    return apply_context(samples_out)
 
 
 def load_augmented(setname, embeddername, aug_dirnames, translation, train_folds):
@@ -252,3 +254,175 @@ def folds_by_role(roles, role):
 # leaks site identity into the early-stopping signal and biases the stopping
 # epoch late. Submodels early-stop on their held-out fold instead; the shipped
 # model has no monitor and trains to the median of their best epochs.
+
+
+# ---------------------------------------------------------------------------
+# Train-time temporal context (ported from exp/yamnet-aves-context; IDEAS.md
+# item 10 adds CONTEXT_MODE='asymmetric')
+# ---------------------------------------------------------------------------
+#
+# `yamnet_context` folds a frame's neighbours into its embedding at EXTRACTION
+# time, which is why it needs contiguous audio and its own 982 MB cache. The
+# same widening can be done at TRAIN time over an existing cache, because
+# `frametimes.csv` (written per ident by 02_set/extract.py) records every
+# embedding row's start time in source-file seconds: row i of `<label>.pickle`
+# started at `start`. Two rows of the same ident that are one frame apart in
+# source time were one frame apart in the audio, whatever pickle they landed in.
+#
+# This is the honest neighbour, not the `context-stack` bug: neighbours are
+# looked up by SOURCE TIME, never by adjacency inside a label pickle (which
+# would hand every frame a same-label neighbour and leak the label).
+#
+# Frames whose neighbour is absent — the ends of a snip, the gaps between snips
+# — clamp to themselves, exactly as EmbedderYamnetContext does at a buffer edge.
+#
+# CONTEXT_MODE='concat' reproduces yamnet-aves-context's behaviour: the frame
+# plus each of its 2k neighbours, concatenated. CONTEXT_MODE='asymmetric' is
+# IDEAS.md item 10: a linear readout of a concat can only take a fixed
+# weighted sum, so it cannot compute "this frame stands out from its own
+# neighbours" -- that contrast is a per-frame quantity. This mode feeds the
+# contrast explicitly instead: [e_t, e_t - mean(neighbours)], so the same
+# information is available to a linear head without inventing new capacity.
+#
+# CONTEXT_DIMS restricts the widening to a leading block of the embedding, so a
+# concat embedder can have context applied to one of its blocks only.
+
+CONTEXT_FRAMES = 0
+CONTEXT_DIMS = 0        # 0 = the whole embedding
+CONTEXT_MODE = 'concat'  # 'concat' or 'asymmetric'
+
+
+def set_context(frames, dims=0, mode='concat'):
+    global CONTEXT_FRAMES, CONTEXT_DIMS, CONTEXT_MODE
+    CONTEXT_FRAMES = int(frames or 0)
+    CONTEXT_DIMS = int(dims or 0)
+    CONTEXT_MODE = mode
+
+
+def context_width(n_embeddings):
+    """Input width a model sees for an `n_embeddings`-wide cache under the
+    current context setting."""
+    k = CONTEXT_FRAMES
+    if k == 0:
+        return n_embeddings
+    d = CONTEXT_DIMS or n_embeddings
+    if not 0 < d <= n_embeddings:
+        raise ValueError(f'context dims {d} outside embedding width {n_embeddings}')
+    if CONTEXT_MODE == 'asymmetric':
+        return 2 * d + (n_embeddings - d)
+    return d * (2 * k + 1) + (n_embeddings - d)
+
+
+_warned_no_frametimes = set()
+
+
+def _frametimes_index(dir_ident):
+    """(label, row) -> start, and start -> (label, row), for one ident."""
+    path = os.path.join(dir_ident, 'frametimes.csv')
+    if not os.path.exists(path):
+        return None
+    ft = pd.read_csv(path)
+    by_row = {(str(r.label), int(r.row)): round(float(r.start), 3)
+              for r in ft.itertuples()}
+    by_start = {}
+    for (label, row), start in by_row.items():
+        by_start.setdefault(start, (label, row))   # first wins on a collision
+    return by_row, by_start
+
+
+def _grid_seconds(by_start):
+    """Frame pitch, as the modal positive gap between consecutive frame starts.
+
+    Inferred rather than taken from the embedder so this works over any cache
+    without importing TensorFlow; a cache whose starts give no repeated gap is
+    not on a grid and cannot carry context.
+    """
+    starts = sorted(by_start)
+    gaps = {}
+    for a, b in zip(starts, starts[1:]):
+        g = round(b - a, 3)
+        if g > 0:
+            gaps[g] = gaps.get(g, 0) + 1
+    if not gaps:
+        return None
+    return max(gaps, key=gaps.get)
+
+
+def apply_context(samples):
+    """Widen every sample's embeddings with its frames' temporal neighbours.
+
+    `samples` is one fold's worth from build_fold_dataset; they are grouped by
+    ident (the directory each pickle sits in) because frametimes.csv, and the
+    contiguity it describes, are per-ident.
+    """
+    import numpy as np
+
+    k = CONTEXT_FRAMES
+    if k == 0:
+        return samples
+
+    by_ident = {}
+    for s in samples:
+        by_ident.setdefault(os.path.dirname(s.path), []).append(s)
+
+    n_hit = n_tot = 0
+    for dir_ident, group in by_ident.items():
+        index = _frametimes_index(dir_ident)
+        if index is None:
+            if dir_ident not in _warned_no_frametimes:
+                _warned_no_frametimes.add(dir_ident)
+                warnings.warn(
+                    f'no frametimes.csv under {dir_ident}; every frame there '
+                    f'clamps to itself and carries no context')
+        by_row, by_start = (None, None) if index is None else index
+        grid = None if index is None else _grid_seconds(by_start)
+
+        # one array per (label, row) so a neighbour in another pickle is reachable
+        rows = {}
+        for s in group:
+            arr = np.asarray(s.embeddings, dtype=np.float32)
+            s.embeddings = arr
+            for i in range(len(arr)):
+                rows[(os.path.basename(s.path)[:-len('.pickle')], i)] = arr[i]
+
+        for s in group:
+            arr = s.embeddings
+            n, w = arr.shape
+            d = CONTEXT_DIMS or w
+            label = os.path.basename(s.path)[:-len('.pickle')]
+            out = np.empty((n, context_width(w)), dtype=np.float32)
+            for i in range(n):
+                neighbours = []
+                for off in range(-k, k + 1):
+                    if off == 0:
+                        continue
+                    vec = None
+                    if grid is not None:
+                        start = by_row.get((label, i))
+                        if start is not None:
+                            key = round(start + off * grid, 3)
+                            hit = by_start.get(key)
+                            if hit is not None and hit in rows:
+                                vec = rows[hit]
+                        n_tot += 1
+                        n_hit += vec is not None
+                    if vec is None:
+                        vec = arr[i]          # edge clamp
+                    neighbours.append(vec[:d])
+                center = arr[i][:d]
+                if CONTEXT_MODE == 'asymmetric':
+                    blocks = [center, center - np.mean(neighbours, axis=0)]
+                else:
+                    # concat mode: left-to-right neighbour order plus centre,
+                    # matching yamnet-aves-context exactly.
+                    it = iter(neighbours)
+                    blocks = [next(it) if off != 0 else center for off in range(-k, k + 1)]
+                if d < w:
+                    blocks.append(arr[i][d:])
+                out[i] = np.concatenate(blocks)
+            s.embeddings = out
+
+    if n_tot:
+        print(f'  context k={k} mode={CONTEXT_MODE}: {n_hit}/{n_tot} neighbours real '
+              f'({n_hit / n_tot:.1%}), rest clamped', flush=True)
+    return samples
