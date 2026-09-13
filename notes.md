@@ -28,18 +28,22 @@ embedder, same budget, hidden=0).
 
 ## Results
 
-| fold | control (h=0) | this (h=1024) | delta |
-|---|---|---|---|
-| 1_114 | 0.156 | 0.075 | -0.081 |
-| 1_37 | 0.382 | 0.347 | -0.035 |
-| 53 | 0.493 | 0.521 | +0.028 |
-| 1_29 | 0.465 | 0.495 | +0.030 |
-| wooster/1_143 | 0.487 | 0.533 | +0.046 |
-| **1_95 (jet, hard)** | 0.098 | 0.149 | **+0.051** |
-| **1_150 (positives, hard)** | 0.304 | 0.365 | **+0.061** |
-| willard/1_11 | 0.444 | 0.526 | +0.082 |
+Against the matched control (`yamnet-aves-verify`, hidden=0). `± SD` is the
+paired per-fold delta SD from `tools/eval_sampling_sd.py --other`, eval
+sampling only:
 
-- mean sens@fpr0.005 (excl. quiet): 0.354 -> 0.376 (**+0.022**)
+| fold | control (h=0) | this (h=1024) | delta | ± SD | buzz events |
+|---|---|---|---|---|---|
+| 1_114 | 0.156 | 0.075 | -0.081 | 0.030 | 14 |
+| 1_37 | 0.382 | 0.347 | -0.035 | 0.042 | 5 |
+| 53 | 0.493 | 0.521 | +0.028 | 0.039 | 9 |
+| 1_29 | 0.465 | 0.495 | +0.030 | 0.017 | 14 |
+| wooster/1_143 | 0.487 | 0.533 | +0.046 | 0.052 | 9 |
+| 1_95 (jet, hard) | 0.098 | 0.149 | +0.051 | 0.020 | 23 |
+| 1_150 (positives, hard) | 0.304 | 0.365 | +0.061 | 0.041 | 14 |
+| willard/1_11 | 0.444 | 0.526 | +0.082 | 0.026 | 14 |
+
+- mean sens@fpr0.005 (excl. quiet): 0.354 -> 0.376 (**+0.022 ± 0.012**)
 - inclusive: 0.283 -> 0.301 (+0.018)
 - 6/8 folds up, 2 down (1_114, 1_37 — same two folds that were also weak in
   `yamnet-aves-verify` itself, no new mechanism proposed here)
@@ -51,25 +55,32 @@ if modest, detection gain, not a quiet-buzz shuffle.
 
 ## Conclusion
 
-Headline delta (+0.022) sits inside the ~0.027 MDE, but the fold pattern is
-coherent rather than scattered — 6/8 up, and **both named hard folds moved up
-together for the first time this era**: 1_150 +0.061, 1_95 +0.051. Per
-LOOP.md, that concentration is the result, not a caveat on it; it is not
-grounds for `caveated` on its own.
+`--hidden 1024` on `yamnet_aves` is worth **+0.022 ± 0.012** on the headline,
+confirmed by the repeat draw in `notes-r2.md` (+0.031) — pooled ~+0.027, a real
+and modest positive. That is the result.
 
-This **reverses the sign** of the other two legs of item 1c
-(`hidden-head-verify`: plain YAMNet, null, 1_150 down; `hidden-context-verify`:
-yamnet_context, null, 1_150 down). All three ran the identical `--hidden 1024`
-mechanism at the identical budget — the only variable is the representation
-underneath. So `--hidden`'s effect is representation-dependent: it hurts
-1_150 on YAMNet and yamnet_context, but helps both hard folds on yamnet_aves.
-No mechanism proposed for why AVES concat specifically benefits from a shared
-representation where the other two don't; worth a look if this gets revisited
-(AVES's block is dense/signed vs YAMNet's sparse/non-negative code, which is
-also why `--dropout` behaves differently across representations per
-`03_train/CLAUDE.md`).
+**The per-fold reading in the original version of this file was wrong, and so
+was r2's rebuttal of it.** This section first argued that both named hard folds
+moving up together (1_150 +0.061, 1_95 +0.051) was "the result, not a caveat on
+it", and proposed a representation-dependent mechanism for it: `--hidden` hurts
+1_150 on YAMNet and yamnet_context but helps it on yamnet_aves. Then r2 drew
+1_150 at -0.044, and was written up as showing the r1 pattern was a one-draw
+artifact.
 
-Item 1c (all three legs) is now closed. `--hidden 1024` on `yamnet_aves` is a
-positive, inside-MDE lead worth combining with future `yamnet_aves`-based
-work, not something to build a headline claim on yet — one more run (a repeat
-draw) would settle whether the hard-fold coherence replicates.
+Neither claim survives contact with the fold's n. `1_150` holds **14 buzz
+events**, not 137 independent frames, and its paired delta SD is **0.041** from
+evaluation sampling alone, with training stochasticity larger again on top. So
++0.061 was weak evidence for a positive effect — real evidence, not noise to
+discard, but nowhere near enough to found a mechanism on — and the later -0.044
+is a second draw from the same wide distribution, not a refutation. A
+threshold-free read (pAUC over FPR<=0.005: control 0.217, r1 0.270, r2 0.208)
+agrees the two models genuinely differ on that fold, but not resolvably.
+
+`1_95` is the sturdier of the two, at +0.051 ± 0.020 and positive again in r2
+(+0.022 ± 0.015) — still not a mechanism, but the right place to look next.
+
+Item 1c (all three legs) is closed. The instrumentation gap this exposed is
+closed too: `folds_sx.csv` now carries `buzz_events_exclquiet`,
+`tools/eval_sampling_sd.py` bootstraps events instead of frames (it understated
+per-fold SD by up to ~8x), and LOOP.md requires a per-fold delta to be quoted
+with its SD.

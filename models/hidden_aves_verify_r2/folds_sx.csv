@@ -1,10 +1,10 @@
-fold,fpr,threshold,sensitivity,precision,sensitivity_exclquiet,sensitivity_faint,sensitivity_quiet,sensitivity_background,sensitivity_untagged,sensitivity_normal,sensitivity_loud,buzz_frames,faint_frames,quiet_frames,background_frames,untagged_frames,normal_frames,loud_frames,neg_frames,frames_val,best_epoch
-JamesU - MustardBumbler/1_29,0.005,-1.743,0.533,0.976,0.55,0.0,0.093,0.478,0.668,,0.0,2047,1,75,1208,759,0,4,26,7303,400
-Lily - Fit+Fast/2023_R3_Marysville/53,0.005,-1.515,0.533,0.944,0.556,,0.308,0.442,0.735,,1.0,991,0,91,596,251,0,53,31,7228,400
-Lily Adam - One Hive/recorders/willard/2024-08-07/1_11,0.005,-2.097,0.359,0.753,0.533,0.0,0.083,,0.481,,0.875,295,5,108,0,158,0,24,34,7256,400
-Lily Adam - One Hive/recorders/wooster/2024-07-26/1_143,0.005,-1.687,0.375,0.749,0.581,,0.101,,0.553,,0.818,184,0,79,0,94,0,11,23,4817,400
-Luke - Diel Drivers/2026-04-08/1_150,0.005,-1.345,0.197,0.533,0.26,,0.0,,0.26,,,137,0,33,0,104,0,0,23,4867,400
-Luke - Diel Drivers/2026-05-06/1_95,0.005,-0.396,0.092,0.497,0.12,,0.011,,0.12,,,369,0,93,0,276,0,0,34,7262,400
-Luke - Various Opportunistic Recordings/2025-07-03/1_37,0.005,-0.623,0.276,0.788,0.367,0.0,0.047,,0.323,,0.739,304,1,85,0,195,0,23,22,4832,400
-Luke - Various Opportunistic Recordings/2025-08-12/1_114,0.005,-0.384,0.104,0.715,0.112,0.0,0.0,,0.112,,,521,6,35,0,480,0,0,21,4817,400
-total,0.005,-1.224,0.309,0.744,0.385,0.0,0.08,0.46,0.406,,0.686,4848,13,599,1804,2317,0,115,214,48382,400
+fold,fpr,threshold,sensitivity,precision,sensitivity_exclquiet,sensitivity_faint,sensitivity_quiet,sensitivity_background,sensitivity_untagged,sensitivity_normal,sensitivity_loud,buzz_frames,buzz_events,buzz_events_exclquiet,faint_frames,quiet_frames,background_frames,untagged_frames,normal_frames,loud_frames,neg_frames,frames_val,best_epoch
+JamesU - MustardBumbler/1_29,0.005,-1.743,0.533,0.976,0.55,0.0,0.093,0.478,0.668,,0.0,2047,15,14,1,75,1208,759,0,4,26,7303,400
+Lily - Fit+Fast/2023_R3_Marysville/53,0.005,-1.515,0.533,0.944,0.556,,0.308,0.442,0.735,,1.0,991,9,9,0,91,596,251,0,53,31,7228,400
+Lily Adam - One Hive/recorders/willard/2024-08-07/1_11,0.005,-2.097,0.359,0.753,0.533,0.0,0.083,,0.481,,0.875,295,16,14,5,108,0,158,0,24,34,7256,400
+Lily Adam - One Hive/recorders/wooster/2024-07-26/1_143,0.005,-1.687,0.375,0.749,0.581,,0.101,,0.553,,0.818,184,9,9,0,79,0,94,0,11,23,4817,400
+Luke - Diel Drivers/2026-04-08/1_150,0.005,-1.345,0.197,0.533,0.26,,0.0,,0.26,,,137,18,14,0,33,0,104,0,0,23,4867,400
+Luke - Diel Drivers/2026-05-06/1_95,0.005,-0.396,0.092,0.497,0.12,,0.011,,0.12,,,369,30,23,0,93,0,276,0,0,34,7262,400
+Luke - Various Opportunistic Recordings/2025-07-03/1_37,0.005,-0.623,0.276,0.788,0.367,0.0,0.047,,0.323,,0.739,304,6,5,1,85,0,195,0,23,22,4832,400
+Luke - Various Opportunistic Recordings/2025-08-12/1_114,0.005,-0.384,0.104,0.715,0.112,0.0,0.0,,0.112,,,521,15,14,6,35,0,480,0,0,21,4817,400
+total,0.005,-1.224,0.309,0.744,0.385,0.0,0.08,0.46,0.406,,0.686,4848,118,102,13,599,1804,2317,0,115,214,48382,400
