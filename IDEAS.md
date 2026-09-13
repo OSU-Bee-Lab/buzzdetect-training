@@ -192,11 +192,11 @@ answers.**
 Ranked. **Run item 1 first** — every comparison after it is budget-limited by
 an unknown amount until it lands, and it is cheap.
 
-## 5b. Up-shift by real time-window decimation, not tile — needs extract.py surgery
+## 5b. Up-shift by real time-window decimation, not tile — self-contained, like `yamnet_context`
 
-*Evidence: **untagged proposal** (Luke, 2026-09-13), narrowed same-day after
-walking through the sample arithmetic — the down direction turned out not to
-need any of this, see below.*
+*Evidence: **untagged proposal** (Luke, 2026-09-13); the down direction needed
+nothing beyond a `samplerate` bump (see below), and a second correction same
+day settled how the up direction should read its wider window.*
 
 `yamnet_pitchshift`'s x2/x4 rungs create a real artifact: to shift up, they
 resample the 0.96 s frame down to fewer samples then **tile** it back to
@@ -210,22 +210,24 @@ a genuinely shorter real span, YAMNet told it's the full 0.96 s. No wider
 buffer, no extraction change beyond the `samplerate` bump; that embedder is
 already extracting.
 
-**The up direction can't be fixed the same way, and the reason is arithmetic,
-not implementation.** Feeding YAMNet 15360 *real, non-repeated* samples that
-span *more* than 0.96 s (so compressing them raises the pitch instead of
-lowering it) requires more unique real audio than a single 0.96 s frame ever
-contains, at any native rate. That audio exists only in the frame's temporal
-*neighbours* — so removing the tile-seam on the up side means reading real
-audio from outside the current frame's boundary, which `02_set/extract.py`
-has no live mechanism for today (the `context_frames` padding described in
-`yamnet_context_aves`'s docstring isn't implemented anywhere in current
-`extract.py` — checked 2026-09-13, grep returns nothing; that docstring claim
-is stale or never landed). Getting there means changing how `extract.py`
-slices audio for a frame at all, with the same care `context-stack` already
-flagged around `overlap_event_s`/labelling and `frametimes.csv`. That's real
-shared-infrastructure surgery, not a self-contained embedder, so treat it as
-its own dedicated loop rather than folding it into the current
-pitch-shift rungs.
+**The up direction genuinely needs more real audio than one 0.96 s frame
+contains** — feeding YAMNet 15360 non-repeated samples that span *more* than
+0.96 s (so compressing them raises the pitch) takes real content from outside
+the frame, at any native rate. But that doesn't mean extraction needs to
+change: it's the receptive field that's wider (1.92 s), not the frame's
+identity on the label/hop grid, which is exactly what `yamnet_context` already
+does (a 0.96 s frame reading its temporal neighbours for a wider context
+block) without any change to `extract.py`. Every embedder's `embed()` already
+receives a per-label-grouped buffer covering several consecutive real frames
+(concatenated by `extract_ident_embeddings`), so this reads as: for frame i,
+concatenate frame i and i+1's real, contiguous samples from that same buffer
+(30720 samples spanning a genuine 1.92 s when they're truly adjacent) and
+decimate down to 15360 — a real, unrepeated compression, not a tile. It
+inherits `yamnet_context`'s one known caveat for free: a buffer boundary
+(edge of a label group or a snip) has no real neighbour to concatenate, and
+clamps the same way `yamnet_context` does — already measured there (92-98%
+real neighbours on medium/yamnet_aves), not new risk. A self-contained
+embedder, no `extract.py` change, same shape as the down rung's fix.
 
 *Falsifier:* if the x2/x4 rungs' hard-fold pattern (particularly the mechanism
 read on `1_95`/`1_114`) doesn't change once the tile-seam is removed, the seam
