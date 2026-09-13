@@ -211,23 +211,29 @@ buffer, no extraction change beyond the `samplerate` bump; that embedder is
 already extracting.
 
 **The up direction genuinely needs more real audio than one 0.96 s frame
-contains** — feeding YAMNet 15360 non-repeated samples that span *more* than
-0.96 s (so compressing them raises the pitch) takes real content from outside
-the frame, at any native rate. But that doesn't mean extraction needs to
-change: it's the receptive field that's wider (1.92 s), not the frame's
-identity on the label/hop grid, which is exactly what `yamnet_context` already
-does (a 0.96 s frame reading its temporal neighbours for a wider context
-block) without any change to `extract.py`. Every embedder's `embed()` already
-receives a per-label-grouped buffer covering several consecutive real frames
-(concatenated by `extract_ident_embeddings`), so this reads as: for frame i,
-concatenate frame i and i+1's real, contiguous samples from that same buffer
-(30720 samples spanning a genuine 1.92 s when they're truly adjacent) and
-decimate down to 15360 — a real, unrepeated compression, not a tile. It
-inherits `yamnet_context`'s one known caveat for free: a buffer boundary
-(edge of a label group or a snip) has no real neighbour to concatenate, and
-clamps the same way `yamnet_context` does — already measured there (92-98%
-real neighbours on medium/yamnet_aves), not new risk. A self-contained
-embedder, no `extract.py` change, same shape as the down rung's fix.
+contains, and the honest way to say that is: the frame is 1.92 s, full stop —
+not "0.96 s with a wider context."** `yamnet_context` widens by concatenating
+three *separate, faithful* 0.96 s embeddings end-to-end; each 1024-d component
+of its output still represents only its own true window, and the label logic
+never has to answer for content it wasn't told about. This construction is
+different in kind: it merges frame i and i+1's real, contiguous raw *samples*
+(30720, a genuine 1.92 s when they're truly adjacent) and decimates that down
+to 15360 *before* YAMNet ever runs — one opaque 1024-d vector that doesn't
+correspond to any single 0.96 s interval. Row spacing can still match the
+existing 0.96 s grid (so frame counts line up with the 2048-d cache for
+concatenation), but whatever label that row gets under the standard grid
+covers only the first half of what the embedding actually heard — a buzz
+sitting entirely in the borrowed second half still shapes the vector without
+being the row's own label. That is a real, if different, version of the same
+dilution concern `framelength-changes-labels` already raised for a literal
+wider frame (`yamnet_doublerate`'s failure mode) — say so up front rather than
+waving it off with the `yamnet_context` comparison, which doesn't have this
+problem. Still self-contained (no `extract.py` change — `embed()` already
+receives a buffer spanning several consecutive real frames, same as every
+other embedder here) and it inherits the boundary-clamp caveat `yamnet_context`
+already measured (92-98% real neighbours on medium/yamnet_aves), but the
+label-mismatch is new and specific to merging audio pre-embedding, and belongs
+in the write-up if this gets run.
 
 *Falsifier:* if the x2/x4 rungs' hard-fold pattern (particularly the mechanism
 read on `1_95`/`1_114`) doesn't change once the tile-seam is removed, the seam
