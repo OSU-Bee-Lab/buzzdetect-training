@@ -404,34 +404,6 @@ the unshifted block's and the headline is inside MDE, YAMNet reads nothing new
 from the shifted copy. Run the x4 rung too if x2 is directionally positive —
 MDE says one rung is not readable.
 
-## 6. Temporal smoothing of frame scores — free, offline, and one honest question
-
-*Evidence: **untagged**, but the artifact it risks is **E2/E3** measured
-(`context-stack`).*
-
-Median or mean filtering of frame-level scores over a short window is the
-standard final stage of every sound-event-detection pipeline and is not in this
-one at all. It costs **nothing**: every model's `predictions.csv` is on disk, the
-metric is rebuildable with `read_fold_predictions()` + `metrics_by_group()`, no
-training, no TensorFlow. Sweep window ∈ {1, 3, 5, 9} frames and median vs mean
-across every model in the log at once.
-
-Two predictions worth having on record before looking, because they diagnose
-different folds in opposite directions:
-- It should **help** where FPs are isolated single-frame spikes and buzz is a
-  sustained drone — the rich folds.
-- It should **hurt `1_95`**, whose FPs are a contiguous ~90 s block and whose
-  buzz is ~1 s events. If it helps `1_95`, the jet story is incomplete.
-
-*Pre-registered artifact, and it is why this is a diagnostic rather than a
-candidate for adoption:* frames inside one snip nearly always share a label, so
-smoothing over cached neighbours inherits exactly the inflation that made
-`context-stack` `artifact` (+0.050 → +0.022 when rebuilt honestly). **Whatever
-number this produces is an upper bound, not a result.** Its value is the
-per-fold *shape*: it separates "spiky FPs" folds from "block FPs" folds for
-free, and that partition is a fact about the deployments that survives every
-data revision.
-
 ## 7. Annotation triage by embedding search — tells Luke what to annotate next
 
 *Evidence: **untagged proposal.** Both halves it needs are **E3** and on disk.*
