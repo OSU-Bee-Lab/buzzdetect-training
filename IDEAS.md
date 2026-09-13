@@ -181,18 +181,6 @@ answers.**
 Ranked. **Run item 1 first** — every comparison after it is budget-limited by
 an unknown amount until it lands, and it is cheap.
 
-## 1d. Dropout, now that it is an experiment rather than a premise
-
-*Evidence: none on the current data — that is the point.*
-
-`Dropout(0.2)` was hardcoded for three eras and was never tested against the
-current head, the current data, or a fixed budget. The anchor runs at
-`--dropout 0`. One run at `--dropout 0.2` settles whether three eras of results
-were carrying a regulariser that helps, hurts, or does nothing.
-
-Cheap, and it is a *hyperparameter*, so it does not survive the next data
-change — run it once, record it, do not bank it.
-
 ## 1e. Fix the epoch budget — DEMOTED 2026-09-11, premise weakened
 
 *Evidence: **E3** — `exp/pairwise-rank:notes/new-era-audit.md`, recommendation 5.
