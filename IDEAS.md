@@ -41,10 +41,13 @@ they are not ideas, they are the anchor:
    4th confirmation across two eras that this is the only intervention to
    touch that fold. `untagged`/`background` tiers broadly up; `loud` dipped
    but on a thin tier (115-122 frames). `1_114` down, no mechanism. See
-   `log.jsonl` for the per-fold table. **Item 1c is next**, and per the E3
-   evidence it should now be run against `yamnet_context` and `yamnet_aves`
-   as well as against plain `yamnet`, since both concats are now confirmed
-   structural gains for this era and 1c was never tested on either.
+   `log.jsonl` for the per-fold table.
+4. ~~1c~~ — **done 2026-09-12, all three legs (`hidden-head-verify`,
+   `hidden-context-verify`, `hidden-aves-verify`): `--hidden 1024`'s effect is
+   representation-dependent.** Null and costs `1_150` on plain YAMNet and
+   `yamnet_context`; on `yamnet_aves` it is +0.022 (inside MDE) with both hard
+   folds up together (1_150 +0.061, 1_95 +0.051) — see `log.jsonl` for the
+   per-fold tables and mechanism notes on each.
 
 Per-tier sensitivity is **already built in** — it is not an idea and not a
 queued experiment. Every run prints it and every `folds_sx.csv` carries it.
@@ -177,25 +180,6 @@ answers.**
 
 Ranked. **Run item 1 first** — every comparison after it is budget-limited by
 an unknown amount until it lands, and it is cheap.
-
-## 1c. The wide hidden head on `yamnet_aves` — third leg, weak prior
-
-*Evidence: **E3** — `yamnet-aves-head-fixed`, h1024 worth ~+0.030 over h0 at a
-matched budget. **E4** — null on the other two representations tried
-(`log.jsonl`: `hidden-head-verify`, `hidden-context-verify`, 2026-09-12); see
-those entries for the mechanism (both runs hurt `1_150` specifically, on its
-`untagged` tier).*
-
-Plain YAMNet and `yamnet_context` legs are done and both null. Only
-`yamnet_aves` is untested. Given the pattern on the other two, the working
-prediction is another null headline with `1_150` down — run it expecting
-confirmation, not a surprise reversal. Same recipe: `--embedder yamnet_aves
---hidden 1024 --dropout 0 --fixed-epochs 400`, against `yamnet-aves-verify`'s
-model as the matched control.
-
-Cost anchor: h1024 was ~7x h0 per epoch in E3; cost scales with input width
-(plain YAMNet ~27 min/fold, `yamnet_context`'s 3072-d ~78 min/fold) — **measure
-the first fold before quoting an ETA**, as always.
 
 ## 1d. Dropout, now that it is an experiment rather than a premise
 
