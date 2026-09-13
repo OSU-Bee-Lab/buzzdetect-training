@@ -85,6 +85,12 @@ if __name__ == '__main__':
                         help='skip the per-frame surprisal CSVs under '
                              '<model>/surprisal/ (written by default, one file '
                              'per source ident, for finding bad annotations)')
+    parser.add_argument('--standardize', action='store_true',
+                        help='per-dim standardization of the embedding input, '
+                             'as a Normalization layer fit on the training '
+                             'pool (fold-safe, never the held-out fold). Off '
+                             'by default: it changes the effective learning '
+                             'rate, so it is an experiment, not a default.')
     args = parser.parse_args()
 
     train_set(
@@ -106,4 +112,5 @@ if __name__ == '__main__':
         train_shipped=args.train_shipped or args.skip_cv,
         only_folds=args.only_folds,
         surprisal=args.surprisal,
+        standardize=args.standardize,
     )
