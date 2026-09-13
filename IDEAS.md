@@ -30,11 +30,15 @@ they are not ideas, they are the anchor:
 1. ~~`cv_baseline_v3`~~ — **done 2026-09-11: 0.330 excl-quiet / 0.269 inclusive,
    8/8 folds.** It is the comparator for everything below, and the only number
    in this file you can beat.
-2. ~~1a~~ — **done 2026-09-11 (`exp/context-verify`): `yamnet_context` confirmed
-   and larger than its E3 lead, 0.330 → 0.415 (+0.085), 6/8 folds up,
-   `untagged`/`loud` both moved — a real detection gain, not a quiet-buzz
-   shuffle. `1_95` and `1_114` went down; see `log.jsonl` for the per-fold
-   table and the (unverified) jet mechanism.
+2. ~~1a~~ — **done 2026-09-11, CORRECTED 2026-09-13 (`exp/context-frames-fix`):
+   `yamnet_context` is worth +0.030 ± 0.015, not the +0.085 `context-verify`
+   reported.** That run trained on a cache `extract.py` had built by embedding
+   label-bucketed frames, so each frame's "neighbours" were same-label frames —
+   `context-stack`'s leak, now fixed. Honestly extracted: 0.330 → 0.360, and
+   the shape changes — `untagged`/`loud` move +0.018/+0.015 (not +0.090/+0.092,
+   so the falsifier fires), the surviving gain is `background`-tier at the four
+   rich folds, and **all four hard folds are flat or down**. `context-verify` is
+   now `artifact` and `hidden-context-verify` `caveated`. See `log.jsonl`.
 3. ~~1b~~ — **done 2026-09-11 (`exp/yamnet-aves-verify`): `yamnet_aves`
    confirmed at almost the same magnitude as its E3 lead, 0.330 → 0.354
    (+0.024), 7/8 folds up. `1_95` moved again (+0.046, 0.052 → 0.098) — the
@@ -45,7 +49,8 @@ they are not ideas, they are the anchor:
 4. ~~1c~~ — **done 2026-09-12, all three legs (`hidden-head-verify`,
    `hidden-context-verify`, `hidden-aves-verify`): `--hidden 1024`'s effect is
    representation-dependent.** Null and costs `1_150` on plain YAMNet and
-   `yamnet_context`; on `yamnet_aves` it is +0.022 (inside MDE) with both hard
+   `yamnet_context` (that leg is `caveated` — both its arms used the leaky
+   context cache, see item 2 above); on `yamnet_aves` it is +0.022 (inside MDE) with both hard
    folds up together (1_150 +0.061, 1_95 +0.051) — see `log.jsonl` for the
    per-fold tables and mechanism notes on each.
 
@@ -183,7 +188,13 @@ answers.**
   stacking — inherits `context-stack`'s inflation (`artifact`, +0.050 → +0.022
   honest when rebuilt from real neighbouring **audio** instead). Reading
   neighbouring audio at extraction time is honest; reading neighbouring cache
-  rows is not.
+  rows is not. **This rule was silently violated for a whole era**: the
+  `context_frames` extraction path both context embedders' docstrings describe
+  was never on `main`, so `yamnet_context` was built from label-bucketed rows
+  and every number resting on it was inflated by ~0.055 (`context-frames-fix`,
+  2026-09-13). It is fixed on `exp/context-frames-fix`; **merge that before
+  extracting `yamnet_context_aves` again**, whose cache is honest only because
+  it was built on the unmerged branch and has not been rebuilt since.
 
 ---
 
