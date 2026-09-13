@@ -431,33 +431,6 @@ MDE, the final layer is the right read and this closes for real.
 `yamnet_aves`-shaped cache and would be indistinguishable. Run whichever fits
 the box first; the loser is still worth a run.
 
-## 5. Pitch-shifted YAMNet block, x4 rung — the x2 rung was the era's largest clean gain
-
-*Evidence: **E4**, `exp/yamnet-pitchshift` (bare linear probe, no hidden
-layer). x2 confirmed at +0.069 +/- 0.011 headline, 8/8 folds up — see
-`log.jsonl`.*
-
-The x2 rung (resample each 0.96 s frame 16k->8k, relabel as 16k so playback
-doubles every frequency, tile 2x back to a full patch, concat with the
-unshifted YAMNet block -> 2048-d) is done and is the largest, cleanest
-headline gain logged this era: **8/8 folds up**, both hard folds up
-(`1_150` +0.086 +/- 0.050, `1_95` +0.025 +/- 0.019), `1_114` the standout
-(+0.181 +/- 0.038). `embedders/yamnet_pitchshift/embedder.py` is the
-implementation to extend, not `yamnet_doublerate/` (wrong framelength_s —
-see the module docstring for why).
-
-**Untested remainder, per the original falsifier:** "run the x4 rung too if
-x2 is directionally positive — MDE says one rung is not readable." It clearly
-is positive, so a third 1024-d block (resample 16k->4k this time, pitch up
-two octaves, harmonics at 920/1840/2760 Hz) concatenated onto the existing
-2048-d cache is the next cheap step: no re-extraction of the x2 block, one
-new resample ratio in a `yamnet_pitchshift_x4` variant, one CV at 3072-d.
-
-*Falsifier:* if x4's own hard-fold pattern doesn't track x2's (particularly
-`1_114`, the standout fold) the win may be about *a* shift rather than
-specifically the octave chosen — worth knowing before picking a final ratio
-for the shipped model.
-
 ## 7. Annotation triage by embedding search into genuinely unannotated audio
 
 *Evidence: **untagged proposal**, narrowed 2026-09-13
