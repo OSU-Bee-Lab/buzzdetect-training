@@ -622,13 +622,6 @@ whatever the headline says.
 - **[throughput only] Split framing from embedding in `--workers`.** `--workers`
   covers both framing (CPU) and embedding (VRAM-bound), so `--workers 1`
   needlessly serialises the framing. No effect on any metric.
-- **[infrastructure] Timestamp join for provenance.** `frametimes.csv` isn't on
-  disk for current idents — added to the extractor after they were last
-  extracted, and the fingerprint hasn't changed since. `frame_index` joins to it
-  whenever a fold re-extracts for another reason; don't force one just for this.
-  **Items 2a and 6 both want it** — if either is run and the index arithmetic
-  proves awkward, re-extracting `yamnet_aves` to get `frametimes.csv` becomes
-  worth the ~40 min on its own.
 
 # Ruled out — do not re-propose
 
