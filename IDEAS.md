@@ -307,49 +307,6 @@ real context each side, so a rich-fold-only gain may be `context-embedder`
 again rather than Perch. Check the per-fold signature against `yamnet_context`
 before crediting the embedder.
 
-## 3. Sub-frame pooling of the AVES block — RE-AIM BEFORE RUNNING
-
-> **Its target moved on 2026-09-11.** This was written to rescue `1_150`'s
-> *quiet* positives, and quiet buzz is now **out of the headline** — catching it
-> earns nothing. Do not run this as written. The mechanism (a mean over ~49
-> tokens washing out a short faint event) is still sound and still worth
-> testing; re-aim it at `untagged` and `loud` frames in the folds that are
-> actually weak on audible buzz, and say up front which tier you expect to move.
-> Check the anchor's tier row per fold before writing the hypothesis.
-
-*Evidence: **untagged proposal**, resting on **E3** (`yamnet-aves` clean) and a
-checkable property of `embedders/aves/embedder.py`.*
-
-`embedders/aves/embedder.py` takes wav2vec2's last-layer output `(B, T', 768)`
-and does `.mean(dim=1)` — a mean over ~49 tokens of 20 ms each. `1_150` is a
-**positives** problem (genuine low-SNR quiet buzz; do not reopen it as an
-annotation question), and 31% of buzz events are shorter than 1 s. A buzz
-occupying 200 ms of the frame has its evidence divided by ~5 before the probe
-sees it. Mean pooling is a matched filter for a *stationary* signal and the
-worst pooling for a *transient* one.
-
-Replace the single mean with `[mean, max, std]` over the token axis: 2304-d
-instead of 768-d, so `yamnet_aves` becomes 3328-d. Max-over-tokens is the
-parameter-free form of what the literature now says frozen transformer probes
-leave behind: attentive pooling over patch tokens takes AudioMAE 84.5 -> 97.2
-AUROC on BEANS and BEATs 94.1 -> 98.0 (arXiv:2508.01277, 2026), and multi-layer
-attentive probing adds ~0.08 accuracy on BEANS over last-layer linear probing
-(arXiv:2605.10494, 2026). Those are bird/multi-taxa benchmarks with far
-stronger labels than ours — treat the **magnitudes** as inapplicable and the
-**direction** as well supported. A learned attention pool is the follow-up, but
-it needs the token sequence cached (~49x, ~12 GB — infeasible), which is
-exactly why the three-statistic version is the right first move.
-
-*Cost:* one AVES re-extraction under a new name (`yamnet_aves_p3`), ~1.0 h on
-GPU with `--workers 0` + `BUZZDETECT_NO_GPU=1` for the TF half — see the
-AVES-GPU note, and do **not** use `CUDA_VISIBLE_DEVICES=""`, which breaks the
-torch path. Then one CV at 3328-d h1024 (~2.8 h at e150). Control `yavf_h1024`.
-
-*Falsifier:* if `1_150` does not move above 0.037 (its bootstrap SD) in the
-right direction, the dilution story is wrong and the extra dims are being read
-as capacity. Check the `[mean, max]`-only variant offline on the new cache
-before spending a second CV.
-
 ## 4. AVES middle layers — the closed lead reopened on measured grounds
 
 *Evidence: **E3**, but the entry that closed it is `caveated` and superseded on
@@ -380,9 +337,10 @@ what is kept), then one CV at 3328-d. Control `yavf_h1024`.
 `harmonic-comb` did) puts >=80% on the layer-12 block and the headline is inside
 MDE, the final layer is the right read and this closes for real.
 
-**Do not run 3 and 4 in the same arm** — both produce a 3328-d
-`yamnet_aves`-shaped cache and would be indistinguishable. Run whichever fits
-the box first; the loser is still worth a run.
+Item 3 (mean/max/std pooling) is now run — `aves-p3`, +0.014 +/- 0.008,
+caveated, falsifier not cleanly cleared. This item produces a 3328-d
+`yamnet_aves`-shaped cache too and would have been indistinguishable from it
+in the same arm; now safe to run on its own.
 
 ## 7. Annotation triage by embedding search into genuinely unannotated audio
 
