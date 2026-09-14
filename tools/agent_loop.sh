@@ -62,7 +62,7 @@ POLL=${POLL:-60}
 PROMPT=${PROMPT:-$ROOT/tools/loop_prompt.md}
 FIX_PROMPT=${FIX_PROMPT:-$ROOT/tools/loop_fix_prompt.md}
 LIMIT_WAIT_MAX=3000   # ~50 min: the prompt cache's ~1 h TTL with margin
-SESSION_SETTINGS='{"autoContinueAtUsageLimit": true}'
+SESSION_SETTINGS='{"autoContinueAtUsageLimit": true, "worktree": {"bgIsolation": "none"}}'
 OUT="$STATE/.out"
 mkdir -p "$STATE/issues" "$JOBS"
 
@@ -165,6 +165,21 @@ session_field() {  # id, jq filter -> that field of the session's `claude agents
   jq -r --arg id "$1" ".[] | select(.id == \$id) | $2 // empty" "$OUT" 2>/dev/null
 }
 
+# Unfinished experiments to resume: a worktree HANDOFF.md from this era (no
+# older than log.jsonl's first entry) whose slug has no log.jsonl entry yet.
+# Logging the experiment retires its handoff.
+find_handoffs() {
+  local era f slug
+  era=$(head -n 1 "$ROOT/log.jsonl" 2>/dev/null | jq -r '.date // empty' 2>/dev/null)
+  for f in "$ROOT"/.local/worktrees/*/HANDOFF.md; do
+    [ -e "$f" ] || continue
+    slug=$(basename "$(dirname "$f")")
+    [ -n "$era" ] && [[ $(date -r "$f" +%F) < $era ]] && continue
+    grep -q "\"name\": \"$slug\"" "$ROOT/log.jsonl" 2>/dev/null && continue
+    echo "$f"
+  done
+}
+
 render() {  # template, issue path
   sed -e "s|{N}|$N|g" -e "s|{BATCH}|$batch|g" -e "s|{ISSUE}|$2|g" -e "s|{ROOT}|$ROOT|g" "$1"
 }
@@ -211,10 +226,22 @@ while true; do
     fi
     prompt=$(render "$PROMPT" ""); last_was_fix=0
     action="launching an agent for $N experiments"
+    handoffs=$(find_handoffs)
+    if [ -n "$handoffs" ]; then
+      prompt+=$'\n\n'"Before starting anything new, resume each unfinished experiment below by following its HANDOFF.md; each counts toward the $N:"$'\n'"$handoffs"
+      cause="$cause; unfinished handoff in $(xargs -n 1 dirname <<<"$handoffs" | xargs -n 1 basename | paste -sd, -)"
+    fi
   fi
   rm -f "$STATE/done"
 
+  # LOOP.md has its own worktree discipline (setup_worktree.sh, plus deliberate
+  # edits in main: IDEAS.md, new embedders, a fixer's repairs), so Claude Code's
+  # background-edit guard is off (bgIsolation in SESSION_SETTINGS) and
+  # EnterWorktree, which the guard pushes agents into, is blocked. It also asks
+  # for confirmation in auto mode, and Remote Control didn't show that dialog
+  # (2026-09-14).
   out=$(cd "$ROOT" && claude --bg --remote-control "loop-$batch" -n "loop-$batch" \
+        --disallowedTools "EnterWorktree,ExitWorktree" \
         --permission-mode auto --model "$model" --effort "$effort" \
         --settings "$SESSION_SETTINGS" "$prompt" 2>&1)
   id=$(grep -oP 'backgrounded · \K[0-9a-f]+' <<<"$out")
