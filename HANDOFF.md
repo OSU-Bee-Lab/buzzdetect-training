@@ -1,54 +1,42 @@
 # HANDOFF — decimate-lead (IDEAS item 19)
 
-Session wrapped up (second time) on Luke's Ctrl+C to `tools/agent_loop.sh`
-while the extraction was still running. Do not wait for it in the same turn
-you read this — check once, act accordingly.
+The extraction is **not running**. `tools/agent_loop.sh` killed it on purpose
+(2026-09-14 14:59) when Luke stopped batch 3: the loop kills a batch's jobs when
+the batch ends. Relaunch it first thing.
 
-## Progress check (one command)
+## Relaunch
 
-```bash
-ps -p 2417327 -o pid,stat,etime,cmd
-tail -5 /home/luke/projects/buzzdetect-training/.local/worktrees/decimate-lead/extract.log
-```
-
-**If it's still running:** report progress (which ident, how many of 73 done
-this relaunch — `grep -c "ident took" extract.log`) and stop. Don't relaunch,
-don't wait inline; re-arm a Monitor if you want to keep watching:
+From the worktree root:
 
 ```bash
-HEARTBEAT=1200 bash tools/watch_job.sh 2417327 --log '.local/worktrees/decimate-lead/extract.log'
+tools/launch_job.sh extract.log -- 02_set/main.py --set medium \
+  --embedder yamnet_pitchshift_decimate_aves_mid --workers 1
 ```
-(pid may differ if it was relaunched — always check `ps` first.)
 
-**State when this was written (2026-09-14, ~21:30 local):** pid 2417327,
-~21m elapsed, on the 4th ident this relaunch (`Chia - Bee Audio 2022
-Original/7-13-22_SouthCharleston/1`), 3/73 idents fully extracted this
-relaunch. This is a **relaunch**, not the original run: the first attempt
-(pid 2384834) had reached 7/82 idents (through `1_37`) when it was found dead
-with no traceback and no `[launch_job] exit` line on the next session's
-check-in — almost certainly killed by a prior loop-cleanup on session end,
-not a real crash. It was relaunched per this file's "If it died" section; the
-9 already-cached idents (including the 7 from the first run) were skipped on
-resume, leaving 73 to go. Per-ident pace so far this relaunch: 12.2min, 8.0min,
-0.75min (varies a lot by ident size) — the Monitor's own linear ETA is not
-trustworthy; read `extract.log` directly if you need a real sense of
-remaining time.
+That starts a notifier too: it pings you on an error, when the job ends, and
+every 50 min. There is nothing to arm; wait for the pings.
 
-If you find it dead again with no traceback, don't assume a real crash before
-relaunching — check `driver.log`/session history for a Ctrl+C around the time
-it stopped first.
+Reruns resume incrementally: idents already extracted are skipped, and a
+killed ident is rebuilt. The embedder code hasn't changed since the first run
+(`embedders/yamnet_pitchshift_decimate_aves_mid/`, smoke-tested and committed to
+main, unit-checked byte-identical against `yamnet_pitchshift_aves_mid` on the
+unshifted/AVES blocks; see notes.md's Changes section).
+
+**Where it got to.** Three runs so far, all stopped by loop cleanup, none by a
+crash: 7/82 idents in the first, 9 cached idents skipped plus 3 in the second,
+and 7 more in the third (killed mid-way through
+`Chia - Bee Audio 2022 Original/7-13-22_SouthCharleston/3`). Per-ident time
+varies a lot with ident size (0.75 to 20 min), so don't extrapolate from one.
 
 ## When it finishes
 
-1. Confirm `[launch_job] exit 0` at the end of `extract.log`.
-2. Launch the CV from the worktree root:
+1. The DONE ping says `exit 0`.
+2. Launch the CV from the worktree root; its notifier pings once per fold:
    ```bash
    tools/launch_job.sh train.log -- 03_train/main.py --name decimate-lead \
      --set medium --embedder yamnet_pitchshift_decimate_aves_mid \
      --translation general -y
    ```
-   Arm `watch_job.sh`'s printed command (with `HEARTBEAT=1200` prefix) as a
-   persistent Monitor.
 3. Read results against **both** matched controls, per notes.md's Hypothesis:
    ```bash
    python tools/results.py yamnet_pitchshift_aves_mid decimate-lead   # the tiled-shift lead (main comparator)
@@ -70,28 +58,18 @@ it stopped first.
 6. Delete this HANDOFF.md in the same commit that records the result (or a
    follow-up commit) — it's a resumption aid, not part of the permanent record.
 
-## If it died
+## If it fails
 
-Check the tail of `extract.log` for a traceback. Relaunch with:
-```bash
-tools/launch_job.sh extract.log -- 02_set/main.py --set medium \
-  --embedder yamnet_pitchshift_decimate_aves_mid --workers 1
-```
-Reruns resume incrementally (idents already extracted are skipped) unless the
-embedder code changed since — it hasn't; `embedders/yamnet_pitchshift_decimate_aves_mid/`
-was smoke-tested and committed to main before this run started (unit-checked
-byte-identical against `yamnet_pitchshift_aves_mid` on the unshifted/AVES
-blocks, see notes.md's Changes section).
+Read the tail of `extract.log` for the traceback before relaunching.
 
-## What's already committed and pushed to main (not just this branch)
+## Already committed and pushed to main (not just this branch)
 
 - `embedders/yamnet_pitchshift_decimate_aves_mid/` (new embedder, IDEAS item 19)
 - `embedders/yamnet_aves_mid_avesshift/` (new embedder, IDEAS item 22 — built
-  and smoke-tested during this extraction's wait, NOT yet extracted or run;
-  next experiment after this one, same falsifier logic as item 22's IDEAS
-  entry — extraction not yet launched)
+  and smoke-tested, NOT yet extracted or run; next experiment after this one,
+  same falsifier logic as item 22's IDEAS entry)
 - `diagnostics/2026-09-14_trill_1_114/` (free diagnostic for item 18, already
   complete with README — no further action needed on it)
 
-This branch (`exp/decimate-lead`) holds only this experiment's `notes.md` and
-this `HANDOFF.md`.
+This branch (`exp/decimate-lead`) holds this experiment's `notes.md` and this
+`HANDOFF.md`, plus a merge of main (2026-09-14) for the current tooling.
