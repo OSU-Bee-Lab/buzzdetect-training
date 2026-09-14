@@ -101,7 +101,6 @@ alternatives:
 - **Tools always run from the main checkout.** Each `tools/*.sh` re-runs the main
   checkout's copy, because a worktree's `tools/` is frozen at its branch point.
   A branch from before 2026-09-14 lacks that redirect: merge main into it first.
-
 - **`run_in_background` doesn't work.** A pipeline job launched with it is
   SIGKILLed within ~15–60 s, and a waiter loop within a minute or two. A leading
   `sleep` in a Bash call is blocked outright.
