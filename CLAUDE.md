@@ -95,8 +95,15 @@ alternatives:
   `pgrep -af "[0]3_train/main.py"`.
 - **The heartbeat keeps the prompt cache warm.** The cache's ~1 h TTL refreshes
   on every read, so wakes under an hour apart carry one agent through a run of
-  any length; a slow job is no reason to hand off. Answer a progress or
-  heartbeat line in one line: anything read while waiting is paid for twice.
+  any length; a slow job is no reason to hand off.
+- **A watcher ping gets a one-line reply and nothing else**: "Fold 7/8
+  trained.", "Still extracting, 1h32m in." Only a progress or heartbeat line
+  qualifies (an ERROR or terminal line needs real attention). Trust the
+  monitor: don't read the log, check files, recompute the ETA or re-arm it. An
+  ordinary ping means the watch is still active, and anything read while
+  waiting is paid for twice. The exception is a ping that looks wrong, such as
+  a job running well past what you expected: then read the log and investigate.
+  Stage 3 pings once per fold; stage 2 pings per ident only under `--verbose`.
 - **The GPU is hidden by default.** The 12288-d trunk embedders OOM the 4 GB
   card, and CPU ≈ GPU for the probe. `--gpu` opts out.
 
