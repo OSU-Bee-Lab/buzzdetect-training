@@ -24,11 +24,12 @@
 #                                     before the next one (not after a fix batch)
 # What a fixer gets is collected into issues/before-batchNNN.md and passed in.
 #
-# Usage limits: a session that hits one waits and continues at the reset
-# (autoContinueAtUsageLimit, forced on) only if the reset is within
-# LIMIT_WAIT_MAX (50 min), i.e. while its prompt cache is still warm. A later
-# reset, or one the loop can't read off the session's screen, stops the session
-# and halts the loop: resuming would re-read the whole context uncached.
+# Usage limits: a session that hits one waits for the reset only if it's within
+# LIMIT_WAIT_MAX (50 min), i.e. while its prompt cache is still warm. A minute
+# past the reset the loop tells it to continue: autoContinueAtUsageLimit is on
+# but didn't fire in a --bg session. A later reset, or one the loop can't read
+# off the session's screen, stops the session and halts the loop: resuming would
+# re-read the whole context uncached.
 #
 # The loop also halts when a fix session reports an issue too, or a session
 # exits without signalling. Rerunning after a halt resumes: a leftover issue
@@ -38,9 +39,13 @@
 # shows the log's recent history and reattaches to the batch's session
 # (loop-<batch>) if it's still running, instead of launching a second agent.
 #
-# "The jobs it started" are those tools/launch_job.sh registered in .local/jobs/
-# since this loop began; a job started any other way is not killed. A halt
-# leaves jobs running.
+# Cleanup is the loop's job, not the agent's. Whenever a batch ends (done, issue
+# or wrap-up) the loop stops the session, which ends its Monitors, and kills the
+# jobs it started: those tools/launch_job.sh registered in .local/jobs/ since the
+# session launched (a reattached session's own start time counts). A job started
+# any other way is not killed. Killing costs at most the fold or ident in
+# progress; stages 2 and 3 resume on rerun. A halt leaves jobs running, for you
+# to look at.
 #
 # Env, for testing the loop: POLL (seconds, 60), PROMPT / FIX_PROMPT (templates),
 # BLOCKED_GRACE (seconds a session stays blocked before it's flagged, 300).
@@ -67,6 +72,8 @@ POLL=${POLL:-60}
 PROMPT=${PROMPT:-$ROOT/tools/loop_prompt.md}
 FIX_PROMPT=${FIX_PROMPT:-$ROOT/tools/loop_fix_prompt.md}
 LIMIT_WAIT_MAX=3000   # ~50 min: the prompt cache's ~1 h TTL with margin
+LIMIT_NUDGE=60        # seconds past a usage-limit reset before telling the session to continue
+LIMIT_GIVEUP=900      # seconds past the reset before a still-blocked session is flagged
 BLOCKED_GRACE=${BLOCKED_GRACE:-300}   # seconds a session stays blocked before it's flagged
 SESSION_SETTINGS='{"autoContinueAtUsageLimit": true, "worktree": {"bgIsolation": "none"}}'
 OUT="$STATE/.out"
@@ -104,6 +111,18 @@ limit_reset() {
   [ -n "$at" ] && echo "$t" || echo unknown
 }
 
+# Deliver a message to a running session by name. The CLI can't message a
+# background session, so a throwaway haiku session sends it with SendMessage.
+# Prints that session's last line: SENT, or FAILED with the reason. The prompt
+# goes on stdin: --allowedTools takes a variable number of values and would
+# swallow a positional prompt after it.
+send_to_session() {  # session name, message
+  printf '%s' "Use the SendMessage tool once, to the session named $1, with exactly this text, then reply SENT or FAILED with the reason:
+
+$2" | (cd "$ROOT" && claude -p --model haiku --effort low --no-session-persistence \
+         --allowedTools SendMessage ListAgents 2>&1) | tail -n 1
+}
+
 pid=$(cat "$STATE/driver.pid" 2>/dev/null)
 if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
   echo "another loop is already running (pid $pid); not starting a second one" >&2
@@ -112,18 +131,18 @@ fi
 echo $$ > "$STATE/driver.pid"
 started=$(date +%s)
 
-kill_jobs() {  # every launch_job.sh job registered since this loop started
-  local f pid groups=()
+kill_jobs() {  # since (epoch s) -> kill every launch_job.sh job registered since then
+  local since=$1 f pid groups=()
   for f in "$JOBS"/*; do
     [ -e "$f" ] || continue
     pid=${f##*/}
-    [ "$(stat -c %Y "$f")" -ge "$started" ] || continue
+    [ "$(stat -c %Y "$f")" -ge "$since" ] || continue
     if [ "$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')" = "$pid" ]; then
       kill -TERM -- "-$pid" 2>/dev/null && groups+=("$pid") && log "killing job $pid: $(cat "$f")"
     fi
     rm -f "$f"
   done
-  [ ${#groups[@]} -gt 0 ] || { log "no running jobs from this loop to kill"; return; }
+  [ ${#groups[@]} -gt 0 ] || { log "no running jobs from this session to kill"; return; }
   for _ in $(seq 10); do
     local alive=0
     for pid in "${groups[@]}"; do kill -0 -- "-$pid" 2>/dev/null && alive=1; done
@@ -133,7 +152,7 @@ kill_jobs() {  # every launch_job.sh job registered since this loop started
   for pid in "${groups[@]}"; do kill -KILL -- "-$pid" 2>/dev/null && log "job $pid ignored SIGTERM → sent SIGKILL"; done
 }
 
-id=""; wrapping_up=0
+id=""; wrapping_up=0; session_started=$started
 on_interrupt() {
   if [ -z "$id" ]; then
     log "Ctrl+C with no agent running → exiting loop"
@@ -142,13 +161,7 @@ on_interrupt() {
   if [ "$wrapping_up" = 0 ]; then
     wrapping_up=1
     log "Ctrl+C → asking session $id (loop-$batch) to wrap up; the loop exits when it has. Ctrl+C again to stop it and kill its jobs now"
-    # the prompt goes on stdin: --allowedTools takes a variable number of
-    # values and would swallow a positional prompt after it
-    ( r=$(cd "$ROOT" && printf '%s' "Use the SendMessage tool once, to the session named loop-$batch, with exactly this text, then reply SENT or FAILED with the reason:
-
-Luke pressed Ctrl+C on tools/agent_loop.sh: wrap up now. Start nothing new. If a job is still running, don't wait for it: record the experiment's state and how to resume in its notes.md and a HANDOFF.md (LOOP.md step 3), then commit and push. Otherwise finish recording what is done (LOOP.md step 5). Then run $ROOT/tools/loop_signal.sh done \"wrapped up\" and end your turn; the loop exits when you do." \
-          | claude -p --model haiku --effort low --no-session-persistence \
-              --allowedTools SendMessage ListAgents 2>&1 | tail -n 1)
+    ( r=$(send_to_session "loop-$batch" "Luke pressed Ctrl+C on tools/agent_loop.sh: wrap up now. Start nothing new. Once you signal, the loop stops this session and kills every job you launched, so don't wait for a job and don't stop jobs or Monitors yourself. If a job is still running, record the experiment's state and its exact relaunch command in its notes.md and a HANDOFF.md (LOOP.md step 3), then commit and push. Otherwise finish recording what is done (LOOP.md step 5). Then run $ROOT/tools/loop_signal.sh done \"wrapped up\" and end your turn.")
       kill -0 $$ 2>/dev/null || exit 0   # the loop already exited (a second Ctrl+C)
       if [[ $r == SENT* ]]; then
         log "wrap-up message delivered to loop-$batch → waiting for it to signal done"
@@ -160,7 +173,7 @@ Luke pressed Ctrl+C on tools/agent_loop.sh: wrap up now. Start nothing new. If a
   trap '' INT TERM
   log "Ctrl+C again → stopping session $id and killing the jobs it started"
   claude stop "$id" >/dev/null 2>&1
-  kill_jobs
+  kill_jobs "$session_started"
   log "session $id stopped → exiting loop"
   finish 130
 }
@@ -216,6 +229,8 @@ while true; do
 
   if [ -n "$reattach" ]; then
     id=$reattach; batch=$prev_batch; reattach=""
+    st=$(session_field "$id" .startedAt)   # ms
+    session_started=${st:+$(( st / 1000 ))}; session_started=${session_started:-$started}
     log "batch $batch: session $id (loop-$batch) is still running → reattaching to it"
   else
     batch=$(( $(cat "$STATE/batch" 2>/dev/null || echo 0) + 1 ))
@@ -264,6 +279,7 @@ while true; do
     # EnterWorktree, which the guard pushes agents into, is blocked. It also asks
     # for confirmation in auto mode, and Remote Control didn't show that dialog
     # (2026-09-14).
+    session_started=$(date +%s)
     out=$(cd "$ROOT" && claude --bg --remote-control "loop-$batch" -n "loop-$batch" \
           --disallowedTools "EnterWorktree,ExitWorktree" \
           --permission-mode auto --model "$model" --effort "$effort" \
@@ -276,19 +292,61 @@ while true; do
 
   # A new session takes a few seconds to appear in `claude agents`, so it only
   # counts as gone once it has been seen running.
-  seen=0; launched=$(date +%s); waited_for=""; was_waiting=""; blocked_since=""
+  seen=0; launched=$(date +%s); was_waiting=""; blocked_since=""
+  limit_at=""; limit_phase=""   # the latest usage limit: its reset, and waiting|nudged|resumed
   while [ ! -f "$STATE/done" ] && [ ! -f "$STATE/issue" ]; do
     quiet claude agents --json --all
     entry=$(jq -c --arg id "$id" '.[] | select(.id == $id)' "$OUT" 2>/dev/null)
     if [ -n "$(jq -r '.pid // empty' <<<"$entry")" ]; then
       seen=1
+      state=$(jq -r '.state // empty' <<<"$entry")
+      now=$(date +%s)
+
+      quiet claude logs "$id"
+      reset=$(limit_reset < "$OUT")
+      if [ "$reset" = unknown ]; then
+        claude stop "$id" >/dev/null 2>&1
+        halt "batch $batch: session $id hit a usage limit and its reset time couldn't be read → stopped it (jobs left running)"
+      elif [ -n "$reset" ] && [ "$reset" != "$limit_at" ]; then
+        wait_s=$(( reset - now ))
+        if [ "$wait_s" -gt "$LIMIT_WAIT_MAX" ]; then
+          claude stop "$id" >/dev/null 2>&1
+          halt "batch $batch: session $id hit a usage limit resetting at $(date -d "@$reset" '+%F %H:%M') ($(( wait_s / 60 )) min, past the cache window) → stopped it (jobs left running)"
+        fi
+        limit_at=$reset; limit_phase=waiting
+        log "batch $batch: session $id hit a usage limit resetting at $(date -d "@$reset" +%H:%M) ($(( wait_s > 0 ? wait_s / 60 : 0 )) min, inside the cache window) → waiting for the reset"
+      fi
+      # autoContinueAtUsageLimit didn't resume a --bg session on 2026-09-14: a
+      # client that opened the session did, 3.5 min after the reset. So once the
+      # reset is LIMIT_NUDGE old, the loop tells the session to continue.
+      if [ "$limit_phase" = waiting ] || [ "$limit_phase" = nudged ]; then
+        if [ "$state" != blocked ] && [ "$now" -ge "$limit_at" ]; then
+          limit_phase=resumed
+          log "batch $batch: session $id resumed after its usage limit"
+        elif [ "$limit_phase" = waiting ] && [ "$now" -ge $(( limit_at + LIMIT_NUDGE )) ]; then
+          limit_phase=nudged
+          r=$(send_to_session "loop-$batch" "Your usage limit reset at $(date -d "@$limit_at" +%H:%M). Continue from where you left off. Detached jobs kept running through the limit, and so did any watch that hasn't printed its re-arm or end line: don't arm a second watch on the same job.")
+          if [[ $r == SENT* ]]; then
+            log "batch $batch: session $id hasn't resumed since its usage limit reset → told it to continue"
+          else
+            log "batch $batch: session $id hasn't resumed since its usage limit reset, and messaging it failed ($r) → answer it in loop-$batch"
+          fi
+        fi
+      fi
+
       # The loop can't answer for you, but it says when a session needs you. A
       # permission prompt is flagged at once. `state: blocked` is Claude Code's
       # job-state label for any turn that ends waiting on you, including a live
       # Remote Control conversation (a false alarm on 2026-09-14), so it's only
       # flagged once it has lasted BLOCKED_GRACE, with the session's own reason.
+      # A session waiting out a usage limit is blocked too; that counts only
+      # once LIMIT_GIVEUP has passed since the reset.
       waiting=$(jq -r 'if .status == "waiting" then (.waitingFor // "input needed") else "" end' <<<"$entry")
-      if [ -z "$waiting" ] && [ "$(jq -r '.state // empty' <<<"$entry")" = blocked ]; then
+      in_limit=""
+      if { [ "$limit_phase" = waiting ] || [ "$limit_phase" = nudged ]; } && [ "$now" -lt $(( limit_at + LIMIT_GIVEUP )) ]; then
+        in_limit=1
+      fi
+      if [ -z "$waiting" ] && [ -z "$in_limit" ] && [ "$state" = blocked ]; then
         blocked_since=${blocked_since:-$(date +%s)}
         if [ $(( $(date +%s) - blocked_since )) -ge "$BLOCKED_GRACE" ]; then
           detail=$(jq -r '.detail // empty' "$HOME/.claude/jobs/$id/state.json" 2>/dev/null | head -c 300)
@@ -302,20 +360,6 @@ while true; do
         log "batch $batch: session $id is waiting on you ($waiting) → answer it in loop-$batch; the loop keeps waiting"
       fi
       was_waiting=$waiting
-      quiet claude logs "$id"
-      reset=$(limit_reset < "$OUT")
-      if [ "$reset" = unknown ]; then
-        claude stop "$id" >/dev/null 2>&1
-        halt "batch $batch: session $id hit a usage limit and its reset time couldn't be read → stopped it (jobs left running)"
-      elif [ -n "$reset" ] && [ "$reset" != "$waited_for" ]; then
-        wait_s=$(( reset - $(date +%s) ))
-        if [ "$wait_s" -gt "$LIMIT_WAIT_MAX" ]; then
-          claude stop "$id" >/dev/null 2>&1
-          halt "batch $batch: session $id hit a usage limit resetting at $(date -d "@$reset" '+%F %H:%M') ($(( wait_s / 60 )) min, past the cache window) → stopped it (jobs left running)"
-        fi
-        waited_for=$reset
-        log "batch $batch: session $id hit a usage limit resetting at $(date -d "@$reset" +%H:%M) ($(( wait_s > 0 ? wait_s / 60 : 0 )) min, inside the cache window) → letting it continue automatically"
-      fi
     elif [ "$seen" = 1 ]; then
       halt "batch $batch: session $id exited without signalling done or issue"
     elif [ $(( $(date +%s) - launched )) -gt 120 ]; then
@@ -338,6 +382,7 @@ while true; do
     nap 30
   done
   claude stop "$id" >/dev/null 2>&1
+  kill_jobs "$session_started"
   if [ "$wrapping_up" = 1 ]; then
     log "wrap-up complete → exiting loop"
     finish 0

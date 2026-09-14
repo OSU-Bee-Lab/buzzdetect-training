@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Launch a long job detached -- the only launch that survives Claude Code (see
 # CLAUDE.md "Running long jobs") -- then print its PID and the watch_job.sh
-# command to arm as a persistent Monitor.
+# command to arm as a Monitor (timeout_ms 1800000; re-arm when it says to).
 #
 #   tools/launch_job.sh [--gpu] <log> -- <command...>
 #
@@ -17,8 +17,10 @@
 # BUZZDETECT_NO_GPU=1 set by the caller instead). Other commands run as given.
 # Env vars set by the caller pass through.
 #
-# The log is overwritten and ends with "[launch_job] exit N", which is how
-# watch_job.sh tells DONE from FAILED.
+# The log is overwritten. Every line the job prints is prefixed with the wall
+# clock ("09-14 13:52:07 "), so watch_job.sh can show when each happened; the
+# log ends with an unprefixed "[launch_job] exit N", which is how it tells DONE
+# from FAILED.
 set -euo pipefail
 
 PY=/home/luke/anaconda3/envs/buzzdetect-train/bin/python
@@ -42,7 +44,9 @@ fi
 log=$(realpath -m "$log")
 # setsid makes the job its own process group (pgid = pid), so one signal to the
 # group reaches every worker it spawned
-nohup setsid env "${envs[@]}" bash -c '"$@"; echo "[launch_job] exit $?"' launch_job "${cmd[@]}" \
+nohup setsid env "${envs[@]}" bash -c '
+  "$@" 2>&1 | while IFS= read -r line; do printf "%(%m-%d %T)T %s\n" -1 "$line"; done
+  echo "[launch_job] exit ${PIPESTATUS[0]}"' launch_job "${cmd[@]}" \
   > "$log" 2>&1 < /dev/null &
 pid=$!
 disown
@@ -61,4 +65,4 @@ if ! kill -0 "$pid" 2>/dev/null; then
   exit 1
 fi
 echo "pid $pid · log $log"
-echo "Monitor (persistent: true): $(dirname "$(realpath "$0")")/watch_job.sh $pid --log '$log'"
+echo "Monitor (timeout_ms 1800000; re-arm only when it says to): $(dirname "$(realpath "$0")")/watch_job.sh $pid --log '$log'"

@@ -79,7 +79,7 @@ download, a slow diagnostic) goes through two tools:
 
 ```bash
 tools/launch_job.sh <log> -- <command...>   # prints the pid and the watch command
-tools/watch_job.sh <pid> --log <log>         # run it as a Monitor, persistent: true
+tools/watch_job.sh <pid> --log <log>         # run it as a Monitor, timeout_ms: 1800000
 ```
 
 Their headers document the options. What they encode, so nobody retries the
@@ -93,17 +93,19 @@ alternatives:
   job, and `pkill -f` has killed its own shell. `watch_job.sh` follows the PID.
   If you must match a pattern, bracket its first letter:
   `pgrep -af "[0]3_train/main.py"`.
-- **The heartbeat keeps the prompt cache warm.** The cache's ~1 h TTL refreshes
-  on every read, so wakes under an hour apart carry one agent through a run of
-  any length; a slow job is no reason to hand off.
+- **The watch ends itself every 29 min, and that keeps the prompt cache warm.**
+  Its "still running · … · re-arm" line lands just inside Monitor's 30-min cap;
+  re-arm the same command then, and at no other time. The cache's ~1 h TTL
+  refreshes on every read, so those wakes carry one agent through a run of any
+  length; a slow job is no reason to hand off.
 - **A watcher ping gets a one-line reply and nothing else**: "Fold 7/8
-  trained.", "Still extracting, 1h32m in." Only a progress or heartbeat line
-  qualifies (an ERROR or terminal line needs real attention). Trust the
-  monitor: don't read the log, check files, recompute the ETA or re-arm it. An
-  ordinary ping means the watch is still active, and anything read while
-  waiting is paid for twice. The exception is a ping that looks wrong, such as
-  a job running well past what you expected: then read the log and investigate.
-  Stage 3 pings once per fold; stage 2 pings per ident only under `--verbose`.
+  trained.", "Still extracting, 1h32m in." (plus the re-arm, when asked). Only a
+  progress or re-arm line qualifies; an ERROR or terminal line needs real
+  attention. Trust the monitor: each ping already shows the log's last 3
+  timestamped lines, so don't read the log, check files or work out an ETA. The
+  exception is a ping that looks wrong, such as a job running well past what you
+  expected: then read the log and investigate. Stage 3 pings once per fold;
+  stage 2 only every 29 min, on purpose.
 - **The GPU is hidden by default.** The 12288-d trunk embedders OOM the 4 GB
   card, and CPU ≈ GPU for the probe. `--gpu` opts out.
 

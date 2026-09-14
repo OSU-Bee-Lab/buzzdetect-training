@@ -632,7 +632,7 @@ Each tool's header documents its options.
 | tool | does |
 |---|---|
 | `launch_job.sh` | start a long job detached, the only way that survives Claude Code; prints the PID and the watch command |
-| `watch_job.sh` | Monitor command for any detached job: progress with measured ETA, errors, a 45-min heartbeat, exit status |
+| `watch_job.sh` | Monitor command for any detached job: one ping per stage-3 fold, errors, exit status, and a 29-min "re-arm" line, each with the log's last 3 timestamped lines |
 | `results.py` | a notes.md Results section for two models: per-fold deltas ± SD, headline, tiers |
 | `compare_folds.py` | the per-fold join of two `folds_sx.csv` files |
 | `eval_sampling_sd.py` | event-blocked bootstrap SD of a model's per-fold and headline sensitivity, or of a paired delta |

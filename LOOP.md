@@ -159,12 +159,12 @@ tools/launch_job.sh extract.log -- 02_set/main.py --set medium --embedder <emb> 
 tools/launch_job.sh train.log -- 03_train/main.py --name <name> --set medium --embedder yamnet --translation general -y
 ```
 
-Arm the `watch_job.sh` command it prints as a Monitor with `persistent: true`,
-then wait.
+Arm the `watch_job.sh` command it prints as a Monitor with `timeout_ms: 1800000`,
+then wait. Re-arm it only when its line says "re-arm".
 
-**You don't know how long a run takes until its first progress line**, which
-carries the measured time per fold and the ETA. Don't state a duration before
-it, from an epoch rate or from the table below: your experiment is a new config,
+**You don't know how long a run takes until its first progress lines**, whose
+spacing is the measured time per fold. Don't state a duration before
+them, from an epoch rate or from the table below: your experiment is a new config,
 so it isn't in the table. The table is for budgeting a run you haven't launched.
 
 | config | per epoch | one CV |
@@ -181,7 +181,7 @@ At the default 400 epochs, a CV costs roughly 2.7x the 150-epoch rows.
 - **Leave the shipped model untrained.** `folds_sx.csv` comes entirely from the
   rotations. `--skip-cv` with the same `--name` later builds an identical one.
 - **`HANDOFF.md` is only for a session that must end while its job runs.** The
-  heartbeat keeps a waiting session alive, so a slow run is no reason to write
+  watch's 29-min re-arm wakes keep a waiting session alive, so a slow run is no reason to write
   one. If you do, commit it in the worktree with four things: the one-command
   progress check; "if it's still running, report progress and stop"; what to do
   when it finishes (the comparator, then steps 4-5); and what to do if it died,
