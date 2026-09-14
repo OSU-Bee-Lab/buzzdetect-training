@@ -134,7 +134,8 @@ kill_jobs() {  # since (epoch s) -> kill every launch_job.sh job registered sinc
     pid=${f##*/}
     [ "$(stat -c %Y "$f")" -ge "$since" ] || continue
     if [ "$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')" = "$pid" ]; then
-      kill -TERM -- "-$pid" 2>/dev/null && groups+=("$pid") && log "killing job $pid: $(cat "$f")"
+      kill -TERM -- "-$pid" 2>/dev/null && groups+=("$pid") && log "killing job $pid: $(cat "$f")" \
+        && echo "[agent_loop] killed by loop cleanup $(date '+%F %T'); not a crash, rerun resumes" >> "$(sed 's/ :: .*//' "$f")"
     fi
     rm -f "$f"
   done
