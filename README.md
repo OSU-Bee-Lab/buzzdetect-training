@@ -639,6 +639,7 @@ Each tool's header documents its options.
 | `log_entry.py` | build one `log.jsonl` line from `folds_sx.csv` |
 | `finish_experiment.sh` | commit and push the experiment branch, then log and commit in main |
 | `agent_loop.sh` | run LOOP.md in back-to-back fresh sessions, N experiments each |
+| `loop_signal.sh` | how a looped agent reports `done`, `issue`, `friction` or `stop`, from any worktree |
 | `archive_era.py` | close an era into `archive/` |
 | `check_sens_at_fpr.py` | pin `metrics.sens_at_fpr` to the `metrics_by_group` → `metrics_at_fpr` pair it restates |
 | `smoke_model.py`, `honest_epoch.py`, `annotation_triage.py` | model smoke test; cross-fold epoch re-scoring; annotation triage from surprisal |

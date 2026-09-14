@@ -40,10 +40,19 @@ if [[ $1 == *.py ]]; then
 fi
 
 log=$(realpath -m "$log")
-nohup env "${envs[@]}" bash -c '"$@"; echo "[launch_job] exit $?"' launch_job "${cmd[@]}" \
+# setsid makes the job its own process group (pgid = pid), so one signal to the
+# group reaches every worker it spawned
+nohup setsid env "${envs[@]}" bash -c '"$@"; echo "[launch_job] exit $?"' launch_job "${cmd[@]}" \
   > "$log" 2>&1 < /dev/null &
 pid=$!
 disown
+
+# Register it in the main checkout (shared by every worktree), so
+# tools/agent_loop.sh can kill the jobs its agents started.
+common=$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-format=absolute --git-common-dir)
+jobs_dir="$(dirname "$common")/.local/jobs"
+mkdir -p "$jobs_dir"
+echo "$log :: ${cmd[*]}" > "$jobs_dir/$pid"
 
 sleep 5
 if ! kill -0 "$pid" 2>/dev/null; then
