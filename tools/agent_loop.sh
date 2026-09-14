@@ -17,7 +17,7 @@
 # Each session is a background interactive session (`claude --bg`) with Remote
 # Control on, so it can be watched and steered from claude.ai/code or the app;
 # a `claude -p` session can't be. An agent reports with tools/loop_signal.sh,
-# not by ending its turn -- it also ends turns while waiting on a Monitor:
+# not by ending its turn -- it also ends turns while waiting on a job's pings:
 #   done      batch finished       -> next session gets tools/loop_prompt.md
 #   issue     batch hit a blocker  -> next session gets tools/loop_fix_prompt.md
 #   friction  reported mid-batch   -> after an experiment batch, a fixer runs
@@ -40,8 +40,8 @@
 # (loop-<batch>) if it's still running, instead of launching a second agent.
 #
 # Cleanup is the loop's job, not the agent's. Whenever a batch ends (done, issue
-# or wrap-up) the loop stops the session, which ends its Monitors, and kills the
-# jobs it started: those tools/launch_job.sh registered in .local/jobs/ since the
+# or wrap-up) the loop stops the session and kills the jobs it started, with
+# their notifiers: those tools/launch_job.sh registered in .local/jobs/ since the
 # session launched (a reattached session's own start time counts). A job started
 # any other way is not killed. Killing costs at most the fold or ident in
 # progress; stages 2 and 3 resume on rerun. A halt leaves jobs running, for you
@@ -49,6 +49,10 @@
 #
 # Env, for testing the loop: POLL (seconds, 60), PROMPT / FIX_PROMPT (templates),
 # BLOCKED_GRACE (seconds a session stays blocked before it's flagged, 300).
+# Run the main checkout's copy: a worktree's tools/ is frozen at its branch point.
+_main="$(dirname "$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-format=absolute --git-common-dir)")/tools/$(basename "$0")"
+[ "$(realpath "$0")" = "$(realpath -m "$_main")" ] || [ ! -f "$_main" ] || exec bash "$_main" "$@"
+
 set -uo pipefail
 
 N=4; MODEL=sonnet; EFFORT=medium; FIX_MODEL=opus; FIX_EFFORT=medium
@@ -111,16 +115,8 @@ limit_reset() {
   [ -n "$at" ] && echo "$t" || echo unknown
 }
 
-# Deliver a message to a running session by name. The CLI can't message a
-# background session, so a throwaway haiku session sends it with SendMessage.
-# Prints that session's last line: SENT, or FAILED with the reason. The prompt
-# goes on stdin: --allowedTools takes a variable number of values and would
-# swallow a positional prompt after it.
-send_to_session() {  # session name, message
-  printf '%s' "Use the SendMessage tool once, to the session named $1, with exactly this text, then reply SENT or FAILED with the reason:
-
-$2" | (cd "$ROOT" && claude -p --model haiku --effort low --no-session-persistence \
-         --allowedTools SendMessage ListAgents 2>&1) | tail -n 1
+send_to_session() {  # session name, message -> SENT, or FAILED with the reason
+  "$ROOT/tools/send_to_session.sh" "$@"
 }
 
 pid=$(cat "$STATE/driver.pid" 2>/dev/null)
@@ -161,7 +157,7 @@ on_interrupt() {
   if [ "$wrapping_up" = 0 ]; then
     wrapping_up=1
     log "Ctrl+C → asking session $id (loop-$batch) to wrap up; the loop exits when it has. Ctrl+C again to stop it and kill its jobs now"
-    ( r=$(send_to_session "loop-$batch" "Luke pressed Ctrl+C on tools/agent_loop.sh: wrap up now. Start nothing new. Once you signal, the loop stops this session and kills every job you launched, so don't wait for a job and don't stop jobs or Monitors yourself. If a job is still running, record the experiment's state and its exact relaunch command in its notes.md and a HANDOFF.md (LOOP.md step 3), then commit and push. Otherwise finish recording what is done (LOOP.md step 5). Then run $ROOT/tools/loop_signal.sh done \"wrapped up\" and end your turn.")
+    ( r=$(send_to_session "loop-$batch" "Luke pressed Ctrl+C on tools/agent_loop.sh: wrap up now. Start nothing new. Once you signal, the loop stops this session and kills every job you launched, so don't wait for a job and don't stop jobs or their notifiers yourself. If a job is still running, record the experiment's state and its exact relaunch command in its notes.md and a HANDOFF.md (LOOP.md step 3), then commit and push. Otherwise finish recording what is done (LOOP.md step 5). Then run $ROOT/tools/loop_signal.sh done \"wrapped up\" and end your turn.")
       kill -0 $$ 2>/dev/null || exit 0   # the loop already exited (a second Ctrl+C)
       if [[ $r == SENT* ]]; then
         log "wrap-up message delivered to loop-$batch → waiting for it to signal done"
@@ -203,9 +199,12 @@ render() {  # template, issue path
   sed -e "s|{N}|$N|g" -e "s|{BATCH}|$batch|g" -e "s|{ISSUE}|$2|g" -e "s|{ROOT}|$ROOT|g" "$1"
 }
 
-if [ -s "$STATE/driver.log" ]; then
-  echo "── last 20 lines of $STATE/driver.log ──"
-  tail -n 20 "$STATE/driver.log"
+# The latest batch's history, from its first log line on
+last_batch=$(cat "$STATE/batch" 2>/dev/null)
+from=$(grep -n " batch $last_batch:" "$STATE/driver.log" 2>/dev/null | head -n 1 | cut -d: -f1)
+if [ -n "$last_batch" ] && [ -n "$from" ]; then
+  echo "── batch $last_batch so far ($STATE/driver.log) ──"
+  tail -n +"$from" "$STATE/driver.log"
   echo "──"
 fi
 # The previous loop's session, if it outlived that loop (e.g. a closed terminal).
@@ -325,7 +324,7 @@ while true; do
           log "batch $batch: session $id resumed after its usage limit"
         elif [ "$limit_phase" = waiting ] && [ "$now" -ge $(( limit_at + LIMIT_NUDGE )) ]; then
           limit_phase=nudged
-          r=$(send_to_session "loop-$batch" "Your usage limit reset at $(date -d "@$limit_at" +%H:%M). Continue from where you left off. Detached jobs kept running through the limit, and so did any watch that hasn't printed its re-arm or end line: don't arm a second watch on the same job.")
+          r=$(send_to_session "loop-$batch" "Your usage limit reset at $(date -d "@$limit_at" +%H:%M). Continue from where you left off. Detached jobs kept running through the limit, and so did their notifiers, which keep pinging you: there is nothing to re-arm.")
           if [[ $r == SENT* ]]; then
             log "batch $batch: session $id hasn't resumed since its usage limit reset → told it to continue"
           else
@@ -378,7 +377,8 @@ while true; do
   # Let the session finish the turn it signalled in, then stop it. It stays
   # resumable (`claude attach`/`--resume`) for reading back.
   for _ in $(seq 20); do
-    [ "$(session_field "$id" .status)" = busy ] || break
+    # .state, not .status: status stays busy while any background task runs
+    [ "$(session_field "$id" .state)" = working ] || break
     nap 30
   done
   claude stop "$id" >/dev/null 2>&1

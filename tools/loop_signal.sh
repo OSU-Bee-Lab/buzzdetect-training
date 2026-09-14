@@ -12,6 +12,10 @@
 # `done` and `issue` end the batch: send one as the last thing before ending
 # your turn, and the loop stops the session soon after. `friction` doesn't: it
 # appends to a list a fixer agent works through after the batch, and you carry on.
+# Run the main checkout's copy: a worktree's tools/ is frozen at its branch point.
+_main="$(dirname "$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-format=absolute --git-common-dir)")/tools/$(basename "$0")"
+[ "$(realpath "$0")" = "$(realpath -m "$_main")" ] || [ ! -f "$_main" ] || exec bash "$_main" "$@"
+
 set -euo pipefail
 
 usage="usage: loop_signal.sh done <summary> | issue [details, or on stdin] | friction <what happened> | stop"
