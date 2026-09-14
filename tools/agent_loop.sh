@@ -34,6 +34,10 @@
 # exits without signalling. Rerunning after a halt resumes: a leftover issue
 # gets one more fix attempt; delete .local/agent_loop/issue to skip that.
 #
+# Closing the terminal kills only the loop, not its session. Rerunning then
+# shows the log's recent history and reattaches to the batch's session
+# (loop-<batch>) if it's still running, instead of launching a second agent.
+#
 # "The jobs it started" are those tools/launch_job.sh registered in .local/jobs/
 # since this loop began; a job started any other way is not killed. A halt
 # leaves jobs running.
@@ -186,69 +190,89 @@ render() {  # template, issue path
   sed -e "s|{N}|$N|g" -e "s|{BATCH}|$batch|g" -e "s|{ISSUE}|$2|g" -e "s|{ROOT}|$ROOT|g" "$1"
 }
 
+if [ -s "$STATE/driver.log" ]; then
+  echo "── last 20 lines of $STATE/driver.log ──"
+  tail -n 20 "$STATE/driver.log"
+  echo "──"
+fi
+# The previous loop's session, if it outlived that loop (e.g. a closed terminal).
+# Found by name, so it also works for a session launched before this was added.
+prev_batch=$(cat "$STATE/batch" 2>/dev/null)
+reattach=""
+if [ -n "$prev_batch" ]; then
+  quiet claude agents --json --all
+  reattach=$(jq -r --arg n "loop-$prev_batch" \
+    '[.[] | select(.name == $n and .pid != null)][0].id // empty' "$OUT" 2>/dev/null)
+fi
+last_was_fix=$(cat "$STATE/last_was_fix" 2>/dev/null || echo 0)
 log "loop started: $N experiments per agent on $MODEL/$EFFORT, fixes on $FIX_MODEL/$FIX_EFFORT (Ctrl+C to wrap up, twice to kill)"
-last_was_fix=0
 while true; do
   id=""
-  if [ -f "$STATE/stop" ]; then
+  if [ -z "$reattach" ] && [ -f "$STATE/stop" ]; then
     rm -f "$STATE/stop"
     log "stop signalled → exiting loop"
     finish 0
   fi
 
-  batch=$(( $(cat "$STATE/batch" 2>/dev/null || echo 0) + 1 ))
-  echo "$batch" > "$STATE/batch"
-
-  # A fixer runs for a blocking issue, or for friction reports after an
-  # experiment batch. Friction a fixer reports itself waits for the next
-  # experiment batch, so fixers can't chain.
-  friction=0; [ -s "$STATE/friction.md" ] && friction=$(grep -c '^- ' "$STATE/friction.md")
-  if [ -f "$STATE/issue" ] || { [ "$friction" -gt 0 ] && [ "$last_was_fix" = 0 ]; }; then
-    [ -f "$STATE/issue" ] && [ "$last_was_fix" = 1 ] \
-      && halt "batch $batch: the fix agent reported an issue too (read $STATE/issue, resolve it, rerun)"
-    issue="$STATE/issues/before-batch$(printf %03d "$batch").md"
-    : > "$issue"; causes=()
-    if [ -f "$STATE/issue" ]; then
-      { echo "# Blocking issue"; echo; cat "$STATE/issue"; echo; } >> "$issue"
-      rm "$STATE/issue"; causes+=("previous agent reported an issue")
-    fi
-    if [ "$friction" -gt 0 ]; then
-      { echo "# Friction"; echo; cat "$STATE/friction.md"; } >> "$issue"
-      rm "$STATE/friction.md"; causes+=("$friction friction report(s)")
-    fi
-    prompt=$(render "$FIX_PROMPT" "$issue"); last_was_fix=1
-    model=$FIX_MODEL; effort=$FIX_EFFORT
-    cause="$(IFS=+; echo "${causes[*]}" | sed 's/+/ and /') ($issue)"; action="launching a fix agent"
+  if [ -n "$reattach" ]; then
+    id=$reattach; batch=$prev_batch; reattach=""
+    log "batch $batch: session $id (loop-$batch) is still running → reattaching to it"
   else
-    model=$MODEL; effort=$EFFORT
-    if [ "$friction" -gt 0 ]; then
-      cause="no open issue; the fixer's own $friction friction report(s) wait until after this batch"
-    else
-      cause="no open issue"
-    fi
-    prompt=$(render "$PROMPT" ""); last_was_fix=0
-    action="launching an agent for $N experiments"
-    handoffs=$(find_handoffs)
-    if [ -n "$handoffs" ]; then
-      prompt+=$'\n\n'"Before starting anything new, resume each unfinished experiment below by following its HANDOFF.md; each counts toward the $N:"$'\n'"$handoffs"
-      cause="$cause; unfinished handoff in $(xargs -n 1 dirname <<<"$handoffs" | xargs -n 1 basename | paste -sd, -)"
-    fi
-  fi
-  rm -f "$STATE/done"
+    batch=$(( $(cat "$STATE/batch" 2>/dev/null || echo 0) + 1 ))
+    echo "$batch" > "$STATE/batch"
 
-  # LOOP.md has its own worktree discipline (setup_worktree.sh, plus deliberate
-  # edits in main: IDEAS.md, new embedders, a fixer's repairs), so Claude Code's
-  # background-edit guard is off (bgIsolation in SESSION_SETTINGS) and
-  # EnterWorktree, which the guard pushes agents into, is blocked. It also asks
-  # for confirmation in auto mode, and Remote Control didn't show that dialog
-  # (2026-09-14).
-  out=$(cd "$ROOT" && claude --bg --remote-control "loop-$batch" -n "loop-$batch" \
-        --disallowedTools "EnterWorktree,ExitWorktree" \
-        --permission-mode auto --model "$model" --effort "$effort" \
-        --settings "$SESSION_SETTINGS" "$prompt" 2>&1)
-  id=$(grep -oP 'backgrounded · \K[0-9a-f]+' <<<"$out")
-  [ -n "$id" ] || halt "batch $batch: claude --bg failed to start a session ($out)"
-  log "batch $batch: $cause → $action on $model/$effort (session $id, named loop-$batch)"
+    # A fixer runs for a blocking issue, or for friction reports after an
+    # experiment batch. Friction a fixer reports itself waits for the next
+    # experiment batch, so fixers can't chain.
+    friction=0; [ -s "$STATE/friction.md" ] && friction=$(grep -c '^- ' "$STATE/friction.md")
+    if [ -f "$STATE/issue" ] || { [ "$friction" -gt 0 ] && [ "$last_was_fix" = 0 ]; }; then
+      [ -f "$STATE/issue" ] && [ "$last_was_fix" = 1 ] \
+        && halt "batch $batch: the fix agent reported an issue too (read $STATE/issue, resolve it, rerun)"
+      issue="$STATE/issues/before-batch$(printf %03d "$batch").md"
+      : > "$issue"; causes=()
+      if [ -f "$STATE/issue" ]; then
+        { echo "# Blocking issue"; echo; cat "$STATE/issue"; echo; } >> "$issue"
+        rm "$STATE/issue"; causes+=("previous agent reported an issue")
+      fi
+      if [ "$friction" -gt 0 ]; then
+        { echo "# Friction"; echo; cat "$STATE/friction.md"; } >> "$issue"
+        rm "$STATE/friction.md"; causes+=("$friction friction report(s)")
+      fi
+      prompt=$(render "$FIX_PROMPT" "$issue"); last_was_fix=1
+      model=$FIX_MODEL; effort=$FIX_EFFORT
+      cause="$(IFS=+; echo "${causes[*]}" | sed 's/+/ and /') ($issue)"; action="launching a fix agent"
+    else
+      model=$MODEL; effort=$EFFORT
+      if [ "$friction" -gt 0 ]; then
+        cause="no open issue; the fixer's own $friction friction report(s) wait until after this batch"
+      else
+        cause="no open issue"
+      fi
+      prompt=$(render "$PROMPT" ""); last_was_fix=0
+      action="launching an agent for $N experiments"
+      handoffs=$(find_handoffs)
+      if [ -n "$handoffs" ]; then
+        prompt+=$'\n\n'"Before starting anything new, resume each unfinished experiment below by following its HANDOFF.md; each counts toward the $N:"$'\n'"$handoffs"
+        cause="$cause; unfinished handoff in $(xargs -n 1 dirname <<<"$handoffs" | xargs -n 1 basename | paste -sd, -)"
+      fi
+    fi
+    rm -f "$STATE/done"
+
+    # LOOP.md has its own worktree discipline (setup_worktree.sh, plus deliberate
+    # edits in main: IDEAS.md, new embedders, a fixer's repairs), so Claude Code's
+    # background-edit guard is off (bgIsolation in SESSION_SETTINGS) and
+    # EnterWorktree, which the guard pushes agents into, is blocked. It also asks
+    # for confirmation in auto mode, and Remote Control didn't show that dialog
+    # (2026-09-14).
+    out=$(cd "$ROOT" && claude --bg --remote-control "loop-$batch" -n "loop-$batch" \
+          --disallowedTools "EnterWorktree,ExitWorktree" \
+          --permission-mode auto --model "$model" --effort "$effort" \
+          --settings "$SESSION_SETTINGS" "$prompt" 2>&1)
+    id=$(grep -oP 'backgrounded · \K[0-9a-f]+' <<<"$out")
+    [ -n "$id" ] || halt "batch $batch: claude --bg failed to start a session ($out)"
+    log "batch $batch: $cause → $action on $model/$effort (session $id, named loop-$batch)"
+    echo "$last_was_fix" > "$STATE/last_was_fix"
+  fi
 
   # A new session takes a few seconds to appear in `claude agents`, so it only
   # counts as gone once it has been seen running.
