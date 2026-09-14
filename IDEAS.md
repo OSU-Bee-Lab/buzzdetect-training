@@ -170,9 +170,11 @@ answers.**
 
   `context-embedder` pushed `1_150`'s threshold *down* (-1.819 → -2.107) without
   helping, so a better representation alone does not touch it — which is why
-  item 3 attacks the *pooling* rather than the encoder. `yamnet_aves` is the only
-  intervention ever to move `1_95` (+0.014 / +0.024 over two draws); it is still
-  near chance.
+  item 3 attacks the *pooling* rather than the encoder. Two interventions now
+  confirmed to move `1_95` over two independent draws each: `yamnet_aves`
+  (+0.014 / +0.024) and `yamnet_pitchshift_decimate` (+0.024 / +0.052, also
+  +0.034 / +0.043 at `1_114`) — unrelated mechanisms, untested in combination;
+  it is still near chance either way.
 - **Read `best_epoch` alongside every delta.** If your treatment moved it, the
   delta is confounded with a stopping change — re-score both arms at a common
   epoch (`tools/honest_epoch.py`, no training) before believing it.
@@ -202,55 +204,6 @@ answers.**
 
 Ranked. **Run item 1 first** — every comparison after it is budget-limited by
 an unknown amount until it lands, and it is cheap.
-
-## 5b. Up-shift by real time-window decimation, not tile — self-contained, like `yamnet_context`
-
-*Evidence: **untagged proposal** (Luke, 2026-09-13); the down direction needed
-nothing beyond a `samplerate` bump (see below), and a second correction same
-day settled how the up direction should read its wider window.*
-
-`yamnet_pitchshift`'s x2/x4 rungs create a real artifact: to shift up, they
-resample the 0.96 s frame down to fewer samples then **tile** it back to
-15360, which repeats the same compressed content twice with a hard seam at
-the midpoint. `yamnet_pitchshift_down` avoids that on the way down for a
-structural reason, not a cleverer trick: it declares a higher native
-`samplerate` (32000, vs the pipeline's usual 16000) so one 0.96 s frame
-already contains 30720 real samples, and the down-shift just **feeds the
-first 15360 of them to YAMNet as-is, no resample call** — same sample count,
-a genuinely shorter real span, YAMNet told it's the full 0.96 s. No wider
-buffer, no extraction change beyond the `samplerate` bump; that embedder is
-already extracting.
-
-**The up direction genuinely needs more real audio than one 0.96 s frame
-contains, and the honest way to say that is: the frame is 1.92 s, full stop —
-not "0.96 s with a wider context."** `yamnet_context` widens by concatenating
-three *separate, faithful* 0.96 s embeddings end-to-end; each 1024-d component
-of its output still represents only its own true window, and the label logic
-never has to answer for content it wasn't told about. This construction is
-different in kind: it merges frame i and i+1's real, contiguous raw *samples*
-(30720, a genuine 1.92 s when they're truly adjacent) and decimates that down
-to 15360 *before* YAMNet ever runs — one opaque 1024-d vector that doesn't
-correspond to any single 0.96 s interval. Row spacing can still match the
-existing 0.96 s grid (so frame counts line up with the 2048-d cache for
-concatenation), but whatever label that row gets under the standard grid
-covers only the first half of what the embedding actually heard — a buzz
-sitting entirely in the borrowed second half still shapes the vector without
-being the row's own label. That is a real, if different, version of the same
-dilution concern `framelength-changes-labels` already raised for a literal
-wider frame (`yamnet_doublerate`'s failure mode) — say so up front rather than
-waving it off with the `yamnet_context` comparison, which doesn't have this
-problem. Still self-contained (no `extract.py` change — `embed()` already
-receives a buffer spanning several consecutive real frames, same as every
-other embedder here) and it inherits the boundary-clamp caveat `yamnet_context`
-already measured (92-98% real neighbours on medium/yamnet_aves), but the
-label-mismatch is new and specific to merging audio pre-embedding, and belongs
-in the write-up if this gets run.
-
-*Falsifier:* if the x2/x4 rungs' hard-fold pattern (particularly the mechanism
-read on `1_95`/`1_114`) doesn't change once the tile-seam is removed, the seam
-wasn't doing the work and the decimation construction is a purity improvement,
-not a result mover — worth knowing either way before spending the extraction
-surgery on a third up-shift family.
 
 ## 16. Stack context onto the pitch-shift block — two confirmed levers, mechanism untested together
 
