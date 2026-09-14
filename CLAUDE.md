@@ -75,28 +75,41 @@ files evaporated and three docs kept citing them for a month.
 ## Running long jobs
 
 Anything longer than a foreground command (stage 2, stage 3, a weights
-download, a slow diagnostic) goes through two tools:
+download, a slow diagnostic) goes through one tool:
 
 ```bash
-tools/launch_job.sh <log> -- <command...>   # prints the pid and the watch command
-tools/watch_job.sh <pid> --log <log>         # run it as a Monitor, persistent: true
+tools/launch_job.sh <log> -- <command...>   # detaches the job and starts its notifier
 ```
 
-Their headers document the options. What they encode, so nobody retries the
+Its header documents the options. What it encodes, so nobody retries the
 alternatives:
+
+- **Launch, then wait: the job pings you.** A notifier messages your session on
+  each stage-3 fold, on an error, when the job ends, and every 50 min
+  otherwise. Pings arrive as "Another Claude session sent a message: [job …]".
+  Don't arm a Monitor, poll or sleep. To get pings for a job another session
+  launched (a HANDOFF.md resume): `tools/notify_job.sh <pid> --log <log>`.
+- **A ping gets a one-line reply and nothing else**: "Fold 3/5 done.", "Still
+  extracting, 1h32m in." Each carries the time and the job's elapsed time,
+  because you can't see when a message arrived. Trust the notifier: read the
+  log only when a ping looks wrong, such as a job running well past what you
+  expected. DONE, FAILED and error pings need real attention. Stage 2 pings
+  only on errors, its end and the 50-min heartbeat, on purpose.
+- **The heartbeat keeps the prompt cache warm.** Its ~1 h TTL refreshes on every
+  read, so pings under an hour apart carry one agent through a run of any
+  length; a slow job is no reason to hand off.
+- **Tools always run from the main checkout.** Each `tools/*.sh` re-runs the main
+  checkout's copy, because a worktree's `tools/` is frozen at its branch point.
+  A branch from before 2026-09-14 lacks that redirect: merge main into it first.
 
 - **`run_in_background` doesn't work.** A pipeline job launched with it is
   SIGKILLed within ~15–60 s, and a waiter loop within a minute or two. A leading
   `sleep` in a Bash call is blocked outright.
 - **`pgrep -f` and `pkill -f` match their own shell.** Claude Code runs each call
   as `bash -c '<command>'`, so an unbracketed pattern always finds a "running"
-  job, and `pkill -f` has killed its own shell. `watch_job.sh` follows the PID.
+  job, and `pkill -f` has killed its own shell. The notifier follows the PID.
   If you must match a pattern, bracket its first letter:
   `pgrep -af "[0]3_train/main.py"`.
-- **The heartbeat keeps the prompt cache warm.** The cache's ~1 h TTL refreshes
-  on every read, so wakes under an hour apart carry one agent through a run of
-  any length; a slow job is no reason to hand off. Answer a progress or
-  heartbeat line in one line: anything read while waiting is paid for twice.
 - **The GPU is hidden by default.** The 12288-d trunk embedders OOM the 4 GB
   card, and CPU ≈ GPU for the probe. `--gpu` opts out.
 
