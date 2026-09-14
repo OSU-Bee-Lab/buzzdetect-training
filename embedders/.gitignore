@@ -22,6 +22,7 @@
 !yamnet_doublerate
 !yamnet_pitchshift
 !yamnet_pitchshift_decimate
+!yamnet_pitchshift_context
 
 # Ignore binary model files within unignored embedders
 panns_cnn14/*.pth
