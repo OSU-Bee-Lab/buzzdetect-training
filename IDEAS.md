@@ -132,39 +132,6 @@ using only rows whose `label` does not contain `ins_buzz`.
 
 Ranked best-first by expected value on the headline and the hard folds, cost second. **Item 18 is a free diagnostic: run it while item 19's extraction runs**, not before it — it only changes how 19 is read. Item 23 is high-ceiling but blocked on Luke, which is why it sits low.
 
-## 19. Decimated shift in the lead — `yamnet_pitchshift_decimate_aves_mid`
-
-*Evidence: **E4, clean, both halves twice-drawn** — `pitchshift-decimate-up`
-(+repeat) moved `1_95` +0.052/+0.024 and `1_114` +0.034/+0.043 while trading
-away rich-fold sensitivity; `pitchshift-aves-mid` lost `1_114` −0.204 vs
-pitch-shift alone. Untagged proposal for the combination.*
-
-The lead uses the **tiled** octave shift (0.48 s of audio played twice, hard
-seam). Swapping it for the seamless **decimated** shift is one variable, and
-it is the only confirmed lever pointing at both `1_95` and `1_114`, two of the
-three FP-limited folds. `aves-mid` supplies the `1_150`/willard gains that
-decimation gave back, so the parents' fold trades are complementary on paper.
-
-**Wait for `pitchshift-aves-mid-repeat` to land** — it is the control.
-
-**Build.** New embedder, `framelength_s = 1.0`, `context_frames = 1`:
-`[yamnet(crop_t), yamnet(decimate(30720 real samples from crop_t's start)),
-aves l6/9/12(frame_t)]` = 4352-d. The 30720 samples run past the end of frame
-t into t+1; they must come from the contiguous buffer `context_frames` supplies,
-**never** from cached rows. Unit-check that the unshifted and AVES blocks are
-byte-identical to `yamnet_pitchshift_aves_mid` on a few `lite` idents before
-the `medium` extraction.
-
-*Cost:* one extraction (~1 h+, both source embedders' costs combined; measure the
-first ident) + one 4352-d CV at 400 epochs (measure the first fold).
-
-*Falsifier:* `1_114` and `1_95` must both rise above the control on **both**
-of its draws, with the headline no worse than −0.027. If `1_114` stays down,
-item 18's answer is the explanation (AVES layers dominate the trill error) and
-no YAMNet-side shift change will rescue it inside this concat. Report the tier
-columns: a `1_114` recovery that shows up only in `untagged` is expected, since
-that fold has no loud/quiet tags.
-
 ## 18. Which block carries the trill confusion at `1_114` — free diagnostic
 
 *Evidence: **E4** census above (2026-09-14). Untagged proposal for the method,
