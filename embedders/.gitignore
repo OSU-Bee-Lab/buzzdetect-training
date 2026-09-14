@@ -26,6 +26,7 @@
 !yamnet_aves_p3
 !yamnet_aves_mid
 !yamnet_pitchshift_aves_mid
+!yamnet_pitchshift_decimate_aves_mid
 
 # Ignore binary model files within unignored embedders
 panns_cnn14/*.pth
