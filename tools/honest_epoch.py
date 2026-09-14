@@ -3,11 +3,11 @@
 Each rotation's held-out fold doubles as its early-stopping monitor
 (README.md, "There is no `validate` role"), so a fold's reported sensitivity was
 measured on the fold that picked its epoch. Under `--monitor val_loss` the
-selection statistic differs from the reported one and README:642 argues the
-optimism is small. Under `--monitor val_sens` they are the *same statistic*, and
-the reported number is `max` over epochs of the thing being reported.
+selection statistic differs from the reported one and that README section argues
+the optimism is small. Under `--monitor val_sens` they are the *same statistic*,
+and the reported number is `max` over epochs of the thing being reported.
 
-README:651 prescribes the remedy and notes it needs no retraining: score each
+The same section prescribes the remedy and notes it needs no retraining: score each
 fold at an epoch derived from the *other* folds. `val_sens_fpr0.005_curve` is
 persisted per fold, so that is a lookup.
 

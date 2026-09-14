@@ -112,23 +112,31 @@ def sens(activation, pos_idx, neg_idx, fpr):
     return _sens_at_fpr(act, correct, (fpr,))[fpr]
 
 
-def main(model_dir, other=None, fpr=0.005, n_boot=2000, seed=0):
+def headline_sd(sds):
+    """Folds are averaged unweighted, so their sampling SDs add in quadrature."""
+    return float(np.sqrt(np.nansum(np.square(sds))) / len(sds))
+
+
+def fold_rows(model_dir, other=None, fpr=0.005, n_boot=2000, seed=0):
+    """One dict per fold: fold, events, sens, sd, neg_at_fpr, and delta/delta_sd
+    when `other` is given and has the fold. tools/results.py reads these."""
     rng = np.random.default_rng(seed)
     preds = read_fold_predictions(os.path.join(model_dir, 'folds'))
     if not preds:
-        sys.exit(f'no predictions.csv under {model_dir}/folds')
+        raise FileNotFoundError(f'no predictions.csv under {model_dir}/folds')
     preds_b = read_fold_predictions(os.path.join(other, 'folds')) if other else {}
 
-    paired = bool(other)
-    head = f"{'fold':<56}{'events':>7}{'sens':>7}{'boot_sd':>9}{'neg@fpr':>9}"
-    if paired:
-        head += f"{'delta':>8}{'delta_sd':>10}"
-    print(head)
-
-    point, spread, dpoint, dspread = [], [], [], []
+    rows = []
     for fold, df in sorted(preds.items()):
         activation, pos, neg, n_neg = fold_units(df)
-        act_b = preds_b[fold]['activation_ins_buzz'].to_numpy() if paired and fold in preds_b else None
+        act_b = preds_b[fold]['activation_ins_buzz'].to_numpy() if fold in preds_b else None
+        if act_b is not None and len(act_b) != len(df):
+            # predictions.csv carries no frame key, so pairing is by row; two
+            # frame grids (e.g. an AVES-hop embedder against YAMNet) can't pair,
+            # and a longer `other` would otherwise pair the wrong frames silently
+            print(f'WARNING: {fold}: {len(df)} vs {len(act_b)} frames -- different '
+                  f'frame grids, no paired delta SD', file=sys.stderr)
+            act_b = None
 
         boot, dboot = [], []
         for _ in range(n_boot):
@@ -143,28 +151,39 @@ def main(model_dir, other=None, fpr=0.005, n_boot=2000, seed=0):
 
         s = sens(activation, np.concatenate(pos) if pos else np.array([], int),
                  np.flatnonzero(~df['correct'].astype(bool).to_numpy()), fpr)
-        sd = float(np.nanstd(boot))
-        label = fold if len(fold) <= 55 else '...' + fold[-52:]
-        line = (f'{label:<56}{len(pos):>7}{s:>7.3f}{sd:>9.3f}'
-                f'{int(np.floor(fpr * n_neg)):>9}')
+        row = dict(fold=fold, events=len(pos), sens=s, sd=float(np.nanstd(boot)),
+                   neg_at_fpr=int(np.floor(fpr * n_neg)))
         if act_b is not None:
             s_b = sens(act_b, np.concatenate(pos) if pos else np.array([], int),
                        np.flatnonzero(~df['correct'].astype(bool).to_numpy()), fpr)
-            line += f'{s_b - s:>+8.3f}{float(np.nanstd(dboot)):>10.3f}'
-            dpoint.append(s_b - s)
-            dspread.append(float(np.nanstd(dboot)))
-        print(line)
-        point.append(s)
-        spread.append(sd)
+            row.update(delta=s_b - s, delta_sd=float(np.nanstd(dboot)))
+        rows.append(row)
+    return rows
 
-    # folds are averaged unweighted, so their sampling SDs add in quadrature
-    hsd = float(np.sqrt(np.nansum(np.square(spread))) / len(spread))
-    print(f"\n{'mean sens (the headline)':<56}{np.nanmean(point):>7.3f}")
-    print(f"{'headline SD, eval sampling alone':<56}{hsd:>7.3f}")
-    if paired and dpoint:
-        dhsd = float(np.sqrt(np.nansum(np.square(dspread))) / len(dspread))
-        print(f"{'headline delta':<56}{np.nanmean(dpoint):>+7.3f}")
-        print(f"{'headline delta SD, eval sampling alone':<56}{dhsd:>7.3f}")
+
+def main(model_dir, other=None, fpr=0.005, n_boot=2000, seed=0):
+    try:
+        rows = fold_rows(model_dir, other, fpr, n_boot, seed)
+    except FileNotFoundError as e:
+        sys.exit(str(e))
+
+    head = f"{'fold':<56}{'events':>7}{'sens':>7}{'boot_sd':>9}{'neg@fpr':>9}"
+    if other:
+        head += f"{'delta':>8}{'delta_sd':>10}"
+    print(head)
+    for r in rows:
+        label = r['fold'] if len(r['fold']) <= 55 else '...' + r['fold'][-52:]
+        line = f"{label:<56}{r['events']:>7}{r['sens']:>7.3f}{r['sd']:>9.3f}{r['neg_at_fpr']:>9}"
+        if 'delta' in r:
+            line += f"{r['delta']:>+8.3f}{r['delta_sd']:>10.3f}"
+        print(line)
+
+    paired = [r for r in rows if 'delta' in r]
+    print(f"\n{'mean sens (the headline)':<56}{np.nanmean([r['sens'] for r in rows]):>7.3f}")
+    print(f"{'headline SD, eval sampling alone':<56}{headline_sd([r['sd'] for r in rows]):>7.3f}")
+    if paired:
+        print(f"{'headline delta':<56}{np.nanmean([r['delta'] for r in paired]):>+7.3f}")
+        print(f"{'headline delta SD, eval sampling alone':<56}{headline_sd([r['delta_sd'] for r in paired]):>7.3f}")
     print('\ntraining stochasticity is NOT in these numbers and is the larger term '
           'per fold; only repeat draws measure it.')
 

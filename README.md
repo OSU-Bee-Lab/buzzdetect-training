@@ -1,8 +1,8 @@
 # buzzdetect-training
 
 Trains Keras classifiers that detect insect buzzing in passive acoustic
-recordings. Raw audio and annotations go in; a shallow probe (dropout + one
-dense layer) over a frozen audio embedder — YAMNet by default — comes out.
+recordings. Raw audio and annotations go in; a linear probe (one dense layer,
+optional dropout) over a frozen audio embedder — YAMNet by default — comes out.
 
 This file is the operator's guide: how to run the pipeline and how to read what
 it produces. `CLAUDE.md` is the orientation file for agents editing the code.
@@ -102,8 +102,8 @@ Results land in `models/my_first_model/`. Everything numeric is in
 
 ## Stage 1 — annotate
 
-Each **annotation effort** is a directory under `01_annotate/` with its own
-`.Rproj` and a `combine.R`. `combine.R` reads that effort's raw annotation
+Each **annotation effort** is a directory under `01_annotate/` holding a
+`combine.R`. `combine.R` reads that effort's raw annotation
 files (Audacity label tracks, via `01_annotate/utils.R`), fills unannotated gaps
 with `ambient_background`, assigns each ident to a fold, and writes two files
 next to itself:
@@ -188,7 +188,7 @@ Checked-in sets:
 | `tiny` | `medium` subset: first two annotations per ident | smoke-test scale |
 
 > `medium` is the set experiments run on: day-long annotated recordings from a
-> diversity of environments. Its `folds.csv` assigns `rotate` to 11 deployment
+> diversity of environments. Its `folds.csv` assigns `rotate` to 8 deployment
 > folds and `train` to the rest. Annotation is ongoing, so folds gain data over
 > time and numbers drift — note the set's state when a run matters.
 > `lite` is kept for troubleshooting, `tiny` for smoke-testing the pipeline.
@@ -203,7 +203,7 @@ conda run -n buzzdetect-train python 02_set/main.py \
 | flag | meaning |
 |---|---|
 | `--set` | set name under `02_set/sets/` |
-| `--embedder` | directory name under `embedders/` — `yamnet`, `yamnet_bandpass`, `yamnet_doublerate`, `yamnet_combined`, `yamnet_copy` |
+| `--embedder` | directory name under `embedders/` (`ls embedders/`) |
 | `--workers` | processes for the framing + embedding phase; **`0` runs in-process** |
 | `--snip-workers` | threads for the snip-sync phase (source-drive I/O, no GPU); default 4, `1` = serial |
 | `--overlap-event-prop` | annotation overlap needed to label a frame, as a fraction of frame length |
@@ -306,9 +306,12 @@ conda run -n buzzdetect-train python 03_train/main.py \
 | `--patience` | `50` | `EarlyStopping` patience (`min_delta` 0.002), `--early-stop` only |
 | `--stop-tol` | `0.01` | shipped-model epoch count under `--early-stop`: stop this fraction short of the consensus val_loss floor (larger = fewer epochs). Ignored under a fixed budget, which ships the same budget |
 | `--skip-cv` | — | train no rotations; build only the shipped model, epoch count from the fold results already on disk |
+| `--train-shipped` | — | also train the shipped model after the rotations (off by default) |
+| `--only-folds` | — | run only the named rotations; cannot supply a shipped epoch count |
 | `--augment` | — | augmentation subdirectory names to include |
 | `-y` / `--yes` | — | accept untranslated labels without prompting |
 | `--verbose` | — | per-epoch output and per-fold detail |
+| `--no-surprisal` | — | skip writing `surprisal/` |
 
 ### Translations
 
@@ -382,8 +385,10 @@ per-fold argmins scatter by 100+ epochs in a flat basin, so their `median`
 lurches with fold composition and the pooled curve is steadier. It's the only
 model saved with a binary, and it gets scored on each `holdout` fold.
 
-The CV loop resumes — folds with a `config_model.json` are skipped — so a
-re-run after an interruption only trains what's missing. `--skip-cv` is the
+The CV loop resumes — folds with a `config_model.json` are skipped, and the
+summary still reads them off disk — so a re-run after an interruption only
+trains what's missing. To start clean, delete `models/<name>/` or pass
+`main.py --clear`. `--skip-cv` is the
 other half of that: it trains *no* rotations and builds only the shipped model,
 taking the epoch count from whatever fold results are already on disk, and
 implies `--train-shipped`. Because the epoch count comes off those saved curves,
@@ -400,13 +405,6 @@ frozen embedding, with a `Dropout` in front only when `--dropout` is nonzero
 (it defaults to 0).
 
 Needs at least two `rotate` folds, or it errors out.
-
-### Reruns resume
-
-A model directory containing `config_model.json` is skipped. The CV summary is
-reassembled by reading each fold's results off disk, so an interrupted run
-picks up where it stopped and the skipped folds still appear in the summary. To
-start clean, delete `models/<name>/` (or use `main.py --clear`).
 
 ### Output
 
@@ -606,8 +604,8 @@ spread understates true uncertainty about a genuinely new deployment.
 
 **Sensitivity and FPR need different amounts of data.** FPR is estimated from the
 flood of non-buzz frames and is tight in every fold. Sensitivity is estimated
-from buzz frames only, and in the quietest deployments (tens of seconds of buzz)
-it's hopeless — ±0.25 or worse. So let every deployment contribute to pooled
+from buzz events only, so in the quietest deployments (a handful of events) it
+is loose — see the per-fold SDs above. So let every deployment contribute to pooled
 FPR, and treat per-deployment sensitivity as meaningful only where there's buzz
 to support it. The quiet folds aren't weak folds; they're the best
 false-positive probes available, and nighttime false positives are the known
@@ -619,8 +617,9 @@ doesn't. `folds_sx.csv` carries a `precision` column because it is what an
 operator sees in the output, but read it against that fold's own buzz density,
 which is a property of what got annotated.
 
-The per-fold and pooled numbers are mildly optimistic: each fold also chose its
-own stopping epoch on the fold it's scored against. See
+Under `--early-stop` only, the per-fold and pooled numbers are mildly
+optimistic: each fold chose its own stopping epoch on the fold it's scored
+against. The default fixed budget selects nothing. See
 [There is no `validate` role](#there-is-no-validate-role) for how much that's
 worth and how to remove it if it ever matters.
 
@@ -628,23 +627,24 @@ worth and how to remove it if it ever matters.
 
 ## Tools
 
-`tools/compare_folds.py` joins two models' `folds_sx.csv` on fold and prints
-the per-fold deltas — LOOP.md step 4. `tools/check_sens_at_fpr.py` pins
-`metrics.sens_at_fpr` (the per-epoch monitor's read) to the `metrics_by_group`
-→ `metrics_at_fpr` pair it restates.
+Each tool's header documents its options.
 
-`tools/night_positives.py` is gone. It plotted a model's activations across an
-all-night recording, taking its threshold off `folds_pooled_metrics.csv`, which
-is no longer written. The recording is still at `tools/night-positives/`, and
-nighttime false positives are still the known real-world failure mode (see
-`log.jsonl`, `yamnet-mask`) — the tool is recoverable from git if that check is
-wanted again.
+| tool | does |
+|---|---|
+| `launch_job.sh` | start a long job detached, the only way that survives Claude Code; prints the PID and the watch command |
+| `watch_job.sh` | Monitor command for any detached job: progress with measured ETA, errors, a 45-min heartbeat, exit status |
+| `results.py` | a notes.md Results section for two models: per-fold deltas ± SD, headline, tiers |
+| `compare_folds.py` | the per-fold join of two `folds_sx.csv` files |
+| `eval_sampling_sd.py` | event-blocked bootstrap SD of a model's per-fold and headline sensitivity, or of a paired delta |
+| `log_entry.py` | build one `log.jsonl` line from `folds_sx.csv` |
+| `finish_experiment.sh` | commit and push the experiment branch, then log and commit in main |
+| `agent_loop.sh` | run LOOP.md in back-to-back fresh sessions, N experiments each |
+| `archive_era.py` | close an era into `archive/` |
+| `check_sens_at_fpr.py` | pin `metrics.sens_at_fpr` to the `metrics_by_group` → `metrics_at_fpr` pair it restates |
+| `smoke_model.py`, `honest_epoch.py`, `annotation_triage.py` | model smoke test; cross-fold epoch re-scoring; annotation triage from surprisal |
 
-There is no stage 4. It scored a fixed model against a hand-curated corpus and
-expected the pre-CV repeated-run layout; a CV run scores every held-out fold
-itself. The code is recoverable from git; **the corpus is gone** — it was left
-in a gitignored directory and lost. `archive/` exists so that does not happen
-again.
+`03_train/resummarize.py` rebuilds `folds_sx.csv` from `predictions.csv` without
+TensorFlow.
 
 ---
 
