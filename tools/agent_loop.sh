@@ -38,7 +38,8 @@
 # since this loop began; a job started any other way is not killed. A halt
 # leaves jobs running.
 #
-# Env, for testing the loop: POLL (seconds, 60), PROMPT / FIX_PROMPT (templates).
+# Env, for testing the loop: POLL (seconds, 60), PROMPT / FIX_PROMPT (templates),
+# BLOCKED_GRACE (seconds a session stays blocked before it's flagged, 300).
 set -uo pipefail
 
 N=4; MODEL=sonnet; EFFORT=medium; FIX_MODEL=opus; FIX_EFFORT=medium
@@ -62,6 +63,7 @@ POLL=${POLL:-60}
 PROMPT=${PROMPT:-$ROOT/tools/loop_prompt.md}
 FIX_PROMPT=${FIX_PROMPT:-$ROOT/tools/loop_fix_prompt.md}
 LIMIT_WAIT_MAX=3000   # ~50 min: the prompt cache's ~1 h TTL with margin
+BLOCKED_GRACE=${BLOCKED_GRACE:-300}   # seconds a session stays blocked before it's flagged
 SESSION_SETTINGS='{"autoContinueAtUsageLimit": true, "worktree": {"bgIsolation": "none"}}'
 OUT="$STATE/.out"
 mkdir -p "$STATE/issues" "$JOBS"
@@ -250,16 +252,29 @@ while true; do
 
   # A new session takes a few seconds to appear in `claude agents`, so it only
   # counts as gone once it has been seen running.
-  seen=0; launched=$(date +%s); waited_for=""; was_waiting=""
+  seen=0; launched=$(date +%s); waited_for=""; was_waiting=""; blocked_since=""
   while [ ! -f "$STATE/done" ] && [ ! -f "$STATE/issue" ]; do
     quiet claude agents --json --all
     entry=$(jq -c --arg id "$id" '.[] | select(.id == $id)' "$OUT" 2>/dev/null)
     if [ -n "$(jq -r '.pid // empty' <<<"$entry")" ]; then
       seen=1
-      # the loop can't answer for you, but it says when a session needs you
-      waiting=$(jq -r 'if .status == "waiting" then (.waitingFor // "input needed")
-                       elif .state == "blocked" then "blocked, e.g. an expired login" else "" end' <<<"$entry")
-      if [ -n "$waiting" ] && [ "$waiting" != "$was_waiting" ]; then
+      # The loop can't answer for you, but it says when a session needs you. A
+      # permission prompt is flagged at once. `state: blocked` is Claude Code's
+      # job-state label for any turn that ends waiting on you, including a live
+      # Remote Control conversation (a false alarm on 2026-09-14), so it's only
+      # flagged once it has lasted BLOCKED_GRACE, with the session's own reason.
+      waiting=$(jq -r 'if .status == "waiting" then (.waitingFor // "input needed") else "" end' <<<"$entry")
+      if [ -z "$waiting" ] && [ "$(jq -r '.state // empty' <<<"$entry")" = blocked ]; then
+        blocked_since=${blocked_since:-$(date +%s)}
+        if [ $(( $(date +%s) - blocked_since )) -ge "$BLOCKED_GRACE" ]; then
+          detail=$(jq -r '.detail // empty' "$HOME/.claude/jobs/$id/state.json" 2>/dev/null | head -c 300)
+          waiting="blocked: ${detail:-no reason given}"
+        fi
+      else
+        blocked_since=""
+      fi
+      # one line per episode: a blocked session's detail can change while it waits
+      if [ -n "$waiting" ] && [ "${waiting%%:*}" != "${was_waiting%%:*}" ]; then
         log "batch $batch: session $id is waiting on you ($waiting) → answer it in loop-$batch; the loop keeps waiting"
       fi
       was_waiting=$waiting
