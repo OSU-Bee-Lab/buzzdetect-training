@@ -166,14 +166,17 @@ answers.**
   | frames setting the threshold | diffuse ambient | **32 of 35 `mech_auto`** |
   | fold threshold | -1.819 | **-0.401** — every other fold is -1.59 to -1.90 |
   | what has failed on it | early stopping was the bug; `--fixed-epochs` gave +0.160 to +0.172 | `harmonic-comb`, `mech-margin`, `shared-trunk-head`, `context-embedder` |
-  | live leads | items 3, 4, 5 | items 2, 8, 15 |
+  | live leads | item 17 | items 2, 8, 15, 17 |
 
   `context-embedder` pushed `1_150`'s threshold *down* (-1.819 → -2.107) without
-  helping, so a better representation alone does not touch it — which is why
-  item 3 attacks the *pooling* rather than the encoder. Two interventions now
-  confirmed to move `1_95` over two independent draws each: `yamnet_aves`
-  (+0.014 / +0.024) and `yamnet_pitchshift_decimate` (+0.024 / +0.052, also
-  +0.034 / +0.043 at `1_114`) — unrelated mechanisms, untested in combination;
+  helping, so a better representation alone does not touch it. `aves-mid`
+  (AVES middle-layer pooling) is the first lever confirmed to move `1_150`
+  itself, over two draws (+0.148 / +0.042 — direction confirmed, magnitude
+  not, given this fold's own 0.055-0.105 training-stochasticity range). Two
+  interventions now confirmed to move `1_95` over two independent draws each:
+  `yamnet_aves` (+0.014 / +0.024) and `yamnet_pitchshift_decimate` (+0.024 /
+  +0.052, also +0.034 / +0.043 at `1_114`) — unrelated mechanisms, untested in
+  combination; `aves-mid` moves it too (+0.016 / +0.025), a third.
   it is still near chance either way.
 - **Read `best_epoch` alongside every delta.** If your treatment moved it, the
   delta is confounded with a stopping change — re-score both arms at a common
@@ -307,40 +310,36 @@ real context each side, so a rich-fold-only gain may be `context-embedder`
 again rather than Perch. Check the per-fold signature against `yamnet_context`
 before crediting the embedder.
 
-## 4. AVES middle layers — the closed lead reopened on measured grounds
+## 17. Stack AVES middle layers with the pitch-shift family
 
-*Evidence: **E3**, but the entry that closed it is `caveated` and superseded on
-mechanism (`aves-probe` -> `aves-readout`).*
+*Evidence: **E4, clean** for both halves — `aves-mid` (+0.026 to +0.032
+headline both draws, `1_150`/`1_29`/willard/`1_95` all up both draws) and
+`yamnet_pitchshift` (+0.069, 8/8 folds, twice confirmed) /
+`yamnet_pitchshift_decimate` (headline-flat but `1_95`/`1_114` up both
+draws). Untagged proposal for the combination (2026-09-14).*
 
-`aves-probe` closed the middle-layer sweep on CV magnitude: "a middle layer
-would have to find ~0.15 sensitivity the final layer has nowhere." **That gap
-was ~2.5x head artifact** — `aves-readout` recovered 0.074 -> 0.194 offline on
-the *same* embeddings, and `aves-mlp-head` then showed the probe was
-undertrained under a rule tuned for a sparse non-negative code. The closure was
-computed against a gap that has since shrunk by more than the gap it denied.
+`aves-mid` and the pitch-shift family touch completely different parts of the
+representation — AVES depth vs. YAMNet frequency register — and neither has
+been tried alongside the other. Unlike item 16 (context + pitch-shift, which
+turned out to be two rich-fold wins stacked at the cost of the hard folds),
+`aves-mid`'s gain is itself concentrated on the hard folds (`1_150`, `1_29`,
+willard, `1_95`), so this pairing has a real chance of being additive on
+exactly the folds that matter, rather than the era's usual rich/hard trade.
 
-The literature contradicts the current choice specifically: for **SSL**
-encoders the *middle* layers carry the most transferable information, upper
-layers only for the supervised pretraining task, and for mixed-taxa and
-non-bird targets it is spread across layers (arXiv:2605.10494, 2026). AVES is
-wav2vec2 — SSL, 12 layers — and we read layer 12 only, for a non-bird target.
+Simplest form: concatenate `yamnet_pitchshift`'s 2048-d block with
+`yamnet_aves_mid`'s AVES-only component (3*768 = 2304-d, skip the duplicate
+YAMNet block already in the pitchshift half) — 4352-d total. Needs a new
+embedder; both source embedders' code is on the shared tree already.
 
-Cheapest honest form: cache mean-pooled layers **6, 9 and 12** (2304-d) and let
-the probe weight them, rather than sweeping one layer at a time.
-`extract_features` already returns every layer; the current code discards
-eleven of them at no saving.
+*Cost:* one extraction (a new embedder combining an unmodified
+`yamnet_pitchshift` pass with `yamnet_aves_mid`'s AVES-layer extraction over
+the same audio) + one CV against `pitchshift-repeat` or `aves-mid-repeat`,
+whichever is the more natural control for the write-up.
 
-*Cost:* one AVES re-extraction (~1.0 h; the forward pass is unchanged, only
-what is kept), then one CV at 3328-d. Control `yavf_h1024`.
-
-*Falsifier:* if the learned per-block weight norm (inspect `W`, as
-`harmonic-comb` did) puts >=80% on the layer-12 block and the headline is inside
-MDE, the final layer is the right read and this closes for real.
-
-Item 3 (mean/max/std pooling) is now run — `aves-p3`, +0.014 +/- 0.008,
-caveated, falsifier not cleanly cleared. This item produces a 3328-d
-`yamnet_aves`-shaped cache too and would have been indistinguishable from it
-in the same arm; now safe to run on its own.
+*Falsifier:* if `1_150`/`1_95` do not move beyond what either lever gets
+alone (i.e. the combination is not additive), this is redundant capacity, not
+a stack — say so plainly rather than reporting the higher of the two parents'
+headlines as if it were new.
 
 ## 7. Annotation triage by embedding search into genuinely unannotated audio
 
