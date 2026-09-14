@@ -1,32 +1,42 @@
 # HANDOFF — decimate-lead (IDEAS item 19)
 
-Session wrapped up on Luke's Ctrl+C to `tools/agent_loop.sh` while the
-extraction was still running. Do not wait for it in the same turn you read
-this — check once, act accordingly.
+Session wrapped up (second time) on Luke's Ctrl+C to `tools/agent_loop.sh`
+while the extraction was still running. Do not wait for it in the same turn
+you read this — check once, act accordingly.
 
 ## Progress check (one command)
 
 ```bash
-ps -p 2384834 -o pid,stat,etime,cmd
+ps -p 2417327 -o pid,stat,etime,cmd
 tail -5 /home/luke/projects/buzzdetect-training/.local/worktrees/decimate-lead/extract.log
 ```
 
-**If it's still running:** report progress (which ident, how many of 82 done —
-`grep -c "ident took" extract.log`) and stop. Don't relaunch, don't wait
-inline; re-arm a Monitor if you want to keep watching:
+**If it's still running:** report progress (which ident, how many of 73 done
+this relaunch — `grep -c "ident took" extract.log`) and stop. Don't relaunch,
+don't wait inline; re-arm a Monitor if you want to keep watching:
 
 ```bash
-HEARTBEAT=1200 bash tools/watch_job.sh 2384834 --log '.local/worktrees/decimate-lead/extract.log'
+HEARTBEAT=1200 bash tools/watch_job.sh 2417327 --log '.local/worktrees/decimate-lead/extract.log'
 ```
 (pid may differ if it was relaunched — always check `ps` first.)
 
-**State when this was written:** pid 2384834, ~1h56m elapsed, on ident 8/82
-(`Luke - Various Opportunistic Recordings/2025-07-03/1_37`, a known hard/slow
-fold), 7/82 idents fully extracted. Per-ident pace was heavily front-loaded on
-the two largest folds (`1_29`, `53`, ~20min each) then dropped to ~7-12
-min/ident once past them — the Monitor's own linear ETA is not trustworthy
-here (see log.jsonl-adjacent friction reports); read `extract.log` directly if
-you need a real sense of remaining time.
+**State when this was written (2026-09-14, ~21:30 local):** pid 2417327,
+~21m elapsed, on the 4th ident this relaunch (`Chia - Bee Audio 2022
+Original/7-13-22_SouthCharleston/1`), 3/73 idents fully extracted this
+relaunch. This is a **relaunch**, not the original run: the first attempt
+(pid 2384834) had reached 7/82 idents (through `1_37`) when it was found dead
+with no traceback and no `[launch_job] exit` line on the next session's
+check-in — almost certainly killed by a prior loop-cleanup on session end,
+not a real crash. It was relaunched per this file's "If it died" section; the
+9 already-cached idents (including the 7 from the first run) were skipped on
+resume, leaving 73 to go. Per-ident pace so far this relaunch: 12.2min, 8.0min,
+0.75min (varies a lot by ident size) — the Monitor's own linear ETA is not
+trustworthy; read `extract.log` directly if you need a real sense of
+remaining time.
+
+If you find it dead again with no traceback, don't assume a real crash before
+relaunching — check `driver.log`/session history for a Ctrl+C around the time
+it stopped first.
 
 ## When it finishes
 
