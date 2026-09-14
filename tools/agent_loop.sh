@@ -37,7 +37,8 @@
 #
 # Closing the terminal kills only the loop, not its session. Rerunning then
 # shows the log's recent history and reattaches to the batch's session
-# (loop-<batch>) if it's still running, instead of launching a second agent.
+# ("Batch <N> - Experiment" or "Batch <N> - Fixes") if it's still running,
+# instead of launching a second agent.
 #
 # Cleanup is the loop's job, not the agent's. Whenever a batch ends (done, issue
 # or wrap-up) the loop stops the session and kills the jobs it started, with
@@ -135,7 +136,8 @@ kill_jobs() {  # since (epoch s) -> kill every launch_job.sh job registered sinc
     [ "$(stat -c %Y "$f")" -ge "$since" ] || continue
     if [ "$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')" = "$pid" ]; then
       kill -TERM -- "-$pid" 2>/dev/null && groups+=("$pid") && log "killing job $pid: $(cat "$f")" \
-        && echo "[agent_loop] killed by loop cleanup $(date '+%F %T'); not a crash, rerun resumes" >> "$(sed 's/ :: .*//' "$f")"
+        && { ! grep -q ' :: ' "$f" \
+             || echo "[agent_loop] killed by loop cleanup $(date '+%F %T'); not a crash, rerun resumes" >> "$(sed 's/ :: .*//' "$f")"; }
     fi
     rm -f "$f"
   done
@@ -149,7 +151,7 @@ kill_jobs() {  # since (epoch s) -> kill every launch_job.sh job registered sinc
   for pid in "${groups[@]}"; do kill -KILL -- "-$pid" 2>/dev/null && log "job $pid ignored SIGTERM → sent SIGKILL"; done
 }
 
-id=""; wrapping_up=0; session_started=$started
+id=""; sname=""; wrapping_up=0; session_started=$started   # sname: "Batch N - Experiment" / "Batch N - Fixes"
 on_interrupt() {
   if [ -z "$id" ]; then
     log "Ctrl+C with no agent running → exiting loop"
@@ -157,13 +159,13 @@ on_interrupt() {
   fi
   if [ "$wrapping_up" = 0 ]; then
     wrapping_up=1
-    log "Ctrl+C → asking session $id (loop-$batch) to wrap up; the loop exits when it has. Ctrl+C again to stop it and kill its jobs now"
-    ( r=$(send_to_session "loop-$batch" "Luke pressed Ctrl+C on tools/agent_loop.sh: wrap up now. Start nothing new. Once you signal, the loop stops this session and kills every job you launched, so don't wait for a job and don't stop jobs or their notifiers yourself. If a job is still running, record the experiment's state and its exact relaunch command in its notes.md and a HANDOFF.md (LOOP.md step 3), then commit and push. Otherwise finish recording what is done (LOOP.md step 5). Then run $ROOT/tools/loop_signal.sh done \"wrapped up\" and end your turn.")
+    log "Ctrl+C → asking session $id ($sname) to wrap up; the loop exits when it has. Ctrl+C again to stop it and kill its jobs now"
+    ( r=$(send_to_session "$sname" "Luke pressed Ctrl+C on tools/agent_loop.sh: wrap up now. Start nothing new. Once you signal, the loop stops this session and kills every job you launched, so don't wait for a job and don't stop jobs or their notifiers yourself. If a job is still running, record the experiment's state and its exact relaunch command in its notes.md and a HANDOFF.md (LOOP.md step 3), then commit and push. Otherwise finish recording what is done (LOOP.md step 5). Then run $ROOT/tools/loop_signal.sh done \"wrapped up\" and end your turn.")
       kill -0 $$ 2>/dev/null || exit 0   # the loop already exited (a second Ctrl+C)
       if [[ $r == SENT* ]]; then
-        log "wrap-up message delivered to loop-$batch → waiting for it to signal done"
+        log "wrap-up message delivered to $sname → waiting for it to signal done"
       else
-        log "wrap-up message to loop-$batch failed ($r) → it won't wrap up on its own; Ctrl+C again to stop it and kill its jobs"
+        log "wrap-up message to $sname failed ($r) → it won't wrap up on its own; Ctrl+C again to stop it and kill its jobs"
       fi ) &
     return
   fi
@@ -214,8 +216,11 @@ prev_batch=$(cat "$STATE/batch" 2>/dev/null)
 reattach=""
 if [ -n "$prev_batch" ]; then
   quiet claude agents --json --all
-  reattach=$(jq -r --arg n "loop-$prev_batch" \
-    '[.[] | select(.name == $n and .pid != null)][0].id // empty' "$OUT" 2>/dev/null)
+  # "loop-N" is the name sessions had before 2026-09-14
+  found=$(jq -c --arg legacy "loop-$prev_batch" --arg prefix "Batch $prev_batch - " \
+    '[.[] | select(.pid != null and (.name == $legacy or ((.name // "") | startswith($prefix))))][0] // empty' \
+    "$OUT" 2>/dev/null)
+  reattach=$(jq -r '.id // empty' <<<"$found"); reattach_name=$(jq -r '.name // empty' <<<"$found")
 fi
 last_was_fix=$(cat "$STATE/last_was_fix" 2>/dev/null || echo 0)
 log "loop started: $N experiments per agent on $MODEL/$EFFORT, fixes on $FIX_MODEL/$FIX_EFFORT (Ctrl+C to wrap up, twice to kill)"
@@ -228,10 +233,10 @@ while true; do
   fi
 
   if [ -n "$reattach" ]; then
-    id=$reattach; batch=$prev_batch; reattach=""
+    id=$reattach; batch=$prev_batch; sname=$reattach_name; reattach=""
     st=$(session_field "$id" .startedAt)   # ms
     session_started=${st:+$(( st / 1000 ))}; session_started=${session_started:-$started}
-    log "batch $batch: session $id (loop-$batch) is still running → reattaching to it"
+    log "batch $batch: session $id ($sname) is still running → reattaching to it"
   else
     batch=$(( $(cat "$STATE/batch" 2>/dev/null || echo 0) + 1 ))
     echo "$batch" > "$STATE/batch"
@@ -253,7 +258,7 @@ while true; do
         { echo "# Friction"; echo; cat "$STATE/friction.md"; } >> "$issue"
         rm "$STATE/friction.md"; causes+=("$friction friction report(s)")
       fi
-      prompt=$(render "$FIX_PROMPT" "$issue"); last_was_fix=1
+      prompt=$(render "$FIX_PROMPT" "$issue"); last_was_fix=1; sname="Batch $batch - Fixes"
       model=$FIX_MODEL; effort=$FIX_EFFORT
       cause="$(IFS=+; echo "${causes[*]}" | sed 's/+/ and /') ($issue)"; action="launching a fix agent"
     else
@@ -263,7 +268,7 @@ while true; do
       else
         cause="no open issue"
       fi
-      prompt=$(render "$PROMPT" ""); last_was_fix=0
+      prompt=$(render "$PROMPT" ""); last_was_fix=0; sname="Batch $batch - Experiment"
       action="launching an agent for $N experiments"
       handoffs=$(find_handoffs)
       if [ -n "$handoffs" ]; then
@@ -280,13 +285,13 @@ while true; do
     # for confirmation in auto mode, and Remote Control didn't show that dialog
     # (2026-09-14).
     session_started=$(date +%s)
-    out=$(cd "$ROOT" && claude --bg --remote-control "loop-$batch" -n "loop-$batch" \
+    out=$(cd "$ROOT" && claude --bg --remote-control "$sname" -n "$sname" \
           --disallowedTools "EnterWorktree,ExitWorktree" \
           --permission-mode auto --model "$model" --effort "$effort" \
           --settings "$SESSION_SETTINGS" "$prompt" 2>&1)
     id=$(grep -oP 'backgrounded · \K[0-9a-f]+' <<<"$out")
     [ -n "$id" ] || halt "batch $batch: claude --bg failed to start a session ($out)"
-    log "batch $batch: $cause → $action on $model/$effort (session $id, named loop-$batch)"
+    log "batch $batch: $cause → $action on $model/$effort (session $id, named $sname)"
     echo "$last_was_fix" > "$STATE/last_was_fix"
   fi
 
@@ -325,11 +330,11 @@ while true; do
           log "batch $batch: session $id resumed after its usage limit"
         elif [ "$limit_phase" = waiting ] && [ "$now" -ge $(( limit_at + LIMIT_NUDGE )) ]; then
           limit_phase=nudged
-          r=$(send_to_session "loop-$batch" "Your usage limit reset at $(date -d "@$limit_at" +%H:%M). Continue from where you left off. Detached jobs kept running through the limit, and so did their notifiers, which keep pinging you: there is nothing to re-arm.")
+          r=$(send_to_session "$sname" "Your usage limit reset at $(date -d "@$limit_at" +%H:%M). Continue from where you left off. Detached jobs kept running through the limit, and so did their notifiers, which keep pinging you: there is nothing to re-arm.")
           if [[ $r == SENT* ]]; then
             log "batch $batch: session $id hasn't resumed since its usage limit reset → told it to continue"
           else
-            log "batch $batch: session $id hasn't resumed since its usage limit reset, and messaging it failed ($r) → answer it in loop-$batch"
+            log "batch $batch: session $id hasn't resumed since its usage limit reset, and messaging it failed ($r) → answer it in $sname"
           fi
         fi
       fi
@@ -357,7 +362,7 @@ while true; do
       fi
       # one line per episode: a blocked session's detail can change while it waits
       if [ -n "$waiting" ] && [ "${waiting%%:*}" != "${was_waiting%%:*}" ]; then
-        log "batch $batch: session $id is waiting on you ($waiting) → answer it in loop-$batch; the loop keeps waiting"
+        log "batch $batch: session $id is waiting on you ($waiting) → answer it in $sname; the loop keeps waiting"
       fi
       was_waiting=$waiting
     elif [ "$seen" = 1 ]; then
