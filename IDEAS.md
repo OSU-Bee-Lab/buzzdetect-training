@@ -252,6 +252,45 @@ wasn't doing the work and the decimation construction is a purity improvement,
 not a result mover — worth knowing either way before spending the extraction
 surgery on a third up-shift family.
 
+## 16. Stack context onto the pitch-shift block — two confirmed levers, mechanism untested together
+
+*Evidence: **E4, clean** for both halves — `yamnet_pitchshift` (x2 up-shift,
++0.069, 8/8 folds up, twice confirmed via `pitchshift-repeat`) and
+`context-frames-fix`'s honest `yamnet_context` (+0.030, four rich folds up,
+all four hard folds flat/down). Untagged proposal for the combination
+(Luke, 2026-09-13).*
+
+The two best-confirmed levers this era look mechanistically distinct —
+pitch-shift is a frequency-register transform of a single frame's own audio,
+context is temporal neighbour-stacking — so there's no obvious *a priori*
+reason to expect them to be redundant the way two frequency-domain tricks
+might be. Concatenate `yamnet_pitchshift`'s 2048-d block with a
+context-stack of it (or of its unshifted half; either is worth stating up
+front and picking one) and run one CV against `pitchshift-repeat`.
+
+**Read this before running it — the era's stacking pattern so far has been
+one-directional, and the write-up should say plainly which side of it this
+lands on.** Both prior stacking experiments hurt the hard folds specifically
+while gaining on the rich ones: `yamnet-aves-context` (context on `aves`)
+found only +0.011–0.015 overlap on top of aves' own +0.024, with all three
+hard folds down; `hidden-context-verify` (`--hidden` on `context`) was
+headline-flat with `1_150` down on both that run and its plain-YAMNet twin.
+**A rich-fold gain here is still a real, shippable result** — `yamnet_context`
+on its own is logged `clean` on exactly that basis — so this is not a
+go/no-go falsifier, only a read on what kind of win it is:
+
+- Hard folds hold near pitchshift's own level *and* rich folds gain further →
+  best config this era, ship it.
+- Hard folds regress toward context's flat/down pattern while rich folds
+  gain → still a net headline improvement worth having, but write it up as
+  two separate wins stacked, not as a fix for `1_150`/`1_95` — those stay
+  open problems for item 2 (Perch) and its own queue entry.
+
+*Cost:* one extraction (a new embedder concatenating `yamnet_pitchshift`'s
+block with context-stacked frames — `context_frames` padding is on `main`
+since `context-frames-fix`, so this is the same mechanism `yamnet_context`
+already uses, just fed shifted audio) + one CV against `pitchshift-repeat`.
+
 ## 1e. Fix the epoch budget — DEMOTED 2026-09-11, premise weakened
 
 *Evidence: **E3** — `exp/pairwise-rank:notes/new-era-audit.md`, recommendation 5.
