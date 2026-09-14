@@ -15,7 +15,7 @@
 #   --label     what pings call the job. Default: the command launch_job.sh
 #               registered
 #
-# Each ping reads "[job <pid> <label> · <HH:MM> · <elapsed>] <event> · log <log>",
+# Each ping reads "[job <pid> <label> · <HH:MM> · <elapsed>] <event> · log <log> · one-way notifier: don't SendMessage back",
 # the time included because an agent can't see when a message arrived:
 #
 #   fold 3/5 (1_150) done           a --progress line
@@ -92,7 +92,7 @@ ping() {
   e=$(( $(date +%s) - started ))
   name=$(session_entry | jq -r '.name // empty')
   [ -n "$name" ] || { echo "$(stamp) session $session is gone; exiting"; exit 0; }
-  msg="[job $pid${label:+ $label} · $(date +%H:%M) · $((e / 3600))h$(( e % 3600 / 60 ))m] $1 · log $log"
+  msg="[job $pid${label:+ $label} · $(date +%H:%M) · $((e / 3600))h$(( e % 3600 / 60 ))m] $1 · log $log · one-way notifier: don't SendMessage back"
   last_ping=$(date +%s)
   for i in 1 2 3; do
     if r=$("$here/send_to_session.sh" "$name" "$msg"); then

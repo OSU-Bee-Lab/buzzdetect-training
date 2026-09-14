@@ -89,7 +89,7 @@ alternatives:
   otherwise. Pings arrive as "Another Claude session sent a message: [job …]".
   Don't arm a Monitor, poll or sleep. To get pings for a job another session
   launched (a HANDOFF.md resume): `tools/notify_job.sh <pid> --log <log>`.
-- **A ping gets a one-line reply and nothing else**: "Fold 3/5 done.", "Still
+- **A ping gets one line of text and nothing else**: "Fold 3/5 done.", "Still
   extracting, 1h32m in." Each carries the time and the job's elapsed time,
   because you can't see when a message arrived. Trust the notifier: read the
   log only when a ping looks wrong, such as a job running well past what you
