@@ -25,8 +25,16 @@ expected.
 
 ## Results
 
-(pending)
+**Extraction in progress, not yet finished** — wrapped up here on Luke's
+Ctrl+C to `tools/agent_loop.sh` (session ended without waiting on the job, per
+the loop's wrap-up protocol). See `HANDOFF.md` in this worktree for the exact
+resume steps, progress-check command, and what to do next once extraction
+finishes (launch the CV, read results against both `yamnet_pitchshift_aves_mid`
+and `yamnet_pitchshift_decimate`, fill in this section).
+
+State when wrapped: pid 2384834 still running, ~1h56m elapsed, 7/82 idents
+fully extracted, on ident 8 (`1_37`).
 
 ## Conclusion
 
-(pending)
+(pending — see HANDOFF.md)
