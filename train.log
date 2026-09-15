@@ -1,0 +1,39 @@
+09-15 13:02:17 2026-09-15 13:02:17.363749: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+09-15 13:02:17 2026-09-15 13:02:17.389288: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+09-15 13:02:17 2026-09-15 13:02:17.389334: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+09-15 13:02:18 2026-09-15 13:02:18.441298: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+09-15 13:02:21 [epoch-budget-700] set medium, embedder yamnet_pitchshift_aves_mid, translation general: 8 rotating fold(s), 36 train-only, 0 holdout
+09-15 13:02:21 [1/8] JamesU - MustardBumbler/1_29: already trained; skipping
+09-15 13:02:21 [2/8] Lily - Fit+Fast/2023_R3_Marysville/53: already trained; skipping
+09-15 13:02:21 [3/8] Lily Adam - One Hive/recorders/willard/2024-08-07/1_11: already trained; skipping
+09-15 13:02:21 [4/8] Lily Adam - One Hive/recorders/wooster/2024-07-26/1_143: already trained; skipping
+09-15 13:02:21 [5/8] Luke - Diel Drivers/2026-04-08/1_150: already trained; skipping
+09-15 13:02:21 [6/8] Luke - Diel Drivers/2026-05-06/1_95: already trained; skipping
+09-15 13:02:21 [7/8] Luke - Various Opportunistic Recordings/2025-07-03/1_37: already trained; skipping
+09-15 13:02:21 [8/8] Luke - Various Opportunistic Recordings/2025-08-12/1_114: already trained; skipping
+09-15 13:02:21 
+09-15 13:02:21 [epoch-budget-700] sens@fpr0.5% per deployment: 0.437  (incl. _quiet buzz: 0.350)
+09-15 13:02:21   mean over 8/8 held-out fold(s), each tuned to 0.5% FPR on its own audio (~24 negative frames set each threshold)
+09-15 13:02:21   threshold: mean -1.451 — what each fold's own audio set, not one number to ship
+09-15 13:02:21     JamesU - MustardBumbler/1_29: threshold -1.782, sensitivity 0.586 (incl. quiet 0.568) (~26 negative frames, 32 buzz events)
+09-15 13:02:21     Lily - Fit+Fast/2023_R3_Marysville/53: threshold -1.665, sensitivity 0.495 (incl. quiet 0.473) (~31 negative frames, 25 buzz events)
+09-15 13:02:21     Lily Adam - One Hive/recorders/willard/2024-08-07/1_11: threshold -2.071, sensitivity 0.533 (incl. quiet 0.359) (~34 negative frames, 28 buzz events)
+09-15 13:02:21     Lily Adam - One Hive/recorders/wooster/2024-07-26/1_143: threshold -1.497, sensitivity 0.571 (incl. quiet 0.364) (~23 negative frames, 21 buzz events)
+09-15 13:02:21     Luke - Diel Drivers/2026-04-08/1_150: threshold -1.900, sensitivity 0.471 (incl. quiet 0.358) (~23 negative frames, 20 buzz events)
+09-15 13:02:21     Luke - Diel Drivers/2026-05-06/1_95: threshold -0.924, sensitivity 0.170 (incl. quiet 0.127) (~34 negative frames, 42 buzz events)
+09-15 13:02:21     Luke - Various Opportunistic Recordings/2025-07-03/1_37: threshold -0.949, sensitivity 0.417 (incl. quiet 0.316) (~22 negative frames, 14 buzz events)
+09-15 13:02:21     Luke - Various Opportunistic Recordings/2025-08-12/1_114: threshold -0.817, sensitivity 0.251 (incl. quiet 0.231) (~21 negative frames, 31 buzz events)
+09-15 13:02:21   by loudness tier, same thresholds — sensitivity (buzz frames, folds scored):
+09-15 13:02:21     faint     0.000  (13 frames, 4/8 folds)  <- dropped from the headline
+09-15 13:02:21     quiet     0.072  (599 frames, 8/8 folds)  <- dropped from the headline
+09-15 13:02:21     background 0.432  (1804 frames, 2/8 folds)
+09-15 13:02:21     untagged  0.464  (2317 frames, 8/8 folds)
+09-15 13:02:21     loud      0.762  (115 frames, 5/8 folds)
+09-15 13:02:21     (2317 buzz frames carry no loudness tag yet — tagging is in progress. They count in the headline, as "not known to be quiet".)
+09-15 13:02:21   an oracle: each threshold is placed using that fold's labels, so read this as the ceiling on operator tuning
+09-15 13:02:21   per-fold spread understates uncertainty about a new deployment (training pools overlap heavily)
+09-15 13:02:21   a fold's own number rests on its buzz *events*, not its frames — single-digit to low-tens. Read one fold as an investigation, not a result:
+09-15 13:02:21   tools/eval_sampling_sd.py puts a standard deviation on it, and it is wide (~0.03-0.13 per fold vs ~0.01 on the mean above).
+09-15 13:02:21 
+09-15 13:02:21 [epoch-budget-700] rotations done; shipped model not trained (default). Pass --train-shipped, or run --skip-cv later with this --name.
+[launch_job] exit 0
