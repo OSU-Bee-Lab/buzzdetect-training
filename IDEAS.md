@@ -309,21 +309,6 @@ multi-ratio concat. If a rung wins or shows a different fold signature (e.g.
 `1_114` up), the follow-up is `[x_best, x2]` concatenated, and only then the
 swap into the lead.
 
-## 1e. Settle the epoch budget on the lead's width
-
-*Evidence: **E3** (every 150-epoch run still climbing); **E4** anchor at 400
-not obviously short (fold peaks 116-398). Demoted 2026-09-11.*
-
-400 was chosen by argument on a 1024-d input; the lead is 4352-d, and items
-20b/21 change the head. Width moves the optimum. One run of the lead at
-`--fixed-epochs 700` gives the pooled curve to e700. From it read the pooled
-argmax and `mean(last 21) − mean(e380-400)`. Offline, `tools/honest_epoch.py`
-scores any shorter budget from the same curves, so one run answers the whole
-ladder.
-
-*Falsifier:* if the pooled argmax is ≤ e400 and e400→e700 moves < 0.01, 400
-stands for the lead. *Cost:* ~1.75x a lead CV; measure the first fold.
-
 ## 23. A 2025-26 bioacoustic encoder in place of AVES-v1 — **ask Luke first**
 
 *Evidence: literature only. "What Matters for Bioacoustic Encoding"
