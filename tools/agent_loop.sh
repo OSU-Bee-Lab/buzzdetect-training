@@ -2,8 +2,10 @@
 # Chain fresh Claude Code sessions through LOOP.md, N experiments per session.
 #
 #   ./tools/agent_loop.sh [--experiments 4] [--model sonnet] [--effort medium]
-#                         [--fix-model opus] [--fix-effort medium]
+#                         [--fix-model opus] [--fix-effort medium] ["note"]
 #
+#   "note"          for every agent of the batch this run starts with: sent to a
+#                   reattached session, added to the prompt of each one launched
 #   --experiments   experiments per agent
 #   --model/--effort          for agents running experiments
 #   --fix-model/--fix-effort  for agents fixing what earlier agents reported
@@ -18,11 +20,16 @@
 # Control on, so it can be watched and steered from claude.ai/code or the app;
 # a `claude -p` session can't be. An agent reports with tools/loop_signal.sh,
 # not by ending its turn -- it also ends turns while waiting on a job's pings:
-#   done      batch finished       -> next session gets tools/loop_prompt.md
-#   issue     batch hit a blocker  -> next session gets tools/loop_fix_prompt.md
-#   friction  reported mid-batch   -> after an experiment batch, a fixer runs
-#                                     before the next one (not after a fix batch)
-# What a fixer gets is collected into issues/before-batchNNN.md and passed in.
+#   done      phase finished       -> after a fixer, the batch's experiment agent
+#                                     (tools/loop_prompt.md); after that, the next batch
+#   issue     batch hit a blocker  -> the next batch opens with a fixer
+#                                     (tools/loop_fix_prompt.md); a fixer's halts the loop
+#   friction  reported mid-batch   -> the next batch opens with a fixer
+#   halt      only Luke can resolve -> the loop stops the session and exits: no
+#                                     fixer, jobs left running, the reason moved to
+#                                     issues/batchNNN-halt.md; a rerun opens a new batch
+# A batch is an optional fixer, then an experiment agent, both under one number.
+# What a fixer gets is collected into issues/batchNNN.md and passed in.
 #
 # Usage limits: a session that hits one waits for the reset only if it's within
 # LIMIT_WAIT_MAX (50 min), i.e. while its prompt cache is still warm. A minute
@@ -56,18 +63,20 @@ _main="$(dirname "$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-form
 
 set -uo pipefail
 
-N=4; MODEL=sonnet; EFFORT=medium; FIX_MODEL=opus; FIX_EFFORT=medium
+N=4; MODEL=sonnet; EFFORT=medium; FIX_MODEL=opus; FIX_EFFORT=medium; NOTE=""
 while [ $# -gt 0 ]; do
   case $1 in
-    --experiments) N=$2 ;;
-    --model) MODEL=$2 ;;
-    --effort) EFFORT=$2 ;;
-    --fix-model) FIX_MODEL=$2 ;;
-    --fix-effort) FIX_EFFORT=$2 ;;
-    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
-    *) echo "agent_loop.sh: unknown argument $1 (see --help)" >&2; exit 2 ;;
+    --experiments) N=$2; shift ;;
+    --model) MODEL=$2; shift ;;
+    --effort) EFFORT=$2; shift ;;
+    --fix-model) FIX_MODEL=$2; shift ;;
+    --fix-effort) FIX_EFFORT=$2; shift ;;
+    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+    -*) echo "agent_loop.sh: unknown argument $1 (see --help)" >&2; exit 2 ;;
+    *) [ -z "$NOTE" ] || { echo "agent_loop.sh: only one note allowed; quote it" >&2; exit 2; }
+       NOTE=$1 ;;
   esac
-  shift 2
+  shift
 done
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -87,6 +96,10 @@ mkdir -p "$STATE/issues" "$JOBS"
 log() { echo "$(date '+%F %T') $*" | tee -a "$STATE/driver.log"; }
 finish() { rm -f "$STATE/driver.pid" "$OUT"; exit "$1"; }
 halt() { log "$* → halting loop"; finish 1; }
+archive_halt() {  # batch -> moves an agent's halt signal to $halt_file; the next run opens a new batch
+  halt_file="$STATE/issues/batch$(printf %03d "$1")-halt.md"
+  mv "$STATE/halt" "$halt_file"; last_was_fix=0; echo 0 > "$STATE/last_was_fix"
+}
 
 # Run a command into $OUT without blocking signals. Bash runs a trap only once
 # its foreground command returns, and folds a repeated signal that arrives in
@@ -151,7 +164,7 @@ kill_jobs() {  # since (epoch s) -> kill every launch_job.sh job registered sinc
   for pid in "${groups[@]}"; do kill -KILL -- "-$pid" 2>/dev/null && log "job $pid ignored SIGTERM → sent SIGKILL"; done
 }
 
-id=""; sname=""; wrapping_up=0; session_started=$started   # sname: "Batch N - Experiment" / "Batch N - Fixes"
+id=""; sname=""; wrapping_up=0; session_started=$started; note_batch=""   # sname: "Batch N - Experiment" / "Batch N - Fixes"
 on_interrupt() {
   if [ -z "$id" ]; then
     log "Ctrl+C with no agent running → exiting loop"
@@ -160,7 +173,7 @@ on_interrupt() {
   if [ "$wrapping_up" = 0 ]; then
     wrapping_up=1
     log "Ctrl+C → asking session $id ($sname) to wrap up; the loop exits when it has. Ctrl+C again to stop it and kill its jobs now"
-    ( r=$(send_to_session "$sname" "Luke pressed Ctrl+C on tools/agent_loop.sh: wrap up now. Start nothing new. Once you signal, the loop stops this session and kills every job you launched, so don't wait for a job and don't stop jobs or their notifiers yourself. If a job is still running, record the experiment's state and its exact relaunch command in its notes.md and a HANDOFF.md (LOOP.md step 3), then commit and push. Otherwise finish recording what is done (LOOP.md step 5). Then run $ROOT/tools/loop_signal.sh done \"wrapped up\" and end your turn.")
+    ( r=$(send_to_session "$sname" "Luke pressed Ctrl+C on tools/agent_loop.sh: wrap up now. Start nothing new. Once you signal, the loop stops this session and kills every job you launched, so don't wait for a job and don't stop jobs or their notifiers yourself. If a job is still running, record the experiment's state and its exact relaunch command in its notes.md and a HANDOFF.md (LOOP.md, 'If you hit an unresolvable blocker', says what goes in it), then commit and push. Otherwise finish recording what is done (LOOP.md step 5). Then run $ROOT/tools/loop_signal.sh done \"wrapped up\" and end your turn.")
       kill -0 $$ 2>/dev/null || exit 0   # the loop already exited (a second Ctrl+C)
       if [[ $r == SENT* ]]; then
         log "wrap-up message delivered to $sname → waiting for it to signal done"
@@ -224,9 +237,15 @@ if [ -n "$prev_batch" ]; then
 fi
 last_was_fix=$(cat "$STATE/last_was_fix" 2>/dev/null || echo 0)
 log "loop started: $N experiments per agent on $MODEL/$EFFORT, fixes on $FIX_MODEL/$FIX_EFFORT (Ctrl+C to wrap up, twice to kill)"
+# A halt the previous loop never saw (it had already exited); rerunning is your go-ahead
+if [ -z "$reattach" ] && [ -f "$STATE/halt" ]; then
+  archive_halt "${prev_batch:-0}"
+  log "batch ${prev_batch:-0}: a halt was signalled after the last loop exited → moved to $halt_file, continuing"
+fi
 while true; do
   id=""
-  if [ -z "$reattach" ] && [ -f "$STATE/stop" ]; then
+  # After a fixer comes the experiment phase of the same batch; a stop waits for it.
+  if [ -z "$reattach" ] && [ "$last_was_fix" = 0 ] && [ -f "$STATE/stop" ]; then
     rm -f "$STATE/stop"
     log "stop signalled → exiting loop"
     finish 0
@@ -237,18 +256,29 @@ while true; do
     st=$(session_field "$id" .startedAt)   # ms
     session_started=${st:+$(( st / 1000 ))}; session_started=${session_started:-$started}
     log "batch $batch: session $id ($sname) is still running → reattaching to it"
+    note_batch=$batch
+    if [ -n "$NOTE" ]; then
+      r=$(send_to_session "$sname" "A note from Luke for this batch: $NOTE")
+      if [[ $r == SENT* ]]; then
+        log "batch $batch: sent the command line's note to $sname"
+      else
+        log "batch $batch: sending the command line's note to $sname failed ($r) → tell it yourself"
+      fi
+    fi
   else
-    batch=$(( $(cat "$STATE/batch" 2>/dev/null || echo 0) + 1 ))
+    [ -f "$STATE/issue" ] && [ "$last_was_fix" = 1 ] \
+      && halt "batch $(cat "$STATE/batch"): the fix agent reported an issue too (read $STATE/issue, resolve it, rerun)"
+    batch=$(cat "$STATE/batch" 2>/dev/null || echo 0)
+    [ "$last_was_fix" = 1 ] || batch=$(( batch + 1 ))
     echo "$batch" > "$STATE/batch"
+    note_batch=${note_batch:-$batch}
 
-    # A fixer runs for a blocking issue, or for friction reports after an
-    # experiment batch. Friction a fixer reports itself waits for the next
-    # experiment batch, so fixers can't chain.
+    # A batch opens with a fixer when there's a blocking issue, or friction
+    # reported since the last fixer; its experiment agent follows. Friction a
+    # fixer reports itself waits for the next batch, so fixers can't chain.
     friction=0; [ -s "$STATE/friction.md" ] && friction=$(grep -c '^- ' "$STATE/friction.md")
     if [ -f "$STATE/issue" ] || { [ "$friction" -gt 0 ] && [ "$last_was_fix" = 0 ]; }; then
-      [ -f "$STATE/issue" ] && [ "$last_was_fix" = 1 ] \
-        && halt "batch $batch: the fix agent reported an issue too (read $STATE/issue, resolve it, rerun)"
-      issue="$STATE/issues/before-batch$(printf %03d "$batch").md"
+      issue="$STATE/issues/batch$(printf %03d "$batch").md"
       : > "$issue"; causes=()
       if [ -f "$STATE/issue" ]; then
         { echo "# Blocking issue"; echo; cat "$STATE/issue"; echo; } >> "$issue"
@@ -276,6 +306,10 @@ while true; do
         cause="$cause; unfinished handoff in $(xargs -n 1 dirname <<<"$handoffs" | xargs -n 1 basename | paste -sd, -)"
       fi
     fi
+    if [ -n "$NOTE" ] && [ "$batch" = "$note_batch" ]; then
+      prompt+=$'\n\n'"A note from Luke for this batch: $NOTE"
+      cause="$cause; with the command line's note"
+    fi
     rm -f "$STATE/done"
 
     # LOOP.md has its own worktree discipline (setup_worktree.sh, plus deliberate
@@ -299,7 +333,7 @@ while true; do
   # counts as gone once it has been seen running.
   seen=0; launched=$(date +%s); was_waiting=""; blocked_since=""
   limit_at=""; limit_phase=""   # the latest usage limit: its reset, and waiting|nudged|resumed
-  while [ ! -f "$STATE/done" ] && [ ! -f "$STATE/issue" ]; do
+  while [ ! -f "$STATE/done" ] && [ ! -f "$STATE/issue" ] && [ ! -f "$STATE/halt" ]; do
     quiet claude agents --json --all
     entry=$(jq -c --arg id "$id" '.[] | select(.id == $id)' "$OUT" 2>/dev/null)
     if [ -n "$(jq -r '.pid // empty' <<<"$entry")" ]; then
@@ -374,6 +408,10 @@ while true; do
   done
   if [ "$wrapping_up" = 1 ]; then
     log "batch $batch: agent finished wrapping up → stopping session $id"
+  elif [ -f "$STATE/halt" ]; then
+    log "batch $batch: agent signalled halt → stopping session $id, leaving its jobs running"
+  elif [ -f "$STATE/done" ] && [ "$last_was_fix" = 1 ]; then
+    log "batch $batch: fix agent finished → stopping session $id, starting the batch's experiment agent"
   elif [ -f "$STATE/done" ]; then
     log "batch $batch: agent marked its batch finished → stopping session $id, starting the next batch"
   else
@@ -388,6 +426,10 @@ while true; do
     nap 30
   done
   claude stop "$id" >/dev/null 2>&1
+  if [ -f "$STATE/halt" ] && [ "$wrapping_up" = 0 ]; then
+    reason=$(head -n 1 "$STATE/halt" | head -c 200); archive_halt "$batch"
+    halt "batch $batch: the agent needs you: $reason (all of it in $halt_file; rerun once resolved)"
+  fi
   kill_jobs "$session_started"
   if [ "$wrapping_up" = 1 ]; then
     log "wrap-up complete → exiting loop"

@@ -1,27 +1,16 @@
 # Judging a result
+There are two comparison to make:
 
-Read at LOOP.md step 4, before writing an interpretation. `tools/results.py`
-produces the numbers; this is how to read them and what each rule is based on.
-
-## The comparator
-
-**Compare against a matched control: the same stopping rule, the same
-`--fixed-epochs` N, and your one variable.** Every fixed-budget run from the last
-era was still rising at its cap, so N moves the score, and a run under
-`--early-stop` scores 0.031-0.040 lower on the rule alone. Background:
-`exp/pairwise-rank:notes/new-era-audit.md` and the archived era's README.
-
-**Compare paired, per fold.** Both models ran on the same folds, so the per-fold
-difference is the useful quantity. A headline gap that vanishes under pairing
-was never a capability gap.
+The headline sensitivity at 0.005 FPR. This is the number we ultimately want to improve.
+Per-fold sensitivities. These numbers help us dive deeper into headline sensitivity.
+An improvement in the headline that only comes from one fold is an acceptable win.
+An improvement in the headline that causes some folds' sensitivity to collapse is not. 
 
 ## What a number rests on
 
-**A fold's sample size is `buzz_events_exclquiet`, not `buzz_frames`.** A buzz
-event spans many frames (one bee heard for 26 s is one observation, not 26), so
-a fold rests on single-digit to low-tens of events. `1_29` carries 1972 scored
-buzz frames in 14 events; `53` has 900 in 9, one of which holds 79% of them; and
-`1_37` has 5.
+**A fold's sample size is measured in events, not frames.**
+`buzz_events_exclquiet`, not `buzz_frames`
+A buzz event spans many frames (one bee heard for 26 s is one observation, not 26), so a fold rests on single-digit to low-tens of events.
 
 **Uncertainty from eval sampling, measured 2026-09-13 by event-blocked
 bootstrap:**
@@ -36,52 +25,34 @@ The paired delta is tighter than either model's own SD, because both models
 score the same resampled events. The headline is tighter still, because eight
 folds' independent wobbles partly cancel.
 
-**Run the tool rather than quoting these figures.** This section's predecessors
-were wrong twice. A "±0.25" figure was ~7x too large. Its replacement,
-0.010-0.037, was 3-8x too small, because the tool resampled frames as if they
-were independent.
+These numbers are demonstrative and will likely change between eras.
 
 **Training stochasticity is larger per fold, and no SD above includes it.**
 `1_150` moved 0.105 between two identical `--hidden 1024` runs, and 0.055 between
 two identical baseline runs, against a 0.041 eval-sampling delta SD. More
 annotation won't fix that: 5x the labels on `1_150` only takes its eval SD from
-0.042 to 0.021. Seed averaging is the only lever on it.
+0.042 to 0.021. Seed averaging is the only lever on it, but this is currently considered too costly.
 
-**Fold-to-fold spread is not a confidence interval.** Training pools overlap
-~90% across rotations, so the fold models are correlated and the spread
-understates the uncertainty about a genuinely new deployment.
+We're looking for significant gains, not just numerical ones. 
 
-## Hard folds are the target
+## Hard folds are not an artifact
 
-The endpoint is a new deployment, and a new deployment may well be a quiet one.
-A lever that moved only the rich folds would be close to worthless; one that
-lifts a near-chance deployment is what this project is for. So when a gain is
-concentrated in `1_150`, `1_95` or `willard`, **that concentration is the
-result**. Read a delta table as: which way did the hard folds move, and are the
-losses elsewhere material? A -0.005 does not cancel a +0.068, and calling that
-"3 up, 2 down, inconclusive" is bad accounting.
+If an experiment improves only one fold, but it's the hardest fold, don't dismiss it!
+The endpoint is a new deployment, and a new deployment may well be a difficult one.
+When a gain is concentrated in a hard fold (low sensitivity, high false positives, mostly quiet buzzes, lots of background noise, etc.),
+this is an interesting and valuable result. Read a delta table as: which way did the hard folds move, and are the losses elsewhere material?
+You may even find that the headline number didn't move but the per-fold sensitivity evened out.
+This could reasonably be logged as a win, as it prevents pathological behavior in some deployments (e.g. systematic false positives).
 
-**Writing a per-fold number down:**
 
-- **Attach its uncertainty**, as in `+0.061 ± 0.041`.
-- **Keep weak evidence weak, but not absent.** `+0.061 ± 0.041` is weak evidence
-  for a positive effect. Don't collapse it to its sign, don't build a mechanism
-  on it, and don't read the next draw's -0.044 as a refutation. Both are single
-  samples from a distribution ~0.05 wide; the two `hidden-aves-verify` entries
-  made exactly these errors, in opposite directions, on the same data.
-- **Don't count signs or group folds.** The headline and the next experiment are
-  what update.
+## Stochasticity
+- Keep uncertainty in the results, as in `+0.061 ± 0.041`.
+- Weak evidence is legitimate, even if it's weak. +0.061 ± 0.041` is weak evidence
+  for a positive effect. If the next draw is -0.044, both are single
+  samples from a distribution ~0.05 wide. Give an honest interpretation and leave it
+  up to future agents to decide what's good enough to follow up on.
 
-**A repeat spread bounds noise *within* a treatment, not a difference *between*
-two.** `1_150`'s 0.007-0.062 across identical baseline runs is the right caution
-when reading two runs of one config against each other. It says nothing about a
-gap produced by a change of configuration; used that way, it talks you out of
-every hard-fold result the loop can find. When the gap is large, group the era's
-runs by the variable you changed and check whether the groups overlap.
-
-**Confirm a large hard-fold gain with one repeat run.** With no seed control, a
-rerun is an independent draw. Frame it as confirmation, not as a check on a
-suspect number.
+Confirm a large gain with one repeat run to confirm that we aren't reading noise.
 
 ## Selection on the reported metric
 
@@ -95,12 +66,15 @@ overlapped completely.
 
 ## Trust
 
-`trust` is what a later agent scans before building on your result. Flagging a
-hard-fold gain `caveated` on magnitude grounds tells that agent to discount the
-very movement the loop exists to produce. Reserve `caveated` for a defect in how
-the number was measured, and put "this rests on one fold, here is the group
-split" in `conclusion`.
+`trust` is what a later agent scans before building on your result.
 
-`context-stack` (+0.050, `artifact`) is why the field exists. A same-label-
-neighbour bug in the eval inflated it, and only `context-embedder`'s honest
-rerun (+0.022, `clean`) showed the gap.
+It judges the measurement separately from the delta:
+
+- **`clean`:** nothing about how it was measured should discount it.
+- **`caveated`:** a specific measurement defect means the direction is probably
+  right but the size isn't. "It rests on one fold" is not such a defect; that
+  goes in `conclusion`.
+- **`artifact`:** the setup, not the effect, moved the number enough that
+  comparing it at face value would mislead. `context-stack` (+0.050, `artifact`) is why the field exists. A same-label- neighbour bug in the eval inflated it, and only `context-embedder`'s honest rerun (+0.022, `clean`) showed the gap.
+
+

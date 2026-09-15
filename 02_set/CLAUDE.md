@@ -1,7 +1,7 @@
 # 02_set — building a set and extracting embeddings
 
 Three layers: snips → framed-audio cache → embeddings (`extract.py`). `--workers`
-parallelises framing+embedding only; `extract_snips` reads source audio off the
+parallelises framing+embedding only, and is capped at 1 when a GPU is visible; `extract_snips` reads source audio off the
 slow HDD and is always serial, so a large set's snip sync is a fixed up-front
 cost no worker count changes.
 

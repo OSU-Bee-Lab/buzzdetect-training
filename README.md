@@ -204,8 +204,8 @@ conda run -n buzzdetect-train python 02_set/main.py \
 |---|---|
 | `--set` | set name under `02_set/sets/` |
 | `--embedder` | directory name under `embedders/` (`ls embedders/`) |
-| `--workers` | processes for the framing + embedding phase; **`0` runs in-process** |
-| `--snip-workers` | threads for the snip-sync phase (source-drive I/O, no GPU); default 4, `1` = serial |
+| `--workers` | processes for the framing + embedding phase; **`0` runs in-process**. Capped at 1 when a GPU is visible (forked workers collide on the card); hide it with `CUDA_VISIBLE_DEVICES=` or `launch_job.sh --cpu` to use more |
+| `--snip-workers` | threads for the snip-sync phase (source-drive I/O, no GPU); default 2 (fastest on a single HDD; 8 and 16 were slower), `1` = serial |
 | `--overlap-event-prop` | annotation overlap needed to label a frame, as a fraction of frame length |
 | `--framehop-prop` | frame hop as a fraction of frame length; `1` = no overlap |
 | `--verbose` | one line per ident |
@@ -631,7 +631,7 @@ Each tool's header documents its options.
 
 | tool | does |
 |---|---|
-| `launch_job.sh` | start a long job detached (the only way that survives Claude Code) with timestamped log lines, plus its notifier |
+| `launch_job.sh` | start a long job detached (the only way that survives Claude Code) with timestamped log lines, plus its notifier. Uses the GPU unless `--cpu` |
 | `notify_job.sh` | ping a session about a job: each stage-3 fold, errors, the job's end, and every 50 min; started by `launch_job.sh` |
 | `send_to_session.sh` | message a running Claude Code session by name, via a haiku SendMessage relay |
 | `results.py` | a notes.md Results section for two models: per-fold deltas ± SD, headline, tiers |
@@ -640,7 +640,7 @@ Each tool's header documents its options.
 | `log_entry.py` | build one `log.jsonl` line from `folds_sx.csv` |
 | `finish_experiment.sh` | commit and push the experiment branch, then log and commit in main |
 | `agent_loop.sh` | run LOOP.md in back-to-back fresh sessions, N experiments each |
-| `loop_signal.sh` | how a looped agent reports `done`, `issue`, `friction` or `stop`, from any worktree |
+| `loop_signal.sh` | how a looped agent reports `done`, `issue`, `halt`, `friction` or `stop`, from any worktree |
 | `archive_era.py` | close an era into `archive/` |
 | `check_sens_at_fpr.py` | pin `metrics.sens_at_fpr` to the `metrics_by_group` → `metrics_at_fpr` pair it restates |
 | `smoke_model.py`, `honest_epoch.py`, `annotation_triage.py` | model smoke test; cross-fold epoch re-scoring; annotation triage from surprisal |

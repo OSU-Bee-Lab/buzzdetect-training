@@ -4,19 +4,23 @@
 # tools/notify_job.sh notifier that pings that session on each stage-3 fold, an
 # error, the job's end, and every 50 min otherwise. The agent arms nothing.
 #
-#   tools/launch_job.sh [--gpu] [--no-notify] <log> -- <command...>
+#   tools/launch_job.sh [--cpu] [--no-notify] <log> -- <command...>
 #
 #   tools/launch_job.sh train_x.log -- 03_train/main.py --name x --set medium -y
 #   tools/launch_job.sh extract.log -- 02_set/main.py --set medium --embedder e --workers 1
 #   tools/launch_job.sh dl.log -- curl -fLo embedders/e/weights.bin https://...
 #
 # A .py command runs under the buzzdetect-train python, unbuffered, with
-# MALLOC_ARENA_MAX=2 and the GPU hidden (the 12288-d trunk embedders OOM the
-# 4 GB card, and CPU ~ GPU for the probe). Stage 2 also gets
-# BUZZDETECT_CHUNK_FRAMES=48, and any pipeline main.py gets --verbose. --gpu
-# leaves CUDA visible, for an embedder that manages the GPU itself (AVES wants
-# BUZZDETECT_NO_GPU=1 set by the caller instead). Other commands run as given.
-# Env vars set by the caller pass through.
+# MALLOC_ARENA_MAX=2. Stage 2 also gets BUZZDETECT_CHUNK_FRAMES=48, and any
+# pipeline main.py gets --verbose. Other commands run as given. Env vars set by
+# the caller pass through.
+#
+# The GPU is visible by default. --cpu hides it (CUDA_VISIBLE_DEVICES=); use it
+# to re-run a job that ran out of GPU memory (stage 3 skips the folds already
+# finished and stage 2 resumes per ident). The 4 GB card fits one GPU job at a
+# time; don't launch a second alongside it.
+# --gpu is accepted and does nothing (it was the opt-in before GPU became the
+# default).
 #
 # The log is overwritten. Every line the job prints is prefixed with the wall
 # clock ("09-14 13:52:07 "); the log ends with an unprefixed
@@ -29,11 +33,12 @@ _main="$(dirname "$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-form
 set -euo pipefail
 
 PY=/home/luke/anaconda3/envs/buzzdetect-train/bin/python
-usage="usage: launch_job.sh [--gpu] [--no-notify] <log> -- <command...>"
-gpu=0; notify=1
+usage="usage: launch_job.sh [--cpu] [--no-notify] <log> -- <command...>"
+cpu=0; notify=1
 while [ $# -gt 0 ]; do
   case $1 in
-    --gpu) gpu=1; shift ;;
+    --cpu) cpu=1; shift ;;
+    --gpu) shift ;;
     --no-notify) notify=0; shift ;;
     *) break ;;
   esac
@@ -43,10 +48,10 @@ log=${1:?$usage}; shift
 [ $# -gt 0 ] || { echo "$usage" >&2; exit 2; }
 
 envs=(PYTHONUNBUFFERED=1)
+[ "$cpu" = 1 ] && envs+=(CUDA_VISIBLE_DEVICES=)
 cmd=("$@")
 if [[ $1 == *.py ]]; then
   envs+=(MALLOC_ARENA_MAX=2)
-  [ "$gpu" = 1 ] || envs+=(CUDA_VISIBLE_DEVICES=)
   [[ $1 == *02_set/main.py ]] && envs+=("BUZZDETECT_CHUNK_FRAMES=${BUZZDETECT_CHUNK_FRAMES:-48}")
   [[ $1 == *main.py && " $* " != *" --verbose "* ]] && cmd+=(--verbose)
   cmd=("$PY" -u "${cmd[@]}")

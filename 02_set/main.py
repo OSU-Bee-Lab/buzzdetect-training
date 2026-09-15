@@ -23,7 +23,7 @@ if __name__ == '__main__':
     parser.add_argument('--embedder', required=True)
     parser.add_argument('--workers', type=int, required=True,
                         help='processes for the framing+embedding phase (VRAM-bound)')
-    parser.add_argument('--snip-workers', type=int, default=4, dest='snip_workers',
+    parser.add_argument('--snip-workers', type=int, default=2, dest='snip_workers',
                         help='threads for the snip-sync phase (source-drive I/O; no GPU); '
                              '1 = serial')
     # Only consulted when the set has no config_extract.json yet — a set that

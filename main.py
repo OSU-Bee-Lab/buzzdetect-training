@@ -39,7 +39,7 @@ def load_stage(path, module_name):
     return mod
 
 def main(modelname, setname, embeddername, name_translation, epochs_max, clear,
-         aug_dirnames=None, verbose=False, n_workers=2, snip_workers=4, patience=50,
+         aug_dirnames=None, verbose=False, n_workers=2, snip_workers=2, patience=50,
          overlap_event_prop=None, framehop_prop=None, assume_yes=False,
          stop_tol=0.01, skip_cv=False, surprisal=True):
     import tensorflow  # noqa: F401  -- load-order side effect; see header comment
@@ -107,7 +107,7 @@ if __name__ == '__main__':
                              'using the fold results already on disk')
     parser.add_argument('--workers', type=int, default=2, dest='n_workers',
                         help='framing+embedding workers; 0 runs in-process')
-    parser.add_argument('--snip-workers', type=int, default=4, dest='snip_workers',
+    parser.add_argument('--snip-workers', type=int, default=2, dest='snip_workers',
                         help='threads for the snip-sync phase (source-drive I/O); 1 = serial')
     # Only consulted when the set has no config_extract.json yet; see 02_set/main.py.
     parser.add_argument('--overlap-event-prop', type=float, default=None, dest='overlap_event_prop')

@@ -156,6 +156,15 @@ FNAME_FRAMETIMES = 'frametimes.csv'
 FNAME_INCOMPLETE = 'extraction.incomplete'
 
 
+def _gpu_visible():
+    """Whether the embedding workers would see an NVIDIA GPU. Read from the
+    environment and /dev rather than asking TF, because initialising CUDA in
+    the parent before fork breaks the workers."""
+    if os.environ.get('CUDA_VISIBLE_DEVICES') == '' or os.environ.get('BUZZDETECT_NO_GPU'):
+        return False
+    return os.path.exists('/dev/nvidia0')
+
+
 def _fingerprint_annotations(annotations_sub: pd.DataFrame) -> str:
     """Hash one ident's annotations. Everything downstream of the snips — which
     ranges get cut, how frames are labelled — is a pure function of these rows, so
@@ -401,7 +410,7 @@ def _sync_snips_ident(ident: str, annotations_sub: pd.DataFrame, path_audio: str
     return status, n_written, n_deleted
 
 
-def extract_snips(setname: str, verbose=False, n_workers=4):
+def extract_snips(setname: str, verbose=False, n_workers=2):
     """Extract raw audio snips for all idents in a set.
 
     Run this before extract_set. Safe and cheap to re-run: an ident whose
@@ -1083,7 +1092,7 @@ def run_worker(config_extract: ConfigExtract, annotations: pd.DataFrame, folds: 
 
 
 def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=None,
-                n_workers=4, snip_workers=4, verbose=False):
+                n_workers=4, snip_workers=2, verbose=False):
     t0 = time.time()
     dir_set = cfg.dir_set(setname)
     path_config = os.path.join(dir_set, 'config_extract.json')
@@ -1225,6 +1234,14 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
               f'all {n_current} ident(s) are current')
         return True
 
+    # Each forked worker takes the whole card and they collide, so a visible
+    # GPU gets one embedding worker. Snip sync above has its own thread count
+    # and is unaffected.
+    if n_workers > 1 and _gpu_visible():
+        print(f'{time.time()-t0:.1f}s - [{setname}/{embeddername}] GPU visible: '
+              f'--workers {n_workers} -> 1 (pass --cpu to launch_job.sh for more)')
+        n_workers = 1
+
     if verbose:
         print(f'{time.time()-t0:.1f}s -   {n_workers} worker(s); folds: '
               f"{folds[folds['ident'].isin(idents_todo)]['fold'].nunique()}")
@@ -1300,8 +1317,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Sync raw audio snips for a set to its annotations (no embedder required).')
     parser.add_argument('--set', required=True, dest='setname')
-    parser.add_argument('--workers', type=int, default=4,
-                        help='threads for concurrent per-ident snip sync (I/O-bound); 1 = serial')
+    parser.add_argument('--workers', type=int, default=2,
+                        help='threads for concurrent per-ident snip sync; 1 = serial. 2 '
+                             'is fastest on this HDD (8 and 16 are slower)')
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
     extract_snips(args.setname, verbose=args.verbose, n_workers=args.workers)
