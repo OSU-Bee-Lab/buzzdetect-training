@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Chain fresh Claude Code sessions through LOOP.md, N experiments per session.
 #
-#   ./tools/agent_loop.sh [--experiments 4] [--model sonnet] [--effort medium]
+#   ./tools/agent_loop.sh [--experiments 4] [--batches N] [--model sonnet] [--effort medium]
 #                         [--fix-model opus] [--fix-effort medium] ["note"]
 #
 #   "note"          for every agent of the batch this run starts with: sent to a
 #                   reattached session, added to the prompt of each one launched
 #   --experiments   experiments per agent
+#   --batches       exit after this many batches (a reattached one counts); default: no limit
 #   --model/--effort          for agents running experiments
 #   --fix-model/--fix-effort  for agents fixing what earlier agents reported
 #   Sessions run in auto mode; a model without it (haiku) prompts for permissions.
@@ -63,15 +64,17 @@ _main="$(dirname "$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-form
 
 set -uo pipefail
 
-N=4; MODEL=sonnet; EFFORT=medium; FIX_MODEL=opus; FIX_EFFORT=medium; NOTE=""
+N=4; BATCHES=""; MODEL=sonnet; EFFORT=medium; FIX_MODEL=opus; FIX_EFFORT=medium; NOTE=""
 while [ $# -gt 0 ]; do
   case $1 in
     --experiments) N=$2; shift ;;
+    --batches) BATCHES=${2:-}; shift
+       [[ $BATCHES =~ ^[1-9][0-9]*$ ]] || { echo "agent_loop.sh: --batches takes a positive integer" >&2; exit 2; } ;;
     --model) MODEL=$2; shift ;;
     --effort) EFFORT=$2; shift ;;
     --fix-model) FIX_MODEL=$2; shift ;;
     --fix-effort) FIX_EFFORT=$2; shift ;;
-    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
     -*) echo "agent_loop.sh: unknown argument $1 (see --help)" >&2; exit 2 ;;
     *) [ -z "$NOTE" ] || { echo "agent_loop.sh: only one note allowed; quote it" >&2; exit 2; }
        NOTE=$1 ;;
@@ -236,7 +239,8 @@ if [ -n "$prev_batch" ]; then
   reattach=$(jq -r '.id // empty' <<<"$found"); reattach_name=$(jq -r '.name // empty' <<<"$found")
 fi
 last_was_fix=$(cat "$STATE/last_was_fix" 2>/dev/null || echo 0)
-log "loop started: $N experiments per agent on $MODEL/$EFFORT, fixes on $FIX_MODEL/$FIX_EFFORT (Ctrl+C to wrap up, twice to kill)"
+log "loop started: ${BATCHES:-unlimited} batch(es), $N experiments per agent on $MODEL/$EFFORT, fixes on $FIX_MODEL/$FIX_EFFORT (Ctrl+C to wrap up, twice to kill)"
+batches_done=0
 # A halt the previous loop never saw (it had already exited); rerunning is your go-ahead
 if [ -z "$reattach" ] && [ -f "$STATE/halt" ]; then
   archive_halt "${prev_batch:-0}"
@@ -248,6 +252,10 @@ while true; do
   if [ -z "$reattach" ] && [ "$last_was_fix" = 0 ] && [ -f "$STATE/stop" ]; then
     rm -f "$STATE/stop"
     log "stop signalled → exiting loop"
+    finish 0
+  fi
+  if [ -z "$reattach" ] && [ "$last_was_fix" = 0 ] && [ -n "$BATCHES" ] && [ "$batches_done" -ge "$BATCHES" ]; then
+    log "$batches_done of $BATCHES batch(es) finished → exiting loop"
     finish 0
   fi
 
@@ -431,6 +439,7 @@ while true; do
     halt "batch $batch: the agent needs you: $reason (all of it in $halt_file; rerun once resolved)"
   fi
   kill_jobs "$session_started"
+  [ "$last_was_fix" = 1 ] || batches_done=$(( batches_done + 1 ))   # a fixer's batch ends with its experiment agent
   if [ "$wrapping_up" = 1 ]; then
     log "wrap-up complete → exiting loop"
     finish 0
