@@ -212,6 +212,20 @@ def read_fold_roles(setname, embeddername):
     roles_all = folds_df.drop_duplicates('fold').set_index('fold')['role'].to_dict()
     roles = {f: r for f, r in sorted(roles_all.items()) if r != ROLE_EXCLUDE}
 
+    # A fold whose idents have no annotations left (e.g. its audio became
+    # unreadable and the build dropped it) has nothing to extract, so a new
+    # embedder never creates its directory. Drop it rather than call that missing.
+    path_annotations = os.path.join(cfg.dir_set(setname), 'annotations.csv')
+    idents_annotated = set(pd.read_csv(path_annotations, usecols=['ident'], dtype=str)['ident'])
+    folds_annotated = set(folds_df.loc[folds_df['ident'].isin(idents_annotated), 'fold'])
+    unannotated = sorted(f for f in roles if f not in folds_annotated)
+    if unannotated:
+        warnings.warn(
+            f'fold(s) {unannotated} are listed in {path_folds} but have no rows in '
+            f'{path_annotations}; skipping them.'
+        )
+        roles = {f: r for f, r in roles.items() if f in folds_annotated}
+
     # A fold id may itself contain path separators (deployment paths like
     # 'Chia - OSPT/2022/2022-07-26'), so resolve each one as a path rather than
     # matching against a flat listing of dir_raw.

@@ -169,7 +169,8 @@ own SD, saying "unsure" where it is within it; which tiers moved>
 ## Conclusion
 ```
 
-If you used an idea, delete its section from `IDEAS.md`. Then, from main:
+If you used an idea, delete its section from main's `IDEAS.md` (not the
+worktree's copy, which `--commit-also` never sees). Then, from main:
 
 ```bash
 tools/finish_experiment.sh <slug> --summary "<what was tried, and the outcome>" \

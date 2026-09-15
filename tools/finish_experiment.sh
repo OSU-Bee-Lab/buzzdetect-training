@@ -41,6 +41,9 @@ fail() { echo "finish_experiment.sh: $*" >&2; exit 1; }
 [ -d "$WT" ] || fail "no worktree at $WT"
 [ -f "$WT/notes.md" ] || fail "$WT/notes.md is missing; write it first (LOOP.md step 5)"
 ! grep -q "\"name\": \"$slug\"" "$ROOT/log.jsonl" || fail "log.jsonl already has an entry named $slug"
+for p in "${also[@]}"; do
+  ! git -C "$ROOT" diff --quiet -- "$p" || fail "--commit-also $p: main's copy is unchanged; edit it in main ($ROOT/$p), not the worktree"
+done
 
 run() { if [ "${DRY_RUN:-0}" = 1 ]; then printf '+'; printf ' %q' "$@"; echo; else "$@"; fi; }
 
