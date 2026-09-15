@@ -28,6 +28,8 @@
 !yamnet_pitchshift_aves_mid
 !yamnet_pitchshift_decimate_aves_mid
 !yamnet_aves_mid_avesshift
+!yamnet_pitchshift_decimate_x126
+!yamnet_pitchshift_decimate_x150
 
 # Ignore binary model files within unignored embedders
 panns_cnn14/*.pth
