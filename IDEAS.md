@@ -260,33 +260,6 @@ on `1_95`, `1_114` and `1_37`. If the aircraft/trill/background share of
 threshold-setting negatives doesn't fall, PCEN isn't doing its job, whatever
 the headline says.
 
-## 22. Pitch-shift the AVES input — is the octave win about YAMNet, or about pretraining priors?
-
-*Evidence: **E4** `yamnet-pitchshift` (+0.069, 8/8) — attributed to YAMNet's
-thin mel coverage near ~230 Hz. Counter-evidence in the literature:
-down-shifting bat calls toward the speech range *hurt* speech SSL models at
-every layer (arXiv:2509.04166), so the direction does not transfer for free.
-Untagged here.*
-
-This is a mechanism test that decides how far the era's biggest lever
-generalises. AVES reads raw waveform through a conv front end (25 ms window,
-20 ms stride), with no mel filterbank. If AVES *also* gains from an octave-up
-shift, the win is about where the pretraining data's energy sat, and shifting
-becomes a lever to try on every encoder (Perch, item 2; BEATs, item 23). If
-AVES is flat or down, the win is specific to YAMNet's front end, and nobody
-should spend extractions shifting other encoders.
-
-**Build**, one variable: `yamnet_aves_mid` with the **AVES input** replaced by
-the decimated octave-up audio (30720 real samples → 16000, via
-`context_frames = 1`), YAMNet block untouched. 3328-d.
-
-*Control:* `aves-mid` / `aves-mid-repeat` (re-run the control if annotations
-moved; see standing facts). *Cost:* one extraction + one CV.
-
-*Falsifier:* headline inside ±MDE with no consistent tier movement → the
-shift is YAMNet-specific; say so in the log so item 2 and item 23 skip the
-shifted variant.
-
 ## 23. A 2025-26 bioacoustic encoder in place of AVES-v1 — **ask Luke first**
 
 *Evidence: literature only. "What Matters for Bioacoustic Encoding"
