@@ -1,0 +1,74 @@
+09-16 14:07:59 2026-09-16 14:07:59.289679: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+09-16 14:07:59 2026-09-16 14:07:59.314883: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+09-16 14:07:59 2026-09-16 14:07:59.314938: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+09-16 14:08:00 2026-09-16 14:08:00.342919: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+09-16 14:08:03 /home/luke/projects/buzzdetect-training/.local/worktrees/avesshift/03_train/dataset.py:223: UserWarning: fold(s) ['Luke - Various Opportunistic Recordings/2026-07-27/1_99'] are listed in /home/luke/projects/buzzdetect-training/.local/worktrees/avesshift/02_set/sets/medium/folds.csv but have no rows in /home/luke/projects/buzzdetect-training/.local/worktrees/avesshift/02_set/sets/medium/annotations.csv; skipping them.
+09-16 14:08:03   warnings.warn(
+09-16 14:08:03 [avesshift] set medium, embedder yamnet_aves_mid_avesshift, translation general: 8 rotating fold(s), 35 train-only, 0 holdout
+09-16 14:08:11 2026-09-16 14:08:11.942662: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 14:08:11 2026-09-16 14:08:11.997832: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 14:08:11 2026-09-16 14:08:12.000521: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 14:08:12 2026-09-16 14:08:12.003171: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 14:08:12 2026-09-16 14:08:12.005158: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 14:08:12 2026-09-16 14:08:12.007116: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 14:08:12 2026-09-16 14:08:12.168413: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 14:08:12 2026-09-16 14:08:12.169555: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 14:08:12 2026-09-16 14:08:12.170580: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 14:08:12 2026-09-16 14:08:12.171561: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1928] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 2358 MB memory:  -> device: 0, name: NVIDIA GeForce GTX 1650, pci bus id: 0000:01:00.0, compute capability: 7.5
+09-16 14:08:12 2026-09-16 14:08:12.172672: W external/local_tsl/tsl/framework/cpu_allocator_impl.cc:83] Allocation of 967103488 exceeds 10% of free system memory.
+09-16 14:08:12 2026-09-16 14:08:12.976260: W external/local_tsl/tsl/framework/cpu_allocator_impl.cc:83] Allocation of 967103488 exceeds 10% of free system memory.
+09-16 14:08:14 2026-09-16 14:08:14.677464: W external/local_tsl/tsl/framework/cpu_allocator_impl.cc:83] Allocation of 97217536 exceeds 10% of free system memory.
+09-16 14:08:14 2026-09-16 14:08:14.760079: W external/local_tsl/tsl/framework/cpu_allocator_impl.cc:83] Allocation of 97217536 exceeds 10% of free system memory.
+09-16 14:08:14 [avesshift_foldJamesU - MustardBumbler/1_29] training on 42 fold(s), 72649 frames; early stopping on JamesU - MustardBumbler/1_29 (7303 frames)...
+09-16 14:08:15 Epoch 1/400
+09-16 14:08:15 2026-09-16 14:08:15.731051: W external/local_tsl/tsl/framework/cpu_allocator_impl.cc:83] Allocation of 967103488 exceeds 10% of free system memory.
+09-16 14:08:17 2026-09-16 14:08:17.343979: W tensorflow/core/kernels/data/prefetch_autotuner.cc:52] Prefetch autotuner tried to allocate 876250752 bytes after encountering the first element of size 876250752 bytes.This already causes the autotune ram budget to be exceeded. To stay within the ram budget, either increase the ram budget or reduce element size
+09-16 14:08:18 WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+09-16 14:08:18 I0000 00:00:1789582098.122722  407522 service.cc:145] XLA service 0x74a41c2842a0 initialized for platform CUDA (this does not guarantee that XLA will be used). Devices:
+09-16 14:08:18 I0000 00:00:1789582098.122781  407522 service.cc:153]   StreamExecutor device (0): NVIDIA GeForce GTX 1650, Compute Capability 7.5
+09-16 14:08:18 2026-09-16 14:08:18.213156: I tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.cc:268] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+09-16 14:08:18 2026-09-16 14:08:18.374687: I external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:465] Loaded cuDNN version 8907
+09-16 14:08:18 2026-09-16 14:08:18.413740: W external/local_tsl/tsl/framework/bfc_allocator.cc:296] Allocator (GPU_0_bfc) ran out of memory trying to allocate 848.41MiB with freed_by_count=0. The caller indicates that this is not a failure, but this may mean that there could be performance gains if more memory were available.
+09-16 14:08:18 2026-09-16 14:08:18.416695: W tensorflow/core/framework/op_kernel.cc:1839] OP_REQUIRES failed at xla_ops.cc:580 : RESOURCE_EXHAUSTED: Out of memory while trying to allocate 889618432 bytes.
+09-16 14:08:18 2026-09-16 14:08:18.416741: W tensorflow/core/framework/local_rendezvous.cc:404] Local rendezvous is aborting with status: RESOURCE_EXHAUSTED: Out of memory while trying to allocate 889618432 bytes.
+09-16 14:08:18 	 [[{{node StatefulPartitionedCall}}]]
+09-16 14:08:18 Hint: If you want to see a list of allocated tensors when OOM happens, add report_tensor_allocations_upon_oom to RunOptions for current allocation info. This isn't available when running in Eager mode.
+09-16 14:08:18 
+09-16 14:08:18 Traceback (most recent call last):
+09-16 14:08:18   File "/home/luke/projects/buzzdetect-training/.local/worktrees/avesshift/03_train/main.py", line 90, in <module>
+09-16 14:08:18     train_set(
+09-16 14:08:18   File "/home/luke/projects/buzzdetect-training/.local/worktrees/avesshift/03_train/train.py", line 643, in train_set
+09-16 14:08:18     result, model = _train_one(
+09-16 14:08:18                     ^^^^^^^^^^^
+09-16 14:08:18   File "/home/luke/projects/buzzdetect-training/.local/worktrees/avesshift/03_train/train.py", line 400, in _train_one
+09-16 14:08:18     history = model.fit(
+09-16 14:08:18               ^^^^^^^^^^
+09-16 14:08:18   File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/utils/traceback_utils.py", line 122, in error_handler
+09-16 14:08:18     raise e.with_traceback(filtered_tb) from None
+09-16 14:08:18   File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/tensorflow/python/eager/execute.py", line 53, in quick_execute
+09-16 14:08:18     tensors = pywrap_tfe.TFE_Py_Execute(ctx._handle, device_name, op_name,
+09-16 14:08:18   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+09-16 14:08:18 tensorflow.python.framework.errors_impl.ResourceExhaustedError: Graph execution error:
+09-16 14:08:18 
+09-16 14:08:18 Detected at node StatefulPartitionedCall defined at (most recent call last):
+09-16 14:08:18   File "/home/luke/projects/buzzdetect-training/.local/worktrees/avesshift/03_train/main.py", line 90, in <module>
+09-16 14:08:18 
+09-16 14:08:18   File "/home/luke/projects/buzzdetect-training/.local/worktrees/avesshift/03_train/train.py", line 643, in train_set
+09-16 14:08:18 
+09-16 14:08:18   File "/home/luke/projects/buzzdetect-training/.local/worktrees/avesshift/03_train/train.py", line 400, in _train_one
+09-16 14:08:18 
+09-16 14:08:18   File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/utils/traceback_utils.py", line 117, in error_handler
+09-16 14:08:18 
+09-16 14:08:18   File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/backend/tensorflow/trainer.py", line 399, in fit
+09-16 14:08:18 
+09-16 14:08:18   File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/backend/tensorflow/trainer.py", line 241, in function
+09-16 14:08:18 
+09-16 14:08:18   File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/backend/tensorflow/trainer.py", line 154, in multi_step_on_iterator
+09-16 14:08:18 
+09-16 14:08:18   File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/backend/tensorflow/trainer.py", line 125, in wrapper
+09-16 14:08:18 
+09-16 14:08:18 Out of memory while trying to allocate 889618432 bytes.
+09-16 14:08:18 	 [[{{node StatefulPartitionedCall}}]]
+09-16 14:08:18 Hint: If you want to see a list of allocated tensors when OOM happens, add report_tensor_allocations_upon_oom to RunOptions for current allocation info. This isn't available when running in Eager mode.
+09-16 14:08:18  [Op:__inference_multi_step_on_iterator_843]
+[launch_job] exit 1
