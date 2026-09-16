@@ -1,0 +1,107 @@
+09-16 13:04:02 2026-09-16 13:04:02.080199: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+09-16 13:04:02 2026-09-16 13:04:02.105779: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+09-16 13:04:02 2026-09-16 13:04:02.105837: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+09-16 13:04:03 2026-09-16 13:04:03.101006: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+09-16 13:04:05 0.0s - [lite/yamnet_context_contrast] existing config: overlap_event_prop=0.2, framehop_prop=1
+09-16 13:04:05 0.0s -   loaded from /home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/02_set/sets/lite/config_extract.json
+09-16 13:04:05 0.0s - extract_snips: [1/10] JamesU - MustardBumbler/1_29/240903_1319 — unchanged (0 written, 0 deleted)
+09-16 13:04:05 0.0s - extract_snips: [2/10] Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 — unchanged (0 written, 0 deleted)
+09-16 13:04:05 0.0s - extract_snips: [3/10] Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 — unchanged (0 written, 0 deleted)
+09-16 13:04:05 0.0s - extract_snips: [4/10] Luke - Diel Drivers/2026-04-08/1_150/260408_1942 — unchanged (0 written, 0 deleted)
+09-16 13:04:05 0.0s - extract_snips: [5/10] Luke - Diel Drivers/2026-05-06/1_95/260506_1924 — unchanged (0 written, 0 deleted)
+09-16 13:04:05 0.0s - extract_snips: [6/10] Luke - Various Opportunistic Recordings/2025-06-23/1_23/250623_0857 — unchanged (0 written, 0 deleted)
+09-16 13:04:05 0.0s - extract_snips: [7/10] Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 — unchanged (0 written, 0 deleted)
+09-16 13:04:05 0.0s - extract_snips: [8/10] Luke - Various Opportunistic Recordings/2025-08-05/31/250805_1247 — unchanged (0 written, 0 deleted)
+09-16 13:04:05 0.0s - extract_snips: [9/10] Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 — unchanged (0 written, 0 deleted)
+09-16 13:04:05 0.0s - extract_snips: [10/10] Luke - Various Opportunistic Recordings/2025-08-27/48/250827_1828 — unchanged (0 written, 0 deleted)
+09-16 13:04:05 0.0s - extract_snips: 10 ident(s): 0 updated (0 snip(s) written, 0 superseded), 10 unchanged
+09-16 13:04:05 0.1s - [lite/yamnet_context_contrast] 10 ident(s): 10 to extract (10 new, 0 superseded by new annotations), 0 already current
+09-16 13:04:05 0.1s -   1 worker(s); folds: 10
+09-16 13:04:05 2026-09-16 13:04:05.762268: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 13:04:05 2026-09-16 13:04:05.807342: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 13:04:05 2026-09-16 13:04:05.808524: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 13:04:05 2026-09-16 13:04:05.810409: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 13:04:05 2026-09-16 13:04:05.811468: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 13:04:05 2026-09-16 13:04:05.812500: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 13:04:05 2026-09-16 13:04:05.977368: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 13:04:05 2026-09-16 13:04:05.978507: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 13:04:05 2026-09-16 13:04:05.979527: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 13:04:05 2026-09-16 13:04:05.980508: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1928] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 132 MB memory:  -> device: 0, name: NVIDIA GeForce GTX 1650, pci bus id: 0000:01:00.0, compute capability: 7.5
+09-16 13:04:05 2026-09-16 13:04:05.999678: I external/local_xla/xla/stream_executor/cuda/cuda_driver.cc:1566] failed to allocate 132.94MiB (139395072 bytes) from device: CUDA_ERROR_OUT_OF_MEMORY: out of memory
+09-16 13:04:05 2026-09-16 13:04:05.999892: I external/local_xla/xla/stream_executor/cuda/cuda_driver.cc:1566] failed to allocate 119.64MiB (125455616 bytes) from device: CUDA_ERROR_OUT_OF_MEMORY: out of memory
+09-16 13:04:08 2026-09-16 13:04:08.174391: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:246] Failed to make cuFFT batched plan: 5
+09-16 13:04:08 2026-09-16 13:04:08.174431: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:324] Initialize Params: rank: 1 elem_count: 512 input_embed: 512 input_stride: 1 input_distance: 512 output_embed: 257 output_stride: 1 output_distance: 257 batch_count: 96
+09-16 13:04:08 2026-09-16 13:04:08.174447: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:333] Failed to initialize batched cufft plan with customized allocator: Failed to make cuFFT batched plan.
+09-16 13:04:08 2026-09-16 13:04:08.174485: W tensorflow/core/framework/local_rendezvous.cc:404] Local rendezvous is aborting with status: INTERNAL: Failed to create cuFFT batched plan with scratch allocator
+09-16 13:04:08 WORKER 0 FATAL: InternalError: Exception encountered when calling WaveformFeatures.call().
+09-16 13:04:08 
+09-16 13:04:08 [1m{{function_node __wrapped__RFFT_device_/job:localhost/replica:0/task:0/device:GPU:0}} Failed to create cuFFT batched plan with scratch allocator [Op:RFFT] name: [0m
+09-16 13:04:08 
+09-16 13:04:08 Arguments received by WaveformFeatures.call():
+09-16 13:04:08   • waveform=tf.Tensor(shape=(15360,), dtype=float32)
+09-16 13:04:08 Traceback (most recent call last):
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/02_set/extract.py", line 1086, in run_worker
+09-16 13:04:08     worker.run()
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/02_set/extract.py", line 1072, in run
+09-16 13:04:08     self.embedder.initialize()
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/embedders/yamnet/embedder.py", line 29, in initialize
+09-16 13:04:08     self.embed(np.zeros(int(self.framelength_s * self.samplerate), dtype=np.float32))
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/embedders/yamnet_context_contrast/embedder.py", line 99, in embed
+09-16 13:04:08     return self.contrast(self.embed_frames(audio))
+09-16 13:04:08                          ^^^^^^^^^^^^^^^^^^^^^^^^
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/embedders/yamnet_context_contrast/embedder.py", line 74, in embed_frames
+09-16 13:04:08     embedded = np.asarray(self.model(piece), dtype=np.float32)
+09-16 13:04:08                           ^^^^^^^^^^^^^^^^^
+09-16 13:04:08   File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/utils/traceback_utils.py", line 122, in error_handler
+09-16 13:04:08     raise e.with_traceback(filtered_tb) from None
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/embedders/yamnet/yamnet.py", line 157, in call
+09-16 13:04:08     log_mel_spectrogram, features = features_lib.waveform_to_log_mel_spectrogram_patches(
+09-16 13:04:08                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/embedders/yamnet/features.py", line 42, in waveform_to_log_mel_spectrogram_patches
+09-16 13:04:08     magnitude_spectrogram = tf.abs(tf.signal.stft(
+09-16 13:04:08                                    ^^^^^^^^^^^^^^^
+09-16 13:04:08 tensorflow.python.framework.errors_impl.InternalError: Exception encountered when calling WaveformFeatures.call().
+09-16 13:04:08 
+09-16 13:04:08 [1m{{function_node __wrapped__RFFT_device_/job:localhost/replica:0/task:0/device:GPU:0}} Failed to create cuFFT batched plan with scratch allocator [Op:RFFT] name: [0m
+09-16 13:04:08 
+09-16 13:04:08 Arguments received by WaveformFeatures.call():
+09-16 13:04:08   • waveform=tf.Tensor(shape=(15360,), dtype=float32)
+09-16 13:04:08 Process Process-1:
+09-16 13:04:08 Traceback (most recent call last):
+09-16 13:04:08   File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+09-16 13:04:08     self.run()
+09-16 13:04:08   File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/multiprocessing/process.py", line 108, in run
+09-16 13:04:08     self._target(*self._args, **self._kwargs)
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/02_set/extract.py", line 1086, in run_worker
+09-16 13:04:08     worker.run()
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/02_set/extract.py", line 1072, in run
+09-16 13:04:08     self.embedder.initialize()
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/embedders/yamnet/embedder.py", line 29, in initialize
+09-16 13:04:08     self.embed(np.zeros(int(self.framelength_s * self.samplerate), dtype=np.float32))
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/embedders/yamnet_context_contrast/embedder.py", line 99, in embed
+09-16 13:04:08     return self.contrast(self.embed_frames(audio))
+09-16 13:04:08                          ^^^^^^^^^^^^^^^^^^^^^^^^
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/embedders/yamnet_context_contrast/embedder.py", line 74, in embed_frames
+09-16 13:04:08     embedded = np.asarray(self.model(piece), dtype=np.float32)
+09-16 13:04:08                           ^^^^^^^^^^^^^^^^^
+09-16 13:04:08   File "/home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/utils/traceback_utils.py", line 122, in error_handler
+09-16 13:04:08     raise e.with_traceback(filtered_tb) from None
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/embedders/yamnet/yamnet.py", line 157, in call
+09-16 13:04:08     log_mel_spectrogram, features = features_lib.waveform_to_log_mel_spectrogram_patches(
+09-16 13:04:08                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/embedders/yamnet/features.py", line 42, in waveform_to_log_mel_spectrogram_patches
+09-16 13:04:08     magnitude_spectrogram = tf.abs(tf.signal.stft(
+09-16 13:04:08                                    ^^^^^^^^^^^^^^^
+09-16 13:04:08 tensorflow.python.framework.errors_impl.InternalError: Exception encountered when calling WaveformFeatures.call().
+09-16 13:04:08 
+09-16 13:04:08 [1m{{function_node __wrapped__RFFT_device_/job:localhost/replica:0/task:0/device:GPU:0}} Failed to create cuFFT batched plan with scratch allocator [Op:RFFT] name: [0m
+09-16 13:04:08 
+09-16 13:04:08 Arguments received by WaveformFeatures.call():
+09-16 13:04:08   • waveform=tf.Tensor(shape=(15360,), dtype=float32)
+09-16 13:04:08 Traceback (most recent call last):
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/02_set/main.py", line 45, in <module>
+09-16 13:04:08     extract_set(
+09-16 13:04:08   File "/home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/02_set/extract.py", line 1281, in extract_set
+09-16 13:04:08     raise RuntimeError(
+09-16 13:04:08 RuntimeError: 1/1 extraction worker(s) crashed (exit codes: [1])
+[launch_job] exit 1

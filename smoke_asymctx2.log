@@ -1,0 +1,359 @@
+09-16 15:13:20 2026-09-16 15:13:20.425235: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+09-16 15:13:20 2026-09-16 15:13:20.452699: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+09-16 15:13:20 2026-09-16 15:13:20.452753: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+09-16 15:13:21 2026-09-16 15:13:21.428163: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+09-16 15:13:23 0.0s - [lite/yamnet_context_contrast] existing config: overlap_event_prop=0.2, framehop_prop=1
+09-16 15:13:23 0.0s -   loaded from /home/luke/projects/buzzdetect-training/.local/worktrees/asym-context-yamnet/02_set/sets/lite/config_extract.json
+09-16 15:13:23 0.0s - extract_snips: [1/10] JamesU - MustardBumbler/1_29/240903_1319 — unchanged (0 written, 0 deleted)
+09-16 15:13:23 0.0s - extract_snips: [2/10] Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 — unchanged (0 written, 0 deleted)
+09-16 15:13:23 0.0s - extract_snips: [3/10] Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 — unchanged (0 written, 0 deleted)
+09-16 15:13:23 0.0s - extract_snips: [4/10] Luke - Diel Drivers/2026-04-08/1_150/260408_1942 — unchanged (0 written, 0 deleted)
+09-16 15:13:23 0.0s - extract_snips: [5/10] Luke - Diel Drivers/2026-05-06/1_95/260506_1924 — unchanged (0 written, 0 deleted)
+09-16 15:13:23 0.0s - extract_snips: [6/10] Luke - Various Opportunistic Recordings/2025-06-23/1_23/250623_0857 — unchanged (0 written, 0 deleted)
+09-16 15:13:23 0.0s - extract_snips: [7/10] Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 — unchanged (0 written, 0 deleted)
+09-16 15:13:23 0.0s - extract_snips: [8/10] Luke - Various Opportunistic Recordings/2025-08-05/31/250805_1247 — unchanged (0 written, 0 deleted)
+09-16 15:13:23 0.0s - extract_snips: [9/10] Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 — unchanged (0 written, 0 deleted)
+09-16 15:13:23 0.0s - extract_snips: [10/10] Luke - Various Opportunistic Recordings/2025-08-27/48/250827_1828 — unchanged (0 written, 0 deleted)
+09-16 15:13:23 0.0s - extract_snips: 10 ident(s): 0 updated (0 snip(s) written, 0 superseded), 10 unchanged
+09-16 15:13:24 0.1s - [lite/yamnet_context_contrast] 10 ident(s): 10 to extract (10 new, 0 superseded by new annotations), 0 already current
+09-16 15:13:24 0.1s -   1 worker(s); folds: 10
+09-16 15:13:24 2026-09-16 15:13:24.082020: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 15:13:24 2026-09-16 15:13:24.127617: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 15:13:24 2026-09-16 15:13:24.130293: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 15:13:24 2026-09-16 15:13:24.133096: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 15:13:24 2026-09-16 15:13:24.135112: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 15:13:24 2026-09-16 15:13:24.137100: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 15:13:24 2026-09-16 15:13:24.296265: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 15:13:24 2026-09-16 15:13:24.297401: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 15:13:24 2026-09-16 15:13:24.298431: I external/local_xla/xla/stream_executor/cuda/cuda_executor.cc:998] successful NUMA node read from SysFS had negative value (-1), but there must be at least one NUMA node, so returning NUMA node zero. See more at https://github.com/torvalds/linux/blob/v6.0/Documentation/ABI/testing/sysfs-bus-pci#L344-L355
+09-16 15:13:24 2026-09-16 15:13:24.299396: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1928] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 2357 MB memory:  -> device: 0, name: NVIDIA GeForce GTX 1650, pci bus id: 0000:01:00.0, compute capability: 7.5
+09-16 15:13:28 2026-09-16 15:13:28.199891: I external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:465] Loaded cuDNN version 8907
+09-16 15:13:28 4.6s - extractor 0: [1] JamesU - MustardBumbler/1_29/240903_1319 — starting (embeddings)
+09-16 15:13:28 4.6s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [1/22] snip_103230.000_103590.004.flac
+09-16 15:13:32 8.1s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [2/22] snip_106830.000_107190.030.flac
+09-16 15:13:33 9.9s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [3/22] snip_110430.000_110790.004.flac
+09-16 15:13:35 11.8s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [4/22] snip_114030.000_114390.000.flac
+09-16 15:13:37 13.5s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [5/22] snip_117630.000_117990.000.flac
+09-16 15:13:39 15.4s - extractor 0: rescued 'animal_dog' at 117676.424s (0.118s) as animal_dog+ins_trill
+09-16 15:13:39 15.5s - extractor 0: rescued 'animal_dog' at 117707.204s (0.164s) as animal_dog+ins_trill
+09-16 15:13:39 15.6s - extractor 0: rescued 'animal_dog' at 117731.219s (0.204s) as animal_dog+ins_trill
+09-16 15:13:39 15.7s - extractor 0: rescued 'animal_dog' at 117757.986s (0.190s) as animal_dog+ins_trill
+09-16 15:13:39 15.8s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [6/22] snip_121230.000_121590.000.flac
+09-16 15:13:41 17.6s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [7/22] snip_38430.000_38790.000.flac
+09-16 15:13:43 19.3s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [8/22] snip_42030.000_42390.000.flac
+09-16 15:13:45 21.2s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [9/22] snip_45630.000_45990.000.flac
+09-16 15:13:47 23.2s - extractor 0: rescued 'ins_trill' at 45663.912s (0.183s) as ins_trill+mech_plane_jet
+09-16 15:13:47 23.3s - extractor 0: rescued 'ins_trill' at 45670.604s (0.162s) as ins_trill+mech_plane_jet
+09-16 15:13:47 23.4s - extractor 0: rescued 'ins_trill' at 45675.464s (0.178s) as ins_trill+mech_plane_jet
+09-16 15:13:47 23.5s - extractor 0: rescued 'ins_trill' at 45679.396s (0.194s) as ins_trill+mech_plane_jet
+09-16 15:13:47 23.6s - extractor 0: rescued 'ins_trill' at 45680.295s (0.183s) as ins_trill+mech_plane_jet
+09-16 15:13:47 23.8s - extractor 0: rescued 'ins_trill' at 45681.190s (0.178s) as ins_trill+mech_plane_jet
+09-16 15:13:47 23.9s - extractor 0: rescued 'ins_trill' at 45684.092s (0.146s) as ins_trill+mech_plane_jet
+09-16 15:13:48 24.0s - extractor 0: rescued 'ins_trill' at 45684.998s (0.167s) as ins_trill+mech_plane_jet
+09-16 15:13:48 24.1s - extractor 0: rescued 'ins_trill' at 45686.028s (0.140s) as ins_trill+mech_plane_jet
+09-16 15:13:48 24.2s - extractor 0: rescued 'ins_trill' at 45691.746s (0.178s) as ins_trill+mech_plane_jet
+09-16 15:13:48 24.3s - extractor 0: rescued 'ins_trill' at 45704.314s (0.152s) as ins_trill+mech_plane_jet
+09-16 15:13:48 24.4s - extractor 0: rescued 'ins_trill' at 45706.156s (0.169s) as ins_trill+mech_plane_jet
+09-16 15:13:48 24.5s - extractor 0: rescued 'ins_trill' at 45712.971s (0.178s) as ins_trill+mech_plane_jet
+09-16 15:13:48 24.6s - extractor 0: rescued 'ins_trill' at 45716.833s (0.138s) as ins_trill+mech_plane_jet
+09-16 15:13:48 24.8s - extractor 0: rescued 'ins_trill' at 45717.747s (0.132s) as ins_trill+mech_plane_jet
+09-16 15:13:48 24.9s - extractor 0: rescued 'ins_trill' at 45718.666s (0.149s) as ins_trill+mech_plane_jet
+09-16 15:13:49 25.0s - extractor 0: rescued 'ins_trill' at 45734.120s (0.156s) as ambient_background+ins_trill
+09-16 15:13:49 25.1s - extractor 0: rescued 'ins_trill' at 45735.044s (0.147s) as ambient_background+ins_trill
+09-16 15:13:49 25.2s - extractor 0: rescued 'ins_trill' at 45735.940s (0.147s) as ambient_background+ins_trill
+09-16 15:13:49 25.3s - extractor 0: rescued 'ins_trill' at 45737.876s (0.149s) as ambient_background+ins_trill
+09-16 15:13:49 25.3s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [10/22] snip_49230.000_49590.000.flac
+09-16 15:13:51 27.3s - extractor 0: rescued 'ins_trill' at 49269.704s (0.100s) as ins_trill+mech_hum_traffic
+09-16 15:13:51 27.4s - extractor 0: rescued 'ins_trill' at 49270.705s (0.130s) as ins_trill+mech_hum_traffic
+09-16 15:13:51 27.5s - extractor 0: rescued 'ins_trill' at 49276.422s (0.128s) as ins_trill+mech_hum_traffic
+09-16 15:13:51 27.6s - extractor 0: rescued 'ins_trill' at 49278.415s (0.130s) as ins_trill+mech_hum_traffic
+09-16 15:13:51 27.7s - extractor 0: rescued 'ins_trill' at 49289.825s (0.149s) as ins_trill+mech_hum_traffic
+09-16 15:13:51 27.9s - extractor 0: rescued 'ins_trill' at 49291.762s (0.135s) as ins_trill+mech_hum_traffic
+09-16 15:13:52 28.0s - extractor 0: rescued 'ins_trill' at 49292.831s (0.135s) as ins_trill+mech_hum_traffic
+09-16 15:13:52 28.1s - extractor 0: rescued 'ins_trill' at 49298.502s (0.131s) as ins_trill+mech_hum_traffic
+09-16 15:13:52 28.3s - extractor 0: rescued 'ins_trill' at 49309.029s (0.158s) as ins_trill+mech_auto_truck
+09-16 15:13:52 28.4s - extractor 0: rescued 'ins_trill' at 49309.951s (0.237s) as ins_trill+mech_auto_truck
+09-16 15:13:52 28.5s - extractor 0: rescued 'ins_trill' at 49325.409s (0.131s) as ambient_background+ins_trill
+09-16 15:13:52 28.6s - extractor 0: rescued 'ins_trill' at 49340.728s (0.185s) as ambient_background+ins_trill
+09-16 15:13:52 28.7s - extractor 0: rescued 'ins_trill' at 49341.626s (0.176s) as ambient_background+ins_trill
+09-16 15:13:52 28.8s - extractor 0: rescued 'ins_trill' at 49342.718s (0.146s) as ambient_background+ins_trill
+09-16 15:13:52 28.9s - extractor 0: rescued 'ins_trill' at 49343.678s (0.182s) as ambient_background+ins_trill
+09-16 15:13:53 29.0s - extractor 0: rescued 'ins_trill' at 49357.969s (0.152s) as ambient_background+ins_trill
+09-16 15:13:53 29.2s - extractor 0: rescued 'ins_trill' at 49359.043s (0.155s) as ambient_background+ins_trill
+09-16 15:13:53 29.3s - extractor 0: rescued 'ins_trill' at 49360.916s (0.142s) as ambient_background+ins_trill
+09-16 15:13:53 29.4s - extractor 0: rescued 'ambient_background' at 49369.636s (0.164s) as ambient_background+ins_trill
+09-16 15:13:53 29.5s - extractor 0: rescued 'ins_trill' at 49370.585s (0.149s) as ambient_background+ins_trill
+09-16 15:13:53 29.6s - extractor 0: rescued 'ins_trill' at 49390.666s (0.143s) as ambient_background+ins_trill
+09-16 15:13:53 29.7s - extractor 0: rescued 'ins_trill' at 49410.806s (0.140s) as ambient_background+ins_trill
+09-16 15:13:53 29.8s - extractor 0: rescued 'ins_trill' at 49411.746s (0.155s) as ambient_background+ins_trill
+09-16 15:13:53 30.0s - extractor 0: rescued 'ins_trill' at 49428.079s (0.178s) as ambient_background+ins_trill
+09-16 15:13:54 30.1s - extractor 0: rescued 'ins_trill' at 49429.120s (0.146s) as ambient_background+ins_trill
+09-16 15:13:54 30.2s - extractor 0: rescued 'ins_trill' at 49439.698s (0.086s) as ambient_background+ins_trill
+09-16 15:13:54 30.3s - extractor 0: rescued 'ins_trill' at 49442.568s (0.137s) as ambient_background+ins_trill
+09-16 15:13:54 30.4s - extractor 0: rescued 'ins_trill' at 49447.346s (0.143s) as ambient_background+ins_trill
+09-16 15:13:54 30.5s - extractor 0: rescued 'ins_trill' at 49453.100s (0.144s) as ambient_background+ins_trill
+09-16 15:13:54 30.7s - extractor 0: rescued 'ins_trill' at 49476.987s (0.198s) as ambient_background+ins_trill
+09-16 15:13:54 30.8s - extractor 0: rescued 'ins_trill' at 49478.007s (0.146s) as ambient_background+ins_trill
+09-16 15:13:54 30.9s - extractor 0: rescued 'ins_trill' at 49479.012s (0.158s) as ambient_background+ins_trill
+09-16 15:13:55 31.0s - extractor 0: rescued 'ins_trill' at 49491.558s (0.136s) as ambient_background+ins_trill
+09-16 15:13:55 31.2s - extractor 0: rescued 'ins_trill' at 49507.849s (0.146s) as ambient_background+ins_trill
+09-16 15:13:55 31.3s - extractor 0: rescued 'ins_trill' at 49510.698s (0.134s) as ambient_background+ins_trill
+09-16 15:13:55 31.4s - extractor 0: rescued 'ins_trill' at 49514.523s (0.146s) as ambient_background+ins_trill
+09-16 15:13:55 31.5s - extractor 0: rescued 'ins_trill' at 49522.261s (0.085s) as ambient_background+ins_trill
+09-16 15:13:55 31.6s - extractor 0: rescued 'ins_trill' at 49538.560s (0.144s) as ambient_background+ins_trill
+09-16 15:13:55 31.7s - extractor 0: rescued 'ins_trill' at 49549.123s (0.141s) as ambient_background+ins_trill
+09-16 15:13:55 31.9s - extractor 0: rescued 'ins_trill' at 49552.897s (0.126s) as ambient_background+ins_trill
+09-16 15:13:56 32.0s - extractor 0: rescued 'ins_trill' at 49557.793s (0.142s) as ambient_background+ins_trill
+09-16 15:13:56 32.0s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [11/22] snip_60030.000_60389.960.flac
+09-16 15:13:57 33.8s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [12/22] snip_63630.000_63990.000.flac
+09-16 15:13:59 35.8s - extractor 0: rescued 'ins_trill' at 63855.918s (0.217s) as ambient_background+ins_trill
+09-16 15:13:59 35.9s - extractor 0: rescued 'ins_trill' at 63932.724s (0.192s) as ambient_background+ins_trill
+09-16 15:13:59 35.9s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [13/22] snip_67230.000_67590.000.flac
+09-16 15:14:01 37.8s - extractor 0: rescued 'animal_bird_goose' at 67410.818s (0.145s) as animal_bird_goose+ins_trill
+09-16 15:14:01 38.0s - extractor 0: rescued 'animal_bird_goose' at 67422.304s (0.277s) as animal_bird_goose+ins_trill
+09-16 15:14:02 38.1s - extractor 0: rescued 'animal_bird_goose' at 67429.063s (0.225s) as animal_bird_goose+ins_trill
+09-16 15:14:02 38.2s - extractor 0: rescued 'animal_bird_goose' at 67432.878s (0.212s) as animal_bird_goose+ins_trill
+09-16 15:14:02 38.3s - extractor 0: rescued 'animal_bird_goose' at 67478.900s (0.225s) as animal_bird_goose+ins_trill
+09-16 15:14:02 38.4s - extractor 0: rescued 'animal_bird_goose' at 67540.342s (0.224s) as animal_bird_goose+ins_trill
+09-16 15:14:02 38.4s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [14/22] snip_70830.000_71190.000.flac
+09-16 15:14:04 40.2s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [15/22] snip_74430.000_74790.004.flac
+09-16 15:14:06 42.1s - extractor 0: rescued 'ins_buzz_rasp' at 74568.606s (0.155s) as ins_buzz_medium+ins_buzz_rasp+mech_plane_prop
+09-16 15:14:06 42.2s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [16/22] snip_78030.000_78390.030.flac
+09-16 15:14:08 44.0s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [17/22] snip_81630.000_81990.004.flac
+09-16 15:14:09 45.9s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [18/22] snip_85230.000_85590.030.flac
+09-16 15:14:11 47.7s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [19/22] snip_88830.000_89190.004.flac
+09-16 15:14:13 49.6s - extractor 0: rescued 'ins_buzz_medium' at 88903.333s (0.234s) as ins_buzz_medium+ins_trill
+09-16 15:14:13 49.6s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [20/22] snip_92430.000_92790.030.flac
+09-16 15:14:15 51.5s - extractor 0: rescued 'ins_buzz_medium' at 92557.977s (0.192s) as ins_buzz_medium+ins_trill
+09-16 15:14:15 51.5s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [21/22] snip_96030.000_96390.004.flac
+09-16 15:14:17 53.4s - extractor 0: JamesU - MustardBumbler/1_29/240903_1319 snip [22/22] snip_99630.000_99990.030.flac
+09-16 15:14:20 56.7s - extractor 0: [1] JamesU - MustardBumbler/1_29/240903_1319 — 22 snip(s) → 6984 frames, 45 label(s) (ident took 52.1s)
+09-16 15:14:20 56.7s - extractor 0: [2] Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 — starting (embeddings)
+09-16 15:14:20 56.7s - extractor 0: Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 snip [1/15] snip_100290.000_100650.000.flac
+09-16 15:14:22 58.0s - extractor 0: Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 snip [2/15] snip_103890.000_104250.000.flac
+09-16 15:14:23 59.4s - extractor 0: rescued 'ins_buzz_medium' at 104026.664s (0.244s) as ambient_background+ins_buzz_medium
+09-16 15:14:23 59.4s - extractor 0: Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 snip [3/15] snip_107490.000_107850.000.flac
+09-16 15:14:24 60.7s - extractor 0: Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 snip [4/15] snip_111090.000_111450.000.flac
+09-16 15:14:26 62.0s - extractor 0: Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 snip [5/15] snip_114690.000_115050.000.flac
+09-16 15:14:27 63.4s - extractor 0: Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 snip [6/15] snip_64290.000_64650.000.flac
+09-16 15:14:28 64.7s - extractor 0: Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 snip [7/15] snip_67890.000_68250.000.flac
+09-16 15:14:30 66.1s - extractor 0: Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 snip [8/15] snip_71490.000_71850.000.flac
+09-16 15:14:31 67.4s - extractor 0: Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 snip [9/15] snip_75090.000_75450.000.flac
+09-16 15:14:32 68.7s - extractor 0: Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 snip [10/15] snip_78690.000_79050.000.flac
+09-16 15:14:34 70.0s - extractor 0: Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 snip [11/15] snip_82290.000_82650.000.flac
+09-16 15:14:35 71.6s - extractor 0: rescued 'ins_buzz_medium' at 82581.165s (0.226s) as ambient_background+ins_buzz_medium
+09-16 15:14:35 71.6s - extractor 0: Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 snip [12/15] snip_85890.000_86250.000.flac
+09-16 15:14:37 73.0s - extractor 0: Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 snip [13/15] snip_89490.000_89850.000.flac
+09-16 15:14:38 74.4s - extractor 0: Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 snip [14/15] snip_93090.000_93450.000.flac
+09-16 15:14:39 75.7s - extractor 0: Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 snip [15/15] snip_96690.000_97050.000.flac
+09-16 15:14:42 78.1s - extractor 0: [2] Lily - Fit+Fast/2023_R3_Marysville/53/230808_1208 — 15 snip(s) → 4712 frames, 33 label(s) (ident took 21.4s)
+09-16 15:14:42 78.1s - extractor 0: [3] Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 — starting (embeddings)
+09-16 15:14:42 78.1s - extractor 0: Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 snip [1/15] snip_103410.000_103770.000.flac
+09-16 15:14:43 79.7s - extractor 0: rescued 'ambient_bang' at 103461.132s (0.329s) as ambient_background+ambient_bang
+09-16 15:14:43 79.8s - extractor 0: rescued 'ins_buzz_high' at 103656.136s (0.139s) as ambient_background+ins_buzz_high
+09-16 15:14:43 79.8s - extractor 0: Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 snip [2/15] snip_107010.000_107370.000.flac
+09-16 15:14:45 81.3s - extractor 0: Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 snip [3/15] snip_110610.000_110970.000.flac
+09-16 15:14:46 82.8s - extractor 0: rescued 'ambient_background' at 110759.057s (0.211s) as ambient_background+ins_buzz_high+ins_buzz_medium
+09-16 15:14:46 82.9s - extractor 0: Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 snip [4/15] snip_114210.000_114570.000.flac
+09-16 15:14:48 84.5s - extractor 0: rescued 'ambient_scraping' at 114334.120s (0.265s) as ambient_background+ambient_scraping
+09-16 15:14:48 84.6s - extractor 0: rescued 'ambient_bang' at 114470.557s (0.224s) as ambient_background+ambient_bang
+09-16 15:14:48 84.6s - extractor 0: Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 snip [5/15] snip_117810.000_118170.000.flac
+09-16 15:14:50 86.2s - extractor 0: rescued 'ambient_bang' at 118121.439s (0.180s) as ambient_background+ambient_bang
+09-16 15:14:50 86.2s - extractor 0: Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 snip [6/15] snip_121410.000_121770.004.flac
+09-16 15:14:51 87.7s - extractor 0: rescued 'ins_buzz_high' at 121647.373s (0.273s) as ins_buzz_high+ins_trill
+09-16 15:14:51 87.7s - extractor 0: Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 snip [7/15] snip_71010.000_71370.000.flac
+09-16 15:14:53 89.2s - extractor 0: Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 snip [8/15] snip_74610.000_74970.000.flac
+09-16 15:14:54 90.8s - extractor 0: Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 snip [9/15] snip_78210.000_78570.040.flac
+09-16 15:14:56 92.5s - extractor 0: rescued 'ins_buzz_medium' at 78401.377s (0.202s) as ambient_background+ins_buzz_medium
+09-16 15:14:56 92.6s - extractor 0: rescued 'ambient_bang' at 78515.292s (0.196s) as ambient_background+ambient_bang
+09-16 15:14:56 92.6s - extractor 0: Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 snip [10/15] snip_81810.000_82170.030.flac
+09-16 15:14:58 94.1s - extractor 0: Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 snip [11/15] snip_85410.000_85770.000.flac
+09-16 15:14:59 95.7s - extractor 0: rescued 'ambient_scraping' at 85514.057s (0.228s) as ambient_background+ambient_scraping
+09-16 15:14:59 95.7s - extractor 0: Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 snip [12/15] snip_89010.000_89370.000.flac
+09-16 15:15:01 97.2s - extractor 0: Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 snip [13/15] snip_92610.000_92970.000.flac
+09-16 15:15:02 98.8s - extractor 0: rescued 'ambient_bang' at 92792.718s (0.198s) as ambient_background+ambient_bang
+09-16 15:15:02 98.9s - extractor 0: rescued 'ambient_bang' at 92818.669s (0.234s) as ambient_bang+ins_trill
+09-16 15:15:02 98.9s - extractor 0: Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 snip [14/15] snip_96210.000_96570.000.flac
+09-16 15:15:04 100.5s - extractor 0: rescued 'ambient_bang' at 96373.464s (0.224s) as ambient_bang+ins_trill
+09-16 15:15:04 100.6s - extractor 0: rescued 'ambient_bang' at 96399.382s (0.196s) as ambient_bang+ins_trill
+09-16 15:15:04 100.8s - extractor 0: rescued 'ambient_scraping' at 96406.180s (0.161s) as ambient_rustle+ambient_scraping+ins_trill
+09-16 15:15:04 100.9s - extractor 0: rescued 'ambient_bang' at 96503.265s (0.242s) as ambient_background+ambient_bang+ins_buzz_high
+09-16 15:15:04 100.9s - extractor 0: Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 snip [15/15] snip_99810.000_100169.926.flac
+09-16 15:15:06 102.4s - extractor 0: rescued 'ambient_bang' at 100113.635s (0.240s) as ambient_background+ambient_bang
+09-16 15:15:07 103.6s - extractor 0: [3] Lily Adam - One Hive/recorders/willard/2024-08-07/1_11/240807_1016 — 15 snip(s) → 4730 frames, 55 label(s) (ident took 25.5s)
+09-16 15:15:07 103.7s - extractor 0: [4] Luke - Diel Drivers/2026-04-08/1_150/260408_1942 — starting (embeddings)
+09-16 15:15:07 103.7s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [1/16] snip_15450.000_15810.000.flac
+09-16 15:15:09 105.6s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [2/16] snip_19050.000_19410.000.flac
+09-16 15:15:11 107.6s - extractor 0: rescued 'ambient_background' at 19199.313s (0.349s) as ambient_background
+09-16 15:15:11 107.7s - extractor 0: rescued 'ambient_bang' at 19326.115s (0.230s) as ambient_background+ambient_bang+mech_auto_truck
+09-16 15:15:11 107.7s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [3/16] snip_22650.000_23010.000.flac
+09-16 15:15:14 110.3s - extractor 0: rescued 'ambient_bang' at 22791.396s (0.285s) as ambient_background+ambient_bang+mech_plane_jet
+09-16 15:15:14 110.4s - extractor 0: rescued 'ambient_background' at 22792.504s (0.180s) as ambient_background+mech_plane_jet
+09-16 15:15:14 110.5s - extractor 0: rescued 'ambient_background' at 22798.539s (0.190s) as ambient_background
+09-16 15:15:14 110.6s - extractor 0: rescued 'ambient_background' at 22802.520s (0.182s) as ambient_background
+09-16 15:15:14 110.7s - extractor 0: rescued 'ambient_background' at 22811.894s (0.174s) as ambient_background+mech_train
+09-16 15:15:14 110.9s - extractor 0: rescued 'ambient_background' at 22814.725s (0.182s) as ambient_background
+09-16 15:15:15 111.0s - extractor 0: rescued 'ambient_background' at 22817.533s (0.214s) as ambient_background
+09-16 15:15:15 111.1s - extractor 0: rescued 'ambient_background' at 22828.629s (0.206s) as ambient_background+mech_auto_car
+09-16 15:15:15 111.2s - extractor 0: rescued 'ambient_background' at 22835.264s (0.159s) as ambient_background
+09-16 15:15:15 111.4s - extractor 0: rescued 'ambient_background' at 22836.183s (0.182s) as ambient_background
+09-16 15:15:15 111.5s - extractor 0: rescued 'ambient_background' at 22841.019s (0.206s) as ambient_background
+09-16 15:15:15 111.6s - extractor 0: rescued 'ambient_background' at 22844.012s (0.143s) as ambient_background
+09-16 15:15:15 111.7s - extractor 0: rescued 'ambient_background' at 22852.594s (0.166s) as ambient_background
+09-16 15:15:15 111.9s - extractor 0: rescued 'ambient_background' at 22854.464s (0.325s) as ambient_background
+09-16 15:15:15 112.0s - extractor 0: rescued 'ambient_background' at 22857.454s (0.198s) as ambient_background
+09-16 15:15:16 112.1s - extractor 0: rescued 'ambient_background' at 22871.778s (0.166s) as ambient_background
+09-16 15:15:16 112.2s - extractor 0: rescued 'ambient_background' at 22876.651s (0.214s) as ambient_background
+09-16 15:15:16 112.3s - extractor 0: rescued 'ambient_background' at 22898.568s (0.293s) as ambient_background+ambient_bang
+09-16 15:15:16 112.3s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [4/16] snip_26250.000_26610.000.flac
+09-16 15:15:18 114.1s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [5/16] snip_29850.000_30210.000.flac
+09-16 15:15:20 116.3s - extractor 0: rescued 'ambient_background' at 29975.150s (0.277s) as ambient_background+mech_auto_car
+09-16 15:15:20 116.4s - extractor 0: rescued 'ambient_background' at 30060.195s (0.095s) as ambient_background
+09-16 15:15:20 116.4s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [6/16] snip_33450.000_33810.000.flac
+09-16 15:15:22 118.6s - extractor 0: rescued 'ambient_background' at 33612.512s (0.182s) as ambient_background
+09-16 15:15:22 118.7s - extractor 0: rescued 'ambient_background' at 33738.835s (0.222s) as ambient_background
+09-16 15:15:22 118.9s - extractor 0: rescued 'ambient_background' at 33761.812s (0.190s) as ambient_background
+09-16 15:15:22 118.9s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [7/16] snip_37050.079_37410.000.flac
+09-16 15:15:24 120.8s - extractor 0: rescued 'ambient_bang' at 37267.364s (0.143s) as ambient_background+ambient_bang
+09-16 15:15:24 120.8s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [8/16] snip_40650.000_41010.000.flac
+09-16 15:15:26 122.7s - extractor 0: rescued 'ambient_scraping' at 40708.904s (0.253s) as ambient_background+ambient_scraping
+09-16 15:15:26 122.8s - extractor 0: rescued 'animal_frog' at 40795.269s (0.230s) as ambient_background+animal_frog
+09-16 15:15:26 122.8s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [9/16] snip_44250.000_44610.000.flac
+09-16 15:15:28 124.6s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [10/16] snip_51450.024_51810.000.flac
+09-16 15:15:30 126.5s - extractor 0: rescued 'ambient_background' at 51495.533s (0.135s) as ambient_background+mech_auto_car
+09-16 15:15:30 126.6s - extractor 0: rescued 'ambient_background' at 51577.987s (0.158s) as ambient_background+mech_auto_car
+09-16 15:15:30 126.8s - extractor 0: rescued 'ambient_background' at 51583.840s (0.095s) as ambient_background+mech_auto_car
+09-16 15:15:30 126.9s - extractor 0: rescued 'ambient_background' at 51591.482s (0.293s) as ambient_background+mech_auto_car
+09-16 15:15:31 127.0s - extractor 0: rescued 'ambient_background' at 51631.849s (0.166s) as ambient_background+mech_auto_car
+09-16 15:15:31 127.1s - extractor 0: rescued 'ambient_background' at 51635.676s (0.166s) as ambient_background+mech_auto_car
+09-16 15:15:31 127.2s - extractor 0: rescued 'ambient_background' at 51642.435s (0.135s) as ambient_background+mech_auto_car
+09-16 15:15:31 127.3s - extractor 0: rescued 'ambient_background' at 51690.320s (0.230s) as ambient_background+mech_auto_car
+09-16 15:15:31 127.5s - extractor 0: rescued 'ambient_bang' at 51765.190s (0.238s) as ambient_bang+mech_auto_car
+09-16 15:15:31 127.6s - extractor 0: rescued 'ambient_background' at 51768.217s (0.166s) as ambient_background+mech_auto_car
+09-16 15:15:31 127.6s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [11/16] snip_55050.000_55410.000.flac
+09-16 15:15:33 129.5s - extractor 0: rescued 'ambient_background' at 55146.292s (0.266s) as ambient_background+ins_buzz_medium
+09-16 15:15:33 129.6s - extractor 0: rescued 'ambient_background' at 55163.603s (0.181s) as ambient_background+ins_buzz_medium
+09-16 15:15:33 129.6s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [12/16] snip_58650.000_59010.000.flac
+09-16 15:15:35 131.5s - extractor 0: rescued 'ins_buzz_medium' at 58918.103s (0.269s) as ins_buzz_medium+mech_auto_car
+09-16 15:15:35 131.6s - extractor 0: rescued 'ambient_bang' at 58955.671s (0.166s) as ambient_bang+mech_auto_car+mech_plane_jet
+09-16 15:15:35 131.6s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [13/16] snip_65850.000_66210.000.flac
+09-16 15:15:40 136.6s - extractor 0: rescued 'ambient_bang' at 65899.329s (0.095s) as ambient_background+ambient_bang
+09-16 15:15:40 136.7s - extractor 0: rescued 'ambient_background' at 65983.605s (0.330s) as ambient_background+ambient_rustle+mech_auto_car
+09-16 15:15:40 136.9s - extractor 0: rescued 'ambient_background' at 65995.291s (0.087s) as ambient_background
+09-16 15:15:41 137.0s - extractor 0: rescued 'ambient_wind' at 66004.786s (0.293s) as ambient_background+ambient_wind
+09-16 15:15:41 137.0s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [14/16] snip_69450.000_69810.000.flac
+09-16 15:15:42 138.9s - extractor 0: rescued 'ambient_background' at 69620.342s (0.156s) as ambient_background+human+ins_buzz_medium
+09-16 15:15:42 139.0s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [15/16] snip_73050.095_73403.407.flac
+09-16 15:15:47 143.8s - extractor 0: rescued 'ambient_background' at 73120.000s (0.182s) as ambient_background+ambient_bang
+09-16 15:15:47 143.9s - extractor 0: rescued 'ins_buzz_medium' at 73191.902s (0.341s) as ambient_background+ins_buzz_medium
+09-16 15:15:47 143.9s - extractor 0: Luke - Diel Drivers/2026-04-08/1_150/260408_1942 snip [16/16] snip_76650.000_76998.859.flac
+09-16 15:15:53 149.9s - extractor 0: rescued 'ambient_bang' at 76741.500s (0.087s) as ambient_bang+ambient_wind
+09-16 15:15:54 150.1s - extractor 0: rescued 'ambient_bang' at 76758.732s (0.048s) as ambient_background+ambient_bang
+09-16 15:15:54 150.2s - extractor 0: rescued 'ambient_rustle' at 76760.737s (0.127s) as ambient_rustle+ambient_wind
+09-16 15:15:54 150.3s - extractor 0: rescued 'ambient_bang' at 76776.091s (0.309s) as ambient_bang+ambient_wind
+09-16 15:15:54 150.5s - extractor 0: rescued 'ambient_background' at 76889.337s (0.182s) as ambient_background+mech_plane_jet
+09-16 15:15:54 150.6s - extractor 0: rescued 'ambient_bang' at 76892.240s (0.285s) as ambient_background+ambient_bang
+09-16 15:15:54 150.7s - extractor 0: rescued 'ambient_bang' at 76926.299s (0.214s) as ambient_background+ambient_bang
+09-16 15:15:55 151.8s - extractor 0: [4] Luke - Diel Drivers/2026-04-08/1_150/260408_1942 — 16 snip(s) → 4947 frames, 63 label(s) (ident took 48.1s)
+09-16 15:15:55 151.8s - extractor 0: [5] Luke - Diel Drivers/2026-05-06/1_95/260506_1924 — starting (embeddings)
+09-16 15:15:55 151.8s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [1/21] snip_16530.000_16890.000.flac
+09-16 15:15:57 153.6s - extractor 0: rescued 'ambient_rustle' at 16582.241s (0.101s) as ambient_background+ambient_rustle
+09-16 15:15:57 153.6s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [2/21] snip_20130.000_20490.000.flac
+09-16 15:15:59 155.3s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [3/21] snip_23730.000_24090.000.flac
+09-16 15:16:01 157.0s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [4/21] snip_27330.000_27690.000.flac
+09-16 15:16:02 158.6s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [5/21] snip_30930.000_31290.000.flac
+09-16 15:16:04 160.3s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [6/21] snip_45330.000_45690.000.flac
+09-16 15:16:05 161.9s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [7/21] snip_48930.043_49290.000.flac
+09-16 15:16:07 163.7s - extractor 0: rescued 'ambient_background' at 49098.337s (0.328s) as ambient_background+ins_buzz_low+mech_plane_prop
+09-16 15:16:07 163.7s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [8/21] snip_52530.000_52890.000.flac
+09-16 15:16:09 165.6s - extractor 0: rescued 'unknown' at 52610.898s (0.233s) as mech_lawnmower+unknown
+09-16 15:16:09 165.7s - extractor 0: rescued 'ambient_rustle' at 52615.813s (0.219s) as ambient_rustle+mech_lawnmower
+09-16 15:16:09 165.7s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [9/21] snip_56130.000_56490.000.flac
+09-16 15:16:11 167.7s - extractor 0: rescued 'ambient_background' at 56396.685s (0.250s) as ambient_background+ambient_music_windchime+animal_dog
+09-16 15:16:11 167.9s - extractor 0: rescued 'ambient_background' at 56400.560s (0.290s) as ambient_background+ambient_music_windchime+human
+09-16 15:16:11 167.9s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [10/21] snip_59730.000_60090.000.flac
+09-16 15:16:14 170.0s - extractor 0: rescued 'ambient_music_windchime' at 59871.399s (0.191s) as ambient_background+ambient_music_windchime
+09-16 15:16:14 170.2s - extractor 0: rescued 'ambient_background' at 59947.359s (0.257s) as ambient_background+ambient_rustle+human
+09-16 15:16:14 170.2s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [11/21] snip_63330.000_63690.000.flac
+09-16 15:16:16 172.1s - extractor 0: rescued 'ambient_rustle' at 63364.024s (0.072s) as ambient_rustle+mech_lawnmower
+09-16 15:16:16 172.2s - extractor 0: rescued 'ambient_background' at 63457.953s (0.172s) as ambient_background+ambient_wind
+09-16 15:16:16 172.2s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [12/21] snip_66930.000_67290.000.flac
+09-16 15:16:18 174.2s - extractor 0: rescued 'ambient_rustle' at 66966.872s (0.184s) as ambient_rustle+ins_buzz_low+ins_buzz_pollination
+09-16 15:16:18 174.4s - extractor 0: rescued 'ambient_rustle' at 67050.392s (0.173s) as ambient_rustle+mech_auto_car+mech_lawnmower
+09-16 15:16:18 174.4s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [13/21] snip_70530.025_70890.000.flac
+09-16 15:16:20 176.4s - extractor 0: rescued 'ambient_music_windchime' at 70571.595s (0.301s) as ambient_background+ambient_music_windchime
+09-16 15:16:20 176.5s - extractor 0: rescued 'ambient_music_windchime' at 70577.366s (0.173s) as ambient_background+ambient_music_windchime
+09-16 15:16:20 176.6s - extractor 0: rescued 'ambient_background' at 70578.340s (0.246s) as ambient_background+ambient_music_windchime
+09-16 15:16:20 176.8s - extractor 0: rescued 'ambient_background' at 70674.725s (0.296s) as ambient_background+ins_buzz_low+ins_buzz_pollination
+09-16 15:16:20 176.9s - extractor 0: rescued 'ambient_background' at 70763.038s (0.214s) as ambient_background+ambient_rustle+human
+09-16 15:16:21 177.0s - extractor 0: rescued 'ambient_music_windchime' at 70805.280s (0.256s) as ambient_background+ambient_music_windchime
+09-16 15:16:21 177.0s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [14/21] snip_74130.063_74490.000.flac
+09-16 15:16:22 178.8s - extractor 0: rescued 'ambient_rustle' at 74378.150s (0.095s) as ambient_background+ambient_rustle
+09-16 15:16:22 179.0s - extractor 0: rescued 'ambient_background' at 74395.284s (0.202s) as ambient_background+ambient_wind+human
+09-16 15:16:22 179.0s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [15/21] snip_77730.000_78090.000.flac
+09-16 15:16:24 180.9s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [16/21] snip_81330.000_81690.000.flac
+09-16 15:16:26 182.7s - extractor 0: rescued 'human' at 81473.438s (0.147s) as ambient_background+human
+09-16 15:16:26 182.8s - extractor 0: rescued 'human' at 81544.348s (0.204s) as ambient_rustle+human
+09-16 15:16:26 182.9s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [17/21] snip_84930.000_85290.000.flac
+09-16 15:16:28 184.6s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [18/21] snip_88530.000_88890.000.flac
+09-16 15:16:30 186.3s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [19/21] snip_92130.000_92490.000.flac
+09-16 15:16:32 188.0s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [20/21] snip_95730.000_96090.000.flac
+09-16 15:16:33 189.7s - extractor 0: Luke - Diel Drivers/2026-05-06/1_95/260506_1924 snip [21/21] snip_99330.000_99690.000.flac
+09-16 15:16:36 192.8s - extractor 0: [5] Luke - Diel Drivers/2026-05-06/1_95/260506_1924 — 21 snip(s) → 6631 frames, 145 label(s) (ident took 41.0s)
+09-16 15:16:36 192.8s - extractor 0: [6] Luke - Various Opportunistic Recordings/2025-06-23/1_23/250623_0857 — starting (embeddings)
+09-16 15:16:36 192.8s - extractor 0: Luke - Various Opportunistic Recordings/2025-06-23/1_23/250623_0857 snip [1/1] snip_100950.015_101310.000.flac
+09-16 15:16:38 194.1s - extractor 0: rescued 'ambient_bang' at 101189.344s (0.239s) as ambient_bang+mech_beep
+09-16 15:16:38 194.2s - extractor 0: [6] Luke - Various Opportunistic Recordings/2025-06-23/1_23/250623_0857 — 1 snip(s) → 315 frames, 18 label(s) (ident took 1.4s)
+09-16 15:16:38 194.2s - extractor 0: [7] Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 — starting (embeddings)
+09-16 15:16:38 194.2s - extractor 0: Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 snip [1/15] snip_48270.000_48629.978.flac
+09-16 15:16:39 195.5s - extractor 0: Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 snip [2/15] snip_51870.000_52230.000.flac
+09-16 15:16:40 196.8s - extractor 0: Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 snip [3/15] snip_55470.000_55829.978.flac
+09-16 15:16:42 198.1s - extractor 0: Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 snip [4/15] snip_59070.000_59430.004.flac
+09-16 15:16:43 199.7s - extractor 0: rescued 'ambient_background' at 59140.399s (0.208s) as ambient_background+ins_buzz_medium
+09-16 15:16:43 199.7s - extractor 0: Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 snip [5/15] snip_62670.000_63030.000.flac
+09-16 15:16:45 201.1s - extractor 0: rescued 'ins_buzz_high' at 62741.407s (0.229s) as ambient_background+ins_buzz_high
+09-16 15:16:45 201.1s - extractor 0: Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 snip [6/15] snip_66270.000_66630.000.flac
+09-16 15:16:46 202.4s - extractor 0: Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 snip [7/15] snip_69870.000_70230.000.flac
+09-16 15:16:47 203.7s - extractor 0: Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 snip [8/15] snip_73470.000_73830.000.flac
+09-16 15:16:49 205.1s - extractor 0: Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 snip [9/15] snip_77070.000_77430.000.flac
+09-16 15:16:50 206.3s - extractor 0: Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 snip [10/15] snip_80670.000_81030.000.flac
+09-16 15:16:51 207.7s - extractor 0: Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 snip [11/15] snip_84270.000_84630.000.flac
+09-16 15:16:53 209.0s - extractor 0: Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 snip [12/15] snip_87870.000_88230.000.flac
+09-16 15:16:54 210.3s - extractor 0: Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 snip [13/15] snip_91470.000_91830.000.flac
+09-16 15:16:55 211.7s - extractor 0: Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 snip [14/15] snip_95070.000_95430.000.flac
+09-16 15:16:57 213.0s - extractor 0: Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 snip [15/15] snip_98670.000_99030.000.flac
+09-16 15:16:58 214.4s - extractor 0: rescued 'ambient_bang' at 98797.085s (0.159s) as ambient_background+ambient_bang
+09-16 15:16:59 215.6s - extractor 0: [7] Luke - Various Opportunistic Recordings/2025-07-03/1_37/250703_1635 — 15 snip(s) → 4715 frames, 22 label(s) (ident took 21.4s)
+09-16 15:16:59 215.6s - extractor 0: [8] Luke - Various Opportunistic Recordings/2025-08-05/31/250805_1247 — starting (embeddings)
+09-16 15:16:59 215.6s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-05/31/250805_1247 snip [1/3] snip_101550.000_101910.000.flac
+09-16 15:17:00 216.9s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-05/31/250805_1247 snip [2/3] snip_69150.000_69510.000.flac
+09-16 15:17:02 218.2s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-05/31/250805_1247 snip [3/3] snip_72750.000_73110.000.flac
+09-16 15:17:03 219.8s - extractor 0: [8] Luke - Various Opportunistic Recordings/2025-08-05/31/250805_1247 — 3 snip(s) → 942 frames, 23 label(s) (ident took 4.2s)
+09-16 15:17:03 219.8s - extractor 0: [9] Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 — starting (embeddings)
+09-16 15:17:03 219.8s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 snip [1/12] snip_102870.000_103230.000.flac
+09-16 15:17:05 221.2s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 snip [2/12] snip_106470.000_106830.000.flac
+09-16 15:17:06 222.7s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 snip [3/12] snip_110070.000_110430.000.flac
+09-16 15:17:08 224.0s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 snip [4/12] snip_113670.000_114030.000.flac
+09-16 15:17:09 225.3s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 snip [5/12] snip_117270.000_117630.000.flac
+09-16 15:17:10 226.7s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 snip [6/12] snip_120870.000_121230.000.flac
+09-16 15:17:12 228.0s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 snip [7/12] snip_124470.000_124830.000.flac
+09-16 15:17:13 229.4s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 snip [8/12] snip_41670.000_42030.000.flac
+09-16 15:17:14 230.7s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 snip [9/12] snip_45270.000_45630.000.flac
+09-16 15:17:16 232.0s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 snip [10/12] snip_48870.000_49230.000.flac
+09-16 15:17:17 233.3s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 snip [11/12] snip_52470.000_52830.000.flac
+09-16 15:17:18 234.6s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 snip [12/12] snip_56070.000_56430.000.flac
+09-16 15:17:20 236.7s - extractor 0: [9] Luke - Various Opportunistic Recordings/2025-08-12/1_114/250812_1225 — 12 snip(s) → 3768 frames, 70 label(s) (ident took 16.9s)
+09-16 15:17:20 236.7s - extractor 0: [10] Luke - Various Opportunistic Recordings/2025-08-27/48/250827_1828 — starting (embeddings)
+09-16 15:17:20 236.7s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-27/48/250827_1828 snip [1/5] snip_19890.000_20250.000.flac
+09-16 15:17:21 237.9s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-27/48/250827_1828 snip [2/5] snip_23490.000_23850.000.flac
+09-16 15:17:23 239.1s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-27/48/250827_1828 snip [3/5] snip_27090.000_27450.000.flac
+09-16 15:17:24 240.3s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-27/48/250827_1828 snip [4/5] snip_41490.000_41850.000.flac
+09-16 15:17:25 241.5s - extractor 0: Luke - Various Opportunistic Recordings/2025-08-27/48/250827_1828 snip [5/5] snip_48690.000_49050.000.flac
+09-16 15:17:26 242.9s - extractor 0: rescued 'ambient_bang' at 48725.803s (0.238s) as ambient_background+ambient_bang
+09-16 15:17:27 243.4s - extractor 0: [10] Luke - Various Opportunistic Recordings/2025-08-27/48/250827_1828 — 5 snip(s) → 1571 frames, 25 label(s) (ident took 6.7s)
+09-16 15:17:27 243.4s - extractor 0: terminating
+09-16 15:17:27 243.7s - all extractions complete
+09-16 15:17:27 :)
+09-16 15:17:27 :D
+09-16 15:17:27 :O
+[launch_job] exit 0
