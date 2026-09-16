@@ -287,28 +287,6 @@ moved; see standing facts). *Cost:* one extraction + one CV.
 shift is YAMNet-specific; say so in the log so item 2 and item 23 skip the
 shifted variant.
 
-## 24. Shift-ratio ladder below one octave
-
-*Evidence: **E4** — x2 up +0.069; x4 −0.011 vs x2; down-octave +0.019/+0.010.
-Untagged proposal for the intermediate rungs.*
-
-The optimum lies at or below x2, and no ratio between 1 and 2 has been tried.
-Bee flight fundamentals span roughly 130-250 Hz across bumble and honey bees,
-so a fixed octave may overshoot for some taxa and undershoot for others. Rungs
-**x1.26 and x1.5**, each built in the seamless **decimated** form (it needs
-`0.96 × ratio` s of real audio — `context_frames = 1` covers both) and
-concatenated with the unshifted block. 2048-d, YAMNet only.
-
-*Control:* `yamnet_pitchshift_decimate` (same seamless form, x2) — not the
-tiled `yamnet_pitchshift`. *Cost:* two YAMNet-only extractions (the decimate
-extraction took ~35 min) + two CVs at 2048-d.
-
-*Falsifier:* if neither rung beats x2 on the headline and the fold signatures
-match x2's, the octave is the right shift. Stop there; do not run a
-multi-ratio concat. If a rung wins or shows a different fold signature (e.g.
-`1_114` up), the follow-up is `[x_best, x2]` concatenated, and only then the
-swap into the lead.
-
 ## 23. A 2025-26 bioacoustic encoder in place of AVES-v1 — **ask Luke first**
 
 *Evidence: literature only. "What Matters for Bioacoustic Encoding"
