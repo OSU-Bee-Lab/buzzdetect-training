@@ -95,7 +95,8 @@ if __name__ == '__main__':
     parser.add_argument('--model', required=True, help='trained model dir (name under models/, or a path — e.g. into a worktree)')
     parser.add_argument('--baseline-model', default='models/cv_baseline_v3',
                          help='baseline model dir to diff against; usually your matched control, not the era anchor')
-    parser.add_argument('--baseline-name', default='cv-baseline-v3', help='label for baseline.model in the entry')
+    parser.add_argument('--baseline-name', default=None,
+                        help="label for baseline.model in the entry; default: --baseline-model's dir name, _ -> -")
     parser.add_argument('--hypothesis', required=True)
     parser.add_argument('--trust', required=True, choices=TRUST_VALUES)
     parser.add_argument('--conclusion', required=True)
@@ -107,6 +108,8 @@ if __name__ == '__main__':
     parser.add_argument('--log', default=os.path.join(ROOT, 'log.jsonl'))
     parser.add_argument('--write', action='store_true', help='append to --log instead of just printing')
     args = parser.parse_args()
+    if args.baseline_name is None:
+        args.baseline_name = os.path.basename(os.path.normpath(args.baseline_model)).replace('_', '-')
 
     entry = build_entry(
         name=args.name, model=args.model, baseline_model=args.baseline_model,

@@ -88,6 +88,7 @@ A leading `sleep` in a Bash call is blocked outright. launch_job is designed to 
 - **Training: prefer the GPU; fall back to CPU only on OOM.** The gain scales with how much there is to fit. A bare linear probe is overhead-bound, so GPU is only ~1.15x (a 400-epoch fold is ~3 min either way). A `--hidden 1024` head on YAMNet is ~8x (~4 min vs ~27 min per fold). A fold that crashes can be resumed: re-running the same command skips finished folds.
 - **YAMNet extraction:** GPU is ~1.6x faster than CPU (the card sits ~10% busy, held back by the CPU). With a GPU visible, stage 2 caps `--workers` (embedding processes) at 1, since forked workers collide on the card; `--snip-workers` is unaffected. On CPU (`--cpu`), `--workers 4` gives ~1.6x over 1.
 - **AVES extraction: use the GPU** (`--workers 0`, `BUZZDETECT_NO_GPU=1`). It is ~10x faster: ~19 min for medium vs ~3 h on CPU.
+  If a YAMNet+AVES embedder OOMs anyway, add `BUZZDETECT_AVES_BATCH=16` (default 64) and `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`; `yamnet_aves_mid_avesshift` needed both on lite.
 - **Keep `BUZZDETECT_CHUNK_FRAMES=48`.** It changes YAMNet's output at chunk edges (~1 frame in 48), so existing embeddings only match at 48. Larger values barely speed things up and use more VRAM (300 ≈ 2.3 GB). AVES ignores it.
 
 ## Testing

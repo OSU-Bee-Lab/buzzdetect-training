@@ -5,7 +5,7 @@
 #   tools/finish_experiment.sh <slug> --summary "<one line, used in both commits>" \
 #     --model <exp model dir> --baseline-model <matched control> \
 #     --hypothesis "..." --trust clean|caveated|artifact --conclusion "..." \
-#     [--baseline-name <label>] [--commit-also IDEAS.md]
+#     [--baseline-name <label, default: control dir name>] [--commit-also IDEAS.md]
 #
 # Model paths are relative to main's root (e.g.
 # .local/worktrees/<slug>/models/<name>). The order is the point: the entry is
