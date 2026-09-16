@@ -27,11 +27,23 @@ folds' independent wobbles partly cancel.
 
 These numbers are demonstrative and will likely change between eras.
 
-**Training stochasticity is larger per fold, and no SD above includes it.**
-`1_150` moved 0.105 between two identical `--hidden 1024` runs, and 0.055 between
-two identical baseline runs, against a 0.041 eval-sampling delta SD. More
-annotation won't fix that: 5x the labels on `1_150` only takes its eval SD from
-0.042 to 0.021. Seed averaging is the only lever on it, but this is currently considered too costly.
+**Training stochasticity, measured 2026-09-15**, is not in the SDs above. Eight
+identical CVs of plain YAMNet with `--hidden 1024` (no seed control):
+
+| quantity | SD across runs | SD of a delta between two runs |
+|---|---|---|
+| one fold's sensitivity | 0.011-0.018 | 0.016-0.026 |
+| the headline | 0.005 | 0.007 |
+
+Per fold that is smaller than eval sampling; on the headline it is about half.
+The two are independent, so a single-run comparison's full SD is their root sum
+of squares: ~0.014 on the headline delta, and `1_150`'s 0.041 eval delta SD
+becomes ~0.048. No fold stands out: the hard folds (`1_150`, `1_95`, `1_114`)
+wobble no more than the rich ones. Eval sampling is the larger term, so more
+annotated events shrink uncertainty more than seed averaging would.
+
+Other configs (the bare linear probe, concatenated embedders) are unmeasured.
+Branch `stoch/hidden1024-repeats` holds the eight runs and the recipe.
 
 We're looking for significant gains, not just numerical ones. 
 

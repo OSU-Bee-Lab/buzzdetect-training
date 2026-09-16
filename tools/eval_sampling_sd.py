@@ -23,9 +23,10 @@ Two readings, and the gap between them is the point:
                 A per-fold delta smaller than about twice this is not evidence
                 of anything, however clean the story it tells.
 
-And this is only half the uncertainty. It holds the model fixed, so it says
-nothing about training stochasticity, which is the larger term per fold (~0.07
-on 1_150, against ~0.045 here). Only repeat draws measure that.
+It holds the model fixed, so it says nothing about training stochasticity. That
+is the smaller term: a delta between two identical runs has an SD of
+~0.016-0.026 per fold and ~0.007 on the headline (docs/judging-results.md). Add
+it in quadrature.
 
     python tools/eval_sampling_sd.py models/cv_baseline
     python tools/eval_sampling_sd.py models/cv_baseline --other models/exp  # paired
@@ -184,8 +185,8 @@ def main(model_dir, other=None, fpr=0.005, n_boot=2000, seed=0):
     if paired:
         print(f"{'headline delta':<56}{np.nanmean([r['delta'] for r in paired]):>+7.3f}")
         print(f"{'headline delta SD, eval sampling alone':<56}{headline_sd([r['delta_sd'] for r in paired]):>7.3f}")
-    print('\ntraining stochasticity is NOT in these numbers and is the larger term '
-          'per fold; only repeat draws measure it.')
+    print('\ntraining stochasticity is NOT in these numbers; add ~0.02 per fold delta, '
+          '~0.007 headline delta, in quadrature (docs/judging-results.md).')
 
 
 if __name__ == '__main__':

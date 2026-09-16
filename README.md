@@ -588,8 +588,9 @@ which is 79% of them. `tools/eval_sampling_sd.py` turns that into a standard
 deviation by resampling events: ~0.03-0.13 per fold, ~0.01 on the headline mean,
 and with `--other <model>` the paired per-fold *delta* SD (0.017-0.052) that a
 comparison should actually be read against. It holds the model fixed, so it
-measures evaluation sampling only; training stochasticity is larger again per
-fold and only repeat draws measure it.
+measures evaluation sampling only. Training stochasticity adds less on top: a
+delta between two identical runs has an SD of ~0.016-0.026 per fold and ~0.007
+on the headline (`docs/judging-results.md`).
 
 Don't reweight the training set to equalize folds. How many *hours* a fold
 contributes is an artifact of annotation effort; how much *buzz* those hours

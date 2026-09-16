@@ -50,8 +50,8 @@ answers.**
   one run. Prefer dose ladders to single comparisons.
 - **A single fold resolves ~0.09, not ~0.027.** `buzz_frames` is not the sample
   size; folds hold 14-42 buzz *events*. `tools/eval_sampling_sd.py <control>
-  --other <exp>` gives each fold's delta its own SD; training stochasticity is
-  larger again on top (`1_150` has swung 0.055-0.105 between identical runs).
+  --other <exp>` gives each fold's delta its own SD; training stochasticity adds
+  a smaller ~0.016-0.026 per fold delta on top (`docs/judging-results.md`).
   Propose against the headline; use folds to ask *where* an effect lives.
 - **Never select an epoch on the held-out fold.** Any rule that reads the
   scored fold's own curve reports max-over-epochs of the graded statistic. A

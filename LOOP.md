@@ -201,6 +201,8 @@ result, and 31 branches' notes. `models/.gitignore` re-includes each model's
 multi-GB unshared cache, remove just that directory.
 
 If instructed to run more than one loop, go back to the top and do it all again.
+Run experiments sequentially, not in parallel. CPU and GPU are likely fully saturated by a single experiment,
+so you'll see no gain from concurrency.
 
 
 ## Restoring a worktree

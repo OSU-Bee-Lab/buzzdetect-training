@@ -41,6 +41,8 @@ fail() { echo "finish_experiment.sh: $*" >&2; exit 1; }
 [ -d "$WT" ] || fail "no worktree at $WT"
 [ -f "$WT/notes.md" ] || fail "$WT/notes.md is missing; write it first (LOOP.md step 5)"
 ! grep -q "\"name\": \"$slug\"" "$ROOT/log.jsonl" || fail "log.jsonl already has an entry named $slug"
+handoffs=("$WT"/HANDOFF*.md)
+[ -e "${handoffs[0]}" ] && fail "$WT still has ${handoffs[*]##*/}; the job it describes is over once notes.md is written -- rm it before finishing" || true
 for p in "${also[@]}"; do
   ! git -C "$ROOT" diff --quiet -- "$p" || fail "--commit-also $p: main's copy is unchanged; edit it in main ($ROOT/$p), not the worktree"
 done
