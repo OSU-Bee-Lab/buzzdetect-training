@@ -46,14 +46,17 @@ files evaporated and three docs kept citing them for a month.
 ## Running long jobs
 
 Anything longer than a foreground command (stage 2, stage 3, a weights
-download, a slow diagnostic) goes through one tool:
+download, a slow diagnostic, a smoke test that extracts) goes through one tool.
+If you can't be sure it finishes in a minute, launch it: a new embedder over
+the lite set runs for minutes on CPU, and piping a raw run through `tail`
+hides all output until it exits.
 
 ```bash
 tools/launch_job.sh <log> -- <command...>   # detaches the job and starts its notifier
 ```
 
 Then wait. launch_job runs a notifier that pings you on milestones, errors, completions, or every 50 min if the job is still running.
-There is nothing else to arm or poll and there is no need to sleep.
+There is nothing else to arm or poll (ScheduleWakeup is for `/loop`, not jobs) and there is no need to sleep.
 Pings arrive as "Another Claude session sent a message: [job …]".
 
 Summarize each ping minimally in the main session context, a few words. They aren't for the user, they're for you.

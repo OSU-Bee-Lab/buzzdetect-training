@@ -17,7 +17,9 @@ echo "Creating worktree at $WT on branch exp/$EXP"
 git worktree add "$WT" -b "exp/$EXP"
 
 # Embedder dirs: replace git-checked-out dirs with symlinks so binary
-# weights and other gitignored files are available
+# weights and other gitignored files are available. git sees each swap as a
+# typechange, so a worktree commit shows these dirs flip to symlinks
+# (mode 120000). That's expected and harmless; don't revert it.
 echo "Symlinking embedders..."
 for d in "$ROOT/embedders/"/*/; do
     name="$(basename "$d")"

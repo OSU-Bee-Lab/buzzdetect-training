@@ -6,7 +6,7 @@ Nobody is watching live, though Luke may message you over Remote Control. Don't 
 Tell the loop where you stand with `{ROOT}/tools/loop_signal.sh` (works from any worktree). Which signal to send for a problem depends on whether it stops you:
 
 - **All {N} experiments done:** `loop_signal.sh done "<slugs>"`, as the last thing before ending your turn. The loop stops your session once it sees this signal.
-- **Friction: something slowed you down or misled you, but you got past it.** A clunky or broken tool, a doc that sent you the wrong way, the loop or its tools not behaving as described. Send `loop_signal.sh friction "<what happened and where, how you worked around it, commits to look at>"` as you hit it, then carry on. The reports pile up, and a fixer works through them after your batch ends.
+- **Friction: something slowed you down or misled you, but you got past it.** A clunky or broken tool, a doc that sent you the wrong way, the loop or its tools not behaving as described. Send `loop_signal.sh friction "<what happened and where, how you worked around it, commits to look at>"` as you hit it, then carry on. The reports pile up, and a fixer works through them after your batch ends. The bar is low: a confusion you cleared up in a few tool calls still counts, and a report needs no root cause or fix, just what happened and where.
 - **Issue: something a fixer agent could repair stops the experiment, and you can't fix it from your worktree.** Examples are broken shared tooling or a doc error you can't safely work around.
   1. Record it in the experiment's `notes.md`: what broke, what you tried. Commit and push `exp/<slug>`.
   2. If the experiment is unfinished, commit a `HANDOFF.md` (below).
@@ -23,7 +23,11 @@ Cleanup is the loop's job. Once you signal `done` or `issue`, it stops this sess
 `issue`, a `halt`, or a wrap-up after Luke's Ctrl+C on the loop. The heartbeat
 pings keep a waiting session alive, so a slow run is never a reason to write
 one. The next experiment agent resumes every handoff whose experiment isn't in
-`log.jsonl` yet. Commit it in the worktree with four things:
+`log.jsonl` yet. The loop lists those handoffs at the end of this prompt (none
+listed means none to resume); any
+other `HANDOFF*.md` under `.local/worktrees/` belongs to a closed era (its
+experiment is in an `archive/*/log.jsonl`), so ignore it. Commit a handoff in
+the worktree with four things:
 
 - the one-command progress check, plus `tools/notify_job.sh <pid> --log <log>`
   to get the job's pings;

@@ -112,13 +112,16 @@ to main, so extraction is shared. Keep it that way: a new embedder directory or
 `--embedder` name goes straight into the shared tree so future runs can use it.
 The cache is keyed by `(set, embedder name)`, and its fingerprint covers annotations, not code. So
 break a symlink only when your run would overwrite something under an existing
-name.
+name. Git sees those symlinks as typechanges, so any commit from the worktree
+(including `finish_experiment.sh`'s) shows shared dirs flipping to mode 120000.
+That noise is expected; don't revert it.
 
 ### 2. Make the change
 
 Write the Hypothesis section of `notes.md` (template in step 5) before touching code.
 Then, implement changes.
-Before stages 2 and 3, smoke test on the lite set. Note: tiny and lite are small and may
+Before stages 2 and 3, smoke test on the lite set, through `tools/launch_job.sh` if it
+extracts (a new embedder over lite runs for minutes on CPU). Note: tiny and lite are small and may
 not be perfectly representative of medium (e.g., missing a class).
 
 ### 3. Run it
