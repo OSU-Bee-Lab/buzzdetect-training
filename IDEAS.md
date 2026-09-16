@@ -298,23 +298,6 @@ follow-up, not part of this run.
 *Falsifier:* `1_150` is where AVES earned its place. A headline gain with
 `1_150` flat is a different lever from the one being replaced; say so.
 
-## 10. Asymmetric context — feed the contrast, not the concat, as an embedder
-
-*Evidence: **untagged proposal**, resting on **E3** `context-embedder` and the
-decoupled-head arithmetic. Demoted: context has landed rich-folds-only three
-times this era.*
-
-A linear readout of `[e_{t-1}, e_t, e_{t+1}]` cannot compute "this frame
-stands out from its neighbours", yet that contrast is close to the definition
-of a buzz against a stationary background. Feed `[e_t, e_t −
-mean(e_{t±1})]` explicitly. **Must be an embedder** (subclass
-`yamnet_context`'s stacking over the contiguous buffer). A train-time
-transform over cached rows has no deployment equivalent and measured a
-train/deploy mismatch (`exp/asymmetric-context`). The difference channel is
-signed where YAMNet is 89.6% zeros, so expect a regime change and keep the
-fixed budget. *Cost:* one extraction + one CV. Run it on plain YAMNet as a
-mechanism question; don't expect it to add to the lead.
-
 ## 7. Nearest-neighbour search into genuinely unannotated audio
 
 *Evidence: **untagged proposal**; the annotated-frame half is done
