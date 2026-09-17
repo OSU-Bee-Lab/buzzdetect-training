@@ -6,7 +6,7 @@ thresholds.py. It merges `thresholds` and `threshold_stats` into
 models/<name>/config_model.json and writes README.md -- or, if one exists,
 rewrites only its generated blocks.
 
-    conda run -n buzzdetect-train python tools/model_card.py <name>...
+    conda run -n buzzdetect-train python 04_deploy/model_card.py <name>...
 
 No TensorFlow: it reads the rotations' predictions off disk.
 """

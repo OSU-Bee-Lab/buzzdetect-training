@@ -45,13 +45,13 @@ class BaseEmbedder(ABC):
     def to_onnx(self, opset=17):
         """Export this embedder's trunk to ONNX: waveform in, embeddings out.
 
-        Used by tools/export_onnx.py to fuse the trunk with a trained
+        Used by 04_deploy/export_onnx.py to fuse the trunk with a trained
         classifier head into buzzdetect's shipped graph. Contract for the
         returned onnx.ModelProto: exactly one graph input, a 1-D float32
         tensor of arbitrary length (raw samples at self.samplerate), and
         exactly one graph output, (n_frames, self.n_embeddings) -- using
         whatever framing/padding rule this embedder's own embed() uses.
-        export_onnx.py probes that rule empirically (tools/export_onnx.py
+        export_onnx.py probes that rule empirically (04_deploy/export_onnx.py
         probe_framing()) rather than assuming one, so any rule is fine as
         long as embed() and this graph agree; that agreement is what
         export_onnx.py's parity check (verify()) is checking.

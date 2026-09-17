@@ -17,6 +17,7 @@ it produces. `CLAUDE.md` is the orientation file for agents editing the code.
 - [Stage 1 — annotate](#stage-1--annotate)
 - [Stage 2 — build a set and extract](#stage-2--build-a-set-and-extract)
 - [Stage 3 — train](#stage-3--train)
+- [Stage 4 — deploy](#stage-4--deploy)
 - [Reading the results](#reading-the-results)
 - [Tools](#tools)
 - [Design: why folds are deployments](#design-why-folds-are-deployments)
@@ -66,10 +67,12 @@ audio/ + 01_annotate/<effort>/data/
         ▼
 03_train/main.py                           → models/<name>/  (CV folds + shipped model)
         │
+        │  4.  04_deploy/main.py           → buzzdetect's engine/models/<name>/  (ONNX)
+        ▼
 ```
 
 Stages are normally run one at a time. Root `main.py` chains 2→3 for
-convenience.
+convenience; deploying (stage 4) is separate and manual.
 
 ---
 
@@ -432,9 +435,9 @@ threshold that puts that held-out fold at 0.5% FPR (the same convention as
 frames), and into `README.md`, whose `<!-- generated:... -->` blocks carry a
 suggestion table and per-class operating points at several FPR and precision
 targets. An existing README keeps everything outside those blocks. Add a
-one-line `description` to the config by hand; `tools/export_onnx.py` carries
+one-line `description` to the config by hand; `04_deploy/export_onnx.py` carries
 `description`, `thresholds`, `threshold_stats` and the README to buzzdetect.
-`tools/model_card.py <name>` redoes this for a model already on disk, falling
+`04_deploy/model_card.py <name>` redoes this for a model already on disk, falling
 back to `surprisal/` for models trained before `predictions_classes.csv`.
 
 **`folds_sx.csv` is the whole metrics summary.** Columns: `fold`, `fpr`,
@@ -507,8 +510,24 @@ conda run -n buzzdetect-train python main.py --model <name> [--set medium] \
 ```
 
 Same flags as the stage scripts, except the model name is `--model`. **Must be
-run from the project root** — it resolves stage paths relative to the cwd.
-There is no stage 4; see [Tools](#tools).
+run from the project root** — it resolves stage paths relative to the cwd. It
+chains stages 2–3 only; deploying is a separate, manual step (below).
+
+---
+
+## Stage 4 — deploy
+
+```bash
+conda run -n buzzdetect-train python 04_deploy/main.py <name> [--dest DIR] [--force]
+```
+
+Refreshes the model's threshold/README card (`04_deploy/model_card.py`), then
+fuses the embedder and the trained head into a single ONNX graph, checks it
+against the Keras model it came from, and carries it into buzzdetect's
+`engine/models/<name>/` (`04_deploy/export_onnx.py`). `--dest` defaults to
+`buzzdetect_dest` in `paths.local.json`. Either step also runs on its own —
+`04_deploy/model_card.py <name>...` or `04_deploy/export_onnx.py <name>
+--dest ...` — see each script's header for its own flags.
 
 ---
 

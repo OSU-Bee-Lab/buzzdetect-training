@@ -1,6 +1,6 @@
 """Export a trained model into buzzdetect's engine/models/.
 
-    conda run -n buzzdetect-train python tools/export_onnx.py cv_baseline
+    conda run -n buzzdetect-train python 04_deploy/export_onnx.py cv_baseline
 
 Reads models/<name>/ here and writes <dest>/<name>/ over in buzzdetect. The
 ONNX half is one graph that takes a waveform and returns predictions -- the
@@ -47,9 +47,10 @@ import tempfile
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config as cfg  # noqa: E402
-from tools.onnx_passes import count_fusable, optimize  # noqa: E402
+from onnx_passes import count_fusable, optimize  # noqa: E402
 
 # Per-machine -- buzzdetect's checkout lives wherever this box put it. Set
 # "buzzdetect_dest" in paths.local.json (gitignored; see
@@ -306,7 +307,7 @@ def export_graph(model, path_onnx):
     n_left = count_fusable(model)
     if n_left:
         raise SystemExit(f'{n_left} Conv+Relu pairs were left unfused; '
-                         f'tools/onnx_passes.py did not do its job.')
+                         f'04_deploy/onnx_passes.py did not do its job.')
     # Nothing to fuse is a different thing, and not necessarily wrong: a
     # backbone using Relu6 or HardSwish has no plain Conv->Relu, and neither
     # does one whose batchnorms never folded. Worth saying out loud, because on

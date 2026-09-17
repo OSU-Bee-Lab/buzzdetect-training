@@ -16,8 +16,10 @@ This is the project for training new passive acoustic monitoring pollinator dete
 | 1\. Combine annotations per effort | `01_annotate/MAKE.R` | R |
 | 2\. Build a set, extract embeddings | `02_set/sets/<set>/build.R`, `02_set/main.py` | R, Python |
 | 3\. Train (leave-one-fold-out CV) | `03_train/main.py` | Python |
+| 4\. Deploy (export to buzzdetect) | `04_deploy/main.py` | Python |
 
-Root `main.py` chains 2→3 and only works from the project root.
+Root `main.py` chains 2→3 and only works from the project root. Stage 4 is
+separate and manual.
 
 Environment: `conda run -n buzzdetect-train python <script>` for anything short;
 long jobs are below. Embedder interface: `embedders/embedding.py`. Model loader:

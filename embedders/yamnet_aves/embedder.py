@@ -145,7 +145,7 @@ class EmbedderYamnetAves(BaseEmbedder):
         model or framework: export each piece separately, bridge the shared
         input into each piece's expected shape with a few Slice/Reshape
         nodes, run onnx.compose.add_prefix on each piece to avoid name
-        collisions, and Concat the outputs. Nothing in tools/export_onnx.py
+        collisions, and Concat the outputs. Nothing in 04_deploy/export_onnx.py
         needs to know any of this -- it only calls to_onnx() and checks the
         result against embed().
         """
@@ -220,7 +220,7 @@ class EmbedderYamnetAves(BaseEmbedder):
         # earlier version of this worked around it with an If node that
         # skipped the sub-models entirely on zero frames; that broke
         # optimize()'s batchnorm-fold/Conv+Relu passes and write_fp16() in
-        # tools/export_onnx.py, both of which only look at the top-level node
+        # 04_deploy/export_onnx.py, both of which only look at the top-level node
         # list and so silently saw zero convolutions once the real ones were
         # nested inside an If branch. This version stays a single flat graph
         # instead: always run at least one frame (right-padded with silence

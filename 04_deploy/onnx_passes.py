@@ -8,7 +8,7 @@ identity and `fuse_conv_relu` only changes which kernel applies the `max()`.
 Depends on `onnx` alone: no TensorFlow, no onnxruntime, nothing from this repo.
 The pair also runs as a CLI, for a graph that came from somewhere else:
 
-    python tools/onnx_passes.py model.onnx model.onnx
+    python 04_deploy/onnx_passes.py model.onnx model.onnx
 
 `fuse_conv_relu` is vendored from buzzdetect's investigation of why the ONNX
 path was slower than TensorFlow on CUDA (`benchmarks/onnx-vs-tf/RESULTS.md` §8

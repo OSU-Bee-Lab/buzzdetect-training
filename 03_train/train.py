@@ -794,6 +794,6 @@ def train_set(name, embeddername, setname, name_translation,
 
     # Suggested per-class thresholds, from the rotations' held-out predictions
     # (not the shipped model, which has no held-out audio of its own), into
-    # config_model.json -- where tools/export_onnx.py picks them up -- and a
+    # config_model.json -- where 04_deploy/export_onnx.py picks them up -- and a
     # README skeleton to fill in. See thresholds.py.
     write_model_card(dir_model_full, name)
