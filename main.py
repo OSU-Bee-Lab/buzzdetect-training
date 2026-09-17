@@ -38,8 +38,8 @@ def load_stage(path, module_name):
     spec.loader.exec_module(mod)
     return mod
 
-def main(modelname, setname, embeddername, name_translation, epochs_max, clear,
-         aug_dirnames=None, verbose=False, n_workers=2, snip_workers=2, patience=50,
+def main(modelname, setname, embeddername, name_translation, epochs, clear,
+         aug_dirnames=None, verbose=False, n_workers=2, snip_workers=2,
          overlap_event_prop=None, framehop_prop=None, assume_yes=False,
          stop_tol=0.01, skip_cv=False, surprisal=True):
     import tensorflow  # noqa: F401  -- load-order side effect; see header comment
@@ -77,10 +77,9 @@ def main(modelname, setname, embeddername, name_translation, epochs_max, clear,
         embeddername=embeddername,
         setname=setname,
         name_translation=name_translation,
-        epochs_max=epochs_max,
+        epochs=epochs,
         aug_dirnames=aug_dirnames,
         verbose=verbose,
-        patience=patience,
         assume_yes=assume_yes,
         stop_tol=stop_tol,
         skip_cv=skip_cv,
@@ -95,9 +94,10 @@ if __name__ == '__main__':
     parser.add_argument('--set', dest='setname', default='medium')
     parser.add_argument('--embedder', default='yamnet')
     parser.add_argument('--translation', default='general')
-    parser.add_argument('--epochs', type=int, default=400)
-    parser.add_argument('--patience', type=int, default=50,
-                        help='EarlyStopping patience for the per-fold submodels')
+    parser.add_argument('--epochs', type=int, default=400,
+                        help='epoch budget: every rotation trains this many '
+                             'epochs, fixed, no early stopping. See '
+                             '03_train/CLAUDE.md.')
     parser.add_argument('--stop-tol', type=float, default=0.01, dest='stop_tol',
                         help='shipped-model epoch count: fraction of the consensus '
                              'val_loss curve span to stop short of its floor '
@@ -122,23 +122,28 @@ if __name__ == '__main__':
     parser.add_argument('-y', '--yes', action='store_true', dest='assume_yes',
                         help='accept untranslated labels without confirming')
     parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--cpu', action='store_true',
+                        help='hide the GPU from stage 2 extraction and stage 3 training '
+                             '(sets BUZZDETECT_NO_GPU=1)')
     parser.add_argument('--no-surprisal', action='store_false', dest='surprisal',
                         help='skip the per-frame surprisal CSVs under '
                              '<model>/surprisal/ (written by default)')
     args = parser.parse_args()
+
+    if args.cpu:
+        os.environ['BUZZDETECT_NO_GPU'] = '1'
 
     main(
         modelname=args.model,
         setname=args.setname,
         embeddername=args.embedder,
         name_translation=args.translation,
-        epochs_max=args.epochs,
+        epochs=args.epochs,
         clear=args.clear,
         aug_dirnames=args.aug_dirnames,
         verbose=args.verbose,
         n_workers=args.n_workers,
         snip_workers=args.snip_workers,
-        patience=args.patience,
         stop_tol=args.stop_tol,
         skip_cv=args.skip_cv,
         surprisal=args.surprisal,

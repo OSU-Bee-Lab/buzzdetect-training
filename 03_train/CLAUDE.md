@@ -5,9 +5,17 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
 
 ## Invariants
 
+- **`train_set` refuses to start on the Metal PluggableDevice** (`train._forbid_metal`,
+  added 2026-09-17). macOS has no CUDA path, so any GPU
+  `tf.config.list_logical_devices('GPU')` finds there is Metal. Confirmed
+  again this era: a shipped model's own training loss climbed for 20+ epochs
+  after an early minimum (`test_config_preview`), cleared immediately on CPU
+  with no other change — consistent with the earlier NaN-within-10-epochs
+  finding below, just a milder symptom. Run with `--cpu` (all three
+  `main.py` entry points have it) or `BUZZDETECT_NO_GPU=1`.
 - **Validation is always a whole fold, never a split within one.** A within-fold
-  split leaks site identity into the early-stopping signal. There is no
-  snip-level splitter and there should not be one; README explains why.
+  split leaks site identity into the val_loss curve. There is no snip-level
+  splitter and there should not be one; README explains why.
 - **No augmentation may cross a fold boundary.** Every augmented frame must be
   derivable from the source fold's audio alone: noise/volume transforms of one
   fold's frames, or mixes of two frames *from the same fold*. A `CombineSpec` /
@@ -16,8 +24,8 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
   over a different site's background" framing is. `load_augmented` loads augment
   dirs per training fold, so a cross-fold-paired frame carries an out-of-fold
   recording's embedding signature into the training pool, and when that fold
-  rotates in as validation the early-stopping signal and the held-out metrics
-  are both contaminated. This inflates the number purely through leakage (the
+  rotates in as validation the val_loss curve and the held-out metrics are
+  both contaminated. This inflates the number purely through leakage (the
   models here are extremely sensitive to it) and is not a real gain. The rule
   also bars any augmentation whose parameters (noise floor, SNR target, mix
   ratio, class balance) are fit on statistics pooled across folds rather than
@@ -64,8 +72,8 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
   `callbacks.py`, plotted by `plot_history.py::plot_sens_history`. It counts
   every buzz frame, quiet included, so the curves stay comparable with the ones
   already on disk.
-- **The stopping rule is `--fixed-epochs`, and it is the default.** Every
-  rotation trains exactly `--fixed-epochs` (400) with no early stopping and no
+- **The stopping rule is the fixed `--epochs` budget, and it is the default.**
+  Every rotation trains exactly `--epochs` (400) with no early stopping and no
   restore-best, and ships its final weights — no epoch selection of any kind,
   so every arm of a comparison is scored at one identical epoch. This replaced
   `val_loss` early stopping on 2026-09-11. That rule carried no measurable
@@ -82,12 +90,25 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
   gaining past 250 was never tested. The budget ladder is an early experiment
   of this era, and it sets the number for everything after it.
 
-  `--early-stop` restores the old rule, kept so the archived era reproduces.
-  **Never mix the two rules in one comparison.** Each run records which it used
-  in `config_model.json`'s `epoch_rule`. A cross-fold epoch rule stays
-  available offline via `tools/honest_epoch.py`; on a fixed-budget run every
-  fold's curve runs the full length, so that tool's truncation caveat does not
-  bind.
+  The old per-fold rule has no flag anymore (2026-09-17) — it was removed
+  outright rather than kept as an `--early-stop` option, since it is strictly
+  worse for a rotation and its only other use is superseded below. A
+  cross-fold epoch rule stays available offline via `tools/honest_epoch.py`;
+  on a fixed-budget run every fold's curve runs the full length, so that
+  tool's truncation caveat does not bind.
+- **The shipped model always picks its own epoch count off the rotation
+  curves — there is no flag for a raw fixed-budget shipped model.**
+  `--train-shipped` (or `--skip-cv`) trains the shipped model on every
+  `rotate` + `train` fold pooled, with nothing held out to monitor its own
+  training. Instead `train._consensus_epoch` reads the *rotations'* pooled
+  `val_loss` curves — weighted running-min, min-max normalised, averaged by
+  validation-frame count, stopped `--stop-tol` short of the floor — and trains
+  the shipped model exactly that many epochs, blind. This works regardless of
+  which fixed budget the rotations ran, because every rotation's curve is now
+  always full-length (no early stopping to truncate it). If no fold results
+  exist yet, it falls back to the raw `--epochs` budget and prints an
+  overfitting warning — this means the rotations haven't been trained, and
+  should be, before shipping.
 - **The head is a bare linear probe — no dropout, no hidden layer.** `--dropout`
   defaults to 0.0. Dropout was 0.2 and hardcoded through the 2026-09 era; it is
   a regulariser tuned on YAMNet's 89.6%-sparse non-negative code, and on a

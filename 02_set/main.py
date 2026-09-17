@@ -38,7 +38,14 @@ if __name__ == '__main__':
                         help='frame hop as a proportion of frame length; 1 = no '
                              'overlap (ignored if the set already has a config_extract.json)')
     parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--cpu', action='store_true',
+                        help='hide the GPU from extraction (sets BUZZDETECT_NO_GPU=1). '
+                             'Embedder subprocesses and extract.py::_gpu_visible() '
+                             'read this at fork time.')
     args = parser.parse_args()
+
+    if args.cpu:
+        os.environ['BUZZDETECT_NO_GPU'] = '1'
 
     multiprocessing.set_start_method('fork', force=True)
 

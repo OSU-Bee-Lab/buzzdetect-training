@@ -10,13 +10,6 @@ import argparse
 import os
 import sys
 
-# tensorflow-metal (Apple GPU) produces non-finite training loss within a few
-# epochs on this data; CPU does not, and is ~GPU speed for the 1024-d probe.
-# CUDA_VISIBLE_DEVICES does not touch the Metal pluggable device, so hide the
-# GPU explicitly. Opt-in via BUZZDETECT_NO_GPU=1.
-if os.environ.get('BUZZDETECT_NO_GPU'):
-    tensorflow.config.set_visible_devices([], 'GPU')
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -34,26 +27,18 @@ if __name__ == '__main__':
                              'bare linear probe; dropout was 0.2 and hardcoded '
                              'through the 2026-09 era, and is now something an '
                              'experiment turns on rather than a premise.')
-    parser.add_argument('--fixed-epochs', type=int, default=400, dest='fixed_epochs',
-                        help='THE STOPPING RULE (default 400). Train every '
+    parser.add_argument('--epochs', type=int, default=400,
+                        help='THE EPOCH BUDGET (default 400). Train every '
                              'rotation for exactly this many epochs, with no '
                              'early stopping and no restore-best, and ship the '
-                             'final weights. No epoch selection of any kind '
-                             'happens, so every arm of a comparison is scored '
-                             'at one identical epoch. Vary it to run a budget '
-                             'ladder; 400 is provisional — see 03_train/CLAUDE.md.')
-    parser.add_argument('--early-stop', action='store_true', dest='early_stop',
-                        help='the pre-2026-09-11 rule: stop on the val_loss '
-                             'argmin with --patience, restoring the true best. '
-                             'Kept so the archived era stays reproducible. It '
-                             'undertrains the hard folds and is worth -0.031 to '
-                             '-0.040 against a fixed budget, so never mix the '
-                             'two rules in one comparison.')
-    parser.add_argument('--epochs', type=int, default=400,
-                        help='epoch cap under --early-stop only; ignored '
-                             'otherwise (--fixed-epochs is the budget).')
-    parser.add_argument('--patience', type=int, default=50,
-                        help='EarlyStopping patience under --early-stop only')
+                             'final weights. No per-fold epoch selection of '
+                             'any kind happens, so every arm of a comparison '
+                             'is scored at one identical epoch. Vary it to run '
+                             'a budget ladder; 400 is provisional — see '
+                             '03_train/CLAUDE.md. The shipped model (see '
+                             '--train-shipped) does not use this budget '
+                             'directly: it reads a data-driven epoch count off '
+                             'the rotation val_loss curves instead.')
     parser.add_argument('--stop-tol', type=float, default=0.01, dest='stop_tol',
                         help='shipped-model epoch count: fraction of the consensus '
                              'val_loss curve span to stop short of its floor '
@@ -85,22 +70,34 @@ if __name__ == '__main__':
                         help='skip the per-frame surprisal CSVs under '
                              '<model>/surprisal/ (written by default, one file '
                              'per source ident, for finding bad annotations)')
+    parser.add_argument('--cpu', action='store_true',
+                        help='hide the GPU from training (sets BUZZDETECT_NO_GPU=1). '
+                             'tensorflow-metal (Apple GPU) produces non-finite training '
+                             'loss within a few epochs on this data; CPU does not, and is '
+                             '~GPU speed for the 1024-d probe. CUDA_VISIBLE_DEVICES does '
+                             'not touch the Metal pluggable device, so this is the only '
+                             'way to hide it.')
     args = parser.parse_args()
+
+    # tensorflow-metal (Apple GPU) produces non-finite training loss within a
+    # few epochs on this data; CPU does not, and is ~GPU speed for the 1024-d
+    # probe. CUDA_VISIBLE_DEVICES does not touch the Metal pluggable device,
+    # so hide the GPU explicitly. Opt-in via --cpu or BUZZDETECT_NO_GPU=1.
+    if args.cpu or os.environ.get('BUZZDETECT_NO_GPU'):
+        os.environ['BUZZDETECT_NO_GPU'] = '1'
+        tensorflow.config.set_visible_devices([], 'GPU')
 
     train_set(
         name=args.name,
         embeddername=args.embedder,
         setname=args.setname,
         name_translation=args.translation,
-        epochs_max=args.epochs,
+        epochs=args.epochs,
         aug_dirnames=args.aug_dirnames,
         verbose=args.verbose,
-        patience=args.patience,
         assume_yes=args.assume_yes,
         stop_tol=args.stop_tol,
         skip_cv=args.skip_cv,
-        # --early-stop turns the fixed budget off; they are one rule, not two.
-        fixed_epochs=None if args.early_stop else args.fixed_epochs,
         dropout=args.dropout,
         # --skip-cv means 'shipped model only', so it has to turn it on.
         train_shipped=args.train_shipped or args.skip_cv,

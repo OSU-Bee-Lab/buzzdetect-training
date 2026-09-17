@@ -289,7 +289,7 @@ default.
 ```bash
 conda run -n buzzdetect-train python 03_train/main.py \
   --name <name> --set <set> --embedder <emb> --translation <t> \
-  [--fixed-epochs 400] [--dropout 0.0] [--early-stop [--epochs 400] [--patience 50]] \
+  [--epochs 400] [--dropout 0.0] \
   [--stop-tol 0.01] [--skip-cv] [--augment <aug_dir> ...] [-y] [--verbose]
 ```
 
@@ -299,12 +299,9 @@ conda run -n buzzdetect-train python 03_train/main.py \
 | `--set` | `medium` | set to train on |
 | `--embedder` | `yamnet` | must already be extracted for this set |
 | `--translation` | `general` | CSV under the set's `translations/`, falling back to the project-wide `translations/` |
-| `--fixed-epochs` | `400` | **the stopping rule.** Train every rotation exactly this many epochs — no early stopping, no restore-best, no epoch selection of any kind. Every arm of a comparison is then scored at one identical epoch |
+| `--epochs` | `400` | **the epoch budget.** Train every rotation exactly this many epochs — no early stopping, no restore-best, no per-fold epoch selection of any kind. Every arm of a comparison is then scored at one identical epoch |
 | `--dropout` | `0.0` | input dropout before the class logits. The baseline head is a bare linear probe; dropout is an experiment, not a premise |
-| `--early-stop` | — | the pre-2026-09-11 rule: stop at the `val_loss` argmin. Kept so archived runs reproduce. Never mix it with fixed-budget runs in one comparison — it is worth 0.031 to 0.040 on its own |
-| `--epochs` | `400` | epoch cap under `--early-stop` only |
-| `--patience` | `50` | `EarlyStopping` patience (`min_delta` 0.002), `--early-stop` only |
-| `--stop-tol` | `0.01` | shipped-model epoch count under `--early-stop`: stop this fraction short of the consensus val_loss floor (larger = fewer epochs). Ignored under a fixed budget, which ships the same budget |
+| `--stop-tol` | `0.01` | shipped-model epoch count: stop this fraction short of the pooled rotation val_loss curve's floor (larger = fewer epochs). See `train._consensus_epoch` |
 | `--skip-cv` | — | train no rotations; build only the shipped model, epoch count from the fold results already on disk |
 | `--train-shipped` | — | also train the shipped model after the rotations (off by default) |
 | `--only-folds` | — | run only the named rotations; cannot supply a shipped epoch count |
@@ -361,11 +358,10 @@ frames would translate to nothing and be dropped silently.
 ### What actually gets trained
 
 Per rotation: hold out one `rotate` fold, train on every other `rotate` fold
-plus all `train` folds for exactly `--fixed-epochs` epochs, then score the
+plus all `train` folds for exactly `--epochs` epochs, then score the
 held-out fold. The held-out fold is still evaluated every epoch, but only to
 record curves — **nothing stops on it and no epoch is selected**, so every arm
-of a comparison is scored at one identical epoch. `--early-stop` restores the
-old `val_loss` rule for reproducing archived runs. Fold model binaries are not
+of a comparison is scored at one identical epoch. Fold model binaries are not
 kept — only their scores and training artifacts.
 
 The **shipped model** is a separate, opt-in step: `--train-shipped` during the
@@ -375,15 +371,16 @@ depends on it — it is a deliverable, wanted once at the end of a search rather
 than in every run of one.
 
 When it does run it trains on `rotate` + `train` pooled. Nothing is held out,
-so there's nothing to monitor — and under the default rule nothing needs
-monitoring: it trains the same `--fixed-epochs` budget every rotation ran.
-Under `--early-stop` the budget is instead read off the rotations' pooled
-`val_loss` curves (`train._consensus_epoch`) — each fold's "best so far" trace,
-min-max normalised, averaged with weight by validation-frame count, stopped
+so there's nothing to monitor during its own training — instead its epoch
+count is always read off the rotations' pooled `val_loss` curves
+(`train._consensus_epoch`) — each fold's "best so far" trace, min-max
+normalised, averaged with weight by validation-frame count, stopped
 `--stop-tol` short of the averaged floor; on a frozen-embedding probe the
 per-fold argmins scatter by 100+ epochs in a flat basin, so their `median`
-lurches with fold composition and the pooled curve is steadier. It's the only
-model saved with a binary, and it gets scored on each `holdout` fold.
+lurches with fold composition and the pooled curve is steadier. If no fold
+results exist yet, it falls back to the raw `--epochs` budget with an
+overfitting warning — run the rotations first. It's the only model saved with
+a binary, and it gets scored on each `holdout` fold.
 
 The CV loop resumes — folds with a `config_model.json` are skipped, and the
 summary still reads them off disk — so a re-run after an interruption only
@@ -634,11 +631,12 @@ doesn't. `folds_sx.csv` carries a `precision` column because it is what an
 operator sees in the output, but read it against that fold's own buzz density,
 which is a property of what got annotated.
 
-Under `--early-stop` only, the per-fold and pooled numbers are mildly
-optimistic: each fold chose its own stopping epoch on the fold it's scored
-against. The default fixed budget selects nothing. See
-[There is no `validate` role](#there-is-no-validate-role) for how much that's
-worth and how to remove it if it ever matters.
+Under the old per-fold `val_loss` early-stopping rule (removed 2026-09-11 for
+rotations, and outright as of the shipped-model rework below), the per-fold
+and pooled numbers were mildly optimistic: each fold chose its own stopping
+epoch on the fold it's scored against. The current fixed budget selects
+nothing. See [There is no `validate` role](#there-is-no-validate-role) for how
+much that was worth.
 
 ---
 
@@ -715,9 +713,12 @@ Each rotation's held-out fold *is* its validation set. A separate `validate`
 role would cost a second deployment per rotation, and which deployment drew the
 short straw would swing everything read off it — several folds here hold only a
 few dozen seconds of buzz, where `val_loss` is mostly a measure of ambient
-reconstruction. Under the default fixed budget this costs nothing at all,
-because no decision is taken from that fold's curve; the argument below is what
-matters under `--early-stop`.
+reconstruction. Under the fixed budget this costs nothing at all, because no
+per-fold decision is taken from that fold's curve — it's only recorded, then
+read in pooled form by the shipped model's `_consensus_epoch`. The argument
+below is historical: it describes the cost of the pre-2026-09-11 per-fold
+`val_loss` early-stopping rule, which has since been removed outright (not just
+defaulted off) rather than kept as a `--early-stop` option.
 
 **Never split within a fold to make a validation set.** Snips from one
 deployment share a recorder, a site, a background, and a species assemblage, so

@@ -8,7 +8,7 @@ Results from different eras may be directionally informative within an era, but 
 **This era (`cv-medium-v3`) started 2026-09-11.
 Three things moved at the cutover: the annotations were revised (adding
 a `_quiet` tag), scoring split into `sensitivity` and `sensitivity_exclquiet`,
-and `--fixed-epochs` became the stopping rule, worth +0.031 to +0.040 by itself.
+and the fixed `--epochs` budget became the stopping rule, worth +0.031 to +0.040 by itself.
 Old verdicts are leads, not answers: `temporal-context` was a clear negative in
 era 1 and, rerun, the largest gain in era 2. Rerun rather than defer.
 
@@ -67,9 +67,11 @@ in addition to the baseline.
 - **Training set: `medium`**, always. The set has 8 rotating folds for evaluation.
   You may use the `lite` set for troubleshooting and `tiny` for smoke tests; draw no conclusions from either.
 - **Never train or run a CV on `large`.** This set is reserved for production-ready training runs.
-- **Use `--fixed-epochs`, not early stopping.**
-  `--early-stop` exists only so the archived era reproduces;
-  `config_model.json`'s `epoch_rule` records which rule a run used.
+- **Every rotation trains the fixed `--epochs` budget.** There is no
+  early-stopping option; it was removed outright (2026-09-17) after
+  measuring it undertrained hard folds unevenly. The shipped model's epoch
+  count is always read off the rotations' pooled val_loss curves instead
+  (`train._consensus_epoch`) — no flag needed.
 - **Prefer structure to hyperparameters.** Annotation keeps moving the data;
   hyperparameter results don't survive that, large one-directional structural
   results usually do.

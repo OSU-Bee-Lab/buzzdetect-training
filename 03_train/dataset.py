@@ -263,6 +263,7 @@ def folds_by_role(roles, role):
 
 # Note: no snip-level train/val splitter here, deliberately. Snips from one
 # deployment share a recorder, a site and a background, so a within-fold split
-# leaks site identity into the early-stopping signal and biases the stopping
-# epoch late. Submodels early-stop on their held-out fold instead; the shipped
-# model has no monitor and trains to the median of their best epochs.
+# leaks site identity into the val_loss curve and biases where a stopping
+# point would land. Rotations validate on their held-out fold (but don't stop
+# on it — fixed budget); the shipped model has no fold of its own to validate
+# on and reads its epoch count off the rotations' pooled curves instead.

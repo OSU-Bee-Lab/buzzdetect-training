@@ -3,6 +3,7 @@ import json
 import math
 import os
 import pickle
+import platform
 import re
 import shutil
 import sys
@@ -24,7 +25,7 @@ from embedders.embedding import load_embedder
 from plot_history import plot_history, plot_sens_history
 from write_model_py import write_model_py
 
-from callbacks import SensAtFPR, RestoreTrueBest
+from callbacks import SensAtFPR
 
 from sx import summarize_folds, format_sx_report, _fold_sens, FPR_TARGETS, FNAME_SX_SUMMARY
 from surprisal import write_fold_surprisal
@@ -107,13 +108,12 @@ def _eval_arrays(samples, classes):
 def _load_data(setname, embeddername, folds_train, name_translation, aug_dirnames,
                val_fold=None):
     """Pool folds_train for training; val_fold, if given, is a whole separate
-    deployment used as the early-stopping monitor.
+    deployment used to record the val_loss curve (nothing stops on it).
 
     Validation is always a whole fold, never a split within one. Snips from a
     deployment share a recorder, a site and a background, so a within-fold
-    split would leak site identity into the stopping signal and bias the
-    stopping epoch late. val_fold=None means no monitor at all — the caller
-    fixes the epoch count instead.
+    split would leak site identity into that curve. val_fold=None means no
+    curve at all — the caller fixes the epoch count instead.
 
     Augmented embeddings go to training only.
     """
@@ -266,8 +266,8 @@ def _collect_fold_results(dir_folds, folds_rotate):
 def _consensus_epoch(summary_rows, tol):
     """Shipped-model epoch count, read off the pooled per-fold val_loss curves.
 
-    Each rotation early-stops at its own val_loss argmin, but on a frozen-
-    embedding probe that basin is very flat — the per-fold argmins scatter by
+    Each rotation trains the full fixed budget, but on a frozen-embedding
+    probe the val_loss basin is very flat — the per-fold argmins scatter by
     100+ epochs and their median lurches with fold composition. Instead:
 
       1. extend every fold's curve to the longest length, holding its own min
@@ -309,9 +309,9 @@ def _consensus_epoch(summary_rows, tol):
 
 
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
-               data: TrainingData, epochs_max, aug_dirnames, verbose,
-               held_out_fold, save_binary, epochs_fixed=None, patience=50,
-               stop_tol=None, fixed_epochs=None, dropout=0.0):
+               data: TrainingData, epochs, aug_dirnames, verbose,
+               held_out_fold, save_binary, epochs_shipped=None,
+               stop_tol=None, dropout=0.0):
     """Train one model. Returns (result_row, model); (None, None) if the model
     directory is already populated."""
     if not can_write(dir_model):
@@ -319,8 +319,8 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         return None, None
 
     if verbose:
-        monitor = (f'early stopping on {data.val_fold} ({data.frames_val} frames)'
-                   if data.val_fold else f'{epochs_fixed} fixed epochs, no monitor')
+        monitor = (f'validating on {data.val_fold} ({data.frames_val} frames), fixed budget'
+                   if data.val_fold else f'{epochs_shipped} fixed epochs, no monitor')
         print(f'[{modelname}] training on {len(data.folds_train)} fold(s), '
               f'{data.frames_train} frames; {monitor}...', flush=True)
     os.makedirs(dir_model, exist_ok=True)
@@ -362,7 +362,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         # monitor. Train a fixed number of epochs instead, set by the caller
         # from the median best epoch across the rotations.
         history = model.fit(
-            data.train_tf, epochs=epochs_fixed,
+            data.train_tf, epochs=epochs_shipped,
             callbacks=[tf.keras.callbacks.TerminateOnNaN()],
             # _to_tf already applies .shuffle(); say so, or Keras warns that it's
             # ignoring shuffle=True on a Dataset input every run.
@@ -371,10 +371,10 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             # leave the flag off (0) so per-epoch lines don't fill their context.
             verbose=1 if verbose else 0,
         )
-        best_epoch = epochs_fixed - 1
+        best_epoch = epochs_shipped - 1
         result = {
-            'n_epochs': epochs_fixed,
-            'best_epoch': epochs_fixed,
+            'n_epochs': epochs_shipped,
+            'best_epoch': epochs_shipped,
             'frames_train': data.frames_train,
         }
     else:
@@ -384,58 +384,43 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             *data.val_eval, data.classes.index('ins_buzz'), FPR_TARGETS,
             batch_size=data.size_batch,
         )
-        if fixed_epochs is not None:
-            # THE DEFAULT RULE. Every rotation trains exactly fixed_epochs and
-            # ships its final weights: no early stopping, no restore-best, no
-            # epoch selection of any kind. All arms of a comparison are scored
-            # at one identical epoch, so a capacity or normalisation change
-            # cannot be confounded by the stopping rule — and there is no
-            # nesting residual to apologise for, because no curve is consulted.
-            #
-            # It replaced val_loss early stopping on 2026-09-11. That rule
-            # carried no measurable *selection* optimism (-0.002 over 17 runs)
-            # but undertrained unevenly: 1_150 hit its val_loss argmin at epoch
-            # 2-32 under every embedder tried while its buzz curve climbed to
-            # e120-185, so that fold shipped a barely-trained probe. Removing
-            # it measured +0.031 and +0.040 on two embedders. Evidence:
-            # archive/2026-09-08_cv-medium-v2/ and
-            # exp/pairwise-rank:notes/new-era-audit.md.
-            #
-            # The sens curves are still persisted, so an offline cross-fold
-            # epoch rule (tools/honest_epoch.py) can pick a shared epoch below
-            # the budget as a diagnostic. On a fixed-budget run every fold's
-            # curve runs the full length, so that tool's truncation caveat does
-            # not bind.
-            history = model.fit(
-                data.train_tf,
-                epochs=fixed_epochs,
-                validation_data=data.val_tf,
-                callbacks=[sens_callback, tf.keras.callbacks.TerminateOnNaN()],
-                shuffle=False,  # _to_tf already shuffles
-                # --verbose is for a human watching: 1 = live progress bar.
-                # Agents leave the flag off (0) so per-epoch lines don't fill
-                # their context.
-                verbose=1 if verbose else 0,
-            )
-            best_epoch = len(history.history['val_loss']) - 1
-            best_val_loss = float(history.history['val_loss'][best_epoch])
-        else:
-            # --early-stop: the pre-2026-09-11 rule, kept so the archived era's
-            # runs stay reproducible. Do not mix it with fixed-budget runs in
-            # one comparison; it is worth +0.031 to +0.040 on its own.
-            callback = RestoreTrueBest(
-                monitor='val_loss', patience=patience, min_delta=0.002, restore_best_weights=True,
-            )
-            history = model.fit(
-                data.train_tf,
-                epochs=epochs_max,
-                validation_data=data.val_tf,
-                callbacks=[sens_callback, callback, tf.keras.callbacks.TerminateOnNaN()],
-                shuffle=False,  # _to_tf already shuffles; see the fixed-epochs fit above
-                verbose=1 if verbose else 0,
-            )
-            best_epoch = callback.best_epoch
-            best_val_loss = float(callback.best)
+        # THE ONLY ROTATION RULE. Every rotation trains exactly `epochs` and
+        # ships its final weights: no early stopping, no restore-best, no
+        # per-fold epoch selection. All arms of a comparison are scored at one
+        # identical epoch, so a capacity or normalisation change cannot be
+        # confounded by the stopping rule.
+        #
+        # It replaced val_loss early stopping on 2026-09-11. That rule carried
+        # no measurable *selection* optimism (-0.002 over 17 runs) but
+        # undertrained unevenly: 1_150 hit its val_loss argmin at epoch 2-32
+        # under every embedder tried while its buzz curve climbed to e120-185,
+        # so that fold shipped a barely-trained probe. Removing it measured
+        # +0.031 and +0.040 on two embedders. Evidence:
+        # archive/2026-09-08_cv-medium-v2/ and
+        # exp/pairwise-rank:notes/new-era-audit.md. Per-fold early stopping
+        # (once a --early-stop flag here) was removed outright rather than kept
+        # as an option — it is strictly worse for a rotation, and its only
+        # other use, deriving the shipped model's epoch count, is now read off
+        # the pooled rotation curves instead (see _consensus_epoch below),
+        # which every fold's full-length curve supports without it.
+        #
+        # The sens curves are still persisted, so an offline cross-fold epoch
+        # rule (tools/honest_epoch.py) can pick a shared epoch below the
+        # budget as a diagnostic. Every fold's curve runs the full length, so
+        # that tool's truncation caveat does not bind.
+        history = model.fit(
+            data.train_tf,
+            epochs=epochs,
+            validation_data=data.val_tf,
+            callbacks=[sens_callback, tf.keras.callbacks.TerminateOnNaN()],
+            shuffle=False,  # _to_tf already shuffles
+            # --verbose is for a human watching: 1 = live progress bar.
+            # Agents leave the flag off (0) so per-epoch lines don't fill
+            # their context.
+            verbose=1 if verbose else 0,
+        )
+        best_epoch = len(history.history['val_loss']) - 1
+        best_val_loss = float(history.history['val_loss'][best_epoch])
         result = {
             'n_epochs': len(history.history['val_loss']),
             'best_epoch': best_epoch + 1,
@@ -486,15 +471,10 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         'held_out_fold': held_out_fold,
         'folds_train': data.folds_train,
         'val_fold': data.val_fold,
-        'epochs_fixed': epochs_fixed,
-        'patience': patience,
+        'epochs_shipped': epochs_shipped,
         'stop_tol': stop_tol,
-        # Which stopping rule produced these weights. Recorded because a
-        # comparison across rules is not a comparison — it is worth more than
-        # most levers being tested (+0.031 to +0.040), and a run's rule was
-        # previously only inferable from whether best_epoch hit the cap.
-        'epoch_rule': 'fixed' if fixed_epochs is not None else 'early',
-        'fixed_epochs': fixed_epochs,
+        # The fixed budget every rotation trained for.
+        'epochs': epochs,
         'dropout': dropout,
     }
     # 'w' for the same reason as write_model_py's — can_write() is the gate
@@ -575,10 +555,41 @@ def _confirm_untranslated(setname, embeddername, folds, name_translation, assume
     return reply in ('y', 'yes')
 
 
+def _forbid_metal():
+    """Refuse to train on the Metal PluggableDevice.
+
+    There's no CUDA path on macOS, so any GPU tf.config.list_physical_devices
+    finds there *is* Metal — the same reasoning extract.py::_gpu_visible()
+    uses in reverse (it checks for /dev/nvidia0 rather than asking TF, because
+    Metal is the only GPU a Mac can report).
+
+    tensorflow-metal has a documented history of destabilizing training on
+    this project: NaNs within ~10 epochs in one case (03_train/CLAUDE.md), and
+    a shipped model's training loss climbing for 20+ epochs after an early
+    minimum in another (test_config_preview, 2026-09-17) — both cleared
+    immediately on CPU with no other change. Rather than let that surface
+    silently in a loss curve nobody is watching (the shipped model has none),
+    refuse to start.
+    """
+    # list_logical_devices (not list_physical_devices) so --cpu / BUZZDETECT_NO_GPU
+    # hiding it via set_visible_devices([], 'GPU') is respected: physical devices
+    # lists hardware presence regardless of visibility and would still trip this.
+    if platform.system() == 'Darwin' and tf.config.list_logical_devices('GPU'):
+        raise RuntimeError(
+            'TensorFlow sees a GPU on macOS -- this is the Metal PluggableDevice. '
+            'tensorflow-metal has produced non-finite or unstable training loss on '
+            'this project (see 03_train/CLAUDE.md, "Metal GPU NaN"); CPU has not, '
+            'and is ~GPU speed for this size of probe. Re-run with --cpu (or set '
+            'BUZZDETECT_NO_GPU=1) before importing tensorflow -- CUDA_VISIBLE_DEVICES '
+            'does not touch the Metal device.'
+        )
+
+
 def train_set(name, embeddername, setname, name_translation,
-              epochs_max=400, aug_dirnames=None, verbose=False, patience=50,
+              epochs=400, aug_dirnames=None, verbose=False,
               assume_yes=False, stop_tol=0.01, skip_cv=False, train_shipped=False,
-              only_folds=None, surprisal=True, fixed_epochs=400, dropout=0.0):
+              only_folds=None, surprisal=True, dropout=0.0):
+    _forbid_metal()
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -618,10 +629,11 @@ def train_set(name, embeddername, setname, name_translation,
 
     # CV: hold out one 'rotate' fold at a time, train on the other 'rotate'
     # folds plus every 'train' fold. The held-out fold doubles as the
-    # early-stopping monitor — a within-fold split would leak site identity
-    # into the stopping signal, and dedicating a second fold to it would cost
-    # another deployment. Fold model binaries are not kept, only their scores
-    # and training artifacts, archived under dir_folds.
+    # val_loss monitor whose curve feeds the shipped model's epoch count
+    # (_consensus_epoch) — a within-fold split would leak site identity into
+    # that signal, and dedicating a second fold to it would cost another
+    # deployment. Fold model binaries are not kept, only their scores and
+    # training artifacts, archived under dir_folds.
     #
     # --skip-cv trains no rotations at all: it goes straight to the shipped
     # model, taking its epoch count from whatever fold summaries are already on
@@ -643,7 +655,7 @@ def train_set(name, embeddername, setname, name_translation,
         data = _load_data(setname, embeddername, folds_train, name_translation,
                           aug_dirnames, val_fold=held_out)
         if data.frames_val == 0:
-            # Nothing to early-stop on or score against — a legitimate state if
+            # Nothing to validate or score against — a legitimate state if
             # every label in this deployment is ignored or excluded, but it
             # can't take a turn as the held-out fold.
             print(f'{tag}: no usable frames under this translation; skipping rotation')
@@ -651,9 +663,8 @@ def train_set(name, embeddername, setname, name_translation,
 
         result, model = _train_one(
             dir_model, modelname, embeddername, setname, name_translation,
-            data, epochs_max, aug_dirnames, verbose,
-            held_out, save_binary=False, patience=patience,
-            fixed_epochs=fixed_epochs, dropout=dropout,
+            data, epochs, aug_dirnames, verbose,
+            held_out, save_binary=False, dropout=dropout,
         )
         if result is None:
             continue
@@ -716,49 +727,47 @@ def train_set(name, embeddername, setname, name_translation,
         return
 
     # Shipped model: trains on every fold except 'holdout'. No fold is held
-    # out, so there is nothing clean left to monitor — the epoch count is read
-    # off the pooled rotation val_loss curves (_consensus_epoch), falling back
-    # to the median per-fold best epoch. Only model saved with a binary.
-    #
-    # Under the fixed-budget rule there is nothing to read: every rotation
-    # trained the whole budget, so the shipped model trains it too.
-    # _consensus_epoch reads val_loss argmins, which is the rule that was
-    # removed — consulting it here would reintroduce it through the back door.
-    epochs_fixed = epochs_max
-    if fixed_epochs is not None:
-        epochs_fixed = fixed_epochs
-        print(f'[{name}] shipped epoch count {epochs_fixed} '
-              f'(--fixed-epochs; the same budget every rotation ran)')
-    elif summary_rows:
+    # out, so there is nothing clean left to monitor during its own training —
+    # instead its epoch count is read off the pooled rotation val_loss curves
+    # (_consensus_epoch), falling back to the median per-fold best epoch, and
+    # to the raw --epochs budget (with a warning) only if no fold results
+    # exist at all. This is always attempted, regardless of what trained the
+    # rotations: every rotation now runs the same fixed budget, so every
+    # curve on disk is full-length and safe for _consensus_epoch to read (see
+    # the comment above the rotation fit() call).
+    if not summary_rows:
+        epochs_shipped = epochs
+        print(f'[{name}] WARNING: no fold results to take an epoch count from; '
+              f'training the shipped model for the full {epochs} epochs, '
+              f'unmonitored. This risks overfitting — run the CV rotations '
+              f'first so the shipped model can read a stopping point from them.')
+    else:
         n_curves = sum(1 for r in summary_rows if r.get('val_loss_curve'))
-        epochs_fixed = _consensus_epoch(summary_rows, stop_tol)
-        if epochs_fixed is not None:
-            print(f'[{name}] shipped epoch count {epochs_fixed} '
+        epochs_shipped = _consensus_epoch(summary_rows, stop_tol) if n_curves else None
+        if epochs_shipped is not None:
+            print(f'[{name}] shipped epoch count {epochs_shipped} '
                   f'(consensus val_loss curve over {n_curves}/{len(folds_rotate)} '
                   f'rotate folds, stop_tol={stop_tol})')
         else:
-            epochs_fixed = int(round(np.median([r['best_epoch'] for r in summary_rows])))
-            print(f'[{name}] shipped epoch count {epochs_fixed} '
+            epochs_shipped = int(round(np.median([r['best_epoch'] for r in summary_rows])))
+            print(f'[{name}] shipped epoch count {epochs_shipped} '
                   f'(median per-fold best epoch over {len(summary_rows)}/'
                   f'{len(folds_rotate)} rotate folds; no curves on disk)')
-    else:
-        print(f'[{name}] no fold results to take an epoch count from; '
-              f'training the shipped model for the full {epochs_max} epochs')
 
     folds_shipped = folds_rotate + folds_train_always
     data = _load_data(setname, embeddername, folds_shipped, name_translation,
                       aug_dirnames, val_fold=None)
     result, model = _train_one(
         dir_model_full, name, embeddername, setname, name_translation,
-        data, epochs_max, aug_dirnames, verbose,
-        None, save_binary=True, epochs_fixed=epochs_fixed, patience=patience,
-        stop_tol=stop_tol, fixed_epochs=fixed_epochs, dropout=dropout,
+        data, epochs, aug_dirnames, verbose,
+        None, save_binary=True, epochs_shipped=epochs_shipped,
+        stop_tol=stop_tol, dropout=dropout,
     )
 
     if result is None:
         return
 
-    print(f'[shipped] {name}: {epochs_fixed} fixed epochs on '
+    print(f'[shipped] {name}: {epochs_shipped} fixed epochs on '
           f'{len(folds_shipped)} fold(s), {data.frames_train} frames → {dir_model_full}')
 
     dir_set = cfg.dir_set(setname)
