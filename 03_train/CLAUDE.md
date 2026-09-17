@@ -52,6 +52,10 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
 - What the headline sens@FPR number means, and the two readings deliberately not
   reported — `sx.py`; its module docstring is the argument, README's "Reading
   the results" is the operator-facing version
+- Shipped-model thresholds and README skeleton — `thresholds.py`, run at the end
+  of `train_set` and by `tools/model_card.py`. Deliberately outside `sx.py`:
+  it is a deliverable, not a metric, and reads `predictions_classes.csv`, not
+  `predictions.csv`.
 - `resummarize.py` rebuilds `folds_sx.csv` for an already-trained model, no
   TensorFlow
 - Threshold sweeps (`metrics_by_group`, `metrics_at_fpr`, `metrics_at_precision`)

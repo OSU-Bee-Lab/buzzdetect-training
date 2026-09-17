@@ -28,6 +28,8 @@ from callbacks import SensAtFPR, RestoreTrueBest
 
 from sx import summarize_folds, format_sx_report, _fold_sens, FPR_TARGETS, FNAME_SX_SUMMARY
 from surprisal import write_fold_surprisal
+from thresholds import (class_predictions_frame, write_model_card,
+                        FNAME_PREDICTIONS_CLASSES)
 
 FNAME_PREDICTIONS = 'predictions.csv'
 FNAME_FOLD_SUMMARY = 'summary.json'
@@ -174,10 +176,12 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
 
 
 def _score_fold(model, setname, embeddername, fold, translation, classes):
-    """Score a trained model on a fold it never saw, ins_buzz only.
+    """Score a trained model on a fold it never saw.
 
-    Returns the frame-level (activation, correct) table, or None if the fold
-    has no usable frames. Every reported number is derived from this: it is the
+    Returns (predictions, predictions_classes), or (None, None) if the fold has
+    no usable frames. `predictions` is the ins_buzz frame-level (activation,
+    correct) table; `predictions_classes` carries every class's logit and
+    target for thresholds.py, which suggests a threshold per class. Every reported number is derived from this: it is the
     only per-fold result kept on disk, and sx.py and resummarize.py rebuild the
     sweeps from it on demand.
     """
@@ -185,17 +189,20 @@ def _score_fold(model, setname, embeddername, fold, translation, classes):
         cfg.dir_embeddings_fold(setname, embeddername, fold), translation,
     )
     if not samples:
-        return None
+        return None, None
 
     embeddings, correct, loudness, sample_id = _eval_arrays(samples, classes)
-    activation = model(embeddings, training=False)[:, classes.index('ins_buzz')].numpy()
+    logits = model(embeddings, training=False).numpy()
+    activation = logits[:, classes.index('ins_buzz')]
+    targets = np.concatenate([np.tile(np.asarray(s.target_array), (s.frames, 1))
+                              for s in samples])
 
     # `sample` goes last: tools/eval_sampling_sd.py reads this file by column
     # index, and older models' predictions.csv has to stay readable beside it.
     return pd.DataFrame({
         'activation_ins_buzz': activation, 'correct': correct, 'loudness': loudness,
         'sample': sample_id,
-    })
+    }), class_predictions_frame(logits, targets, sample_id, classes)
 
 
 def _format_sens(sens):
@@ -220,11 +227,13 @@ def _write_predictions(dir_out, model, setname, embeddername, fold, translation,
     Otherwise silent by design — the caller folds these numbers into its
     per-fold line rather than printing a second one here."""
     os.makedirs(dir_out, exist_ok=True)
-    predictions = _score_fold(model, setname, embeddername, fold, translation, classes)
+    predictions, predictions_classes = _score_fold(
+        model, setname, embeddername, fold, translation, classes)
     if predictions is None:
         return None, None
 
     predictions.to_csv(os.path.join(dir_out, FNAME_PREDICTIONS), index=False)
+    predictions_classes.to_csv(os.path.join(dir_out, FNAME_PREDICTIONS_CLASSES), index=False)
     cols, _ = _fold_sens(predictions, FPR_TARGETS)
     return predictions, cols['sensitivity']
 
@@ -773,3 +782,9 @@ def train_set(name, embeddername, setname, name_translation,
                 dir_model_full, model, setname, embeddername, fold,
                 data.translation, data.classes,
             )
+
+    # Suggested per-class thresholds, from the rotations' held-out predictions
+    # (not the shipped model, which has no held-out audio of its own), into
+    # config_model.json -- where tools/export_onnx.py picks them up -- and a
+    # README skeleton to fill in. See thresholds.py.
+    write_model_card(dir_model_full, name)

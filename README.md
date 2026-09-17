@@ -411,11 +411,13 @@ Needs at least two `rotate` folds, or it errors out.
 ```
 models/<name>/
 ├── model.keras, model.py, config_model.json   the shipped model
+├── README.md                  skeleton + generated threshold tables (see below)
 ├── annotations.csv, folds.csv                 copies of the set's, for provenance
 ├── weights.csv, translation.csv, history.pickle, loss_curves.svg
 ├── folds_sx.csv               the results: a row per fold, then a `total` row
 ├── folds/<fold>/              per-rotation archive (no model.keras)
 │   ├── predictions.csv        every held-out frame's activation and label
+│   ├── predictions_classes.csv  every class's logit and target per frame (thresholds.py)
 │   ├── summary.json           epochs, val_loss, frame counts, sens-monitor peaks
 │   ├── config_model.json, loss_curves.svg, sens_curves.svg
 ├── surprisal/<ident>_surprisal.csv   per-frame class activations + loss (see below)
@@ -423,6 +425,20 @@ models/<name>/
 ```
 
 `model.py` is generated so `models.load_model('<name>')` works for inference.
+
+**Suggested thresholds** are written once the shipped model is trained, by
+`03_train/thresholds.py`: for every class, the mean over rotations of the
+threshold that puts that held-out fold at 0.5% FPR (the same convention as
+`folds_sx.csv`'s `total` row, so the ins_buzz numbers agree). They go into
+`config_model.json` as `thresholds` (`{class: number}`, nothing else) and
+`threshold_stats` (SD, 95% t-interval over folds, folds reached, events,
+frames), and into `README.md`, whose `<!-- generated:... -->` blocks carry a
+suggestion table and per-class operating points at several FPR and precision
+targets. An existing README keeps everything outside those blocks. Add a
+one-line `description` to the config by hand; `tools/export_onnx.py` carries
+`description`, `thresholds`, `threshold_stats` and the README to buzzdetect.
+`tools/model_card.py <name>` redoes this for a model already on disk, falling
+back to `surprisal/` for models trained before `predictions_classes.csv`.
 
 **`folds_sx.csv` is the whole metrics summary.** Columns: `fold`, `fpr`,
 `threshold`, `sensitivity`, `sensitivity_exclquiet`, `sensitivity_<tier>` for

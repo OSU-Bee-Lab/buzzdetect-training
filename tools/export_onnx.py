@@ -109,6 +109,15 @@ AGREE_FP16 = 0.98
 # the embedder here (see where config_out is built in export()). Keep it in step
 # with the engine's src/inference/models.py::REQUIRED_CONFIG_KEYS. Training
 # metadata is not shipped.
+#
+# Three optional keys ride along for people rather than for the engine, which
+# ignores all of them: `description` (one line, written by hand -- the app shows
+# it under the model picker), and `thresholds`/`threshold_stats` (written by
+# 03_train/thresholds.py when the shipped model is trained; the engine copies
+# `thresholds` into each output folder's buzzdetect_manifest.json). A hand-written
+# description in the destination survives a re-export when the source has none.
+CONFIG_PASSTHROUGH = ('description', 'thresholds', 'threshold_stats')
+FNAME_README = 'README.md'
 
 
 def load_head(dir_src, n_embeddings):
@@ -646,6 +655,24 @@ def write_fp16(path_onnx, path_fp16, samples):
             f'itself convolutional, that boundary is in the wrong place.')
 
 
+def stage_readme(dir_src, dir_out, dir_stage):
+    """Carry the model's README.md over, unless the destination already holds a
+    different one. The README is filled in by hand, and it may have been filled
+    in on either side; overwriting prose silently is the one thing an export
+    must not do, so a conflict keeps the destination's copy and says so."""
+    src = os.path.join(dir_src, FNAME_README)
+    if not os.path.exists(src):
+        return
+    dest = os.path.join(dir_out, FNAME_README)
+    if os.path.exists(dest):
+        with open(src, 'rb') as a, open(dest, 'rb') as b:
+            if a.read() != b.read():
+                print(f'{FNAME_README}: {dest} differs from {src}; kept the '
+                      f'destination\'s. Copy it across by hand if the source is newer.')
+                return
+    shutil.copy2(src, os.path.join(dir_stage, FNAME_README))
+
+
 def export(modelname, dir_dest, force=False, path_audio=None,
            dir_src=None, embeddername=None):
     """Build the export in a staging dir, check it, and only then move it into place.
@@ -658,7 +685,8 @@ def export(modelname, dir_dest, force=False, path_audio=None,
     the directory. A model directory is not only the export: it also holds the
     README, the test plots, the training history and the weights table, none of
     which this tool produces and all of which replacing the directory would
-    delete.
+    delete. (The README is carried over when the destination has none; see
+    stage_readme.)
     """
     dir_src = dir_src or os.path.join(cfg.DIR_MODELS, modelname)
     if not os.path.isdir(dir_src):
@@ -714,8 +742,20 @@ def export(modelname, dir_dest, force=False, path_audio=None,
         # the graph actually returns none.
         'samples_floor_nonzero': floor_nonzero,
     }
+    config_dest = {}
+    path_config_dest = os.path.join(dir_out, 'config_model.json')
+    if os.path.exists(path_config_dest):
+        with open(path_config_dest) as f:
+            config_dest = json.load(f)
+    for key in CONFIG_PASSTHROUGH:
+        if config.get(key) not in (None, '', {}):
+            config_out[key] = config[key]
+        elif config_dest.get(key) not in (None, '', {}):
+            config_out[key] = config_dest[key]
     with open(os.path.join(dir_stage, 'config_model.json'), 'w') as f:
         json.dump(config_out, f, indent=2)
+
+    stage_readme(dir_src, dir_out, dir_stage)
 
     os.makedirs(dir_out, exist_ok=True)
     written = sorted(os.listdir(dir_stage))
