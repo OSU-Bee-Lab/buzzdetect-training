@@ -30,6 +30,7 @@
 !yamnet_aves_mid_avesshift
 !yamnet_pitchshift_decimate_x126
 !yamnet_pitchshift_decimate_x150
+!yamnet_pitchshift_aves_l345
 !yamnet_pitchshift_aves_all12
 
 # Ignore binary model files within unignored embedders
