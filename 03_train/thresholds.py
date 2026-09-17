@@ -19,13 +19,14 @@ What goes in config_model.json:
                       can use it without knowing this module exists. A class
                       reached by fewer than MIN_FOLDS folds is left out.
     threshold_stats   {class: {...}}. How much the number rests on: the FPR
-                      target, the across-fold SD and a 95% t-interval on the
-                      mean, the number of folds it was set on, and the buzz
-                      events (annotation samples) and frames behind them.
+                      target, the number of folds it was set on, the lowest
+                      and highest sensitivity and precision observed across
+                      those folds, and the buzz events (annotation samples)
+                      and frames behind them.
 
-The interval is over folds, i.e. over deployments. It says how well the mean
-is pinned down, not where a new deployment's own threshold will land; the SD
-is the better guide to that, and on eight folds both are wide.
+The low/high range is over folds, i.e. over deployments: it says where a new
+deployment's own operating point is likely to land, not how precisely the
+mean is pinned down.
 
 The source is each rotation's `predictions_classes.csv`: every class's logit
 and 0/1 target per held-out frame, plus the `sample` id. Models trained before
@@ -46,7 +47,7 @@ import re
 import numpy as np
 import pandas as pd
 
-from metrics import metrics_by_group, metrics_at_fpr, metrics_at_precision
+from metrics import metrics_by_group, metrics_at_fpr
 
 FNAME_PREDICTIONS_CLASSES = 'predictions_classes.csv'
 FNAME_CONFIG = 'config_model.json'
@@ -57,9 +58,6 @@ SUBDIR_SURPRISAL = 'surprisal'
 # The suggestion's operating point. sx.FPR_TARGETS is the same number; kept
 # separate so the headline metric and the shipped suggestion can diverge.
 FPR_SUGGESTED = 0.005
-# The rows of the README table.
-FPR_TABLE = (0.001, 0.005, 0.01, 0.05)
-PRECISION_TABLE = (0.90, 0.95, 0.99)
 # Fewer folds than this and there is no spread to report, so no suggestion.
 MIN_FOLDS = 2
 DIGITS = 3
@@ -140,31 +138,19 @@ def _sweep(df, cls):
     return metrics_by_group(one)
 
 
-def _fold_points(df, cls):
-    """One fold's operating points for one class: a row per FPR target and per
-    precision target. A target the fold cannot reach is NaN -- including, as in
-    sx._fold_sens, an FPR target that corresponds to less than one negative
-    frame, where metrics_at_fpr would otherwise interpolate inside one frame."""
+def _fold_point(df, cls):
+    """One fold's threshold, sensitivity and precision at FPR_SUGGESTED, or
+    None if the fold can't reach it -- including, as in sx.py's _fold_sens, a
+    target that corresponds to less than one negative frame, where
+    metrics_at_fpr would otherwise interpolate inside one frame."""
     correct = df[TARGET_PREFIX + cls].astype(bool)
     n_pos = int(correct.sum())
     n_neg = int((~correct).sum())
-    if n_pos == 0 or n_neg == 0:
+    if n_pos == 0 or n_neg == 0 or math.floor(FPR_SUGGESTED * n_neg) < 1:
         return None
     sweep = _sweep(df, cls)
-    fpr = metrics_at_fpr(sweep, FPR_TABLE).set_index('fpr')
-    for f in FPR_TABLE:
-        if math.floor(f * n_neg) < 1:
-            fpr.loc[f] = np.nan
-    prec = metrics_at_precision(sweep, PRECISION_TABLE).set_index('precision')
-    return fpr, prec
-
-
-def _t975(df):
-    """Two-sided 95% Student t critical value. scipy is not a dependency of
-    this stage, and the folds number in the single digits."""
-    table = (12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262,
-             2.228, 2.201, 2.179, 2.160, 2.145, 2.131)
-    return table[df - 1] if df <= len(table) else 2.0
+    row = metrics_at_fpr(sweep, [FPR_SUGGESTED]).set_index('fpr').loc[FPR_SUGGESTED]
+    return None if pd.isna(row['threshold']) else row
 
 
 def _count_events(df, cls):
@@ -173,72 +159,47 @@ def _count_events(df, cls):
 
 
 def compute(fold_frames, events_source='sample'):
-    """Suggested thresholds, their stats, and the README table.
+    """Suggested thresholds and their stats.
 
-    Returns (thresholds, stats, table): `thresholds` {class: float},
-    `stats` {class: dict}, and `table` a DataFrame with one row per
-    (class, target) holding the across-fold mean threshold, sensitivity,
-    precision and FPR, and how many folds reached it."""
+    Returns (thresholds, stats): `thresholds` {class: float} is the
+    across-fold mean of each fold's threshold at FPR_SUGGESTED; `stats`
+    {class: dict} carries the low/high range of sensitivity and precision
+    observed across those folds, plus how many folds and events back it."""
     if not fold_frames:
-        return {}, {}, pd.DataFrame()
+        return {}, {}
     classes = _classes_in(next(iter(fold_frames.values())))
 
-    thresholds, stats, rows = {}, {}, []
+    thresholds, stats = {}, {}
     for cls in classes:
-        per_fold_fpr, per_fold_prec = [], []
+        points = []
         events = frames = 0
         for df in fold_frames.values():
             events += _count_events(df, cls)
             frames += int(df[TARGET_PREFIX + cls].sum())
-            points = _fold_points(df, cls)
-            if points is None:
-                continue
-            per_fold_fpr.append(points[0])
-            per_fold_prec.append(points[1])
+            point = _fold_point(df, cls)
+            if point is not None:
+                points.append(point)
 
-        for target, key, per_fold in (
-                *[(f, 'fpr', per_fold_fpr) for f in FPR_TABLE],
-                *[(p, 'precision', per_fold_prec) for p in PRECISION_TABLE]):
-            if not per_fold:
-                continue
-            here = pd.DataFrame([pf.loc[target] for pf in per_fold]).dropna(subset=['threshold'])
-            rows.append({
-                'class': cls,
-                'target': f'{key} {target:g}',
-                'threshold': here['threshold'].mean() if len(here) else np.nan,
-                'sensitivity': here['sensitivity'].mean() if len(here) else np.nan,
-                'precision': (here['precision'].mean() if key == 'fpr' else target) if len(here) else np.nan,
-                'fpr': (target if key == 'fpr' else here['fpr'].mean()) if len(here) else np.nan,
-                'folds': len(here),
-            })
-
-        at = [pf.loc[FPR_SUGGESTED, 'threshold'] for pf in per_fold_fpr]
-        at = np.array([t for t in at if pd.notna(t)], dtype=np.float64)
         entry = {
             'fpr_target': FPR_SUGGESTED,
-            'folds': int(len(at)),
+            'folds': len(points),
             'folds_total': len(fold_frames),
             'events': events,
             'events_source': events_source,
             'frames': frames,
         }
-        if len(at) >= MIN_FOLDS:
-            mean = float(at.mean())
-            sd = float(at.std(ddof=1))
-            half = _t975(len(at) - 1) * sd / math.sqrt(len(at))
-            thresholds[cls] = round(mean, DIGITS)
+        if len(points) >= MIN_FOLDS:
+            here = pd.DataFrame(points)
+            thresholds[cls] = round(float(here['threshold'].mean()), DIGITS)
             entry.update({
-                'sd': round(sd, DIGITS),
-                'ci95_low': round(mean - half, DIGITS),
-                'ci95_high': round(mean + half, DIGITS),
+                'sensitivity_low': round(float(here['sensitivity'].min()), DIGITS),
+                'sensitivity_high': round(float(here['sensitivity'].max()), DIGITS),
+                'precision_low': round(float(here['precision'].min()), DIGITS),
+                'precision_high': round(float(here['precision'].max()), DIGITS),
             })
         stats[cls] = entry
 
-    table = pd.DataFrame(rows)
-    if len(table):
-        for c in ('threshold', 'sensitivity', 'precision', 'fpr'):
-            table[c] = table[c].round(DIGITS)
-    return thresholds, stats, table
+    return thresholds, stats
 
 
 def load_fold_frames(dir_model, classes):
@@ -275,7 +236,7 @@ def _markdown_table(df, cols):
     return '\n'.join(lines)
 
 
-GENERATED = ('thresholds', 'operating-points')
+GENERATED = ('thresholds',)
 
 
 def _block(name, body):
@@ -283,25 +244,26 @@ def _block(name, body):
             f'edits inside are lost -->\n{body}\n<!-- /generated:{name} -->')
 
 
-def render_blocks(thresholds, stats, table):
+def render_blocks(thresholds, stats):
     """The generated parts of the README, by block name."""
     suggested = pd.DataFrame([{
         'class': cls,
         'threshold': thresholds.get(cls, np.nan),
-        'ci95': (f"{s['ci95_low']:.3f} to {s['ci95_high']:.3f}" if 'ci95_low' in s else ''),
-        'sd': s.get('sd', np.nan),
-        'folds': f"{s['folds']}/{s['folds_total']}",
+        'sensitivity': (f"{s['sensitivity_low']:.3f} to {s['sensitivity_high']:.3f}"
+                         if 'sensitivity_low' in s else ''),
+        'precision': (f"{s['precision_low']:.3f} to {s['precision_high']:.3f}"
+                       if 'precision_low' in s else ''),
+        'deployments tested': f"{s['folds']}/{s['folds_total']}",
         'events': s['events'],
-        'frames': s['frames'],
     } for cls, s in stats.items()])
     omitted = [c for c in stats if c not in thresholds]
 
     lines = [
-        f'Suggested thresholds are the mean, across held-out deployments, of the '
-        f'threshold that puts each deployment at {FPR_SUGGESTED:.1%} false positive '
-        f'rate. `ci95` is a 95% t-interval on that mean; `sd` is the spread '
-        f'between deployments, the better guide to where a new deployment will land. '
-        f'`events` counts annotated samples, `frames` the frames they span.',
+        f'Suggested thresholds put each held-out deployment at {FPR_SUGGESTED:.1%} '
+        f'false positive rate; the threshold is the mean across deployments that '
+        f'reached it. Sensitivity and precision are given as the range observed '
+        f'across those deployments, from lowest to highest. `events` counts '
+        f'annotated samples.',
         '',
         _markdown_table(suggested, list(suggested.columns)) if len(suggested) else '_No rotations on disk._',
     ]
@@ -309,17 +271,7 @@ def render_blocks(thresholds, stats, table):
         lines += ['', f'No suggestion for {", ".join(omitted)}: fewer than {MIN_FOLDS} '
                       f'deployments could reach the target.']
 
-    points = ['Mean across held-out deployments at each target. Precision depends on '
-              'each deployment\'s base rate; FPR and sensitivity do not.']
-    if len(table):
-        for cls, g in table.groupby('class', sort=False):
-            points += ['', f'### {cls}', '',
-                       _markdown_table(g, ['target', 'threshold', 'sensitivity',
-                                           'precision', 'fpr', 'folds'])]
-    return {
-        'thresholds': _block('thresholds', '\n'.join(lines)),
-        'operating-points': _block('operating-points', '\n'.join(points)),
-    }
+    return {'thresholds': _block('thresholds', '\n'.join(lines))}
 
 
 def render_readme(modelname, blocks):
@@ -330,7 +282,6 @@ def render_readme(modelname, blocks):
         f'# {modelname}',
         '',
         '## At a glance',
-        '### Purpose',
         '_TODO_',
         '',
         '### Recommended threshold',
@@ -343,9 +294,6 @@ def render_readme(modelname, blocks):
         '',
         '## Training',
         '_TODO_',
-        '',
-        '## Operating points',
-        blocks['operating-points'],
         '',
     ])
 
@@ -375,9 +323,9 @@ def write_model_card(dir_model, modelname):
         print(f'[{modelname}] no per-class fold predictions or surprisal on disk; '
               f'no thresholds written')
         return {}, {}
-    thresholds, stats, table = compute(frames, source)
+    thresholds, stats = compute(frames, source)
     update_config(dir_model, thresholds, stats)
-    blocks = render_blocks(thresholds, stats, table)
+    blocks = render_blocks(thresholds, stats)
 
     path_readme = os.path.join(dir_model, FNAME_README)
     if not os.path.exists(path_readme):

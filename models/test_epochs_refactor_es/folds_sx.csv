@@ -1,0 +1,3 @@
+fold,fpr,threshold,sensitivity,precision,sensitivity_exclquiet,sensitivity_faint,sensitivity_quiet,sensitivity_background,sensitivity_untagged,sensitivity_normal,sensitivity_loud,buzz_frames,buzz_events,buzz_events_exclquiet,faint_frames,quiet_frames,background_frames,untagged_frames,normal_frames,loud_frames,neg_frames,frames_val,best_epoch
+JamesU - MustardBumbler/1_29,0.005,-0.485,0.02,0.196,0.02,,,,0.02,,,51,3,3,0,0,0,51,0,0,4,872,8
+total,0.005,-0.485,0.02,0.196,0.02,,,,0.02,,,51,3,3,0,0,0,51,0,0,4,872,8

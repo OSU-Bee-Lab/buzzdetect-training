@@ -15,7 +15,7 @@ only part of an idea is tested, trim to the untested remainder; don't narrate
 the tested part here.
 
 **State as of 2026-09-14.** Anchor **`cv_baseline_v3` = 0.330** (bare linear
-probe on frozen YAMNet, `--fixed-epochs 400`). Provisional era lead
+probe on frozen YAMNet, `--epochs 400`). Provisional era lead
 **`pitchshift-aves-mid` = 0.422** — `[yamnet(t), yamnet(octave-up(t)), AVES
 layers 6/9/12 mean-pooled]`, 4352-d, linear. Its repeat draw
 (`pitchshift-aves-mid-repeat`) was in flight when this was written; read its log
@@ -25,9 +25,9 @@ octave (+0.069), AVES middle layers (+0.026 to +0.032), `--hidden 1024` on
 `1_95`/`1_114` up both draws). Context stacking is honest at ~+0.02 to +0.03
 and **three times** landed on rich folds only.
 
-**Read the epoch rule before you read any number here.** `--fixed-epochs` is
-the default and selects no epoch. **A different budget N is a different rule**,
-so still run a matched control.
+**Read the epoch rule before you read any number here.** The fixed `--epochs`
+budget is the default and selects no epoch. **A different budget N is a
+different rule**, so still run a matched control.
 
 ## Which era a number came from
 

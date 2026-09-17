@@ -1,0 +1,5 @@
+fold,fpr,threshold,sensitivity,precision,buzz_frames,neg_frames,frames_val,best_epoch
+JamesU - MustardBumbler/1_29,0.005,-0.989,0.451,0.972,2144,27,7617,76
+Lily - Fit+Fast/2023_R3_Marysville/53,0.005,-1.097,0.397,0.926,1031,32,7540,82
+Luke - Diel Drivers/2026-05-06/1_95,0.005,0.115,0.036,0.305,433,35,7572,77
+total,0.005,-0.657,0.295,0.734,3608,94,22729,77
