@@ -90,3 +90,19 @@ class EmbedderYamnetContextAves(_yav.EmbedderYamnetAves):
     def embed(self, audio):
         """Contiguous audio in, one context-widened embedding per frame out."""
         return self.stack_context(self.embed_frames(audio))
+
+    def to_onnx(self, opset=17):
+        """yamnet_aves's own [YAMNet | AVES] to_onnx(), cropped to whole
+        frames the way embed_frames() crops its input, plus the context-stack
+        stack_context() applies to the YAMNet block in numpy -- see
+        embedders/onnx_context.py. The AVES block passes through unwidened.
+        """
+        from embedders.onnx_context import add_context_stack, crop_waveform_to_whole_frames
+
+        trunk_onnx = super().to_onnx(opset=opset)
+        trunk_onnx = crop_waveform_to_whole_frames(trunk_onnx, self.samplerate)
+        return add_context_stack(
+            trunk_onnx, k=self.context_frames,
+            widen_dim=_YAMNET_DIMS,
+            total_dim=_yav.EmbedderYamnetAves.n_embeddings,
+            n_embeddings=self.n_embeddings)

@@ -1,7 +1,9 @@
 # 02_set — building a set and extracting embeddings
 
 Three layers: snips → framed-audio cache → embeddings (`extract.py`). `--workers`
-parallelises framing+embedding only, and is capped at 1 when a GPU is visible; `extract_snips` reads source audio off the
+parallelises framing+embedding only, and is capped at 1 when a GPU is visible, and
+forced to 0 (in-process) on macOS outright -- `fork()` after a TF SavedModel loads
+segfaults the child there regardless of GPU. `extract_snips` reads source audio off the
 slow HDD and is always serial, so a large set's snip sync is a fixed up-front
 cost no worker count changes.
 

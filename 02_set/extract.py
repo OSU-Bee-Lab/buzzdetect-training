@@ -1,6 +1,7 @@
 import glob
 import hashlib
 import json
+import math
 import os
 import pickle
 import shutil
@@ -132,10 +133,20 @@ def collapse_labels(labellist):
     return collapse
 
 
+# What soundfile can read directly, plus formats buzzdetect handles via its own
+# drivers (engine/src/stream/drivers/) rather than soundfile. Mirrors how
+# buzzdetect itself builds driver_map in stream/audio.py.
+EXTENSIONS_AUDIO = set(sf.available_formats().keys()) | {'mp3', 'mp4', 'mts', 'wma'}
+EXTENSIONS_AUDIO = {ext.lower() for ext in EXTENSIONS_AUDIO}
+
+
 def get_ident_audio_path(ident):
     base_raw = os.path.join(cfg.TRAIN_DIR_AUDIO, ident)
 
-    path_audio = glob.glob(base_raw + '.*')
+    path_audio = [
+        p for p in glob.glob(base_raw + '.*')
+        if os.path.splitext(p)[1][1:].lower() in EXTENSIONS_AUDIO
+    ]
 
     if len(path_audio) > 1:
         raise ValueError(f'multiple audio files found for ident {ident}')
@@ -655,14 +666,20 @@ class WorkerExtract:
         # looks like -- it is the `context-stack` leak. 0 = ordinary embedder, and
         # every line gated on it below is skipped, so that path is byte-identical.
         self.context_frames = int(getattr(self.embedder, 'context_frames', 0) or 0)
+        # A context embedder still needs each phase it's handed to be contiguous
+        # (see _embed_with_context), but framehop_prop < 1 only breaks that if the
+        # hop doesn't divide framelength evenly. At framehop_prop = 1/n, frames[p::n]
+        # for each phase p in range(n) are themselves exactly framelength_s apart --
+        # true contiguous slices of the real chunk audio, just interleaved n ways.
+        # extract_ident_both splits on that below; only a non-1/n hop has no such split.
+        self.context_phases = 1
         if self.context_frames and self.config_extract.framehop_prop != 1:
-            # The contiguous buffer handed to embed() is np.concatenate(frames), which
-            # only reconstructs the chunk's audio when the frames tile it without
-            # overlap. At framehop_prop < 1 it would splice duplicated audio -- and the
-            # frame count would still come out right, so nothing downstream would notice.
-            raise NotImplementedError(
-                f'{self.embedder.embeddername} needs contiguous audio; '
-                f'framehop_prop must be 1, got {self.config_extract.framehop_prop}')
+            n_phases = round(1 / self.config_extract.framehop_prop)
+            if not math.isclose(self.config_extract.framehop_prop * n_phases, 1, rel_tol=1e-9, abs_tol=1e-9):
+                raise NotImplementedError(
+                    f'{self.embedder.embeddername} needs frames on a fixed lattice; '
+                    f'framehop_prop must be 1/n for an integer n, got {self.config_extract.framehop_prop}')
+            self.context_phases = n_phases
 
     def read_range(self, track: sf.SoundFile, audiorange: tuple[float, float]):
         start_sample = round(track.samplerate * audiorange[0])
@@ -697,11 +714,14 @@ class WorkerExtract:
     def _embed_with_context(self, track, frames, first_start_s, snip_duration):
         """Embeddings for `frames`, each carrying its real temporal neighbours.
 
-        `frames` tile the audio from first_start_s at framelength_s (framehop_prop
-        is 1 on this path). They are handed to embed() as ONE contiguous buffer
-        padded by context_frames frames of real audio on each side, and the pad
-        rows are dropped. The kept rows are byte-identical audio to the default
-        path -- the pad only changes what the embedder can see around them.
+        `frames` must tile the audio from first_start_s at framelength_s with no
+        gap or overlap -- true at framehop_prop=1 for a whole chunk's frames, and
+        equally true for a single phase (frames[p::n]) at framehop_prop=1/n, since
+        neighbouring elements of a phase are exactly framelength_s apart. They are
+        handed to embed() as ONE contiguous buffer padded by context_frames frames
+        of real audio on each side, and the pad rows are dropped. The kept rows are
+        byte-identical audio to the default path -- the pad only changes what the
+        embedder can see around them.
         """
         k = self.context_frames
         L = self.embedder.framelength_s
@@ -847,13 +867,22 @@ class WorkerExtract:
 
                     frames_rel += [(f[0] - snip_start, f[1] - snip_start) for f in frametimes]
 
-                    # One call for the whole chunk, in time order and padded with real
-                    # audio either side, so every frame kept below carries the frames
-                    # that really sat beside it in the recording.
+                    # One call per phase, each in time order and padded with real audio
+                    # either side, so every frame kept below carries the frames that
+                    # really sat beside it in the recording. At framehop_prop=1 there's
+                    # one phase (n=1) covering every frame, same as before; at 1/n it's
+                    # n phases, each a contiguous frames[p::n] slice — see context_phases.
                     embeddings_chunk = None
                     if self.context_frames:
-                        embeddings_chunk = self._embed_with_context(
-                            track, frames, chunk[0], snip_duration)
+                        n = self.context_phases
+                        hop_s = self.config_extract.framehop_prop * self.embedder.framelength_s
+                        embeddings_chunk = np.empty((len(frames), self.embedder.n_embeddings), dtype=np.float32)
+                        for p in range(n):
+                            frames_phase = frames[p::n]
+                            if len(frames_phase) == 0:
+                                continue
+                            embeddings_chunk[p::n] = self._embed_with_context(
+                                track, frames_phase, chunk[0] + p * hop_s, snip_duration)
 
                     for i_frame, (frame, frame_range) in enumerate(zip(frames, frametimes)):
                         events_frame = events_in_frame(
@@ -1241,6 +1270,17 @@ def extract_set(setname, embeddername, overlap_event_prop=None, framehop_prop=No
         print(f'{time.time()-t0:.1f}s - [{setname}/{embeddername}] GPU visible: '
               f'--workers {n_workers} -> 1 (pass --cpu to launch_job.sh for more)')
         n_workers = 1
+
+    # fork() after a TF SavedModel is loaded corrupts macOS's GCD thread pools
+    # in the child -- this is unrelated to GPU visibility and hits --cpu runs
+    # too. It manifests as a segfault (exit code -11) partway through the
+    # first ident, not at worker startup, so there's nothing to catch inside
+    # the worker itself. Force in-process extraction instead of crashing.
+    if n_workers > 0 and sys.platform == 'darwin':
+        print(f'{time.time()-t0:.1f}s - [{setname}/{embeddername}] macOS: '
+              f'--workers {n_workers} -> 0 (fork() after loading a TF SavedModel '
+              f'segfaults on macOS; extraction runs in-process instead)')
+        n_workers = 0
 
     if verbose:
         print(f'{time.time()-t0:.1f}s -   {n_workers} worker(s); folds: '

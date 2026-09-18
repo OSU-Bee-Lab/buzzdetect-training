@@ -1,1 +1,0 @@
-{"n_epochs": 3, "best_epoch": 3, "best_val_loss": 0.7219544649124146, "frames_train": 13626, "frames_val": 872, "val_loss_curve": [0.7793477177619934, 0.7488527894020081, 0.7219544649124146], "val_sens_fpr0.005_at_best": 0.0, "val_sens_fpr0.005_curve": [0.0, 0.0, 0.0], "val_sens_fpr0.005_peak": 0.0, "val_sens_fpr0.005_peak_epoch": 1}

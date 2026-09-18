@@ -38,10 +38,19 @@ def load_stage(path, module_name):
     spec.loader.exec_module(mod)
     return mod
 
+# Same fallback 03_train/train.py::_RUN_CONFIG_DEFAULTS uses when --set/
+# --embedder/--translation are left as None (inherit from an existing
+# config_model.json). Stage 2 needs a concrete set/embedder up front, before
+# train_set ever gets a chance to resolve against disk, so this is the value
+# it falls back to for a brand-new model. Keep in sync with train.py.
+_EXTRACT_DEFAULTS = {'setname': 'medium', 'embeddername': 'yamnet'}
+
+
 def main(modelname, setname, embeddername, name_translation, epochs, clear,
          aug_dirnames=None, verbose=False, n_workers=2, snip_workers=2,
          overlap_event_prop=None, framehop_prop=None, assume_yes=False,
-         stop_tol=0.01, skip_cv=False, surprisal=True):
+         stop_tol=0.01, skip_cv=False, surprisal=True, dropout=0.0,
+         train_shipped=False, only_folds=None):
     import tensorflow  # noqa: F401  -- load-order side effect; see header comment
 
     # tensorflow-metal (Apple GPU) produces non-finite training loss within a
@@ -59,10 +68,10 @@ def main(modelname, setname, embeddername, name_translation, epochs, clear,
 
     print('=== 02 extract set ===')
     multiprocessing.set_start_method('fork', force=True)
-    stage2 = load_stage('02_set/main.py', 'stage2_main')
+    stage2 = load_stage('02_set/extract.py', 'stage2_extract')
     stage2.extract_set(
-        setname=setname,
-        embeddername=embeddername,
+        setname=setname if setname is not None else _EXTRACT_DEFAULTS['setname'],
+        embeddername=embeddername if embeddername is not None else _EXTRACT_DEFAULTS['embeddername'],
         overlap_event_prop=overlap_event_prop,
         framehop_prop=framehop_prop,
         n_workers=n_workers,
@@ -84,27 +93,54 @@ def main(modelname, setname, embeddername, name_translation, epochs, clear,
         stop_tol=stop_tol,
         skip_cv=skip_cv,
         surprisal=surprisal,
+        dropout=dropout,
+        # --skip-cv means 'shipped model only', so it has to turn it on.
+        train_shipped=train_shipped or skip_cv,
+        only_folds=only_folds,
     )
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    # Defaults match 03_train/main.py — only --model is required.
+    # Flag names and defaults match the stage scripts (03_train/main.py in
+    # particular), except the model name is --model here vs --name there.
+    # --set/--embedder/--translation default to None, not a hardcoded value:
+    # None means "inherit from this model's existing config_model.json if one
+    # exists" (see train.py::_resolve_run_config) — a resumed run must be able
+    # to omit them, so they can't be pinned to a default here.
     parser.add_argument('--model', required=True, help='Model name')
-    parser.add_argument('--set', dest='setname', default='medium')
-    parser.add_argument('--embedder', default='yamnet')
-    parser.add_argument('--translation', default='general')
+    parser.add_argument('--set', dest='setname', default=None,
+                        help="training set (default: inherited from --model's "
+                             "existing config_model.json, else 'medium')")
+    parser.add_argument('--embedder', default=None,
+                        help="embedder (default: inherited from --model's "
+                             "existing config_model.json, else 'yamnet')")
+    parser.add_argument('--translation', default=None,
+                        help="translation table (default: inherited from "
+                             "--model's existing config_model.json, else "
+                             "'general')")
     parser.add_argument('--epochs', type=int, default=400,
                         help='epoch budget: every rotation trains this many '
                              'epochs, fixed, no early stopping. See '
                              '03_train/CLAUDE.md.')
+    parser.add_argument('--dropout', type=float, default=0.0,
+                        help='input dropout rate before the class logits '
+                             '(default 0.0 = none)')
     parser.add_argument('--stop-tol', type=float, default=0.01, dest='stop_tol',
                         help='shipped-model epoch count: fraction of the consensus '
                              'val_loss curve span to stop short of its floor '
                              '(default 0.01). Larger = fewer epochs.')
     parser.add_argument('--skip-cv', action='store_true', dest='skip_cv',
                         help='train no rotations; go straight to the shipped model '
-                             'using the fold results already on disk')
+                             'using the fold results already on disk. Implies '
+                             '--train-shipped.')
+    parser.add_argument('--train-shipped', action='store_true', dest='train_shipped',
+                        help='also train the shipped model after the rotations '
+                             '(off by default)')
+    parser.add_argument('--only-folds', nargs='+', default=None, dest='only_folds',
+                        metavar='FOLD',
+                        help='diagnostic: hold out & score only these rotating '
+                             'folds; cannot supply a shipped epoch count')
     parser.add_argument('--workers', type=int, default=2, dest='n_workers',
                         help='framing+embedding workers; 0 runs in-process')
     parser.add_argument('--snip-workers', type=int, default=2, dest='snip_workers',
@@ -147,6 +183,9 @@ if __name__ == '__main__':
         stop_tol=args.stop_tol,
         skip_cv=args.skip_cv,
         surprisal=args.surprisal,
+        dropout=args.dropout,
+        train_shipped=args.train_shipped,
+        only_folds=args.only_folds,
         overlap_event_prop=args.overlap_event_prop,
         framehop_prop=args.framehop_prop,
         assume_yes=args.assume_yes,

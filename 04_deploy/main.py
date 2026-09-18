@@ -34,7 +34,7 @@ def load_module(path, module_name):
 
 
 def main(modelname, dir_dest, force=False, path_audio=None, dir_src=None,
-         embeddername=None, skip_card=False):
+         embeddername=None, skip_card=False, assume_yes=False):
     import tensorflow  # noqa: F401  -- load-order side effect; see header comment
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -53,7 +53,8 @@ def main(modelname, dir_dest, force=False, path_audio=None, dir_src=None,
 
     print('\n=== export to buzzdetect (ONNX) ===')
     export_onnx = load_module(os.path.join(here, 'export_onnx.py'), 'deploy_export_onnx')
-    export_onnx.export(modelname, dir_dest, force, path_audio, dir_src, embeddername)
+    export_onnx.export(modelname, dir_dest, force, path_audio, dir_src, embeddername,
+                       assume_yes=assume_yes)
 
 
 if __name__ == '__main__':
@@ -77,6 +78,10 @@ if __name__ == '__main__':
                         help='check on synthetic lengths only')
     parser.add_argument('--skip-card', action='store_true',
                         help='export as-is; do not refresh thresholds/README first')
+    parser.add_argument('-y', '--yes', dest='assume_yes', action='store_true',
+                        help='auto-accept a failed parity check instead of prompting '
+                             '(for non-interactive runs; read the printed diagnostic '
+                             'first)')
     args = parser.parse_args()
 
     dest = args.dest
@@ -108,4 +113,5 @@ if __name__ == '__main__':
         dir_src=args.dir_src,
         embeddername=args.embedder,
         skip_card=args.skip_card,
+        assume_yes=args.assume_yes,
     )

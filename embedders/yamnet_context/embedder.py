@@ -90,3 +90,19 @@ class EmbedderYamnetContext(_yamnet.EmbedderYamnet):
     def embed(self, audio):
         """Contiguous audio in, one context-widened embedding per frame out."""
         return self.stack_context(self.embed_frames(audio))
+
+    def to_onnx(self, opset=17):
+        """Plain YAMNet's own to_onnx(), cropped to whole frames the way
+        embed_frames() crops its input, plus the context-stack stack_context()
+        does in numpy, built onto the graph -- see embedders/onnx_context.py.
+        """
+        from embedders.onnx_context import add_context_stack, crop_waveform_to_whole_frames
+
+        frame_samples = int(round(self.framelength_s * self.samplerate))
+        trunk_onnx = super().to_onnx(opset=opset)
+        trunk_onnx = crop_waveform_to_whole_frames(trunk_onnx, frame_samples)
+        return add_context_stack(
+            trunk_onnx, k=self.context_frames,
+            widen_dim=_yamnet.EmbedderYamnet.n_embeddings,
+            total_dim=_yamnet.EmbedderYamnet.n_embeddings,
+            n_embeddings=self.n_embeddings)

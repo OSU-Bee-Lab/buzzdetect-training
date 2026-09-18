@@ -1,0 +1,18 @@
+{
+  "annotationDirectory": {
+    "kind": "relative",
+    "path": "./annotations"
+  },
+  "buzzdetectTrimActivationPrefix": true,
+  "mediaDirectory": {
+    "kind": "relative",
+    "path": "./audio"
+  },
+  "nameGradientColors": [
+    "#faf1bb",
+    "#b63677"
+  ],
+  "outputFormat": "txt",
+  "outputRoundingDecimals": 4,
+  "projectName": "2025-06-11 Lilian Dicentra"
+}

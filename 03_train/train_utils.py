@@ -206,8 +206,15 @@ def scored_buzz(labels_raw, labels_translate, buzz_class=BUZZ_CLASS):
     return tier != TIER_NONE and tier not in TIERS_EXCLUDED_FROM_HEADLINE
 
 
-def can_write(dir_model):
-    if not os.path.exists(os.path.join(dir_model, 'config_model.json')):
+def can_write(dir_model, marker='config_model.json'):
+    """A rotation fold never saves a binary (save_binary=False), so
+    config_model.json is its only completion signal. The shipped model does
+    save one, and train.py's early pipeline-identity write (_resolve_run_config)
+    puts a partial config_model.json in the model dir before training starts --
+    pass marker='model.keras' there so "already trained" means the weights
+    exist, not just that identity metadata was recorded.
+    """
+    if not os.path.exists(os.path.join(dir_model, marker)):
         return True
 
     if os.path.basename(dir_model) == 'test':

@@ -108,16 +108,21 @@ AGREE_FP16 = 0.98
 # the engine needs to turn a chunk into frames. `classes` and `digits_results`
 # come from the training config; the rest is measured off the exported graph and
 # the embedder here (see where config_out is built in export()). Keep it in step
-# with the engine's src/inference/models.py::REQUIRED_CONFIG_KEYS. Training
+# with the engine's src/inference/models.py::REQUIRED_CONFIG_KEYS. Most training
 # metadata is not shipped.
 #
-# Three optional keys ride along for people rather than for the engine, which
+# A few optional keys ride along for people rather than for the engine, which
 # ignores all of them: `description` (one line, written by hand -- the app shows
-# it under the model picker), and `thresholds`/`threshold_stats` (written by
+# it under the model picker), `thresholds`/`threshold_stats` (written by
 # 03_train/thresholds.py when the shipped model is trained; the engine copies
-# `thresholds` into each output folder's buzzdetect_manifest.json). A hand-written
-# description in the destination survives a re-export when the source has none.
+# `thresholds` into each output folder's buzzdetect_manifest.json), and
+# `metadata` (bundled below from the training config's `set`, `trained_date`
+# and `overlap_event_prop` -- provenance for a person looking at the model,
+# not anything the engine or buzzdetect reads). A hand-written description, or
+# a metadata field the training config lacks, survives a re-export from the
+# destination's existing config.
 CONFIG_PASSTHROUGH = ('description', 'thresholds', 'threshold_stats')
+METADATA_KEYS = ('set', 'trained_date', 'overlap_event_prop')
 FNAME_README = 'README.md'
 
 
@@ -321,7 +326,7 @@ def export_graph(model, path_onnx):
     return model
 
 
-def verify(path_onnx, embedder, head, path_audio):
+def verify(path_onnx, embedder, head, path_audio, assume_yes=False):
     """Run the ONNX graph against embed() and the trained head it was built from.
 
     embed() -- not a fused Keras model -- is the ground truth here because
@@ -377,8 +382,22 @@ def verify(path_onnx, embedder, head, path_audio):
         print(f'  {label:<34} {str(got.shape):<12} max|d|={d:.2e}  agree={agree:.4f}')
 
     if worst > TOL:
-        raise SystemExit(f'parity FAILED: {worst:.2e} > {TOL}; nothing shipped')
-    print(f'parity OK: {worst:.2e}')
+        msg = (f'parity FAILED: {worst:.2e} > {TOL}. This can be real numeric '
+               f'drift (e.g. a chunked embed_frames() zero-padding at a memory-'
+               f'chunk boundary the unchunked ONNX graph does not reproduce -- '
+               f'see embedders/yamnet_aves/embedder.py\'s module docstring for '
+               f'the same effect there) or an actual export bug -- ship anyway '
+               f'only once you know which.')
+        if assume_yes:
+            print(f'{msg}\n  --yes passed: shipping anyway')
+        else:
+            print(msg)
+            reply = input('  ship anyway? [y/N] ').strip().lower()
+            if reply not in ('y', 'yes'):
+                raise SystemExit('aborted: parity check not accepted')
+            print('  accepted: shipping anyway')
+    else:
+        print(f'parity OK: {worst:.2e}')
     return worst
 
 
@@ -675,7 +694,7 @@ def stage_readme(dir_src, dir_out, dir_stage):
 
 
 def export(modelname, dir_dest, force=False, path_audio=None,
-           dir_src=None, embeddername=None):
+           dir_src=None, embeddername=None, assume_yes=False):
     """Build the export in a staging dir, check it, and only then move it into place.
 
     Staging is what makes a failed check harmless: nothing lands in the
@@ -715,7 +734,7 @@ def export(modelname, dir_dest, force=False, path_audio=None,
     export_graph(model, path_onnx)
 
     print('checking the graph against embed() and the head it came from')
-    verify(path_onnx, embedder, head, path_audio)
+    verify(path_onnx, embedder, head, path_audio, assume_yes=assume_yes)
     samples_hop, samples_min, floor_nonzero, float32_quotient = probe_framing(
         path_onnx, embedder)
     n_session = verify_fixed_length(path_onnx, embedder, samples_hop, samples_min,
@@ -753,6 +772,13 @@ def export(modelname, dir_dest, force=False, path_audio=None,
             config_out[key] = config[key]
         elif config_dest.get(key) not in (None, '', {}):
             config_out[key] = config_dest[key]
+
+    metadata = {k: config[k] for k in METADATA_KEYS if config.get(k) not in (None, '')}
+    if metadata:
+        config_out['metadata'] = metadata
+    elif config_dest.get('metadata'):
+        config_out['metadata'] = config_dest['metadata']
+
     with open(os.path.join(dir_stage, 'config_model.json'), 'w') as f:
         json.dump(config_out, f, indent=2)
 

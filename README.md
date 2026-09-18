@@ -207,7 +207,7 @@ conda run -n buzzdetect-train python 02_set/main.py \
 |---|---|
 | `--set` | set name under `02_set/sets/` |
 | `--embedder` | directory name under `embedders/` (`ls embedders/`) |
-| `--workers` | processes for the framing + embedding phase; **`0` runs in-process**. Capped at 1 when a GPU is visible (forked workers collide on the card); hide it with `CUDA_VISIBLE_DEVICES=` or `launch_job.sh --cpu` to use more |
+| `--workers` | processes for the framing + embedding phase; **`0` runs in-process**. Capped at 1 when a GPU is visible (forked workers collide on the card); hide it with `CUDA_VISIBLE_DEVICES=` or `launch_job.sh --cpu` to use more. Forced to `0` on macOS regardless of GPU or value passed -- `fork()` after a TF SavedModel loads corrupts macOS's GCD thread pools in the child (segfault, exit code -11) |
 | `--snip-workers` | threads for the snip-sync phase (source-drive I/O, no GPU); default 2 (fastest on a single HDD; 8 and 16 were slower), `1` = serial |
 | `--overlap-event-prop` | annotation overlap needed to label a frame, as a fraction of frame length |
 | `--framehop-prop` | frame hop as a fraction of frame length; `1` = no overlap |
@@ -509,9 +509,14 @@ conda run -n buzzdetect-train python main.py --model <name> [--set medium] \
   [--embedder yamnet] [--translation general] [--workers 2] [--clear] ...
 ```
 
-Same flags as the stage scripts, except the model name is `--model`. **Must be
-run from the project root** — it resolves stage paths relative to the cwd. It
-chains stages 2–3 only; deploying is a separate, manual step (below).
+Same flags as the stage scripts (stage 2's `--set`/`--embedder`/`--workers`/
+`--snip-workers`/`--overlap-event-prop`/`--framehop-prop` plus stage 3's
+`--translation`/`--epochs`/`--dropout`/`--stop-tol`/`--skip-cv`/
+`--train-shipped`/`--only-folds`/`--augment`/`-y`/`--no-surprisal`), except the
+model name is `--model` here vs `--name` in `03_train/main.py`, and `--workers`
+defaults to 2 here rather than being required. **Must be run from the project
+root** — it resolves stage paths relative to the cwd. It chains stages 2–3
+only; deploying is a separate, manual step (below).
 
 ---
 

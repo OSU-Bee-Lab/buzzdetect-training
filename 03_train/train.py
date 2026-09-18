@@ -8,6 +8,7 @@ import re
 import shutil
 import sys
 from dataclasses import dataclass, field
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -20,7 +21,8 @@ from dataset import (
     survey_untranslated, ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT,
 )
 from train_utils import (build_weights, build_classes, can_write,
-                         weighted_bce_loss, Sample, buzz_tier)
+                         weighted_bce_loss, Sample, buzz_tier,
+                         TIERS_EXCLUDED_FROM_HEADLINE)
 from embedders.embedding import load_embedder
 from plot_history import plot_history, plot_sens_history
 from write_model_py import write_model_py
@@ -137,10 +139,14 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
         frames_val = sum(s.frames for s in data_val)
         if data_val:
             # The per-epoch monitor stays on the inclusive reading (all buzz,
-            # every tier). It steers nothing under the fixed-budget rule; it is
-            # a curve, and changing what it counts would break comparison with
-            # the curves already on disk.
-            val_eval = _eval_arrays(data_val, classes)[:2]
+            # every tier) as its first two elements. It steers nothing under
+            # the fixed-budget rule; it is a curve, and changing what it counts
+            # would break comparison with the curves already on disk. The
+            # exclquiet correct array rides alongside it for the headline-
+            # matching curve on sens_curves.svg.
+            embeddings_val, correct_val, loudness_val, _ = _eval_arrays(data_val, classes)
+            correct_val_exclquiet = correct_val & ~np.isin(loudness_val, TIERS_EXCLUDED_FROM_HEADLINE)
+            val_eval = (embeddings_val, correct_val, correct_val_exclquiet)
 
     if aug_dirnames:
         data_train += load_augmented(setname, embeddername, aug_dirnames, translation, folds_train)
@@ -202,7 +208,7 @@ def _score_fold(model, setname, embeddername, fold, translation, classes):
     return pd.DataFrame({
         'activation_ins_buzz': activation, 'correct': correct, 'loudness': loudness,
         'sample': sample_id,
-    }), class_predictions_frame(logits, targets, sample_id, classes)
+    }), class_predictions_frame(logits, targets, sample_id, classes, loudness)
 
 
 def _format_sens(sens):
@@ -314,7 +320,8 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                stop_tol=None, dropout=0.0):
     """Train one model. Returns (result_row, model); (None, None) if the model
     directory is already populated."""
-    if not can_write(dir_model):
+    marker = 'model.keras' if save_binary else 'config_model.json'
+    if not can_write(dir_model, marker):
         print(f'[{modelname}] already trained; skipping')
         return None, None
 
@@ -380,9 +387,10 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     else:
         # Reporting only, and listed first so its keys are in `logs` before any
         # other callback or History sees them.
+        val_embeddings, val_correct, val_correct_exclquiet = data.val_eval
         sens_callback = SensAtFPR(
-            *data.val_eval, data.classes.index('ins_buzz'), FPR_TARGETS,
-            batch_size=data.size_batch,
+            val_embeddings, val_correct, data.classes.index('ins_buzz'), FPR_TARGETS,
+            batch_size=data.size_batch, correct_exclquiet=val_correct_exclquiet,
         )
         # THE ONLY ROTATION RULE. Every rotation trains exactly `epochs` and
         # ships its final weights: no early stopping, no restore-best, no
@@ -459,6 +467,15 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         data.weights.to_csv(os.path.join(dir_model, 'weights.csv'), index=False)
         data.translation.to_csv(os.path.join(dir_model, 'translation.csv'), index=False)
 
+    # Read alongside config_model.json, not carried in TrainingData: it
+    # describes the set's extraction, not this training run, and a set
+    # trained before config_extract.json existed has none on disk.
+    path_config_extract = os.path.join(cfg.dir_set(setname), 'config_extract.json')
+    overlap_event_prop = None
+    if os.path.exists(path_config_extract):
+        with open(path_config_extract) as f:
+            overlap_event_prop = json.load(f).get('overlap_event_prop')
+
     config_model = {
         'embeddername': embeddername,
         'set': setname,
@@ -476,6 +493,8 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         # The fixed budget every rotation trained for.
         'epochs': epochs,
         'dropout': dropout,
+        'trained_date': date.today().isoformat(),
+        'overlap_event_prop': overlap_event_prop,
     }
     # 'w' for the same reason as write_model_py's — can_write() is the gate
     with open(os.path.join(dir_model, 'config_model.json'), 'w') as f:
@@ -483,7 +502,8 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
 
     plot_history(history, modelname, best_epoch, os.path.join(dir_model, 'loss_curves.svg'))
     plot_sens_history(history, modelname, best_epoch, FPR_TARGETS,
-                      SensAtFPR.key, os.path.join(dir_model, 'sens_curves.svg'))
+                      SensAtFPR.key, os.path.join(dir_model, 'sens_curves.svg'),
+                      key_exclquiet=SensAtFPR.key_exclquiet)
     if save_binary:
         write_model_py(dir_model, modelname, embeddername, config_model['digits_results'])
 
@@ -585,11 +605,77 @@ def _forbid_metal():
         )
 
 
+_RUN_CONFIG_DEFAULTS = {'set': 'medium', 'embeddername': 'yamnet', 'translation': 'general'}
+
+
+def _resolve_run_config(dir_model_full, setname, embeddername, name_translation, aug_dirnames):
+    """Fill in unspecified --set/--embedder/--translation/--augment from the
+    model's existing config_model.json, and guard against a model name
+    accumulating folds trained under different pipeline settings.
+
+    can_write() only asks "does this fold's dir exist" -- it has no way to
+    know the pool a resumed run intends differs from the one that produced
+    what's already there. A --name reused with the wrong --set (or embedder,
+    translation, augmentation) would silently keep old folds and add new ones
+    trained on a different pool, and folds_sx.csv/the shipped model would mix
+    both without complaint. An arg left as None (not passed on the command
+    line) inherits from disk rather than a hardcoded default, so a bare
+    `--name X --train-shipped` resumes X's own pipeline instead of falling
+    back to whatever main.py's argparse defaults happen to be. An arg that
+    *is* passed and disagrees with disk still errors -- that's the only way
+    a genuine pipeline change is distinguished from an accidental default.
+
+    Runs before any fold trains, so the mismatch is caught before touching
+    data; _train_one later overwrites this same path for the shipped model
+    with the fuller config_model.json, whose identity fields still agree with
+    what was just resolved.
+    """
+    path = os.path.join(dir_model_full, 'config_model.json')
+    existing = None
+    if os.path.exists(path):
+        with open(path) as f:
+            existing = json.load(f)
+
+    requested = {'set': setname, 'embeddername': embeddername, 'translation': name_translation}
+    resolved = {}
+    for key, val in requested.items():
+        if val is not None:
+            resolved[key] = val
+        elif existing is not None and existing.get(key) is not None:
+            resolved[key] = existing[key]
+        else:
+            resolved[key] = _RUN_CONFIG_DEFAULTS[key]
+    resolved['aug_dirnames'] = aug_dirnames if aug_dirnames is not None else (
+        (existing or {}).get('aug_dirnames', []))
+
+    if existing is not None:
+        mismatched = {k: (existing.get(k), v) for k, v in resolved.items()
+                      if existing.get(k) != v}
+        if mismatched:
+            detail = '\n'.join(f'  {k}: on disk {old!r} != requested {new!r}'
+                               for k, (old, new) in mismatched.items())
+            raise ValueError(
+                f'{dir_model_full} already holds folds trained under different '
+                f'settings:\n{detail}\nA model name must not mix folds trained '
+                f'under different pipelines -- use a different --name, or delete '
+                f'{dir_model_full} to start over.'
+            )
+    else:
+        os.makedirs(dir_model_full, exist_ok=True)
+        with open(path, 'w') as f:
+            json.dump(resolved, f)
+
+    return resolved['set'], resolved['embeddername'], resolved['translation'], resolved['aug_dirnames']
+
+
 def train_set(name, embeddername, setname, name_translation,
               epochs=400, aug_dirnames=None, verbose=False,
               assume_yes=False, stop_tol=0.01, skip_cv=False, train_shipped=False,
               only_folds=None, surprisal=True, dropout=0.0):
     _forbid_metal()
+    dir_model_full = os.path.join(cfg.DIR_MODELS, name)
+    setname, embeddername, name_translation, aug_dirnames = _resolve_run_config(
+        dir_model_full, setname, embeddername, name_translation, aug_dirnames)
     roles = read_fold_roles(setname, embeddername)
     folds_rotate = folds_by_role(roles, ROLE_ROTATE)
     folds_train_always = folds_by_role(roles, ROLE_TRAIN)
@@ -624,7 +710,6 @@ def train_set(name, embeddername, setname, name_translation,
                                  name_translation, assume_yes):
         return
 
-    dir_model_full = os.path.join(cfg.DIR_MODELS, name)
     dir_folds = os.path.join(dir_model_full, SUBDIR_FOLDS)
 
     # CV: hold out one 'rotate' fold at a time, train on the other 'rotate'

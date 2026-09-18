@@ -24,7 +24,7 @@ read_annotation <- function(path_in){
     )
 }
 
-annotations <- lapply(paths_annotations, read_annotation) %>% 
+annotations_combined <- lapply(paths_annotations, read_annotation) %>% 
   bind_rows() %>% 
   mutate(
     label = case_when(
@@ -34,12 +34,12 @@ annotations <- lapply(paths_annotations, read_annotation) %>%
   )
 
 write.csv(
-  annotations,
+  annotations_combined,
   'annotations_combined.csv',
   row.names=F
 )
 
-summary <- annotations %>% 
+summary <- annotations_combined %>% 
   mutate(duration = round(end-start)) %>% 
   group_by(label) %>% 
   summarize(
@@ -49,5 +49,27 @@ summary <- annotations %>%
 write.csv(
   summary,
   'summary.csv',
+  row.names=F
+)
+
+
+annotation_counts <- paths_annotations %>% 
+  stringr::str_remove_all('_s\\d+\\.txt$') %>% 
+  data.frame(ident=.) %>% 
+  group_by(ident) %>% 
+  summarize(snips_annotated=n())
+
+folds <- annotations_combined %>% 
+  mutate(
+    fold = ident,
+    role = 'train'
+  ) %>% 
+  select(ident, fold) %>% 
+  unique()
+  
+
+write.csv(
+  folds,
+  'folds.csv',
   row.names=F
 )

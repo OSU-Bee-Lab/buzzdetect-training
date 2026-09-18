@@ -33,10 +33,12 @@ class SensAtFPR(tf.keras.callbacks.Callback):
     time anything downstream reads `logs`.
     """
 
-    def __init__(self, embeddings, correct, buzz_index, fprs, batch_size=65568):
+    def __init__(self, embeddings, correct, buzz_index, fprs, batch_size=65568,
+                 correct_exclquiet=None):
         super().__init__()
         self.embeddings = embeddings
         self.correct = correct
+        self.correct_exclquiet = correct_exclquiet
         self.buzz_index = buzz_index
         self.fprs = tuple(fprs)
         self.batch_size = batch_size
@@ -44,6 +46,10 @@ class SensAtFPR(tf.keras.callbacks.Callback):
     @staticmethod
     def key(fpr):
         return f'val_sens_fpr{fpr:g}'
+
+    @staticmethod
+    def key_exclquiet(fpr):
+        return f'val_sens_fpr{fpr:g}_exclquiet'
 
     def on_epoch_end(self, epoch, logs=None):
         if logs is None:
@@ -55,3 +61,6 @@ class SensAtFPR(tf.keras.callbacks.Callback):
         activation = np.concatenate([c.numpy() for c in chunks])
         for fpr, sens in sens_at_fpr(activation, self.correct, self.fprs).items():
             logs[self.key(fpr)] = sens
+        if self.correct_exclquiet is not None:
+            for fpr, sens in sens_at_fpr(activation, self.correct_exclquiet, self.fprs).items():
+                logs[self.key_exclquiet(fpr)] = sens

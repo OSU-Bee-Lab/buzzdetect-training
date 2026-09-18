@@ -43,22 +43,34 @@ def plot_history(history, modelname, best_epoch, path_out):
     plt.close(fig)
 
 
-def plot_sens_history(history, modelname, best_epoch, fprs, key, path_out):
+def plot_sens_history(history, modelname, best_epoch, fprs, key, path_out, key_exclquiet=None):
     """sens@FPR per epoch, with val_loss on a twin axis.
 
     Kept out of loss_curves.svg deliberately: the question these answer is
     whether val_loss's minimum lands anywhere near sens@FPR's peak, and that
     reads better on its own axes than as two more lines on a loss plot. Returns
     False and writes nothing when no fold-level target was ever reachable.
+
+    `key_exclquiet`, if given, plots the headline-matching reading (buzz minus
+    faint/quiet tiers) alongside the inclusive curve, one dashed line per FPR
+    target, in the same color as its inclusive counterpart.
     """
     curves = {f: history.history.get(key(f)) for f in fprs}
     curves = {f: c for f, c in curves.items() if c and not all(v != v for v in c)}
     if not curves:
         return False
 
+    curves_exclquiet = {}
+    if key_exclquiet is not None:
+        curves_exclquiet = {f: history.history.get(key_exclquiet(f)) for f in fprs}
+        curves_exclquiet = {f: c for f, c in curves_exclquiet.items() if c and not all(v != v for v in c)}
+
     fig, ax = plt.subplots()
     for fpr, curve in curves.items():
-        ax.plot(curve, label=f'sens@fpr{fpr:.1%}')
+        line, = ax.plot(curve, label=f'sens@fpr{fpr:.1%}')
+        excl = curves_exclquiet.get(fpr)
+        if excl:
+            ax.plot(excl, label=f'sens@fpr{fpr:.1%} exclquiet', color=line.get_color(), linestyle='--')
     ax.set_ylim([0, 1])
     ax.set_xlabel('epoch')
     ax.set_ylabel('sensitivity')

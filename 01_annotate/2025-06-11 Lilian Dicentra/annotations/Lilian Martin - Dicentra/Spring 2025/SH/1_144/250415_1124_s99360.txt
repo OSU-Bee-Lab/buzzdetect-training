@@ -1,0 +1,13 @@
+0.000000	74.912075	mech_hum_traffic
+4.923798	35.539105	ambient_day
+98.636075	193.355474	mech_plane_prop
+101.196096	123.182152	ambient_day
+169.376444	169.973220	ambient_squeak
+186.876190	188.496011	ambient_day
+194.890041	195.316310	ambient_scraping
+219.357863	222.000729	ambient_scraping
+267.440971	300.000000	ambient_day
+275.7340	276.8134	ins_buzz_low_quiet
+280.9623	282.4132	ins_buzz_low
+283.8130	284.3623	ins_buzz_rasp
+297.3930	298.3001	ins_buzz_low

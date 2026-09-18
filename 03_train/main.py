@@ -1,26 +1,20 @@
-# TensorFlow must be imported before pandas/pyarrow. pandas eagerly imports
-# pyarrow, and pyarrow + TF each bundle their own statically-linked abseil; the
-# shared lib that loads first wins abseil's weak synchronization symbols
-# process-wide. If libarrow wins, TF's in-graph FFT (ducc0) threadpool ends up
-# waiting on libarrow's incompatible semaphore impl and deadlocks. Keep this
-# import first, ahead of anything (incl. train.py) that pulls in pandas.
-import tensorflow  # noqa: F401  -- imported for load-order side effect only
-
 import argparse
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from train import train_set
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', required=True)
-    parser.add_argument('--set', default='medium', dest='setname')
-    parser.add_argument('--embedder', default='yamnet')
-    parser.add_argument('--translation', default='general')
+    parser.add_argument('--set', default=None, dest='setname',
+                        help="training set (default: inherited from --name's "
+                             "existing config_model.json, else 'medium')")
+    parser.add_argument('--embedder', default=None,
+                        help="embedder (default: inherited from --name's "
+                             "existing config_model.json, else 'yamnet')")
+    parser.add_argument('--translation', default=None,
+                        help="translation table (default: inherited from "
+                             "--name's existing config_model.json, else "
+                             "'general')")
     parser.add_argument('--dropout', type=float, default=0.0,
                         help='input dropout rate before the class logits '
                              '(default 0.0 = none). The era baseline is the '
@@ -78,6 +72,21 @@ if __name__ == '__main__':
                              'not touch the Metal pluggable device, so this is the only '
                              'way to hide it.')
     args = parser.parse_args()
+
+    # TensorFlow must be imported before pandas/pyarrow. pandas eagerly imports
+    # pyarrow, and pyarrow + TF each bundle their own statically-linked abseil; the
+    # shared lib that loads first wins abseil's weak synchronization symbols
+    # process-wide. If libarrow wins, TF's in-graph FFT (ducc0) threadpool ends up
+    # waiting on libarrow's incompatible semaphore impl and deadlocks. Keep this
+    # import first, ahead of anything (incl. train.py) that pulls in pandas.
+    # Deferred to here, after parse_args(), so `--help` and argparse errors are
+    # instant rather than paying TF's tens-of-seconds cold import.
+    import tensorflow  # noqa: F401  -- imported for load-order side effect only
+
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+    from train import train_set
 
     # tensorflow-metal (Apple GPU) produces non-finite training loss within a
     # few epochs on this data; CPU does not, and is ~GPU speed for the 1024-d

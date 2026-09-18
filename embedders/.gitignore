@@ -4,6 +4,7 @@
 
 # Unignore these shared embedders (code only, not binaries)
 !embedding.py
+!onnx_context.py
 !yamnet
 !yamnet_k2
 !nighthawk

@@ -5,7 +5,10 @@ experiment is judged on. A shipped model needs something broader: a starting
 threshold for every class it outputs, and some sense of how far to trust it.
 This module computes that from the rotations' held-out predictions and writes
 it into the model's config_model.json, where buzzdetect's export carries it to
-the engine, and into a sparse README.md for a person to fill in.
+the engine. config_model.json is the only place this table lives -- the
+README used to carry a duplicate generated one, which was one more place for
+the numbers to go stale against each other; write_model_card() now leaves a
+fresh README's threshold section pointing at the config instead.
 
 The threshold follows sx.py's convention exactly, so the ins_buzz number agrees
 with folds_sx.csv's `total` row: each fold sets its own threshold at the target
@@ -19,21 +22,26 @@ What goes in config_model.json:
                       can use it without knowing this module exists. A class
                       reached by fewer than MIN_FOLDS folds is left out.
     threshold_stats   {class: {...}}. How much the number rests on: the FPR
-                      target, the number of folds it was set on, the lowest
-                      and highest sensitivity and precision observed across
-                      those folds, and the buzz events (annotation samples)
-                      and frames behind them.
+                      target, the number of folds it was set on, the mean
+                      sensitivity over those folds -- `sensitivity` counting
+                      every positive frame and `sensitivity_exclquiet`
+                      dropping frames whose buzz is only faint/quiet-tagged
+                      (sx.py's sensitivity_exclquiet, generalized here from
+                      ins_buzz to every class) -- and the buzz events
+                      (annotation samples) and frames behind them.
 
-The low/high range is over folds, i.e. over deployments: it says where a new
-deployment's own operating point is likely to land, not how precisely the
-mean is pinned down.
+Both sensitivities are the plain mean over the folds that reached the target,
+same as the threshold -- a deployment-typical read, not a pooled one.
+`sensitivity_exclquiet` is None where no fold carried a loudness tier (a run
+predating it, or the surprisal fallback below).
 
 The source is each rotation's `predictions_classes.csv`: every class's logit
-and 0/1 target per held-out frame, plus the `sample` id. Models trained before
-that file existed fall back to `surprisal/`, which carries the same frames as
-sigmoid probabilities (converted back to logits here) but no sample id, so
-events there are counted as runs of positive frames -- an approximation, and
-the stats say so (`events_source`).
+and 0/1 target per held-out frame, the buzz loudness tier, and the `sample`
+id. Models trained before that file existed fall back to `surprisal/`, which
+carries the same frames as sigmoid probabilities (converted back to logits
+here) but no sample id and no loudness tier, so events there are counted as
+runs of positive frames -- an approximation, and the stats say so
+(`events_source`) -- and sensitivity_exclquiet is left out entirely.
 
 No TensorFlow: nothing here loads a model.
 """
@@ -42,7 +50,6 @@ import glob
 import json
 import math
 import os
-import re
 
 import numpy as np
 import pandas as pd
@@ -64,17 +71,28 @@ DIGITS = 3
 
 ACT_PREFIX = 'activation_'
 TARGET_PREFIX = 'target_'
+LOUDNESS_COL = 'loudness'
+
+# Which loudness tiers don't count toward sensitivity. Mirrors
+# train_utils.TIERS_EXCLUDED_FROM_HEADLINE, duplicated rather than imported --
+# train_utils pulls in TensorFlow at module load, and this module's whole
+# point is not to.
+TIERS_EXCLUDED = ('faint', 'quiet')
 
 
-def class_predictions_frame(logits, targets, sample_id, classes):
+def class_predictions_frame(logits, targets, sample_id, classes, loudness):
     """The per-frame table written beside predictions.csv: one logit and one
-    0/1 target per class, then the sample id."""
+    0/1 target per class, the sample id, and the frame's buzz loudness tier
+    (empty for a non-buzz frame; see train_utils.buzz_tier). loudness is a
+    property of the annotation, not of any one class, so every class's column
+    shares it."""
     data = {}
     for k, c in enumerate(classes):
         data[ACT_PREFIX + c] = logits[:, k]
     for k, c in enumerate(classes):
         data[TARGET_PREFIX + c] = targets[:, k].astype(np.int8)
     data['sample'] = sample_id
+    data[LOUDNESS_COL] = loudness
     return pd.DataFrame(data)
 
 
@@ -138,11 +156,32 @@ def _sweep(df, cls):
     return metrics_by_group(one)
 
 
+def _sens_over(df, cls, positives, fprs):
+    """Sensitivity at each target FPR over a restricted set of positives, at
+    the SAME threshold sweep -- sx.py's `_sens_over`, generalized here from
+    ins_buzz to any class. The negatives are untouched, so the threshold this
+    reads sensitivity off is identical to the unrestricted sweep's; only the
+    sensitivity numerator and denominator change."""
+    correct = df[TARGET_PREFIX + cls].astype(bool)
+    keep = df[(~correct) | positives]
+    if not positives.any():
+        return pd.Series({f: np.nan for f in fprs})
+    one = pd.DataFrame({
+        'activation_ins_buzz': keep[ACT_PREFIX + cls].to_numpy(),
+        'correct': positives.loc[keep.index].to_numpy(),
+    })
+    return metrics_at_fpr(metrics_by_group(one), fprs).set_index('fpr')['sensitivity']
+
+
 def _fold_point(df, cls):
-    """One fold's threshold, sensitivity and precision at FPR_SUGGESTED, or
-    None if the fold can't reach it -- including, as in sx.py's _fold_sens, a
-    target that corresponds to less than one negative frame, where
-    metrics_at_fpr would otherwise interpolate inside one frame."""
+    """One fold's threshold and its two sensitivities at FPR_SUGGESTED --
+    `sensitivity` over every positive frame, `sensitivity_exclquiet` with
+    frames tagged faint/quiet dropped (sx.py's sensitivity_exclquiet,
+    generalized from ins_buzz to any class; NaN if this fold carries no
+    loudness tier at all) -- or None if the fold can't reach the target,
+    including, as in sx.py's _fold_sens, a target that corresponds to less
+    than one negative frame, where metrics_at_fpr would otherwise interpolate
+    inside one frame."""
     correct = df[TARGET_PREFIX + cls].astype(bool)
     n_pos = int(correct.sum())
     n_neg = int((~correct).sum())
@@ -150,7 +189,20 @@ def _fold_point(df, cls):
         return None
     sweep = _sweep(df, cls)
     row = metrics_at_fpr(sweep, [FPR_SUGGESTED]).set_index('fpr').loc[FPR_SUGGESTED]
-    return None if pd.isna(row['threshold']) else row
+    if pd.isna(row['threshold']):
+        return None
+
+    sens_exclquiet = float('nan')
+    if LOUDNESS_COL in df.columns:
+        tier = df[LOUDNESS_COL].fillna('').astype(str)
+        excl = _sens_over(df, cls, correct & ~tier.isin(TIERS_EXCLUDED), [FPR_SUGGESTED])
+        sens_exclquiet = excl.get(FPR_SUGGESTED, float('nan'))
+
+    return pd.Series({
+        'threshold': row['threshold'],
+        'sensitivity': row['sensitivity'],
+        'sensitivity_exclquiet': sens_exclquiet,
+    })
 
 
 def _count_events(df, cls):
@@ -163,8 +215,8 @@ def compute(fold_frames, events_source='sample'):
 
     Returns (thresholds, stats): `thresholds` {class: float} is the
     across-fold mean of each fold's threshold at FPR_SUGGESTED; `stats`
-    {class: dict} carries the low/high range of sensitivity and precision
-    observed across those folds, plus how many folds and events back it."""
+    {class: dict} carries the across-fold mean of both sensitivities at that
+    threshold, plus how many folds and events back it."""
     if not fold_frames:
         return {}, {}
     classes = _classes_in(next(iter(fold_frames.values())))
@@ -191,12 +243,11 @@ def compute(fold_frames, events_source='sample'):
         if len(points) >= MIN_FOLDS:
             here = pd.DataFrame(points)
             thresholds[cls] = round(float(here['threshold'].mean()), DIGITS)
-            entry.update({
-                'sensitivity_low': round(float(here['sensitivity'].min()), DIGITS),
-                'sensitivity_high': round(float(here['sensitivity'].max()), DIGITS),
-                'precision_low': round(float(here['precision'].min()), DIGITS),
-                'precision_high': round(float(here['precision'].max()), DIGITS),
-            })
+            entry['sensitivity'] = round(float(here['sensitivity'].mean()), DIGITS)
+            entry['sensitivity_exclquiet'] = (
+                round(float(here['sensitivity_exclquiet'].mean()), DIGITS)
+                if here['sensitivity_exclquiet'].notna().any() else None
+            )
         stats[cls] = entry
 
     return thresholds, stats
@@ -224,60 +275,11 @@ def update_config(dir_model, thresholds, stats):
         f.write(json.dumps(config))
 
 
-def _fmt(v):
-    return '' if pd.isna(v) else f'{v:.3f}'
-
-
-def _markdown_table(df, cols):
-    lines = ['| ' + ' | '.join(cols) + ' |', '|' + '---|' * len(cols)]
-    for _, r in df.iterrows():
-        cells = [(_fmt(r[c]) if isinstance(r[c], float) else str(r[c])) for c in cols]
-        lines.append('| ' + ' | '.join(cells) + ' |')
-    return '\n'.join(lines)
-
-
-GENERATED = ('thresholds',)
-
-
-def _block(name, body):
-    return (f'<!-- generated:{name} -- rewritten by 03_train/thresholds.py; '
-            f'edits inside are lost -->\n{body}\n<!-- /generated:{name} -->')
-
-
-def render_blocks(thresholds, stats):
-    """The generated parts of the README, by block name."""
-    suggested = pd.DataFrame([{
-        'class': cls,
-        'threshold': thresholds.get(cls, np.nan),
-        'sensitivity': (f"{s['sensitivity_low']:.3f} to {s['sensitivity_high']:.3f}"
-                         if 'sensitivity_low' in s else ''),
-        'precision': (f"{s['precision_low']:.3f} to {s['precision_high']:.3f}"
-                       if 'precision_low' in s else ''),
-        'deployments tested': f"{s['folds']}/{s['folds_total']}",
-        'events': s['events'],
-    } for cls, s in stats.items()])
-    omitted = [c for c in stats if c not in thresholds]
-
-    lines = [
-        f'Suggested thresholds put each held-out deployment at {FPR_SUGGESTED:.1%} '
-        f'false positive rate; the threshold is the mean across deployments that '
-        f'reached it. Sensitivity and precision are given as the range observed '
-        f'across those deployments, from lowest to highest. `events` counts '
-        f'annotated samples.',
-        '',
-        _markdown_table(suggested, list(suggested.columns)) if len(suggested) else '_No rotations on disk._',
-    ]
-    if omitted:
-        lines += ['', f'No suggestion for {", ".join(omitted)}: fewer than {MIN_FOLDS} '
-                      f'deployments could reach the target.']
-
-    return {'thresholds': _block('thresholds', '\n'.join(lines))}
-
-
-def render_readme(modelname, blocks):
-    """A sparse README: headings to fill in around the generated blocks. The
-    thresholds are also in config_model.json, which is what programs should
-    read; this is for people."""
+def render_readme(modelname):
+    """A sparse README: headings for a person to fill in. The suggested
+    thresholds live only in config_model.json now -- that's what programs
+    (and this README) point readers at, rather than duplicating the table
+    here where it could go stale against the config."""
     return '\n'.join([
         f'# {modelname}',
         '',
@@ -285,7 +287,7 @@ def render_readme(modelname, blocks):
         '_TODO_',
         '',
         '### Recommended threshold',
-        blocks['thresholds'],
+        'See `thresholds` and `threshold_stats` in config_model.json.',
         '',
         '_TODO: interpretation_',
         '',
@@ -298,24 +300,11 @@ def render_readme(modelname, blocks):
     ])
 
 
-def refresh_blocks(text, blocks):
-    """Replace each generated block already in `text`, leaving everything a
-    person wrote around them alone. Returns (text, names replaced)."""
-    replaced = []
-    for name, block in blocks.items():
-        pattern = re.compile(
-            rf'<!-- generated:{re.escape(name)}\b.*?<!-- /generated:{re.escape(name)} -->',
-            re.DOTALL)
-        text, n = pattern.subn(lambda _m: block, text)
-        if n:
-            replaced.append(name)
-    return text, replaced
-
-
 def write_model_card(dir_model, modelname):
-    """Compute thresholds for a trained model, merge them into its config, and
-    write README.md -- a fresh skeleton if there is none, otherwise only its
-    generated blocks. Returns (thresholds, stats)."""
+    """Compute thresholds for a trained model and merge them into its config.
+    Writes a fresh README.md if there is none; an existing one is left alone,
+    since the thresholds it might once have echoed now live only in
+    config_model.json. Returns (thresholds, stats)."""
     with open(os.path.join(dir_model, FNAME_CONFIG)) as f:
         classes = json.load(f)['classes']
     frames, source = load_fold_frames(dir_model, classes)
@@ -325,22 +314,15 @@ def write_model_card(dir_model, modelname):
         return {}, {}
     thresholds, stats = compute(frames, source)
     update_config(dir_model, thresholds, stats)
-    blocks = render_blocks(thresholds, stats)
 
     path_readme = os.path.join(dir_model, FNAME_README)
     if not os.path.exists(path_readme):
         with open(path_readme, 'w') as f:
-            f.write(render_readme(modelname, blocks))
+            f.write(render_readme(modelname))
         print(f'[{modelname}] wrote {path_readme}')
     else:
-        with open(path_readme) as f:
-            text, replaced = refresh_blocks(f.read(), blocks)
-        with open(path_readme, 'w') as f:
-            f.write(text)
-        missing = [b for b in blocks if b not in replaced]
-        print(f'[{modelname}] {FNAME_README} exists; refreshed '
-              f'{", ".join(replaced) or "no generated blocks"}'
-              + (f' (no marker for {", ".join(missing)})' if missing else ''))
+        print(f'[{modelname}] {FNAME_README} exists; left as is '
+              f'(thresholds live in config_model.json)')
     print(f'[{modelname}] thresholds @ fpr {FPR_SUGGESTED}: {thresholds}'
           + ('' if source == 'sample' else f' (from {SUBDIR_SURPRISAL}/)'))
     return thresholds, stats

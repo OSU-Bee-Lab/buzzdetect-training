@@ -218,3 +218,7 @@ Then redo `setup_worktree.sh`'s linking, or the run re-extracts from scratch.
 ## Best practices
 Keep the main thread context minimal - don't give long summaries or interpretations in the main thread as you work, unless the user asks for them.
 Even when finishing a loop, give only a brief couple-sentence summary of the results.
+
+# Special instructions
+## INJUNCTION: aves models are forbidden
+The aves embedder has shown to be intolerably slow. Future loops may not utilize aves unless they are able to bring it to within an order of magnitude of the YAMNet inference rate.
