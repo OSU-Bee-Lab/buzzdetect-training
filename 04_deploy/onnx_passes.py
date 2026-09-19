@@ -160,6 +160,116 @@ def fuse_conv_relu(model):
     return model, n_fused
 
 
+_SCALAR_ELEMENTWISE = ('Add', 'Sub', 'Mul', 'Div', 'Max', 'Min', 'Ceil', 'Floor',
+                       'Cast', 'Neg', 'Abs')
+
+
+def promote_scalars(model):
+    """Rewrite rank-0 shape arithmetic as rank-1, in place; return the number
+    of tensors promoted.
+
+    Frameworks compute things like "how many samples to pad" as a chain of
+    rank-0 tensors: a Squeeze of a length, a few elementwise ops against rank-0
+    constants, then an Unsqueeze into a Pad's paddings. CoreML's MLProgram
+    format types a rank-0 result as [1] and rejects the graph ("Output '0'
+    has unexpected type 'ios18.mul'"), and this only surfaces when the chain
+    survives constant folding, i.e. when its length isn't known until runtime.
+    A rank-1 [1] tensor holds the same number, so: the Squeeze that opens the
+    chain and the Unsqueeze that closes it become Identity, and the rank-0
+    constants in between are replaced by [1] copies. Every tensor of the chain
+    must be consumed only by the chain (or its closing Unsqueeze); if anything else
+    reads one, that chain is left alone rather than half-converted.
+    """
+    g = model.graph
+    init = {t.name: t for t in g.initializer}
+    rank = {t.name: len(t.dims) for t in g.initializer}
+    for v in list(onnx.shape_inference.infer_shapes(model).graph.value_info):
+        if v.type.HasField('tensor_type') and v.type.tensor_type.HasField('shape'):
+            rank.setdefault(v.name, len(v.type.tensor_type.shape.dim))
+    consumers = {}
+    for n in g.node:
+        for i in n.input:
+            consumers.setdefault(i, []).append(n)
+
+    def opens(n):   # Squeeze of a [1] into a scalar
+        return n.op_type == 'Squeeze' and len(n.output) == 1 and rank.get(n.output[0]) == 0
+
+    promoted, opened = set(), []
+    for n in g.node:
+        if opens(n):
+            promoted.add(n.output[0])
+            opened.append(n)
+    chain, closers = [], []
+    changed = True
+    while changed:
+        changed = False
+        for n in g.node:
+            if n in chain or n in closers or not n.output:
+                continue
+            ins = [i for i in n.input if i]
+            data = ins[:1] if n.op_type == 'Cast' else ins
+            if (n.op_type in _SCALAR_ELEMENTWISE
+                    and any(i in promoted for i in data)
+                    and all(i in promoted or (i in init and rank[i] == 0) for i in data)):
+                promoted.add(n.output[0])
+                chain.append(n)
+                changed = True
+            elif (n.op_type == 'Unsqueeze' and ins and ins[0] in promoted
+                    and rank.get(n.output[0]) == 1):
+                closers.append(n)
+                changed = True
+
+    # Group the rewritten nodes into connected chains, then keep only chains
+    # that are entirely self-contained: a promoted tensor read by anything
+    # outside its chain (a Range that needs a true scalar, say), or a constant
+    # shared with such a node, disqualifies that chain and no other.
+    members = opened + chain + closers
+    ids = {id(n): k for k, n in enumerate(members)}
+    parent = list(range(len(members)))
+
+    def find(k):
+        while parent[k] != k:
+            parent[k] = parent[parent[k]]
+            k = parent[k]
+        return k
+
+    producer = {n.output[0]: n for n in opened + chain}
+    for n in chain + closers:
+        for i in n.input:
+            if i in producer:
+                parent[find(ids[id(n)])] = find(ids[id(producer[i])])
+    bad = set()
+    for n in opened + chain:
+        for c in consumers.get(n.output[0], []):
+            if id(c) not in ids:
+                bad.add(find(ids[id(n)]))
+    keep = {id(n) for n in members if find(ids[id(n)]) not in bad}
+    n_promoted = 0
+    for n in opened + closers:
+        if id(n) in keep:
+            src = n.input[0]
+            n.op_type = 'Identity'
+            del n.input[:]
+            n.input.append(src)
+            del n.attribute[:]
+            n_promoted += n in opened
+    copies = {}
+    for n in chain:
+        if id(n) not in keep:
+            continue
+        n_promoted += 1
+        for k, i in enumerate(n.input):
+            if i in init and rank[i] == 0 and i not in promoted:
+                # A copy, not an edit: the constant may also feed a node that
+                # needs a true scalar (a Range's start).
+                if i not in copies:
+                    copies[i] = i + '_r1'
+                    g.initializer.append(numpy_helper.from_array(
+                        numpy_helper.to_array(init[i]).reshape(1), copies[i]))
+                n.input[k] = copies[i]
+    return n_promoted
+
+
 def drop_orphan_initializers(model):
     """Remove initializers no node reads any more.
 

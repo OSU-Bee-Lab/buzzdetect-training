@@ -16,6 +16,7 @@ its own -- `python 04_deploy/model_card.py <name>...` or
 # at module scope.
 
 import argparse
+import time
 import importlib.util
 import os
 import sys
@@ -33,14 +34,51 @@ def load_module(path, module_name):
     return mod
 
 
+class _Tee:
+    """Mirror a stream to the deploy log, timestamping each line there, and
+    flush on every write so the log is current while a slow step runs."""
+
+    def __init__(self, stream, log):
+        self.stream, self.log, self.bol = stream, log, True
+
+    def write(self, text):
+        self.stream.write(text)
+        self.stream.flush()
+        for part in text.splitlines(keepends=True):
+            if self.bol:
+                self.log.write(time.strftime('%m-%d %H:%M:%S '))
+            self.log.write(part)
+            self.bol = part.endswith('\n')
+        self.log.flush()
+
+    def flush(self):
+        self.stream.flush()
+
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
+
+
 def main(modelname, dir_dest, force=False, path_audio=None, dir_src=None,
-         embeddername=None, skip_card=False, assume_yes=False):
+         embeddername=None, skip_card=False, assume_yes=False, fp16_only=False):
     import tensorflow  # noqa: F401  -- load-order side effect; see header comment
 
     here = os.path.dirname(os.path.abspath(__file__))
     root = os.path.dirname(here)
     sys.path.insert(0, root)
     import config as cfg
+
+    # Log to the model's own directory (overwritten each run) so a slow or
+    # failed export can be inspected from where its other artefacts live.
+    dir_log = dir_src or os.path.join(cfg.DIR_MODELS, modelname)
+    if os.path.isdir(dir_log):
+        log = open(os.path.join(dir_log, 'deploy.log'), 'w')
+        sys.stdout, sys.stderr = _Tee(sys.stdout, log), _Tee(sys.stderr, log)
+
+    if fp16_only:
+        print('=== rebuild fp16 sibling (ONNX) ===')
+        export_onnx = load_module(os.path.join(here, 'export_onnx.py'), 'deploy_export_onnx')
+        export_onnx.export_fp16(modelname, dir_dest)
+        return
 
     if not skip_card:
         print('=== model card (thresholds + README) ===')
@@ -76,6 +114,9 @@ if __name__ == '__main__':
                              '(default: the bundled fixture)')
     parser.add_argument('--no-verify-audio', dest='no_verify_audio', action='store_true',
                         help='check on synthetic lengths only')
+    parser.add_argument('--fp16-only', action='store_true',
+                        help='rebuild only model.fp16.onnx from the model.onnx already '
+                             'in the destination; no card, weights or embedder')
     parser.add_argument('--skip-card', action='store_true',
                         help='export as-is; do not refresh thresholds/README first')
     parser.add_argument('-y', '--yes', dest='assume_yes', action='store_true',
@@ -114,4 +155,5 @@ if __name__ == '__main__':
         embeddername=args.embedder,
         skip_card=args.skip_card,
         assume_yes=args.assume_yes,
+        fp16_only=args.fp16_only,
     )

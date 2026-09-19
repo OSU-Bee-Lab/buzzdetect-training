@@ -50,7 +50,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config as cfg  # noqa: E402
-from onnx_passes import count_fusable, optimize  # noqa: E402
+from onnx_passes import count_fusable, optimize, promote_scalars  # noqa: E402
 
 # Per-machine -- buzzdetect's checkout lives wherever this box put it. Set
 # "buzzdetect_dest" in paths.local.json (gitignored; see
@@ -91,6 +91,10 @@ OPSET = 17
 # handing an fp32 graph to the Neural Engine means CoreML's NeuralNetwork
 # format, which declines the FusedConv nodes and ends up slower than the CPU.
 FNAME_FP16 = 'model.fp16.onnx'
+
+# The waveform length buzzdetect fixes the graph at for CoreML (see
+# verify_fixed_length); the fp16 sibling is checked at the same length.
+FIXED_SECONDS = 200
 
 # What the fp16 graph is allowed to differ by. Two orders of magnitude past
 # TOL, and deliberately so: this is not a parity check, it is a check that the
@@ -553,7 +557,7 @@ def probe_framing(path_onnx, embedder):
 
 
 def verify_fixed_length(path_onnx, embedder, samples_hop, samples_min, floor_nonzero,
-                        float32_quotient, seconds=200):
+                        float32_quotient, seconds=FIXED_SECONDS):
     """Check the graph still agrees with itself once its input length is pinned.
 
     This is how buzzdetect runs it. CoreML's MLProgram format cannot compile a
@@ -581,6 +585,7 @@ def verify_fixed_length(path_onnx, embedder, samples_hop, samples_min, floor_non
     worst = 0.0
     for n in (n_fixed, samples_hop * 7, samples_hop * 7 + 137, samples_min - 1):
         samples = (rng.standard_normal(n) * 0.1).astype(np.float32)
+        print(f'  fixed-length check, n={n}')
         padded = np.zeros(n_fixed, dtype=np.float32)
         padded[:n] = samples
         n_expected = frames_for(n, samples_hop, samples_min, floor_nonzero, float32_quotient)
@@ -615,24 +620,174 @@ def write_fp16(path_onnx, path_fp16, samples):
     output dtype is already explicit in its `to` attribute; converting it is
     also the one case where leaving a node in fp32 changes nothing about
     memory or speed, since it was never doing arithmetic.
+
+    Which nodes stay fp32 is a guess about the model's shape, so the result is
+    checked rather than trusted: every candidate is linted for mixed-dtype
+    arithmetic, run on CPU against the fp32 graph, and -- where the provider
+    exists -- compiled by CoreML at the fixed length buzzdetect will use. A
+    candidate that fails any of these is discarded for a more conservative
+    block list (fp16 only for Conv/MatMul/Gemm). If none passes, no sibling is
+    written and False is returned: buzzdetect falls back to model.onnx, which
+    is slower on CoreML but works.
     """
+    import onnx
+
+    model = onnx.load(path_onnx)
+    # The converter names the Casts it inserts after the node they wrap, so
+    # unnamed nodes (e.g. yamnet_pitchshift's hand-built front end) all
+    # collide on '_output_cast_0' and the graph fails to load. Node names are
+    # otherwise unused here, so give every unnamed node a unique one.
+    for i, n in enumerate(model.graph.node):
+        if not n.name:
+            n.name = f'unnamed_{n.op_type}_{i}'
+    n_scalar = promote_scalars(model)
+    if n_scalar:
+        print(f'  promoted {n_scalar} rank-0 tensors to rank 1 (CoreML MLProgram)')
+    nodes = list(model.graph.node)
+    if not any(n.op_type in HEAVY_OPS for n in nodes):
+        print('  no convolution in the graph; skipping the fp16 sibling')
+        return False
+
+    # Front end = every node no trunk convolution feeds, found by data flow
+    # rather than node order: yamnet_pitchshift's twin front end is emitted
+    # after the first branch's convolutions, so slicing at the first Conv left
+    # it in fp16. A Conv with one input and one output channel is a signal
+    # filter (that model's resampler), part of the front end rather than the
+    # start of the trunk; treating it as the boundary put the twin's log-mel
+    # in fp16 and CoreML returned wrong values.
+    weight_dims = {t.name: list(t.dims) for t in model.graph.initializer}
+    def is_trunk_conv(n):
+        return (n.op_type in ('Conv', 'FusedConv')
+                and weight_dims.get(n.input[1], [0, 0])[:2] != [1, 1])
+    fed_by_conv = set()
+    for n in nodes:
+        if is_trunk_conv(n) or fed_by_conv.intersection(n.input):
+            fed_by_conv.update(n.output)
+    frontend = {n.name for n in nodes if not fed_by_conv.intersection(n.output)}
+    casts = {n.name for n in nodes if n.op_type == 'Cast'}
+    strategies = [
+        ('front end + Casts in fp32', frontend | casts),
+        ('only Conv/MatMul/Gemm in fp16',
+         {n.name for n in nodes if n.op_type not in HEAVY_OPS}),
+    ]
+
+    for label, block in strategies:
+        try:
+            _try_fp16(model, path_onnx, path_fp16, samples, sorted(block),
+                      len(frontend), len(casts - frontend), len(nodes))
+            return True
+        except Exception as e:
+            print(f'  fp16 candidate "{label}" rejected: {str(e)[:300]}')
+    if os.path.exists(path_fp16):
+        os.remove(path_fp16)
+    print('WARNING: no fp16 candidate passed; writing model.onnx only')
+    return False
+
+
+HEAVY_OPS = ('Conv', 'FusedConv', 'MatMul', 'Gemm')
+_ELEMENTWISE = ('Add', 'Sub', 'Mul', 'Div', 'Pow', 'Max', 'Min', 'Where', 'Equal',
+                'Less', 'Greater')
+
+
+def lint_dtypes(model):
+    """Return problems the fp16 converter is known to leave behind: duplicate
+    node names, and elementwise nodes whose inputs disagree on dtype (the
+    converter turns a constant fp16 while its blocked consumer stays fp32, or
+    the reverse, and CoreML refuses the result). Only inputs whose dtype is
+    known are compared."""
+    import onnx
+    inferred = onnx.shape_inference.infer_shapes(model)
+    g = inferred.graph
+    dtype = {t.name: t.data_type for t in g.initializer}
+    for v in list(g.input) + list(g.value_info) + list(g.output):
+        if v.type.HasField('tensor_type'):
+            dtype.setdefault(v.name, v.type.tensor_type.elem_type)
+    problems = []
+    names = [n.name for n in g.node]
+    dupes = {x for x in names if names.count(x) > 1}
+    if dupes:
+        problems.append(f'duplicate node names: {sorted(dupes)[:3]}')
+    for n in g.node:
+        if n.op_type not in _ELEMENTWISE:
+            continue
+        # Where's first input is a bool condition
+        ins = list(n.input)[1:] if n.op_type == 'Where' else list(n.input)
+        types = {dtype[i] for i in ins if i in dtype}
+        if len(types) > 1:
+            problems.append(f'{n.op_type} {n.name}: mixed input dtypes {sorted(types)}')
+    return problems
+
+
+# How buzzdetect loads the fp16 sibling (engine/src/inference/onnx.py,
+# COREML_FP16): ALL compute units, so the Neural Engine, which is stricter than
+# the GPU about shapes it will accept.
+COREML_FP16 = {'ModelFormat': 'MLProgram', 'MLComputeUnits': 'ALL'}
+
+_COREML_CHILD = """
+import sys, numpy as np, onnxruntime as ort
+path, n, name_dim, name_in, out = sys.argv[1:6]
+opts = ort.SessionOptions()
+opts.add_free_dimension_override_by_name(name_dim, int(n))
+opts.log_severity_level = 3
+s = ort.InferenceSession(path, opts, providers=[('CoreMLExecutionProvider', %r),
+                                                'CPUExecutionProvider'])
+x = np.load(out + '.in.npy')
+np.save(out, s.run(None, {name_in: x})[0])
+""" % COREML_FP16
+
+
+def check_coreml(path, path_reference, n_fixed):
+    """Load the graph under CoreML as buzzdetect does -- the same provider
+    options, the length pinned by a session override -- and run it once,
+    comparing against the fp32 graph on the CPU. Session creation is where
+    CoreML parses and compiles, and the Neural Engine can still refuse at the
+    first run, so both are exercised. It runs in a subprocess because Apple's
+    compiler aborts the whole process on some graphs, which no try/except
+    survives. Raises on any failure; returns False, checking nothing, where the
+    provider isn't installed."""
+    import subprocess
+    import onnxruntime as ort
+
+    if 'CoreMLExecutionProvider' not in ort.get_available_providers():
+        return False
+    rng = np.random.default_rng(3)
+    x = (rng.standard_normal(n_fixed) * 0.1).astype(np.float32)
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, 'out.npy')
+        np.save(out + '.in.npy', x)
+        r = subprocess.run(
+            [sys.executable, '-c', _COREML_CHILD, path, str(n_fixed), DIM_SAMPLES,
+             NAME_IN, out], capture_output=True, text=True)
+        if r.returncode != 0 or not os.path.exists(out):
+            lines = [l for l in (r.stderr or r.stdout).splitlines() if l.strip()]
+            raise RuntimeError(f'CoreML exit {r.returncode}: ' + ' | '.join(lines[-3:]))
+        got = np.load(out)
+    opts = ort.SessionOptions()
+    opts.add_free_dimension_override_by_name(DIM_SAMPLES, n_fixed)
+    expected = ort.InferenceSession(path_reference, opts,
+                                    providers=['CPUExecutionProvider']).run(
+        None, {NAME_IN: x})[0]
+    if expected.shape != got.shape:
+        raise RuntimeError(f'CoreML output {got.shape} against {expected.shape}')
+    d = float(np.abs(expected - got).max())
+    print(f'  CoreML (MLProgram, ALL) max|d| against fp32 CPU = {d:.2e}')
+    if d > TOL_FP16:
+        raise RuntimeError(f'CoreML max|d|={d:.2e} (limit {TOL_FP16})')
+    return True
+
+
+def _try_fp16(model, path_onnx, path_fp16, samples, node_block_list,
+              n_frontend, n_casts, n_nodes):
+    """Convert with one block list and run every check; raise on any failure."""
     import onnx
     import onnxruntime as ort
     from onnxconverter_common import float16
 
-    model = onnx.load(path_onnx)
-    nodes = list(model.graph.node)
-    first_conv = next((i for i, n in enumerate(nodes)
-                       if n.op_type in ('Conv', 'FusedConv')), None)
-    if first_conv is None:
-        raise SystemExit('no convolution in the graph; fp16 conversion has no '
-                         'sensible boundary to stop at')
-    frontend = {n.name for n in nodes[:first_conv]}
-    casts = {n.name for n in nodes if n.op_type == 'Cast'}
-    node_block_list = sorted(frontend | casts)
-
     converted = float16.convert_float_to_float16(
         model, keep_io_types=True, node_block_list=node_block_list)
+    problems = lint_dtypes(converted)
+    if problems:
+        raise RuntimeError('; '.join(problems[:3]))
     onnx.save(converted, path_fp16)
 
     # It loads, it runs, and it still resembles the model it came from. Run
@@ -658,21 +813,57 @@ def write_fp16(path_onnx, path_fp16, samples):
     d = float(np.abs(expected - got).max())
     agree = float((expected.argmax(1) == got.argmax(1)).mean())
     print(f'  {os.path.getsize(path_fp16) / 1e6:.2f} MB, '
-          f'{len(node_block_list)} of {len(nodes)} nodes left in fp32 '
-          f'({len(frontend)} front end, {len(casts - frontend)} Cast), '
+          f'{len(node_block_list)} of {n_nodes} nodes left in fp32 '
+          f'({n_frontend} front end, {n_casts} Cast), '
           f'max|d|={d:.2e}, top-class agreement={agree:.4f}')
     # Both bounds are loose on purpose. This is not a parity check -- reduced
     # precision is a deliberate trade the operator opts into -- it is a check
     # that the conversion produced the model rather than mush, and in
-    # particular that the fp32/fp16 boundary landed somewhere sensible. A model
-    # whose feature extractor is itself convolutional would put that boundary
-    # in the wrong place, and this is what would say so.
+    # particular that the fp32/fp16 boundary landed somewhere sensible.
     if d > TOL_FP16 or agree < AGREE_FP16:
-        raise SystemExit(
-            f'fp16 conversion looks wrong: max|d|={d:.2e} (limit {TOL_FP16}), '
-            f'top-class agreement={agree:.4f} (limit {AGREE_FP16}). The fp32 '
-            f'prefix is {len(frontend)} nodes; if this model\'s front end is '
-            f'itself convolutional, that boundary is in the wrong place.')
+        raise RuntimeError(
+            f'max|d|={d:.2e} (limit {TOL_FP16}), top-class agreement='
+            f'{agree:.4f} (limit {AGREE_FP16})')
+
+    if not check_coreml(path_fp16, path_onnx, samples):
+        print('  CoreML unavailable here; fp16 graph NOT compile-checked for it')
+
+
+def drop_stale_fp16(dir_stage, dir_out):
+    """If staging produced no fp16 sibling, remove the one an earlier export
+    left in the destination: it belongs to a model that no longer exists."""
+    stale = os.path.join(dir_out, FNAME_FP16)
+    if not os.path.exists(os.path.join(dir_stage, FNAME_FP16)) and os.path.exists(stale):
+        os.remove(stale)
+        print(f'removed stale {stale}')
+
+
+def export_fp16(modelname, dir_dest):
+    """Rebuild only the fp16 sibling, from the model.onnx already in the
+    destination. Needs no trained weights, embedder or audio: the fp32 graph
+    is the whole input, and it is left untouched. For a shipped model whose
+    sibling was written by an older (or buggier) write_fp16."""
+    dir_out = os.path.join(dir_dest, modelname)
+    path_onnx = os.path.join(dir_out, 'model.onnx')
+    path_config = os.path.join(dir_out, 'config_model.json')
+    for path in (path_onnx, path_config):
+        if not os.path.isfile(path):
+            raise SystemExit(f'{path} missing; run a full export first')
+    with open(path_config) as f:
+        samplerate = json.load(f)['samplerate']
+
+    dir_stage = tempfile.mkdtemp(prefix='export_fp16_')
+    try:
+        print(f'rebuilding {FNAME_FP16} for {modelname} from {path_onnx}')
+        write_fp16(path_onnx, os.path.join(dir_stage, FNAME_FP16),
+                   int(FIXED_SECONDS * samplerate))
+        staged = os.path.join(dir_stage, FNAME_FP16)
+        if os.path.exists(staged):
+            shutil.copy2(staged, os.path.join(dir_out, FNAME_FP16))
+            print(f'wrote {os.path.join(dir_out, FNAME_FP16)}')
+        drop_stale_fp16(dir_stage, dir_out)
+    finally:
+        shutil.rmtree(dir_stage, ignore_errors=True)
 
 
 def stage_readme(dir_src, dir_out, dir_stage):
@@ -742,6 +933,7 @@ def export(modelname, dir_dest, force=False, path_audio=None,
 
     print('writing the reduced-precision sibling')
     write_fp16(path_onnx, os.path.join(dir_stage, FNAME_FP16), n_session)
+    drop_stale_fp16(dir_stage, dir_out)
 
     config_out = {
         'classes': config['classes'],
@@ -809,6 +1001,9 @@ def main():
                         help="override the embedder named in config_model.json, "
                              "for a config that names one of buzzdetect's "
                              "(yamnet_k2 is this repo's yamnet)")
+    parser.add_argument('--fp16-only', action='store_true',
+                        help=f'rebuild only {FNAME_FP16} from the model.onnx already '
+                             'in the destination (no weights or embedder needed)')
     parser.add_argument('--verify-audio', default=FIXTURE_AUDIO, metavar='PATH',
                         help='audio to run the parity check on '
                              '(default: the bundled fixture)')
@@ -822,6 +1017,9 @@ def main():
                           'in paths.local.json (see paths.local.example.json)')
     if not os.path.isdir(args.dest):
         raise SystemExit(f'destination does not exist: {args.dest}')
+    if args.fp16_only:
+        export_fp16(args.modelname, args.dest)
+        return
     # Checked up front: the export is a slow way to discover a typo.
     if args.verify_audio is not None and not os.path.isfile(args.verify_audio):
         raise SystemExit(f'no such audio: {args.verify_audio}')
