@@ -349,10 +349,6 @@ training. Do not relabel anything.
 - **[E3] Seed averaging inside a run.** Shrinks error on every future
   experiment for ~2-3x compute. Era-boundary decision; **Luke declined for
   now** (2026-09-10). Re-raise at the next cutover.
-- **[E2] Trunk fine-tuning.** `trunk-ft-1e5` was +0.046 at 9/11 folds with an
-  interior depth optimum (layers 13-14). **The standing injunction bans
-  unfreezing backbone layers.** If unparked, do not let the frozen ranking
-  choose the embedder.
 - **[policy] `large`-set confirmation. Forbidden without Luke asking.**
 - **[E3] Frame length isolated from embedder** (YAMNet at a 5 s effective frame,
   `overlap_event_s` held absolute). Item 2 asks the motivating question more
