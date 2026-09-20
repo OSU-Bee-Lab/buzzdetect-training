@@ -91,7 +91,9 @@ def write_fold_surprisal(dir_model_full, model, setname, embeddername, fold,
             idents_no_frametimes.add(ident)
             continue
 
-        logits = model(np.asarray(s.embeddings, dtype=np.float32), training=False).numpy()
+        _emb = np.asarray(s.embeddings, dtype=np.float32)
+        logits = np.concatenate([model(_emb[i:i + 1024], training=False).numpy()
+                                 for i in range(0, len(_emb), 1024)])
         probs = 1.0 / (1.0 + np.exp(-logits))
         probs_c = np.clip(probs, 1e-12, 1.0 - 1e-12)
 
