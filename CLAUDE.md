@@ -68,7 +68,7 @@ Its first line is the job's state, timestamped: running or not, folds done,
 error lines so far, the last log line. Re-arming therefore also catches anything
 logged while no Monitor was armed. After that it stays silent until something
 completes: stage 3's CV headline, the shipped model, and the closing
-`[launch_job] exit N`. It exits with the job. No per-fold or per-error events:
+`[launch_job] exit N`. It exits with the job. The same watch fits any command (a one-off diagnostic too): the state line and exit line are generic, only the headline and shipped events are pipeline-specific. No per-fold or per-error events:
 a crash ends the job and arrives as its exit line, and an error that leaves a
 job hanging shows in the next re-arm's error count. **Re-arm the Monitor at every
 expiry, every time, until the job is done.** Expiries are expected and cheap;
