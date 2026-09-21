@@ -6,5 +6,5 @@ retry() { for i in 1 2 3 4 5 6; do "$@" && return 0; echo "[retry $i] $* exited 
 PY="conda run --no-capture-output -n buzzdetect-train python -u"
 export BUZZDETECT_CHUNK_FRAMES=48 TRUNK_FP16=1 TRUNK_LR_HEAD=2e-4 TRUNK_BATCH=1024 TRUNK_LR_BACKBONE=1e-5
 retry $PY 03_train/main.py --name trunklarge-ft-1e5 --set large --embedder yamnet_trunk \
-  --translation general --epochs 60 -y --verbose
+  --translation general --epochs 60 -y --verbose || { echo "CHAINLARGE-FAILED: retries exhausted"; exit 1; }
 echo CHAINLARGE-DONE
