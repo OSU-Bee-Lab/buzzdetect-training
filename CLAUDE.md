@@ -91,6 +91,11 @@ A leading `sleep` in a Bash call is blocked outright. launch_job exists for exac
   job, and `pkill -f` has killed its own shell. watch_job follows the PID.
   If you must match a pattern, bracket its first letter:
   `pgrep -af "[0]3_train/main.py"`.
+- **Watch launch_job's own pid, not a `retry()`-wrapped chain's inner subprocess.**
+  `chain*.sh` scripts wrap each step in `retry()`; a kill mid-fold respawns a new
+  python pid every attempt, but the outer `launch_job.sh` pid (what it printed,
+  and what the chain resumes under) lives for the whole chain. Watching an inner
+  pid means watch_job exits (job "failed") on every retry, not just a real end.
   
 
 ## Gotchas
