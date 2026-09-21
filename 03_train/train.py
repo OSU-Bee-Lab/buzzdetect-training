@@ -1,4 +1,5 @@
 # TensorFlow imported first — see 03_train/main.py for rationale.
+import gc
 import json
 import math
 import os
@@ -61,7 +62,17 @@ class TrainingData:
     val_eval: tuple = None
 
 
-def _to_tf(data, size_batch, size_shuffle):
+def _rss_gb():
+    try:
+        with open('/proc/self/status') as f:
+            return next(int(l.split()[1]) for l in f if l.startswith('VmRSS')) / 2**20
+    except Exception:
+        return float('nan')
+
+
+def _to_tf(data, size_batch, size_shuffle, free=False):
+    if os.environ.get('TRUNK_FP16'):
+        return _to_tf_lowmem(data, size_batch, free)
     embeddings, targets = [], []
     for s in data:
         embeddings.extend(s.embeddings)
@@ -73,6 +84,47 @@ def _to_tf(data, size_batch, size_shuffle):
         tf.data.Dataset.from_tensor_slices((emb_np, tgt_np))
         .cache().shuffle(size_shuffle).batch(size_batch).prefetch(tf.data.AUTOTUNE)
     )
+
+
+def _to_tf_lowmem(data, size_batch, free=False):
+    """Wide float16 embeddings (yamnet_trunk 12288-d, yamnet_trunk_context 36864-d):
+    one preallocated float16 array, reshuffled every epoch by a generator that casts
+    per batch. The plain path holds ~5 copies, which is ~26 GB for the context arm."""
+    n = sum(s.frames for s in data)
+    width = len(data[0].embeddings[0])
+    emb = np.empty((n, width), dtype=np.float16)
+    tgt = np.empty((n, len(data[0].target_array)), dtype=np.float32)
+    at = 0
+    for s in data:
+        emb[at:at + s.frames] = np.asarray(s.embeddings)
+        tgt[at:at + s.frames] = s.target_array
+        at += s.frames
+        if free:
+            s.embeddings = None  # the float16 copy above is the only one kept
+
+    return _Fp16Batches(emb, tgt, size_batch)
+
+
+class _Fp16Batches(tf.keras.utils.PyDataset):
+    """Reshuffled-every-epoch float16 batches, cast to float32 per batch. A PyDataset
+    rather than Dataset.from_generator: from_generator parks its closure (here the
+    whole embedding array) in TensorFlow's global py-function registry, so every
+    fold's data outlived the fold and the host ran out of RAM after a few folds."""
+
+    def __init__(self, emb, tgt, size_batch):
+        super().__init__()
+        self.emb, self.tgt, self.size_batch = emb, tgt, size_batch
+        self.perm = np.random.permutation(len(emb))
+
+    def __len__(self):
+        return -(-len(self.emb) // self.size_batch)
+
+    def __getitem__(self, i):
+        b = np.sort(self.perm[i * self.size_batch:(i + 1) * self.size_batch])
+        return self.emb[b].astype(np.float32), self.tgt[b]
+
+    def on_epoch_end(self):
+        self.perm = np.random.permutation(len(self.emb))
 
 
 def _eval_arrays(samples, classes):
@@ -161,11 +213,11 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     weights = build_weights(data_train, classes)
     weight_dict = {i: w for i, w in enumerate(weights['weight'])}
 
-    size_batch = 65568
+    size_batch = int(os.environ.get('TRUNK_BATCH', 65568))
     size_shuffle = 10 * size_batch
 
     return TrainingData(
-        train_tf=_to_tf(data_train, size_batch, size_shuffle),
+        train_tf=_to_tf(data_train, size_batch, size_shuffle, free=True),
         val_tf=_to_tf(data_val, size_batch, size_shuffle) if data_val is not None else None,
         classes=classes,
         weight_dict=weight_dict,
@@ -198,7 +250,8 @@ def _score_fold(model, setname, embeddername, fold, translation, classes):
         return None, None
 
     embeddings, correct, loudness, sample_id = _eval_arrays(samples, classes)
-    logits = model(embeddings, training=False).numpy()
+    logits = np.concatenate([model(embeddings[i:i + 1024], training=False).numpy()
+                             for i in range(0, len(embeddings), 1024)])
     activation = logits[:, classes.index('ins_buzz')]
     targets = np.concatenate([np.tile(np.asarray(s.target_array), (s.frames, 1))
                               for s in samples])
@@ -351,6 +404,13 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     if dropout:
         model.add(tf.keras.layers.Dropout(dropout))
     model.add(tf.keras.layers.Dense(len(data.classes)))
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.002)
+    if hasattr(embedder, 'build_head'):
+        # Fine-tunable embedder (yamnet_trunk): layers 13-14 live in the head.
+        model = embedder.build_head(
+            len(data.classes), lr_backbone=float(os.environ.get('TRUNK_LR_BACKBONE', 0)),
+            lr_head=float(os.environ.get('TRUNK_LR_HEAD', 2e-4)), dropout=dropout, name=tf_name)
+        optimizer = model.optimizer
 
     # Per-class weights go in the loss, not in fit(class_weight=). Keras'
     # class_weight= assumes single-label targets: for a multi-hot y it collapses
@@ -360,7 +420,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     weights_ordered = [data.weight_dict[i] for i in range(len(data.classes))]
     model.compile(
         loss=weighted_bce_loss(weights_ordered, label_smoothing=0.2),
-        optimizer=tf.keras.optimizers.Adam(learning_rate=0.002),
+        optimizer=optimizer,
         metrics=['accuracy'],
     )
 
@@ -774,7 +834,20 @@ def train_set(name, embeddername, setname, name_translation,
         print(f"{tag}: {result['n_epochs']} epochs (best {result['best_epoch']}), "
               f"val_loss {result['best_val_loss']:.4f}, "
               f"{data.frames_train}/{data.frames_val} frames train/val, "
-              f"{_format_sens(sens)}", flush=True)
+              f"{_format_sens(sens)}, rss {_rss_gb():.1f}G", flush=True)
+
+        # Each fold builds a fresh model; without this the GPU allocations pile up
+        # across folds and a later fold dies with "Dst tensor is not initialized".
+        del model
+        # data.train_tf (_Fp16Batches) holds the whole fold's packed embedding
+        # array (~9 GB on `large`); dropping only `model` left it and this fold's
+        # `data` reachable until the next `data = _load_data(...)` reassignment,
+        # so the outgoing and incoming fold's arrays briefly coexisted and OOM
+        # killed the process on `large`'s bigger pools. Clear it explicitly first.
+        data.train_tf = data.val_tf = data.val_eval = None
+        del data
+        tf.keras.backend.clear_session()
+        gc.collect()
 
     summary_rows, predictions_pooled = _collect_fold_results(dir_folds, folds_scored)
 
