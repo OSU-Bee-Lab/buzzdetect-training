@@ -86,22 +86,47 @@ def _to_tf(data, size_batch, size_shuffle, free=False):
     )
 
 
-def _to_tf_lowmem(data, size_batch, free=False):
-    """Wide float16 embeddings (yamnet_trunk 12288-d, yamnet_trunk_context 36864-d):
-    one preallocated float16 array, reshuffled every epoch by a generator that casts
-    per batch. The plain path holds ~5 copies, which is ~26 GB for the context arm."""
-    n = sum(s.frames for s in data)
-    width = len(data[0].embeddings[0])
+def _pack_fp16(samples, free=False):
+    """Pack samples' embeddings into one preallocated float16 array, freeing
+    each sample's raw copy as it's copied in (see _load_data: packing one
+    source fold at a time instead of the whole training pool keeps the raw
+    and packed copies from coexisting at full size)."""
+    n = sum(s.frames for s in samples)
+    width = len(samples[0].embeddings[0])
     emb = np.empty((n, width), dtype=np.float16)
-    tgt = np.empty((n, len(data[0].target_array)), dtype=np.float32)
+    tgt = np.empty((n, len(samples[0].target_array)), dtype=np.float32)
     at = 0
-    for s in data:
+    for s in samples:
         emb[at:at + s.frames] = np.asarray(s.embeddings)
         tgt[at:at + s.frames] = s.target_array
         at += s.frames
         if free:
             s.embeddings = None  # the float16 copy above is the only one kept
+    return emb, tgt
 
+
+def _to_tf_lowmem(data, size_batch, free=False):
+    """Wide float16 embeddings (yamnet_trunk 12288-d, yamnet_trunk_context 36864-d):
+    one preallocated float16 array, reshuffled every epoch by a generator that casts
+    per batch. The plain path holds ~5 copies, which is ~26 GB for the context arm."""
+    emb, tgt = _pack_fp16(data, free=free)
+    return _Fp16Batches(emb, tgt, size_batch)
+
+
+def _assemble_fp16(chunks_emb, chunks_tgt, size_batch):
+    """Concatenate per-fold float16 chunks (see _load_data) into one array
+    without the peak a plain np.concatenate would add: each chunk is copied
+    into the final buffer and dropped immediately, so memory is the final
+    array plus at most one live chunk, never both full copies at once."""
+    n = sum(len(c) for c in chunks_emb)
+    emb = np.empty((n, chunks_emb[0].shape[1]), dtype=np.float16)
+    tgt = np.empty((n, chunks_tgt[0].shape[1]), dtype=np.float32)
+    at = 0
+    while chunks_emb:
+        c_emb, c_tgt = chunks_emb.pop(0), chunks_tgt.pop(0)
+        emb[at:at + len(c_emb)] = c_emb
+        tgt[at:at + len(c_tgt)] = c_tgt
+        at += len(c_emb)
     return _Fp16Batches(emb, tgt, size_batch)
 
 
@@ -174,11 +199,23 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     translation = pd.read_csv(cfg.path_translation(setname, name_translation))
     classes = build_classes(translation)
 
+    # Packed per source fold as it loads, not after the whole training pool is
+    # in RAM: `large`'s ~40-fold pool held every fold's raw float32 embeddings
+    # (~18 GB) alongside the packed float16 copy (~9 GB) under the old
+    # load-everything-then-convert order, which OOM-killed the process on
+    # every fold (fine on `medium`'s much smaller pool).
+    fp16 = bool(os.environ.get('TRUNK_FP16'))
     data_train = []
+    chunks_emb, chunks_tgt = [], []
     for fold in folds_train:
-        data_train += build_fold_dataset(
+        fold_samples = build_fold_dataset(
             cfg.dir_embeddings_fold(setname, embeddername, fold), translation,
         )
+        if fp16 and fold_samples:
+            emb_chunk, tgt_chunk = _pack_fp16(fold_samples, free=True)
+            chunks_emb.append(emb_chunk)
+            chunks_tgt.append(tgt_chunk)
+        data_train += fold_samples
     frames_train = sum(s.frames for s in data_train)
 
     data_val = None
@@ -201,7 +238,12 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
             val_eval = (embeddings_val, correct_val, correct_val_exclquiet)
 
     if aug_dirnames:
-        data_train += load_augmented(setname, embeddername, aug_dirnames, translation, folds_train)
+        aug_samples = load_augmented(setname, embeddername, aug_dirnames, translation, folds_train)
+        if fp16 and aug_samples:
+            emb_chunk, tgt_chunk = _pack_fp16(aug_samples, free=True)
+            chunks_emb.append(emb_chunk)
+            chunks_tgt.append(tgt_chunk)
+        data_train += aug_samples
 
     if not data_train:
         raise ValueError(
@@ -216,9 +258,14 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     size_batch = int(os.environ.get('TRUNK_BATCH', 65568))
     size_shuffle = 10 * size_batch
 
+    train_tf = (_assemble_fp16(chunks_emb, chunks_tgt, size_batch) if fp16
+                else _to_tf(data_train, size_batch, size_shuffle, free=True))
+
     return TrainingData(
-        train_tf=_to_tf(data_train, size_batch, size_shuffle, free=True),
-        val_tf=_to_tf(data_val, size_batch, size_shuffle) if data_val is not None else None,
+        train_tf=train_tf,
+        # already extracted into val_eval above; free=True drops the raw
+        # copy instead of keeping it resident for the rest of the fold.
+        val_tf=_to_tf(data_val, size_batch, size_shuffle, free=True) if data_val is not None else None,
         classes=classes,
         weight_dict=weight_dict,
         weights=weights,
