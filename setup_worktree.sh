@@ -28,6 +28,13 @@ for d in "$ROOT/embedders/"/*/; do
 done
 ln -sf "$ROOT/embedders/embedding.py" "$WT/embedders/embedding.py"
 
+# Per-machine config (buzzdetect_dest, audio_sources) — gitignored, so a fresh
+# worktree has none and 04_deploy/main.py fails with "no destination" the
+# first time it's run there.
+if [ -e "$ROOT/paths.local.json" ] && [ ! -e "$WT/paths.local.json" ]; then
+    ln -s "$ROOT/paths.local.json" "$WT/paths.local.json"
+fi
+
 # Set data: symlink the gitignored products of build.R and extraction for every
 # set that exists. A set whose build.R isn't committed has no directory in the
 # worktree at all — skip it rather than dying halfway through the loop, or the
