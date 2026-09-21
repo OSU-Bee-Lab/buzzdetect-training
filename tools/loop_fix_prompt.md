@@ -19,16 +19,15 @@ Tell the loop the outcome with `{ROOT}/tools/loop_signal.sh` (works from any wor
 - **Anything only Luke can resolve** (the data or annotations, a policy call, a repair you couldn't make work): don't guess and don't work around it.
   1. Record it in the experiment's `notes.md`: what broke, what you tried, what Luke needs to decide. Commit and push `exp/<slug>`.
   2. If you started a job that's still running, write a `HANDOFF.md` (below) and commit it too.
-  3. Send `loop_signal.sh halt` with the same summary and end your turn. The loop stops your session and quits, without killing your jobs.
+  3. Send `loop_signal.sh halt` with the same summary, and a PushNotification with its first line (the one event Luke gets pushed), then end your turn. The loop stops your session and quits, without killing your jobs.
 
-**`HANDOFF.md` is only for a session that ends while its job runs:** a halt, or
-a wrap-up after Luke's Ctrl+C on the loop, which kills the job. The heartbeat
-pings keep a waiting session alive, so a slow run is never a reason to write
-one. The next experiment agent resumes every handoff it finds. Commit it in the
+**`HANDOFF.md` is only for a session that ends while its job runs:** a halt.
+Watch every job with a Monitor on `tools/watch_job.sh`, re-armed at every
+30-min expiry (CLAUDE.md "Running long jobs"); that keeps a waiting session
+alive, so a slow run is never a reason to write one. The next experiment agent resumes every handoff it finds. Commit it in the
 worktree with four things:
 
-- the one-command progress check, plus `tools/notify_job.sh <pid> --log <log>`
-  to get the job's pings;
+- the job's pid and log, for `tools/watch_job.sh <pid> <log>` in a Monitor;
 - "if it's still running, report progress and stop";
 - what to do when it finishes: the comparator, then steps 4-5;
 - what to do if it died, including the exact relaunch command.

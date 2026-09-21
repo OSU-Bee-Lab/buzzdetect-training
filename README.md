@@ -670,9 +670,8 @@ Each tool's header documents its options.
 
 | tool | does |
 |---|---|
-| `launch_job.sh` | start a long job detached (the only way that survives Claude Code) with timestamped log lines, plus its notifier. Uses the GPU unless `--cpu` |
-| `notify_job.sh` | ping a session about a job: each stage-3 fold, errors, the job's end, and every 50 min; started by `launch_job.sh` |
-| `send_to_session.sh` | message a running Claude Code session by name, via a haiku SendMessage relay |
+| `launch_job.sh` | start a long job detached (the only way that survives Claude Code) with timestamped log lines. Uses the GPU unless `--cpu` |
+| `watch_job.sh` | the Monitor command for a launched job: its state, then only completions (CV headline, shipped model, exit); re-arm every 30 min |
 | `results.py` | a notes.md Results section for two models: per-fold deltas ± SD, headline, tiers |
 | `compare_folds.py` | the per-fold join of two `folds_sx.csv` files |
 | `eval_sampling_sd.py` | event-blocked bootstrap SD of a model's per-fold and headline sensitivity, or of a paired delta |

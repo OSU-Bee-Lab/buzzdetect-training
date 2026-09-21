@@ -54,26 +54,41 @@ the lite set runs for minutes on CPU, and piping a raw run through `tail`
 hides all output until it exits.
 
 ```bash
-tools/launch_job.sh <log> -- <command...>   # detaches the job and starts its notifier
+tools/launch_job.sh <log> -- <command...>   # detaches the job; prints its pid
 ```
 
-Then wait. launch_job runs a notifier that pings you on milestones, errors, completions, or every 50 min if the job is still running.
-There is nothing else to arm or poll (ScheduleWakeup is for `/loop`, not jobs) and there is no need to sleep.
-Pings arrive as "Another Claude session sent a message: [job …]".
+Then watch it with Claude Code's built-in **Monitor** tool, `timeout_ms: 1800000`
+(the 30-min maximum), with launch_job's printed command:
 
-Summarize each ping minimally in the main session context, a few words. They aren't for the user, they're for you.
+```bash
+tools/watch_job.sh <pid> <log>
+```
 
-Trust the notifier: read the log only when a ping looks wrong, such as a job running well past what you expected.
-DONE, FAILED and error pings need real attention. 
+Its first line is the job's state, timestamped: running or not, folds done,
+error lines so far, the last log line. Re-arming therefore also catches anything
+logged while no Monitor was armed. After that it stays silent until something
+completes: stage 3's CV headline, the shipped model, and the closing
+`[launch_job] exit N`. It exits with the job. No per-fold or per-error events:
+a crash ends the job and arrives as its exit line, and an error that leaves a
+job hanging shows in the next re-arm's error count. **Re-arm the Monitor at every
+expiry, every time, until the job is done.** Expiries are expected and cheap;
+re-arming keeps the session alive and its cache warm. A lapsed Monitor means
+nobody is watching. The re-arm's first line doubles as your check, so there is
+nothing else to poll, no `sleep`, and no ScheduleWakeup (that's for `/loop`).
 
-To get pings for a job another session launched (a HANDOFF.md resume): `tools/notify_job.sh <pid> --log <log>`.
+`exit 0` is done; any other exit, or a rising error count, needs real attention. Read
+the log when an event looks wrong or a job runs well past what you expected.
+Don't PushNotification about jobs, not even on failure or completion: Luke
+checks in when he wants. Push only when you can't go forward without his input.
+A job another session launched (a HANDOFF.md resume) is watched the same way,
+with its pid and log.
 
-**`run_in_background` doesn't work.** A pipeline job launched with it is SIGKILLed within ~15–60 s, and a waiter loop within a minute or two.
-A leading `sleep` in a Bash call is blocked outright. launch_job is designed to solve all of these problems!
+**`run_in_background` doesn't work.** A pipeline job launched with it is SIGKILLed within ~15–60 s.
+A leading `sleep` in a Bash call is blocked outright. launch_job exists for exactly this.
 
 - **`pgrep -f` and `pkill -f` match their own shell.** Claude Code runs each call
   as `bash -c '<command>'`, so an unbracketed pattern always finds a "running"
-  job, and `pkill -f` has killed its own shell. The notifier follows the PID.
+  job, and `pkill -f` has killed its own shell. watch_job follows the PID.
   If you must match a pattern, bracket its first letter:
   `pgrep -af "[0]3_train/main.py"`.
   

@@ -14,23 +14,22 @@ Tell the loop where you stand with `{ROOT}/tools/loop_signal.sh` (works from any
 - **Halt: blocked by something only Luke can resolve.** For example, a problem in the data that should stop training entirely, or a policy call.
   1. Record it in the experiment's `notes.md`: what broke, what you tried, what Luke needs to decide. Commit and push `exp/<slug>`.
   2. If the experiment is unfinished, commit a `HANDOFF.md`.
-  3. Send `loop_signal.sh halt` with a summary. The loop stops your session and quits, without running a fixer and without killing your jobs. If a process is hanging, kill it first.
+  3. Send `loop_signal.sh halt` with a summary, and a PushNotification with its first line: this is the one event Luke gets pushed. The loop stops your session and quits, without running a fixer and without killing your jobs. If a process is hanging, kill it first.
 - **Luke asks you to stop the loop:** `loop_signal.sh stop`, and the loop exits after this batch.
 
-Cleanup is the loop's job. Once you signal `done` or `issue`, it stops this session and kills every job you started with `launch_job.sh`, notifiers included. After `halt` it stops the session and leaves the jobs running. Don't stop jobs or notifiers yourself.
+Cleanup is the loop's job. Once you signal `done` or `issue`, it stops this session and kills every job you started with `launch_job.sh`. After `halt` it stops the session and leaves the jobs running. Don't stop jobs yourself.
 
 **`HANDOFF.md` is only for a session that ends before its experiment does:** an
-`issue`, a `halt`, or a wrap-up after Luke's Ctrl+C on the loop. The heartbeat
-pings keep a waiting session alive, so a slow run is never a reason to write
-one. The next experiment agent resumes every handoff whose experiment isn't in
+`issue` or a `halt`. Watch every job with a Monitor on `tools/watch_job.sh`,
+re-armed at every 30-min expiry (CLAUDE.md "Running long jobs"); that keeps a
+waiting session alive, so a slow run is never a reason to write one. The next experiment agent resumes every handoff whose experiment isn't in
 `log.jsonl` yet. The loop lists those handoffs at the end of this prompt (none
 listed means none to resume); any
 other `HANDOFF*.md` under `.local/worktrees/` belongs to a closed era (its
 experiment is in an `archive/*/log.jsonl`), so ignore it. Commit a handoff in
 the worktree with four things:
 
-- the one-command progress check, plus `tools/notify_job.sh <pid> --log <log>`
-  to get the job's pings;
+- the job's pid and log, for `tools/watch_job.sh <pid> <log>` in a Monitor;
 - "if it's still running, report progress and stop";
 - what to do when it finishes: the comparator, then steps 4-5;
 - what to do if it died, including the exact relaunch command. After an
