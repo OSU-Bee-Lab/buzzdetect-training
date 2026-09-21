@@ -86,7 +86,7 @@ in addition to the baseline.
 - **Don't measure the noise floor.** There is no seed control, and repeat runs to
   build a CI are not how this loop spends compute. Read the headline delta
   against its eval SD, and confirm a large gain with one repeat run.
-- Do not modify `01_annotate/`, `translations/`, any set's `build.R`, or
+- Do not modify `01_annotate/`, any set's `build.R`, or
 `03_train/metrics.py`.
 
 ## Experiment lifecycle
