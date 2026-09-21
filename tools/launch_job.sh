@@ -66,7 +66,7 @@ pid=$!
 disown
 
 # Register it in the main checkout (shared by every worktree), so
-# tools/agent_loop.sh can kill the jobs its agents started.
+# tools/human/agent_loop.sh can kill the jobs its agents started.
 common=$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-format=absolute --git-common-dir)
 jobs_dir="$(dirname "$common")/.local/jobs"
 mkdir -p "$jobs_dir"

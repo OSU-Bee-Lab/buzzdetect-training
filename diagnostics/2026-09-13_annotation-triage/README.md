@@ -1,6 +1,6 @@
 # Annotation triage from existing surprisal.csv — 2026-09-13
 
-IDEAS.md item 7, reduced scope. `tools/annotation_triage.py <model dir>
+IDEAS.md item 7, reduced scope. `annotation_triage.py <model dir>
 [--top N]` reads `<model>/surprisal/**/*_surprisal.csv` (written free during
 every training run) and produces two ranked lists, no training, no
 extraction, no new inference:

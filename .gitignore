@@ -85,3 +85,6 @@ diagnostics/**
 /train_*.log
 /cv_*.log
 01_annotate/2025-06-11 Lilian Dicentra/.seenote/preferences.json
+
+# Root-level scratch logs from long jobs (launch_job.sh <log>)
+/*.log

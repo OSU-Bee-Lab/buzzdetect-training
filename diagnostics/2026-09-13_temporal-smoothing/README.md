@@ -1,6 +1,6 @@
 # Temporal smoothing of frame scores — diagnostic, 2026-09-13
 
-IDEAS.md item 6. No training, no extraction: `tools/temporal_smoothing_diag.py
+IDEAS.md item 6. No training, no extraction: `temporal_smoothing_diag.py
 <model dir> [--windows 1,3,5,9] [--stat mean|median]` reads an existing model's
 `predictions.csv` per fold and re-scores `sensitivity_exclquiet` after a
 rolling mean/median over `activation_ins_buzz`, using `sx.summarize_folds`

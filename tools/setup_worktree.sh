@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Usage: bash setup_worktree.sh <slug>
+# Usage: bash tools/setup_worktree.sh <slug>
 # Creates a new experiment worktree at .local/worktrees/<slug> on branch exp/<slug>
 # and symlinks all shared data/binary dirs into it.
 set -euo pipefail
 
 if [ -z "${1-}" ]; then
-    echo "Usage: bash setup_worktree.sh <slug>"
+    echo "Usage: bash tools/setup_worktree.sh <slug>"
     exit 1
 fi
 

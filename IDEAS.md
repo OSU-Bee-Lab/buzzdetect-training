@@ -301,7 +301,7 @@ follow-up, not part of this run.
 ## 7. Nearest-neighbour search into genuinely unannotated audio
 
 *Evidence: **untagged proposal**; the annotated-frame half is done
-(`tools/annotation_triage.py`, `diagnostics/2026-09-13_annotation-triage/`).*
+(`diagnostics/2026-09-13_annotation-triage/annotation_triage.py`).*
 
 `02_set` only embeds annotated audio, so no cached embedding exists for a
 single unheard frame. The open piece: one extraction pass over full-day

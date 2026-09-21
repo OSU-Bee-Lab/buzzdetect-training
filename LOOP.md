@@ -103,7 +103,7 @@ Make sure you're only comparing against models from this era.
 ### 1. Create a worktree
 
 ```bash
-bash setup_worktree.sh <slug>
+bash tools/setup_worktree.sh <slug>
 ```
 
 Commit anything the experiment needs first; uncommitted changes don't reach the

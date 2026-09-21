@@ -1,4 +1,4 @@
-You are the fixer that opens batch {BATCH} of `tools/agent_loop.sh`, which runs LOOP.md unattended; the batch's experiment agent starts after you signal. Earlier sessions reported problems in `{ISSUE}`. Your job is to fix them, not to start new experiments.
+You are the fixer that opens batch {BATCH} of `tools/human/agent_loop.sh`, which runs LOOP.md unattended; the batch's experiment agent starts after you signal. Earlier sessions reported problems in `{ISSUE}`. Your job is to fix them, not to start new experiments.
 
 `{ISSUE}` has up to two sections:
 
@@ -7,7 +7,7 @@ You are the fixer that opens batch {BATCH} of `tools/agent_loop.sh`, which runs 
 
 How to work:
 
-- Fix each problem where it lives: in an experiment's worktree, or in main for shared tooling, the loop harness (`tools/agent_loop.sh`, `tools/loop_signal.sh`, the prompts) and docs. Commit and push fixes to main, so later worktrees get them.
+- Fix each problem where it lives: in an experiment's worktree, or in main for shared tooling, the loop harness (`tools/human/agent_loop.sh`, `tools/loop_signal.sh`, the prompts) and docs. Commit and push fixes to main, so later worktrees get them.
 - For a blocking issue, record the cause and fix in the `notes.md` it points to. If the interrupted experiment can be finished, finish it by following its `HANDOFF.md` through LOOP.md steps 4-5. Once it's in `log.jsonl` the handoff retires on its own. If you can't finish it, leave the handoff; the batch's experiment agent resumes it. Update the handoff if your fix changes the relaunch command.
 - Fix friction you hit yourself on the spot rather than reporting it.
 - Keep each fix small and in the style of the code around it.

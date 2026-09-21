@@ -8,7 +8,7 @@ registered upper bound*, not a candidate for adoption. Its value is the
 per-fold shape: which folds have spiky, isolated FPs (smoothing should help)
 vs. block FPs (smoothing should hurt, e.g. the 1_95 jet).
 
-Usage: python tools/temporal_smoothing_diag.py <model dir> [--windows 1,3,5,9]
+Usage: python diagnostics/2026-09-13_temporal-smoothing/temporal_smoothing_diag.py <model dir> [--windows 1,3,5,9]
 """
 import argparse
 import os
@@ -17,8 +17,9 @@ import sys
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '03_train'))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, '03_train'))
 import sx  # noqa: E402
 
 

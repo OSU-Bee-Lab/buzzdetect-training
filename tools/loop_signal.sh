@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# How an agent run by tools/agent_loop.sh tells the loop where it stands. Works
+# How an agent run by tools/human/agent_loop.sh tells the loop where it stands. Works
 # from any worktree: it always writes to the main checkout's .local/agent_loop/.
 #
 #   tools/loop_signal.sh done "<slugs, or what was fixed>"

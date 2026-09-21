@@ -1,4 +1,4 @@
-Follow LOOP.md for {N} experiments. You are the experiment agent of batch {BATCH} of `tools/agent_loop.sh`, which starts a fresh session after each batch, looping indefinitely.
+Follow LOOP.md for {N} experiments. You are the experiment agent of batch {BATCH} of `tools/human/agent_loop.sh`, which starts a fresh session after each batch, looping indefinitely.
 
 Nobody is watching live, though Luke may message you over Remote Control. Don't end your turn waiting for an answer; make the call and record it in notes.md.
 

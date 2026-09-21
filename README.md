@@ -457,6 +457,9 @@ you what the total rests on.
 Three files used to carry this, disagreeing with each other about folds too
 small to reach the target; see `03_train/sx.py::_fold_sens` for the policy that
 survived. `predictions.csv` is the source everything is derived from —
+One-off diagnostics (`annotation_triage.py`, `temporal_smoothing_diag.py`) live beside their write-ups in
+`diagnostics/<date>_<slug>/`.
+
 `03_train/resummarize.py` rebuilds `folds_sx.csv` from it without TensorFlow,
 and a pooled ROC or a `metrics_at_precision` read is `read_fold_predictions()`
 plus `metrics_by_group()` away.
@@ -677,11 +680,13 @@ Each tool's header documents its options.
 | `eval_sampling_sd.py` | event-blocked bootstrap SD of a model's per-fold and headline sensitivity, or of a paired delta |
 | `log_entry.py` | build one `log.jsonl` line from `folds_sx.csv` |
 | `finish_experiment.sh` | commit and push the experiment branch, then log and commit in main |
-| `agent_loop.sh` | run LOOP.md in back-to-back fresh sessions, N experiments each |
+| `human/agent_loop.sh` | run LOOP.md in back-to-back fresh sessions, N experiments each |
 | `loop_signal.sh` | how a looped agent reports `done`, `issue`, `halt`, `friction` or `stop`, from any worktree |
 | `archive_era.py` | close an era into `archive/` |
 | `check_sens_at_fpr.py` | pin `metrics.sens_at_fpr` to the `metrics_by_group` → `metrics_at_fpr` pair it restates |
-| `smoke_model.py`, `honest_epoch.py`, `annotation_triage.py` | model smoke test; cross-fold epoch re-scoring; annotation triage from surprisal |
+| `setup_worktree.sh` | create an experiment worktree at `.local/worktrees/<slug>` and link the shared data into it |
+| `smoke_model.py`, `honest_epoch.py` | model smoke test; cross-fold epoch re-scoring |
+| `human/log_viewer.html` | browser view of `log.jsonl`, for reading by hand; no agent uses it |
 
 `03_train/resummarize.py` rebuilds `folds_sx.csv` from `predictions.csv` without
 TensorFlow.

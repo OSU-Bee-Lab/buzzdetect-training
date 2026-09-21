@@ -18,7 +18,7 @@ Both lists are restricted to *already-annotated* held-out audio -- see the
 scope note. Wall-clock time is parsed from the ident's file-start stem
 (YYMMDD_HHMM) plus `start` seconds into that file.
 
-Usage: python tools/annotation_triage.py <model dir> [--top 50] [--out csv]
+Usage: python diagnostics/2026-09-13_annotation-triage/annotation_triage.py <model dir> [--top 50] [--out csv]
 """
 import argparse
 import glob

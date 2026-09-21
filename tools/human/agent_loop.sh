@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Chain fresh Claude Code sessions through LOOP.md, N experiments per session.
 #
-#   ./tools/agent_loop.sh [--experiments 4] [--batches N] [--model sonnet] [--effort medium]
+#   ./tools/human/agent_loop.sh [--experiments 4] [--batches N] [--model sonnet] [--effort medium]
 #                         [--fix-model opus] [--fix-effort medium] ["note"]
 #
 #   "note"          added to the prompt of each agent launched in the batch this
@@ -60,7 +60,7 @@
 # Env, for testing the loop: POLL (seconds, 60), PROMPT / FIX_PROMPT (templates),
 # BLOCKED_GRACE (seconds a session stays blocked before it's flagged, 300).
 # Run the main checkout's copy: a worktree's tools/ is frozen at its branch point.
-_main="$(dirname "$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-format=absolute --git-common-dir)")/tools/$(basename "$0")"
+_main="$(dirname "$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-format=absolute --git-common-dir)")/tools/human/$(basename "$0")"
 [ "$(realpath "$0")" = "$(realpath -m "$_main")" ] || [ ! -f "$_main" ] || exec bash "$_main" "$@"
 
 set -uo pipefail
@@ -83,7 +83,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 STATE="$ROOT/.local/agent_loop"
 JOBS="$ROOT/.local/jobs"
 POLL=${POLL:-60}
