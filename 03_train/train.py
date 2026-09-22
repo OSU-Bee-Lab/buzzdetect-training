@@ -1,4 +1,5 @@
 # TensorFlow imported first — see 03_train/main.py for rationale.
+import gc
 import json
 import math
 import os
@@ -775,6 +776,14 @@ def train_set(name, embeddername, setname, name_translation,
               f"val_loss {result['best_val_loss']:.4f}, "
               f"{data.frames_train}/{data.frames_val} frames train/val, "
               f"{_format_sens(sens)}", flush=True)
+
+        # Each fold builds a fresh model; without this the GPU allocations pile
+        # up across folds and a later fold dies with "Dst tensor is not
+        # initialized" (ported from exp/trunk-ft-v3, never merged to main --
+        # hit here on a plain 2048-d probe too, so it is not trunk-specific).
+        del model
+        tf.keras.backend.clear_session()
+        gc.collect()
 
     summary_rows, predictions_pooled = _collect_fold_results(dir_folds, folds_scored)
 
