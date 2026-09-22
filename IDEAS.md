@@ -53,6 +53,22 @@ answers.**
   --other <exp>` gives each fold's delta its own SD; training stochasticity adds
   a smaller ~0.016-0.026 per fold delta on top (`docs/judging-results.md`).
   Propose against the headline; use folds to ask *where* an effect lives.
+- **Context/averaging levers have a standing prior against them: four for
+  four, they lift rich folds and leave hard folds flat-to-down.**
+  `context-verify`/`context-stack` (+0.085, "three times landed on rich folds
+  only" per the era-open summary above), `asym-context-yamnet` (+0.046, 6/8
+  folds but both `1_95`/`1_114` flat-to-down even with an explicit-contrast
+  design), and `trunk-ft-v3`'s `trunkctx-ft-1e5` (flat, +0.002 over plain
+  fine-tuning) all show it. Mechanism: this era's hard folds (`1_95`, `1_114`,
+  `1_150`) fail on isolated ~1 s events; averaging or concatenating a wider
+  window washes out exactly that signal while flattering `1_29`/`53`'s
+  254 s-median sustained drones. This is backwards from the era's goal (hard
+  folds are the target, not rich-fold noise). A new context/broadcast/mean-pool
+  proposal (Perch included — a naive mean-pooled window has the same
+  structure) must argue past this prior: prefer a design that preserves the
+  transient (max-pool, attention, or an explicit local-vs-baseline contrast)
+  over another plain average, and treat `1_95`/`1_114`/`1_150` as the falsifier,
+  not the headline.
 - **Never select an epoch on the held-out fold.** Any rule that reads the
   scored fold's own curve reports max-over-epochs of the graded statistic. A
   cross-fold rule stays available offline via `tools/honest_epoch.py`.
