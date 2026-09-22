@@ -684,7 +684,7 @@ Each tool's header documents its options.
 | `loop_signal.sh` | how a looped agent reports `done`, `issue`, `halt`, `friction` or `stop`, from any worktree |
 | `archive_era.py` | close an era into `archive/` |
 | `check_sens_at_fpr.py` | pin `metrics.sens_at_fpr` to the `metrics_by_group` → `metrics_at_fpr` pair it restates |
-| `setup_worktree.sh` | create an experiment worktree at `.local/worktrees/<slug>` and link the shared data into it |
+| `setup_worktree.sh` | create an experiment worktree at `.local/worktrees/<slug>` and link the shared data into it; `--relink <slug>` adds links for embedders/sets made since |
 | `smoke_model.py`, `honest_epoch.py` | model smoke test; cross-fold epoch re-scoring |
 | `human/log_viewer.html` | browser view of `log.jsonl`, for reading by hand; no agent uses it |
 

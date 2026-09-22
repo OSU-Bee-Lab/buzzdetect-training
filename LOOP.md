@@ -130,6 +130,8 @@ worktree. All code changes go in the worktree, never in main's tracked files.
 The script symlinks `embedders/*` and each set's `audio/` and `embeddings/` back
 to main, so extraction is shared. Keep it that way: a new embedder directory or
 `--embedder` name goes straight into the shared tree so future runs can use it.
+A worktree only gets links for what existed when it was made: after creating an
+embedder in main, run `bash tools/setup_worktree.sh --relink <slug>`.
 The cache is keyed by `(set, embedder name)`, and its fingerprint covers annotations, not code. So
 break a symlink only when your run would overwrite something under an existing
 name. Git sees those symlinks as typechanges, so any commit from the worktree
@@ -231,7 +233,7 @@ so you'll see no gain from concurrency.
 git worktree add .local/worktrees/<slug> exp/<slug>
 ```
 
-Then redo `setup_worktree.sh`'s linking, or the run re-extracts from scratch.
+Then `bash tools/setup_worktree.sh --relink <slug>`, or the run re-extracts from scratch.
 
 ## Best practices
 Keep the main thread context minimal - don't give long summaries or interpretations in the main thread as you work, unless the user asks for them.

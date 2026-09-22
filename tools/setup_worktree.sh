@@ -1,28 +1,50 @@
 #!/usr/bin/env bash
-# Usage: bash tools/setup_worktree.sh <slug>
+# Usage: bash tools/setup_worktree.sh [--relink] <slug>
 # Creates a new experiment worktree at .local/worktrees/<slug> on branch exp/<slug>
 # and symlinks all shared data/binary dirs into it.
+#
+# --relink skips creation and links whatever the existing worktree is missing:
+# an embedder or set made in main after the worktree was, or a worktree restored
+# with `git worktree add`. Links already there, and dirs deliberately unlinked,
+# are left alone.
+
+# Run the main checkout's copy: a worktree's tools/ is frozen at its branch point.
+_main="$(dirname "$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-format=absolute --git-common-dir)")/tools/$(basename "$0")"
+[ "$(realpath "$0")" = "$(realpath -m "$_main")" ] || [ ! -f "$_main" ] || exec bash "$_main" "$@"
 set -euo pipefail
 
+RELINK=0
+if [ "${1-}" = "--relink" ]; then RELINK=1; shift; fi
 if [ -z "${1-}" ]; then
-    echo "Usage: bash tools/setup_worktree.sh <slug>"
+    echo "Usage: bash tools/setup_worktree.sh [--relink] <slug>"
     exit 1
 fi
 
 EXP="$1"
-ROOT="$(git rev-parse --show-toplevel)"
+# The main checkout, even when called from inside a worktree.
+ROOT="$(dirname "$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-format=absolute --git-common-dir)")"
 WT="$ROOT/.local/worktrees/$EXP"
 
-echo "Creating worktree at $WT on branch exp/$EXP"
-git worktree add "$WT" -b "exp/$EXP"
+if [ "$RELINK" = 1 ]; then
+    [ -d "$WT" ] || { echo "No worktree at $WT"; exit 1; }
+    echo "Relinking shared data into $WT"
+else
+    echo "Creating worktree at $WT on branch exp/$EXP"
+    git -C "$ROOT" worktree add "$WT" -b "exp/$EXP"
+fi
 
 # Embedder dirs: replace git-checked-out dirs with symlinks so binary
 # weights and other gitignored files are available. git sees each swap as a
 # typechange, so a worktree commit shows these dirs flip to symlinks
 # (mode 120000). That's expected and harmless; don't revert it.
 echo "Symlinking embedders..."
+# Absolute targets, so a hand-made link can't get the depth wrong.
 for d in "$ROOT/embedders/"/*/; do
     name="$(basename "$d")"
+    if [ "$RELINK" = 1 ]; then
+        [ -e "$WT/embedders/$name" ] || [ -L "$WT/embedders/$name" ] && continue
+        echo "  linking new embedder '$name'"
+    fi
     rm -rf "$WT/embedders/$name"
     ln -s "$d" "$WT/embedders/$name"
 done
