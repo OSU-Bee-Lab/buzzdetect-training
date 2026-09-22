@@ -111,6 +111,7 @@ A leading `sleep` in a Bash call is blocked outright. launch_job exists for exac
 - **YAMNet extraction:** GPU is ~1.6x faster than CPU (the card sits ~10% busy, held back by the CPU). With a GPU visible, stage 2 caps `--workers` (embedding processes) at 1, since forked workers collide on the card; `--snip-workers` is unaffected. On CPU (`--cpu`), `--workers 4` gives ~1.6x over 1.
 - **AVES extraction: use the GPU** (`--workers 0`, `BUZZDETECT_NO_GPU=1`). It is ~10x faster: ~19 min for medium vs ~3 h on CPU.
   If a YAMNet+AVES embedder OOMs anyway, add `BUZZDETECT_AVES_BATCH=16` (default 64) and `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`; `yamnet_aves_mid_avesshift` needed both on lite.
+- **Perch extraction is CPU-only.** It runs in `.local/venv-perch-extract` (TF 2.21), which sees no GPU: its CUDA libraries don't load. perch-probe extracted medium on CPU on purpose (`CUDA_VISIBLE_DEVICES=""`, 32 frames/pass, 2 workers; `run_perch.sh` in that worktree). Nobody has benchmarked Perch on the GPU; making the venv see it is unsolved.
 - **Keep `BUZZDETECT_CHUNK_FRAMES=48`.** It changes YAMNet's output at chunk edges (~1 frame in 48), so existing embeddings only match at 48. Larger values barely speed things up and use more VRAM (300 ≈ 2.3 GB). AVES ignores it.
 
 ## Testing
