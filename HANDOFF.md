@@ -1,39 +1,42 @@
 # HANDOFF — exp/perch-centred
 
-**Unblocked (batch-11 fixer). Nothing is running**: no pid to watch. Read
-the `## Fix` section at the end of `notes.md`. The memory blowup was the
-whole annotation chunk going into Perch as one batch. `embed()` now uses
-fixed 16-window batches (main, `embedders/perch_centred/embedder.py`), and
-`lite` held a flat ~2.7 GB RSS. The experiment has not been started:
-no medium embeddings exist yet.
+**Halted for a loop restart Luke requested (2026-09-22), not a technical
+blocker.** Nothing is broken. The extraction below IS running — a `halt`
+signal exits the driver before it kills any job, so this should still be
+alive when you pick this up.
+
+## What's running
+
+Medium extraction, launched this batch (2026-09-22 12:03): pid **1092642**,
+log `.local/worktrees/perch-centred/extract_medium.log`, `--workers 2`,
+`.local/venv-perch-extract/bin/python`, CPU. Watch with
+`tools/watch_job.sh 1092642 .../extract_medium.log` in a Monitor, re-armed
+every 30 min. As of 2026-09-22 17:28 it was on ident 3/82 (~5.4 h elapsed),
+each ident taking roughly 1-2.5 h depending on snip count — this is a long
+job, expect several more hours. Memory has fluctuated (available dropped as
+low as ~2 GB / swap as high as 7 GB at one point when a concurrent GPU
+training job was also running) but never crashed; with the GPU job now also
+possibly still running (see `exp/trunk-depth-headtohead`'s HANDOFF.md),
+check `free -h` on your first re-arm and don't launch a third heavy job
+alongside both if memory looks tight.
 
 ## What to do
 
-1. Launch the medium extraction as an ordinary long job from this worktree
-   (CPU, the TF 2.21 venv; `BUZZDETECT_CHUNK_FRAMES` doesn't reach the context
-   path, so it's not set). Don't use `run_perch_centred.sh`, which is obsolete:
-
+1. If it's still running when you pick this up, report progress and stop —
+   don't launch anything else against this worktree.
+2. If it died, read the log's tail. Re-running the same command resumes:
+   idents are fingerprinted per-ident, and a half-written ident rebuilds.
    ```bash
    /home/luke/projects/buzzdetect-training/tools/launch_job.sh --cpu extract_medium.log -- \
      /home/luke/projects/buzzdetect-training/.local/venv-perch-extract/bin/python -u \
      02_set/main.py --set medium --embedder perch_centred --workers 2 --verbose
    ```
-
-   Watch it with a Monitor on `tools/watch_job.sh <pid> <log>` and re-arm it
-   every 30 min. Expect roughly 6-11 h. Lite's first ident took 3806 s for
-   6984 frames (0.55 s/frame on one worker), and medium has ~72k frames. Check `free -h` on the first re-arms; each worker
-   should sit near 3 GB.
-2. If it's still running when you pick this up, report progress and stop.
-3. If it died, read the log. Re-running the same command resumes: idents
-   are fingerprinted, and a half-written ident rebuilds.
-4. When it finishes, train with the pinned env:
-
+3. When it finishes, train with the pinned env:
    ```bash
    /home/luke/projects/buzzdetect-training/tools/launch_job.sh cv.log -- \
      /home/luke/anaconda3/envs/buzzdetect-train/bin/python -u 03_train/main.py \
      --name perch-centred --set medium --embedder perch_centred --translation general -y
    ```
-
    Compare against the `cv-baseline-v3` family anchor (see notes.md
    Comparator). `1_95` is the pre-registered falsifier. Then do LOOP.md
    steps 4-5.
