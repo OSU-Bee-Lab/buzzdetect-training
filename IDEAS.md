@@ -149,20 +149,23 @@ frame-length confound: `overlap_event_s` scales with frame length, so Perch's
 5 s frame demanded 1.0 s of overlap and per-fold label dilution predicted the
 delta. This design keeps the lead's frame grid and labels.
 
-**2a — broadcast, no Perch re-extraction.** Both caches are framed over the
-same snips, so 1.0 s frame *j* lies inside 5 s Perch frame *j // 5*. Join at
-train time: `[lead(j), perch(j//5)]`. Verify the index map first
-(`extract.py`'s per-chunk padding, clamp the last `j//5`). Frame count and
-labels are identical to the lead's, so the lead is the control.
+**Broadcast-joining Perch's existing 5 s cache onto the lead's frame grid
+without re-extracting is forbidden** (LOOP.md constraints: no artificial
+frame/embedding cache). A prior attempt (`perch-broadcast-join`, closed
+unfinished 2026-09) duplicated one 5 s Perch row across every ~1 s frame near
+it and zero-filled ~2.87% of frames with no real Perch frame nearby — real risk
+of the same inflation as `context-stack`'s cached-row leak, on isolated
+short-buzz frames specifically. Do not resume it as written.
 
-**2b — centred Perch, only if 2a pays.** Perch on a 5 s window centred on each
-1.0 s frame, extracted in `.local/venv-perch-extract` (TF 2.21).
+**Centred Perch, extracted for real.** Perch on a 5 s window centred on each
+1.0 s frame, extracted in `.local/venv-perch-extract` (TF 2.21) as a genuine
+new embedder/extraction pass — the only compliant design.
 
 *Falsifier:* **`1_95` is the test, not the headline.** A headline gain with
-`1_95` inside its delta SD is a rich-fold gain. Broadcasting also adds ~2.5 s
-of real context each side, so compare the per-fold signature against the
-honest `yamnet_context` pattern (rich folds up, hard folds flat) before
-crediting Perch.
+`1_95` inside its delta SD is a rich-fold gain. The extra ~2.5 s of real
+context each side means comparing the per-fold signature against the honest
+`yamnet_context` pattern (rich folds up, hard folds flat) before crediting
+Perch.
 
 ## 20. All 12 AVES layers, then a learned layer mix
 

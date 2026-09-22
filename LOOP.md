@@ -86,6 +86,24 @@ in addition to the baseline.
 - **Don't measure the noise floor.** There is no seed control, and repeat runs to
   build a CI are not how this loop spends compute. Read the headline delta
   against its eval SD, and confirm a large gain with one repeat run.
+- **Never build an artificial frame/embedding cache.** Every embedding row used
+  for training or CV must come from a real embedder's `embed()` running on real
+  audio in a real extraction step (`02_set/main.py`, or an equivalent full
+  extraction pass for a new embedder). Do not synthesize, broadcast, nearest-
+  neighbour-join, zero-fill, interpolate, or otherwise construct a cache from
+  other caches, however the join is justified (shared frame grid, "no
+  re-extraction needed," matching another embedder's labels). A join across two
+  embedders' frame grids duplicates one embedder's row across several of the
+  other's frames that don't share its audio window, which hands a "negative"
+  frame information about audio outside its own span — the same inflation
+  mechanism as `context-stack`'s cached-row leak, and unlike it, it can silently
+  fabricate rows outright (e.g. zero-filling wherever no real frame is close
+  enough). We have the compute budget for a real extraction; take it. If a new
+  embedder needs a different frame grid or context window than an existing one,
+  write it as a real embedder and extract it for real — do not assemble it from
+  pieces of other embedders' caches. (This closed `perch-broadcast-join`
+  unfinished, mid-2026-09; do not resume it as written — Perch context belongs
+  in a real embedder, e.g. a per-frame-centred extraction, item 2b.)
 - Do not modify `01_annotate/`, any set's `build.R`, or
 `03_train/metrics.py`.
 
