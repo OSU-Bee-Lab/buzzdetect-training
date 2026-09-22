@@ -163,3 +163,25 @@ only worth it if the per-call overhead stays small next to Perch's own
 Handed off via `HANDOFF.md` rather than pushed through, given the time
 already spent diagnosing two real bugs without reaching a stable extraction --
 this needs fresh budget, not persistence on the same three hypotheses.
+
+## Fix (batch-11 fixer, 2026-09-22)
+
+**Cause: the whole annotation chunk went through Perch as one batch.** The
+context path (`extract.py::_embed_with_context`) hands `embed()` every frame
+of an annotation chunk at once, up to a full 360 s snip (~375 windows plus
+pads). `BUZZDETECT_CHUNK_FRAMES` only chunks the non-context path, which is
+why no `CHUNK` value helped. `smoke_jitfix.log` shows it directly: a single
+`Allocation of 6146631936 exceeds 10% of free system memory` on the first
+snip, then exit 137. `_BATCH_BUCKET` rounding kept that one giant call and
+turned every distinct chunk length into another shape. The "slow growth"
+in result 3 was this, not `read_range`.
+
+**Fix** (main, `embedders/perch_centred/embedder.py`): `embed()` now runs the
+model in fixed `(16, 160000)` batches, the last zero-padded with its pad rows
+dropped. Rows are unchanged: each window is still normalized on its own.
+JIT stays off.
+
+**Verified** on `lite` (`smoke_batchfix.log`, `--workers 1`, CPU): worker RSS
+held at 2.5-2.8 GB over 6 snips / 14 min, falling back at snip boundaries.
+Before the fix it passed 16 GB within a minute. Throughput is ~1.2-2 min per
+360 s snip. `run_perch_centred.sh` (the burst driver) is no longer needed.
