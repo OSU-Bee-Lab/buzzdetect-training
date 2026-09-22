@@ -31,6 +31,12 @@
 !yamnet_aves_mid_avesshift
 !yamnet_pitchshift_decimate_x126
 !yamnet_pitchshift_decimate_x150
+!yamnet_pitchshift_contrast
+!yamnet_trunk
+!yamnet_trunk_context
+!yamnet_trunk_depth12
+!yamnet_trunk_pitchshift
+!perch_centred
 
 # Ignore binary model files within unignored embedders
 panns_cnn14/*.pth
