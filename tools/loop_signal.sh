@@ -30,7 +30,7 @@ _main="$(dirname "$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-form
 
 set -euo pipefail
 
-usage="usage: loop_signal.sh done <summary> | issue [details, or on stdin] | halt [details, or on stdin] | friction [what happened, or on stdin] | stop"
+usage="usage: loop_signal.sh done [summary, or on stdin] | issue [details, or on stdin] | halt [details, or on stdin] | friction [what happened, or on stdin] | stop"
 signal=${1:?$usage}; shift
 
 common=$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-format=absolute --git-common-dir)
@@ -39,8 +39,9 @@ mkdir -p "$state"
 
 case $signal in
   done)
-    [ $# -gt 0 ] || { echo "$usage" >&2; exit 2; }
-    echo "$*" > "$state/done" ;;
+    if [ $# -gt 0 ]; then details="$*"; else details=$(cat); fi
+    [ -n "$details" ] || { echo "$usage" >&2; exit 2; }
+    echo "$details" > "$state/done" ;;
   issue)
     # appended, so a second report doesn't erase the first
     if [ $# -gt 0 ]; then details="$*"; else details=$(cat); fi
