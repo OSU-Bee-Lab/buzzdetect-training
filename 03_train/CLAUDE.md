@@ -48,8 +48,10 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
   from `folds/<fold>/predictions.csv` on demand — don't add a fourth summary
   file, add a column or a function.
 - **Reruns resume, silently.** `train_utils.can_write()` skips any model
-  directory already holding a `config_model.json`, and the CV summary is
-  reassembled from disk so skipped folds still contribute. After a code change,
+  directory already holding a `config_model.json` (a CV fold: its
+  `summary.json`, the last thing it writes; a fold without one is wiped and
+  retrained), and the CV summary is reassembled from disk so skipped folds
+  still contribute. After a code change,
   use a fresh `--name` or clear the model dir, or you get a mix of both.
 
 ## Where to look

@@ -1,4 +1,5 @@
 # TensorFlow imported first — see 03_train/main.py for rationale.
+import gc
 import json
 import math
 import os
@@ -733,9 +734,15 @@ def train_set(name, embeddername, setname, name_translation,
         modelname = f'{name}_fold{held_out}'
         tag = f'[{i}/{len(folds_rotate)}] {held_out}'
 
-        if not can_write(dir_model):
+        # summary.json is the fold's last write and what the CV summary needs;
+        # a fold killed after config_model.json but before it would otherwise
+        # read as trained and drop out of folds_sx.csv. Rebuild it instead.
+        if not can_write(dir_model, FNAME_FOLD_SUMMARY):
             print(f'{tag}: already trained; skipping')
             continue
+        if os.path.exists(dir_model) and os.listdir(dir_model):
+            print(f'{tag}: incomplete fold on disk (no {FNAME_FOLD_SUMMARY}); retraining')
+            shutil.rmtree(dir_model)
 
         data = _load_data(setname, embeddername, folds_train, name_translation,
                           aug_dirnames, val_fold=held_out)
@@ -775,6 +782,14 @@ def train_set(name, embeddername, setname, name_translation,
               f"val_loss {result['best_val_loss']:.4f}, "
               f"{data.frames_train}/{data.frames_val} frames train/val, "
               f"{_format_sens(sens)}", flush=True)
+
+        # Each fold builds a fresh model and loads its own data; without this
+        # GPU allocations and the fold's arrays pile up, and a wide embedder's
+        # later fold dies with "Dst tensor is not initialized" (from
+        # exp/trunk-ft-v3; hit on a plain 2048-d probe in pitchshift-contrast).
+        del model, data
+        tf.keras.backend.clear_session()
+        gc.collect()
 
     summary_rows, predictions_pooled = _collect_fold_results(dir_folds, folds_scored)
 
