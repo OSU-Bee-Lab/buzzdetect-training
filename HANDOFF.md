@@ -20,8 +20,8 @@ no medium embeddings exist yet.
    ```
 
    Watch it with a Monitor on `tools/watch_job.sh <pid> <log>` and re-arm it
-   every 30 min. It will likely take many hours: lite ran ~1.2-2 min per 360 s
-   snip on one worker. Check `free -h` on the first re-arms; each worker
+   every 30 min. Expect roughly 6-11 h. Lite's first ident took 3806 s for
+   6984 frames (0.55 s/frame on one worker), and medium has ~72k frames. Check `free -h` on the first re-arms; each worker
    should sit near 3 GB.
 2. If it's still running when you pick this up, report progress and stop.
 3. If it died, read the log. Re-running the same command resumes: idents

@@ -183,5 +183,7 @@ JIT stays off.
 
 **Verified** on `lite` (`smoke_batchfix.log`, `--workers 1`, CPU): worker RSS
 held at 2.5-2.8 GB over 6 snips / 14 min, falling back at snip boundaries.
-Before the fix it passed 16 GB within a minute. Throughput is ~1.2-2 min per
-360 s snip. `run_perch_centred.sh` (the burst driver) is no longer needed.
+Before the fix it passed 16 GB within a minute. The first ident (22 snips, 6984 frames,
+45 label files) completed in 3806 s (0.55 s/frame on one worker), and RSS dropped
+to 2.7 GB after its write. The ~0.8 GB creep within an ident is its raw frames,
+which are held until write-out. `run_perch_centred.sh` (the burst driver) is no longer needed.
