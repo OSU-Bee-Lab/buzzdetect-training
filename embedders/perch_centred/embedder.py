@@ -47,7 +47,7 @@ _GPU_SUBDIR = 'perch_v2_gpu'
 _TARGET_PEAK = 0.25  # perch_hoplite's zoo_interface.EmbeddingModel.normalize_audio
 
 _WINDOW_S = 5.0  # Perch's native, fixed SavedModel input width
-_BATCH_BUCKET = 16  # see embed(): pad every call up to a multiple of this
+_BATCH_BUCKET = 16  # see embed(): windows per fixed-shape model call
 
 
 class EmbedderPerchCentred(BaseEmbedder):
@@ -103,34 +103,28 @@ class EmbedderPerchCentred(BaseEmbedder):
         if n == 0:
             return np.zeros((0, self.n_embeddings), dtype=np.float32)
 
-        windows = np.zeros((n, self.window_samples), dtype=np.float32)
-        for i in range(n):
-            center_start = i * self.frame_samples
-            lo = center_start - self._offset_samples
-            hi = lo + self.window_samples
-            src_lo, src_hi = max(lo, 0), min(hi, len(audio))
-            dst_lo, dst_hi = src_lo - lo, src_hi - lo
-            if src_hi > src_lo:
-                windows[i, dst_lo:dst_hi] = audio[src_lo:src_hi]
+        # One fixed-shape model call per _BATCH_BUCKET windows. extract.py's
+        # context path hands this embedder a whole annotation chunk at once
+        # (BUZZDETECT_CHUNK_FRAMES never reaches it), up to a full 360 s snip:
+        # ~375 windows, which Perch turned into a single 6 GB activation
+        # allocation, and every distinct chunk length into a fresh retrace.
+        # A constant (_BATCH_BUCKET, 160000) input keeps both bounded; the
+        # last batch is zero-padded and its pad rows dropped.
+        out = np.empty((n, self.n_embeddings), dtype=np.float32)
+        for b0 in range(0, n, _BATCH_BUCKET):
+            windows = np.zeros((_BATCH_BUCKET, self.window_samples), dtype=np.float32)
+            for j, i in enumerate(range(b0, min(b0 + _BATCH_BUCKET, n))):
+                lo = i * self.frame_samples - self._offset_samples
+                hi = lo + self.window_samples
+                src_lo, src_hi = max(lo, 0), min(hi, len(audio))
+                if src_hi > src_lo:
+                    windows[j, src_lo - lo:src_hi - lo] = audio[src_lo:src_hi]
 
-        # Perch's normalize_audio: DC-remove, then scale each window's peak to _TARGET_PEAK.
-        windows = windows - windows.mean(axis=-1, keepdims=True)
-        peak = np.max(np.abs(windows), axis=-1, keepdims=True)
-        windows = np.divide(windows, peak, where=(peak > 0.0)) * _TARGET_PEAK
+            # Perch's normalize_audio: DC-remove, then scale each window's peak to _TARGET_PEAK.
+            windows = windows - windows.mean(axis=-1, keepdims=True)
+            peak = np.max(np.abs(windows), axis=-1, keepdims=True)
+            windows = np.divide(windows, peak, out=np.zeros_like(windows), where=(peak > 0.0)) * _TARGET_PEAK
 
-        # self.model is a tf.saved_model signature: calling it with a batch
-        # dimension it hasn't seen before triggers a fresh retrace, and TF
-        # never releases an old trace's compiled graph. extract.py's chunk
-        # sizes vary (context padding shrinks near an ident's edges, rescue
-        # calls pass n=1, the last chunk of a snip is ragged), so calling
-        # with the raw batch size accumulates one cached graph per distinct
-        # n seen -- unbounded over a real extraction. Padding every call up
-        # to a multiple of _BATCH_BUCKET caps the distinct shapes at a
-        # handful, regardless of how CHUNK_FRAMES or context padding varies.
-        n_padded = -(-n // _BATCH_BUCKET) * _BATCH_BUCKET
-        if n_padded != n:
-            windows = np.concatenate(
-                [windows, np.zeros((n_padded - n, self.window_samples), dtype=np.float32)],
-                axis=0,
-            )
-        return self.model(inputs=windows)['embedding'].numpy()[:n]
+            m = min(_BATCH_BUCKET, n - b0)
+            out[b0:b0 + m] = self.model(inputs=windows)['embedding'].numpy()[:m]
+        return out
