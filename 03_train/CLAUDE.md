@@ -163,6 +163,13 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
   there; calling faint buzz a negative would teach the model that faint buzz is
   background, which is worse than either scoring choice. The tier steers
   scoring only.
+- **Fine-tunable `yamnet_trunk*` embedders** (merged 2026-09-22; every trunk
+  experiment had hand-ported it before): an embedder with `build_head()` builds
+  its own head in `_train_one`, read from `TRUNK_LR_BACKBONE` (default 0,
+  frozen) and `TRUNK_LR_HEAD` (2e-4). Their 12288-d+ float16 embeddings need
+  `TRUNK_FP16=1` (`_to_tf_lowmem`, one float16 copy) and `TRUNK_BATCH=1024`, or
+  the first fold OOMs the GPU with "Dst tensor is not initialized". Other embedders never
+  reach any of this, so they train exactly as before.
 - Per-frame class activations + multi-label loss for finding bad annotations and
   hard negatives, on by default (`--no-surprisal`) — `surprisal.py`, written to
   `<model>/surprisal/<ident>_surprisal.csv`
