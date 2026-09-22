@@ -37,11 +37,11 @@ class EmbedderYamnetTrunkPitchshift(_trunk.EmbedderYamnetTrunk):
     n_embeddings = _trunk.EmbedderYamnetTrunk.n_embeddings * 2  # 24576
 
     def initialize(self):
-        super().initialize()  # loads self.model = trunk through layer12, warms it
         import librosa
         self._librosa = librosa
         self._frame_samples = int(round(self.framelength_s * self.samplerate))
         self._half_sr = self.samplerate // 2
+        super().initialize()  # loads self.model = trunk through layer12, warms it (calls embed())
 
     # identical mechanism to yamnet_pitchshift._pitch_up_octave -- resample to
     # half-rate (relabelled 16 kHz), tile 2x, crop to one frame. Held as its
