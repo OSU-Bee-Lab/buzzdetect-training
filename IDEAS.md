@@ -258,27 +258,6 @@ unknown — this is exactly the run the first-fold gate exists for.
 rise. If attention lands within ~0.014 of mean pooling (`aves-p3`'s size),
 pooling is not the bottleneck on this data; close it.
 
-## 15. PCEN as a parallel block — speculative, high ceiling, near known failures
-
-*Evidence: **untagged proposal**; the nearest E1 relatives (bandpass, mel
-masking) are catastrophic negatives.*
-
-Per-Channel Energy Normalization (Lostanlen et al., arXiv:1911.00417) is an
-adaptive per-channel gain whose time constant defines "background". Its
-published effect is the FP-limited folds' failure: 50x fewer false alarms
-near-field, 5x far-field. A ~90 s jet, a stationary trill chorus (`1_114`) and
-long ambient spans (`1_37`) are all background at a 1-2 s time constant; a
-~1 s buzz is not. **Only defensible as a parallel block** (a PCEN-frontend
-YAMNet concatenated with the unmodified block), because replacement frontends
-corrupt the input distribution YAMNet expects. `librosa.pcen` is in the
-pinned env.
-
-*Cost:* one YAMNet-class extraction + one CV at 2048-d against plain
-`yamnet`. *Falsifier:* measure the threshold-setting census (standing facts)
-on `1_95`, `1_114` and `1_37`. If the aircraft/trill/background share of
-threshold-setting negatives doesn't fall, PCEN isn't doing its job, whatever
-the headline says.
-
 ## 23. A 2025-26 bioacoustic encoder in place of AVES-v1 — **ask Luke first**
 
 *Evidence: literature only. "What Matters for Bioacoustic Encoding"
