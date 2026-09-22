@@ -47,6 +47,7 @@ _GPU_SUBDIR = 'perch_v2_gpu'
 _TARGET_PEAK = 0.25  # perch_hoplite's zoo_interface.EmbeddingModel.normalize_audio
 
 _WINDOW_S = 5.0  # Perch's native, fixed SavedModel input width
+_BATCH_BUCKET = 16  # see embed(): pad every call up to a multiple of this
 
 
 class EmbedderPerchCentred(BaseEmbedder):
@@ -60,6 +61,18 @@ class EmbedderPerchCentred(BaseEmbedder):
 
     def initialize(self):
         import tensorflow as tf  # deferred: must not import TF before fork, see embedders/perch
+
+        # Calling this SavedModel's signature repeatedly under XLA JIT (its
+        # default) retraces/recompiles per call in a way that never releases
+        # the old compiled graph -- measured as unbounded host RSS growth
+        # across a real extraction (10+ GB within single-digit minutes),
+        # even with embed()'s fixed bucketed batch shape. Disabling JIT here
+        # gives flat RSS across repeated calls (measured: ~2.7-2.9 GB steady
+        # over 20+ calls) at the SAME per-window throughput perch-probe
+        # already established (~0.4 s / 5 s window) -- JIT was not buying
+        # real speed on this workload, only leaking memory. Must be set
+        # before the model loads.
+        tf.config.optimizer.set_jit(False)
 
         curdir = os.path.dirname(os.path.realpath(__file__))
         perch_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'perch')
@@ -105,4 +118,19 @@ class EmbedderPerchCentred(BaseEmbedder):
         peak = np.max(np.abs(windows), axis=-1, keepdims=True)
         windows = np.divide(windows, peak, where=(peak > 0.0)) * _TARGET_PEAK
 
-        return self.model(inputs=windows)['embedding'].numpy()
+        # self.model is a tf.saved_model signature: calling it with a batch
+        # dimension it hasn't seen before triggers a fresh retrace, and TF
+        # never releases an old trace's compiled graph. extract.py's chunk
+        # sizes vary (context padding shrinks near an ident's edges, rescue
+        # calls pass n=1, the last chunk of a snip is ragged), so calling
+        # with the raw batch size accumulates one cached graph per distinct
+        # n seen -- unbounded over a real extraction. Padding every call up
+        # to a multiple of _BATCH_BUCKET caps the distinct shapes at a
+        # handful, regardless of how CHUNK_FRAMES or context padding varies.
+        n_padded = -(-n // _BATCH_BUCKET) * _BATCH_BUCKET
+        if n_padded != n:
+            windows = np.concatenate(
+                [windows, np.zeros((n_padded - n, self.window_samples), dtype=np.float32)],
+                axis=0,
+            )
+        return self.model(inputs=windows)['embedding'].numpy()[:n]
