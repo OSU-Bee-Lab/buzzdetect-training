@@ -37,6 +37,7 @@
 !yamnet_trunk_depth12
 !yamnet_trunk_pitchshift
 !yamnet_trunk_pitchshift_contrast
+!yamnet_trunk_pitchshift_depth12
 !perch_centred
 
 # Ignore binary model files within unignored embedders
