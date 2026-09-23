@@ -242,3 +242,14 @@ Even when finishing a loop, give only a brief couple-sentence summary of the res
 # Special instructions
 ## INJUNCTION: aves models are forbidden
 The aves embedder has shown to be intolerably slow. Future loops may not utilize aves unless they are able to bring it to within an order of magnitude of the YAMNet inference rate.
+
+## INJUNCTION: perch models are forbidden
+Perch's CPU inference rate is roughly 0.005x YAMNet's (`perch-centred`'s medium
+extraction, 2026-09-22/23: ~22.6 h wall-clock for one embedder over one set,
+against YAMNet's single-digit minutes) -- not feasible for `medium`-or-larger
+extractions as a routine lever, whatever its accuracy. `exp/perch-pitchshift-concat`
+(launched 2026-09-23, still running at the time of this injunction) is exempted
+as an already-in-flight run; let it finish and log its result. Future loops may
+not start any new Perch extraction (`perch`, `perch_centred`, or a derivative)
+unless its inference rate is brought within an order of magnitude of YAMNet's,
+the same bar the aves injunction sets.
