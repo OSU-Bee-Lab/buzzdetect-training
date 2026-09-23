@@ -66,3 +66,78 @@ being placed behind a jointly fine-tuned shared tail -- concat and
 contrast are equivalent once the tail can adapt. A clean `1_114` win **and**
 a headline at or above `trunkps-ft-1e5`'s 0.434 would confirm the explicit-
 contrast lever generalizes past the frozen case.
+
+(Training was interrupted mid-run by an unrelated loop restart/usage-limit
+halt on 2026-09-22/23 -- host-RAM OOM killed the first attempt at fold 4/8,
+same recurring `yamnet_trunk`-family leak logged in `trunk-ft-pitchshift`
+and reported again in this batch's friction. Relaunching the identical
+command resumed cleanly at fold 5/8 via `can_write()`; no data lost.)
+
+## Results
+
+vs own frozen control (`trunkpscontrast-frozen` -> `trunkpscontrast-ft-1e5`):
+
+| fold | frozen | ft-1e5 | delta | ± SD | buzz events |
+|---|---|---|---|---|---|
+| 1_29 | 0.465 | 0.489 | +0.024 | 0.030 | 32 |
+| 53 | 0.435 | 0.541 | +0.106 | 0.052 | 28 |
+| 1_11 | 0.430 | 0.549 | +0.119 | 0.034 | 26 |
+| 1_143 | 0.505 | 0.559 | +0.054 | 0.035 | 22 |
+| 1_150 | 0.269 | 0.303 | +0.034 | 0.053 | 21 |
+| 1_95 | 0.080 | 0.159 | +0.079 | 0.027 | 46 |
+| 1_37 | 0.466 | 0.516 | +0.050 | 0.043 | 14 |
+| 1_114 | 0.398 | 0.341 | -0.057 | 0.039 | 28 |
+
+headline (exclquiet): 0.381 -> 0.432 (+0.051 ± 0.014, ~3.6 sigma), incl.
+quiet: 0.311 -> 0.354, 7/8 folds up. `loud` +0.015, `untagged` +0.050,
+`background` +0.075, `quiet` +0.020 -- fine-tuning's usual broad gain
+reproduces cleanly a fourth time, concentrated in `background`/`untagged`
+as in every other trunk fine-tune this era.
+
+Head-to-head vs `trunk-ft-pitchshift`'s concat `trunkps-ft-1e5` (same tail
+depth, same pitch-shift mechanism, contrast instead of concat):
+
+| fold | concat (baseline) | contrast (this) | delta | ± SD | buzz events |
+|---|---|---|---|---|---|
+| 1_29 | 0.454 | 0.489 | +0.035 | 0.041 | 32 |
+| 53 | 0.573 | 0.541 | -0.032 | 0.019 | 28 |
+| 1_11 | 0.565 | 0.549 | -0.016 | 0.028 | 26 |
+| 1_143 | 0.550 | 0.559 | +0.009 | 0.030 | 22 |
+| 1_150 | 0.287 | 0.303 | +0.016 | 0.053 | 21 |
+| 1_95 | 0.156 | 0.159 | +0.003 | 0.020 | 46 |
+| 1_37 | 0.493 | 0.516 | +0.023 | 0.035 | 14 |
+| 1_114 | 0.398 | 0.341 | -0.057 | 0.042 | 28 |
+
+headline (exclquiet): 0.434 -> 0.432 (-0.002 ± 0.012, well inside noise),
+incl. quiet: 0.359 -> 0.354. Every tier delta is within ±0.015 of flat
+(`loud` -0.015, `untagged` +0.001, `background` -0.003, `quiet` -0.004) --
+concat and contrast land statistically indistinguishable once behind the
+shared fine-tuned tail.
+
+**`1_114`, the named falsifier, moved the wrong direction against both
+comparators**, by the same amount (-0.057 ± 0.039 vs frozen, -0.057 ± 0.042
+vs concat -- both ~1.4 sigma, inside noise but consistently negative, not
+just flat). This is the opposite of `pitchshift-contrast`'s frozen result
+(`1_114` +0.153) and matches, rather than reverses, `trunk-ft-pitchshift`'s
+own wrong-direction `1_114` (-0.038 there vs its frozen concat control).
+
+## Conclusion
+
+Falsifier **not cleared**: `1_114` did not recover, in either comparison,
+and the headline against the concat comparator is flat (-0.002 ± 0.012) --
+not the generalizing win the hypothesis needed. This confirms the
+hypothesis's own fallback prediction instead: once the trunk tail is
+jointly fine-tuned across both pitch views, it already extracts whatever
+the explicit contrast channel would otherwise hand a frozen linear head,
+so making the contrast explicit buys nothing further (and on `1_114`
+specifically, costs a bit, though not past noise). Concat and contrast are
+equivalent downstream of a shared fine-tuned tail; the explicit-contrast
+lever from `asym-context-yamnet`/`pitchshift-contrast` does not generalize
+past the frozen-probe regime where it was established. Fine-tuning's own
+gain reproduces cleanly again (+0.051 ± 0.014, `background`/`untagged`
+lifted), so this experiment adds a fourth confirmation of that, independent
+of the contrast-vs-concat question it was built to test.
+
+Trust: clean (both training arms completed all 8 folds; the OOM interruption
+mid-run only affected wall time, not the data -- resumed byte-identical via
+`can_write()`).
