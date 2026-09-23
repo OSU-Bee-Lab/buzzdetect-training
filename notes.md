@@ -187,3 +187,69 @@ Before the fix it passed 16 GB within a minute. The first ident (22 snips, 6984 
 45 label files) completed in 3806 s (0.55 s/frame on one worker), and RSS dropped
 to 2.7 GB after its write. The ~0.8 GB creep within an ident is its raw frames,
 which are held until write-out. `run_perch_centred.sh` (the burst driver) is no longer needed.
+
+## Resumed (batch-13, 2026-09-23)
+
+Medium extraction (launched batch-12, resumed via `HANDOFF.md`) finished
+clean, `--workers 2`, CPU: `[launch_job] exit 0`, no errors across all 82
+idents. Stage 3 (`03_train/main.py --name perch-centred --set medium
+--embedder perch_centred --translation general -y`, GPU) ran all 8 rotations
+without incident: `[launch_job] exit 0`.
+
+```
+python tools/results.py <cv-baseline-v3-refresh worktree>/models/cv-baseline-v3-refresh perch-centred
+```
+
+| fold | baseline | perch-centred | delta | ± SD | buzz events |
+|---|---|---|---|---|---|
+| 1_29 | 0.443 | 0.234 | -0.209 | 0.064 | 32 |
+| 53 | 0.440 | 0.451 | +0.011 | 0.053 | 28 |
+| 1_11 | 0.368 | 0.250 | -0.118 | 0.079 | 26 |
+| 1_143 | 0.459 | 0.207 | -0.252 | 0.097 | 22 |
+| 1_150 | 0.231 | 0.259 | +0.028 | 0.090 | 21 |
+| **1_95** | **0.042** | **0.222** | **+0.180** | **0.048** | 46 |
+| 1_37 | 0.399 | 0.335 | -0.064 | 0.088 | 14 |
+| **1_114** | **0.252** | **0.546** | **+0.294** | **0.101** | 28 |
+
+Headline: 0.329 → 0.313 (-0.016 ± 0.028), inside noise, flat. Inclusive
+(with `_quiet`): 0.268 → 0.268, exactly flat. Tiers: loud -0.069 (thin,
+n=122), untagged -0.003 (flat, n=2418), background -0.119 (n=1874, almost
+entirely 1_29's collapse), quiet +0.015.
+
+## Conclusion
+
+**Falsifier clears, decisively, on both pre-registered hard folds.** `1_95`
+(the jet-confusion fold the whole design targets) moves +0.180 ± 0.048
+(~3.75σ) -- the largest, cleanest single-fold gain any lever has landed on
+this fold all era, where every other representation (including the
+pitch-shift/fine-tuning era lead) has left it near its aircraft-set floor.
+`1_114` (trill confusion) moves +0.294 ± 0.101 (~2.9σ), also a real gain and
+the largest absolute movement on that fold this era. Both are real, not
+noise, and neither is the fold the design was built for by coincidence --
+they are exactly the two hard folds IDEAS.md's census names as FP-limited by
+a specific confuser class.
+
+**The headline is flat only because three rich folds collapsed.** `1_29`
+(-0.209), `1_143` (-0.252), `1_11` (-0.118) all drop hard, `1_29`/`1_143`
+into the largest single-fold *losses* logged this era by any lever. This is
+the exact inverse of the era's standing context/averaging prior ("four for
+four: lifts rich folds, leaves hard folds flat-to-down") -- here the wide
+real Perch window helps precisely the folds context levers have never
+touched, and actively hurts the ones they used to flatter. `background`
+tier's -0.119 is almost entirely `1_29`'s own collapse (2144 of that fold's
+buzz frames are `_background`), not a broad background-tier effect
+(`untagged` is flat, -0.003).
+
+**Reading:** Perch's bioacoustic pretraining carries real, targeted signal
+for the aircraft and trill confusions specifically, not a general sensitivity
+lift -- the opposite failure mode from every context lever tried this era,
+and evidence the two mechanisms are separable. Not a standalone win at this
+config (headline is a wash), but a strong candidate to concatenate onto the
+era lead (`yamnet_trunk_pitchshift`, 0.434, itself weak on `1_95`/mixed on
+`1_114`) rather than to ship alone -- if the rich-fold cost is a YAMNet-vs-
+Perch capacity/interference effect and not something inherent to the 5 s
+window, stacking should keep both folds' gains instead of trading them.
+Flagged for a follow-up experiment, not run in this batch (compute budget).
+
+`trust`: clean. Mechanism, direction and magnitude on the pre-registered
+folds all agree; the rich-fold cost is real and reported, not hidden.
