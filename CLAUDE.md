@@ -58,30 +58,49 @@ tools/launch_job.sh <log> -- <command...>   # detaches the job; prints its pid
 ```
 
 Then watch it with Claude Code's built-in **Monitor** tool, `timeout_ms: 1800000`
-(the 30-min maximum), with launch_job's printed command:
+(the 30-min maximum). **One Monitor per session, not per job:**
 
 ```bash
-tools/watch_job.sh <pid> <log>
+tools/watch_job.sh            # every job this session launched, and any it launches later
 ```
 
-Its first line is the job's state, timestamped: running or not, folds done,
-error lines so far, the last log line. Re-arming therefore also catches anything
-logged while no Monitor was armed. After that it stays silent until something
-completes: stage 3's CV headline, the shipped model, and the closing
-`[launch_job] exit N`. It exits with the job. The same watch fits any command (a one-off diagnostic too): the state line and exit line are generic, only the headline and shipped events are pipeline-specific. No per-fold or per-error events:
-a crash ends the job and arrives as its exit line, and an error that leaves a
-job hanging shows in the next re-arm's error count. **Re-arm the Monitor at every
-expiry, every time, until the job is done.** Expiries are expected and cheap;
-re-arming keeps the session alive and its cache warm. A lapsed Monitor means
-nobody is watching. The re-arm's first line doubles as your check, so there is
-nothing else to poll, no `sleep`, and no ScheduleWakeup (that's for `/loop`).
+It follows every job launch_job started from this session, including ones
+launched after it was armed, so starting a second job (extraction, then
+training) needs no new Monitor, and N jobs still mean one expiry per 30 min.
+Arming a second Monitor, or one per job, multiplies your turns: expiries at
+different offsets land every ~30/N min. Check with TaskList before arming. A
+job another session launched (a HANDOFF.md resume) joins with
+`tools/watch_job.sh --adopt <pid>`; `tools/watch_job.sh <pid> <log>` still
+watches one job alone.
+
+Its first lines are each job's state, timestamped: running or not, folds done,
+error lines so far, the last log line (a job that ended while no Monitor was
+armed is reported once). Re-arming therefore also catches anything logged in
+between. After that it stays silent until something completes: stage 3's CV
+headline, the shipped model, and each job's closing `[launch_job] exit N`,
+prefixed with the job's log name. It exits when the last job does. The same
+watch fits any command (a one-off diagnostic too): the state line and exit line
+are generic, only the headline and shipped events are pipeline-specific. No
+per-fold or per-error events: a crash ends the job and arrives as its exit
+line, and an error that leaves a job hanging shows in the next re-arm's error
+count. **Re-arm the Monitor at every expiry, every time, until the jobs are
+done.** Expiries are expected and cheap; re-arming keeps the session alive and
+its cache warm. A lapsed Monitor means nobody is watching.
+
+**Between Monitor events, do not look at the job at all.** The re-arm's first
+line is your check. No `tail`/`grep` of the log, no `nvidia-smi`, no
+`ReadNotifications` unless a notice says some are pending, no `sleep`, no
+ScheduleWakeup (that's for `/loop`). The known failure is a check-in loop:
+ReadNotifications (empty), then `tail -3 train.log`, then again, once per
+epoch (~40 s). Each check is a full turn, and one batch-12 session burned its
+budget on it. If you want to know sooner, the Monitor is the thing to change:
+add a pattern to watch_job's `EVENTS` in main, don't hand-poll around it. If
+you have nothing to do until an event, end your turn: the event wakes you.
 
 `exit 0` is done; any other exit, or a rising error count, needs real attention. Read
 the log when an event looks wrong or a job runs well past what you expected.
 Don't PushNotification about jobs, not even on failure or completion: Luke
 checks in when he wants. Push only when you can't go forward without his input.
-A job another session launched (a HANDOFF.md resume) is watched the same way,
-with its pid and log.
 
 **`run_in_background` doesn't work.** A pipeline job launched with it is SIGKILLed within ~15–60 s.
 A leading `sleep` in a Bash call is blocked outright. launch_job exists for exactly this.

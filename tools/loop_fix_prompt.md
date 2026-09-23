@@ -22,12 +22,15 @@ Tell the loop the outcome with `{ROOT}/tools/loop_signal.sh` (works from any wor
   3. Send `loop_signal.sh halt` with the same summary, and a PushNotification with its first line (the one event Luke gets pushed), then end your turn. The loop stops your session and quits, without killing your jobs.
 
 **`HANDOFF.md` is only for a session that ends while its job runs:** a halt.
-Watch every job with a Monitor on `tools/watch_job.sh`, re-armed at every
+Watch your jobs with one Monitor on `tools/watch_job.sh` (no
+arguments: it follows every job you launch, later ones too, so never arm a
+second), re-armed at every
 30-min expiry (CLAUDE.md "Running long jobs"); that keeps a waiting session
-alive, so a slow run is never a reason to write one. The next experiment agent resumes every handoff it finds. Commit it in the
+alive, so a slow run is never a reason to write one. Between its events, don't look at the job: no `tail` of the log, no ReadNotifications-then-check loop. Each look is a full turn (CLAUDE.md "Running long jobs"). The next experiment agent resumes every handoff it finds. Commit it in the
 worktree with four things:
 
-- the job's pid and log, for `tools/watch_job.sh <pid> <log>` in a Monitor;
+- the job's pid and log: the resuming session runs `tools/watch_job.sh --adopt <pid>`,
+  then watches it with its one `tools/watch_job.sh` Monitor;
 - "if it's still running, report progress and stop";
 - what to do when it finishes: the comparator, then steps 4-5;
 - what to do if it died, including the exact relaunch command.

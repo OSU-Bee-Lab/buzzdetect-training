@@ -20,16 +20,18 @@ Tell the loop where you stand with `{ROOT}/tools/loop_signal.sh` (works from any
 Cleanup is the loop's job. Once you signal `done` or `issue`, it stops this session and kills every job you started with `launch_job.sh`. After `halt` it stops the session and leaves the jobs running. Don't stop jobs yourself.
 
 **`HANDOFF.md` is only for a session that ends before its experiment does:** an
-`issue` or a `halt`. Watch every job with a Monitor on `tools/watch_job.sh`,
-re-armed at every 30-min expiry (CLAUDE.md "Running long jobs"); that keeps a
-waiting session alive, so a slow run is never a reason to write one. The next experiment agent resumes every handoff whose experiment isn't in
+`issue` or a `halt`. Watch your jobs with one Monitor on `tools/watch_job.sh` (no
+arguments: it follows every job you launch, later ones too, so never arm a
+second), re-armed at every 30-min expiry (CLAUDE.md "Running long jobs"); that keeps a
+waiting session alive, so a slow run is never a reason to write one. Between its events, don't look at the job: no `tail` of the log, no ReadNotifications-then-check loop. Each look is a full turn (CLAUDE.md "Running long jobs"). The next experiment agent resumes every handoff whose experiment isn't in
 `log.jsonl` yet. The loop lists those handoffs at the end of this prompt (none
 listed means none to resume); any
 other `HANDOFF*.md` under `.local/worktrees/` belongs to a closed era (its
 experiment is in an `archive/*/log.jsonl`), so ignore it. Commit a handoff in
 the worktree with four things:
 
-- the job's pid and log, for `tools/watch_job.sh <pid> <log>` in a Monitor;
+- the job's pid and log: the resuming session runs `tools/watch_job.sh --adopt <pid>`,
+  then watches it with its one `tools/watch_job.sh` Monitor;
 - "if it's still running, report progress and stop";
 - what to do when it finishes: the comparator, then steps 4-5;
 - what to do if it died, including the exact relaunch command. After an

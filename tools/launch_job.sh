@@ -66,11 +66,13 @@ pid=$!
 disown
 
 # Register it in the main checkout (shared by every worktree), so
-# tools/human/agent_loop.sh can kill the jobs its agents started.
+# tools/human/agent_loop.sh can kill the jobs its agents started, and
+# tools/watch_job.sh can follow every job one session launched.
 common=$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-format=absolute --git-common-dir)
 jobs_dir="$(dirname "$common")/.local/jobs"
 mkdir -p "$jobs_dir"
-echo "$log :: ${cmd[*]}" > "$jobs_dir/$pid"
+{ echo "$log :: ${cmd[*]}"
+  [ -n "${CLAUDE_JOB_DIR:-}" ] && echo "session $CLAUDE_JOB_DIR"; } > "$jobs_dir/$pid"
 
 sleep 5
 if ! kill -0 "$pid" 2>/dev/null; then
@@ -79,4 +81,9 @@ if ! kill -0 "$pid" 2>/dev/null; then
   exit 1
 fi
 echo "pid $pid · log $log"
-echo "watch it: Monitor, timeout_ms 1800000, re-armed at every expiry, command: $(dirname "$(realpath "$0")")/watch_job.sh $pid $log"
+if [ -n "${CLAUDE_JOB_DIR:-}" ]; then
+  echo "watch it: ONE Monitor per session, timeout_ms 1800000, re-armed at every expiry, command: $(dirname "$(realpath "$0")")/watch_job.sh"
+  echo "(it follows every job this session launched, this one included; if one is already armed, it has picked this job up: don't arm another)"
+else
+  echo "watch it: Monitor, timeout_ms 1800000, re-armed at every expiry, command: $(dirname "$(realpath "$0")")/watch_job.sh $pid $log"
+fi
