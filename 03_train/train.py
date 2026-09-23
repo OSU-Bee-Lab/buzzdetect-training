@@ -88,43 +88,43 @@ def _to_tf(data, size_batch, size_shuffle, free=False):
 
 def _to_tf_lowmem(data, size_batch, free=False):
     """Wide float16 embeddings (yamnet_trunk 12288-d, yamnet_trunk_context 36864-d):
-    one preallocated float16 array, reshuffled every epoch by a generator that casts
-    per batch. The plain path holds ~5 copies, which is ~26 GB for the context arm."""
+    one float16 buffer, reshuffled every epoch, cast to float32 per batch. The plain
+    path holds ~5 copies, which is ~26 GB for the context arm.
+
+    Pure tf.data, no Python in the input pipeline. Dataset.from_generator parks
+    its closure (here the whole embedding array) in TensorFlow's global
+    py-function registry, so every fold's data outlived the fold and the host
+    ran out of RAM 2-4 folds in (trunk-ft-pitchshift, trunk-pitchshift-contrast).
+    A keras PyDataset does not avoid it: Keras 3's TF backend wraps one in
+    from_generator itself (measured: +1 array of RSS per fit, del/gc or not).
+    The buffer is a CPU Variable filled in place by scatter_update, in blocks:
+    tf.constant(ndarray) copies, doubling the peak, and a slice assign
+    (emb[a:b].assign) copies the whole buffer on every call (~1 s each)."""
     n = sum(s.frames for s in data)
     width = len(data[0].embeddings[0])
-    emb = np.empty((n, width), dtype=np.float16)
-    tgt = np.empty((n, len(data[0].target_array)), dtype=np.float32)
-    at = 0
-    for s in data:
-        emb[at:at + s.frames] = np.asarray(s.embeddings)
-        tgt[at:at + s.frames] = s.target_array
-        at += s.frames
-        if free:
-            s.embeddings = None  # the float16 copy above is the only one kept
+    with tf.device('/CPU:0'):
+        emb = tf.Variable(tf.zeros((n, width), tf.float16), trainable=False)
+        at, block = 0, []
+        for i, s in enumerate(data):
+            block.append(np.asarray(s.embeddings, dtype=np.float16))
+            if free:
+                s.embeddings = None  # the float16 copy is the only one kept
+            if sum(len(b) for b in block) >= 8192 or i == len(data) - 1:
+                block = np.concatenate(block)
+                emb.scatter_update(tf.IndexedSlices(block, tf.range(at, at + len(block))))
+                at += len(block)
+                block = []
+        tgt = tf.constant(np.concatenate(
+            [np.tile(s.target_array, (s.frames, 1)) for s in data]).astype(np.float32))
 
-    return _Fp16Batches(emb, tgt, size_batch)
+    def gather(idx):
+        idx = tf.sort(idx)
+        return tf.cast(tf.gather(emb, idx), tf.float32), tf.gather(tgt, idx)
 
-
-class _Fp16Batches(tf.keras.utils.PyDataset):
-    """Reshuffled-every-epoch float16 batches, cast to float32 per batch. A PyDataset
-    rather than Dataset.from_generator: from_generator parks its closure (here the
-    whole embedding array) in TensorFlow's global py-function registry, so every
-    fold's data outlived the fold and the host ran out of RAM after a few folds."""
-
-    def __init__(self, emb, tgt, size_batch):
-        super().__init__()
-        self.emb, self.tgt, self.size_batch = emb, tgt, size_batch
-        self.perm = np.random.permutation(len(emb))
-
-    def __len__(self):
-        return -(-len(self.emb) // self.size_batch)
-
-    def __getitem__(self, i):
-        b = np.sort(self.perm[i * self.size_batch:(i + 1) * self.size_batch])
-        return self.emb[b].astype(np.float32), self.tgt[b]
-
-    def on_epoch_end(self):
-        self.perm = np.random.permutation(len(self.emb))
+    return (
+        tf.data.Dataset.range(n).shuffle(n, reshuffle_each_iteration=True)
+        .batch(size_batch).map(gather).prefetch(tf.data.AUTOTUNE)
+    )
 
 
 def _eval_arrays(samples, classes):
@@ -841,7 +841,7 @@ def train_set(name, embeddername, setname, name_translation,
         print(f"{tag}: {result['n_epochs']} epochs (best {result['best_epoch']}), "
               f"val_loss {result['best_val_loss']:.4f}, "
               f"{data.frames_train}/{data.frames_val} frames train/val, "
-              f"{_format_sens(sens)}", flush=True)
+              f"{_format_sens(sens)}, host RAM {_rss_gb():.1f} GB", flush=True)
 
         # Each fold builds a fresh model and loads its own data; without this
         # GPU allocations and the fold's arrays pile up, and a wide embedder's

@@ -168,7 +168,11 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
   its own head in `_train_one`, read from `TRUNK_LR_BACKBONE` (default 0,
   frozen) and `TRUNK_LR_HEAD` (2e-4). Their 12288-d+ float16 embeddings need
   `TRUNK_FP16=1` (`_to_tf_lowmem`, one float16 copy) and `TRUNK_BATCH=1024`, or
-  the first fold OOMs the GPU with "Dst tensor is not initialized". Other embedders never
+  the first fold OOMs the GPU with "Dst tensor is not initialized".
+  `_to_tf_lowmem` must stay pure tf.data: anything Python-fed (`from_generator`,
+  or a keras `PyDataset`, which Keras 3 wraps in one) keeps each fold's whole
+  array alive and the host OOMs 2-4 folds in. The per-fold line prints host RAM;
+  it should stay flat. Other embedders never
   reach any of this, so they train exactly as before.
 - Per-frame class activations + multi-label loss for finding bad annotations and
   hard negatives, on by default (`--no-surprisal`) — `surprisal.py`, written to
