@@ -29,7 +29,7 @@
 
 # Run the main checkout's copy: a worktree's tools/ is frozen at its branch point.
 _main="$(dirname "$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-format=absolute --git-common-dir)")/tools/$(basename "$0")"
-[ "$(realpath "$0")" = "$(realpath -m "$_main")" ] || [ ! -f "$_main" ] || exec bash "$_main" "$@"
+[ ! -f "$_main" ] || [ "$(realpath "$0")" = "$(realpath "$_main")" ] || exec bash "$_main" "$@"
 
 usage="usage: watch_job.sh [<pid> <log>]... | --adopt <pid>"
 common=$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-format=absolute --git-common-dir)
@@ -53,7 +53,20 @@ state() {  # <pid> <log> -> one line: where the job stands
   fi
 }
 follow() {  # <pid> <log> -> its events until it exits
-  tail --pid="$1" -n 0 -F "$2" 2>/dev/null | grep --line-buffered -E "$EVENTS"
+  if tail --version 2>/dev/null | grep -q GNU; then
+    tail --pid="$1" -n 0 -F "$2" 2>/dev/null | grep --line-buffered -E "$EVENTS"
+    return
+  fi
+  # BSD tail (macOS) has no --pid: follow until the job is gone, give tail a
+  # beat to read the exit line, then stop it so grep sees EOF.
+  local tp
+  tail -n 0 -F "$2" 2>/dev/null > >(grep --line-buffered -E "$EVENTS") &
+  tp=$!
+  while kill -0 "$1" 2>/dev/null; do sleep 2; done
+  sleep 2
+  kill "$tp" 2>/dev/null
+  wait "$tp" 2>/dev/null
+  sleep 0.2  # let grep flush its last line
 }
 
 # One job: unprefixed, as HANDOFF.md files written before 2026-09-23 expect.
@@ -72,9 +85,9 @@ if [ "${1:-}" = --adopt ]; then
   [ -f "$f" ] || { echo "watch_job: no launch_job.sh job $2 in $JOBS" >&2; exit 1; }
   # Keep the mtime: tools/human/agent_loop.sh kills the jobs registered since
   # a session started, and an adopted job was not started by this one.
-  m=$(stat -c %Y "$f")
+  ref=$(mktemp); touch -r "$f" "$ref"   # portable mtime save (no GNU stat -c)
   printf '%s\nsession %s\n' "$(head -n 1 "$f")" "$CLAUDE_JOB_DIR" > "$f"
-  touch -d "@$m" "$f"
+  touch -r "$ref" "$f"; rm -f "$ref"
   echo "adopted job $2 ($(sed -n '1s/ :: .*//p' "$f")); tools/watch_job.sh with no arguments now follows it"
   exit 0
 fi

@@ -61,7 +61,7 @@
 # BLOCKED_GRACE (seconds a session stays blocked before it's flagged, 300).
 # Run the main checkout's copy: a worktree's tools/ is frozen at its branch point.
 _main="$(dirname "$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-format=absolute --git-common-dir)")/tools/human/$(basename "$0")"
-[ "$(realpath "$0")" = "$(realpath -m "$_main")" ] || [ ! -f "$_main" ] || exec bash "$_main" "$@"
+[ ! -f "$_main" ] || [ "$(realpath "$0")" = "$(realpath "$_main")" ] || exec bash "$_main" "$@"
 
 set -uo pipefail
 
@@ -119,13 +119,38 @@ nap() { quiet sleep "$1"; }
 # screen text on stdin -> nothing if no usage limit shows; otherwise the reset
 # as epoch seconds, or "unknown" when a limit shows but no reset time parses.
 # The screen is raw terminal output, where spaces are often cursor moves.
+# GNU date parses free text and takes -d @epoch; BSD date (macOS) does neither.
+fmt_epoch() {  # epoch format -> formatted local time
+  date -d "@$1" "$2" 2>/dev/null || date -r "$1" "$2"
+}
+parse_clock() {  # "3pm" / "3:30pm" / "Sep 24 3pm" -> epoch s (today unless dated)
+  date -d "$1" +%s 2>/dev/null && return
+  python3 - "$1" <<'PY'
+import datetime as dt, sys
+s, now = sys.argv[1].strip(), dt.datetime.now()
+for f in ('%I%p', '%I:%M%p', '%H:%M', '%b %d %I%p', '%b %d %I:%M%p', '%b %d %H:%M',
+          '%B %d %I%p', '%B %d %I:%M%p', '%B %d %H:%M'):
+    dated = '%b' in f or '%B' in f  # parse with this year attached: no year is ambiguous
+    try:
+        t = dt.datetime.strptime(f'{now.year} {s}', f'%Y {f}') if dated else dt.datetime.strptime(s, f)
+    except ValueError:
+        continue
+    if not dated:
+        t = t.replace(year=now.year, month=now.month, day=now.day)
+    print(int(t.timestamp()))
+    sys.exit(0)
+sys.exit(1)
+PY
+}
+
 limit_reset() {
   local text at t now
-  text=$(sed -E 's/\x1b\[[0-9]*[CG]/ /g; s/\x1b\[[0-9;?]*[A-Za-z]//g; s/\x1b\][^\x07]*\x07//g' | tr -s ' ')
+  local e=$'\033' b=$'\007'  # literal ESC/BEL: BSD sed has no \x escapes
+  text=$(sed -E "s/${e}\[[0-9]*[CG]/ /g; s/${e}\[[0-9;?]*[A-Za-z]//g; s/${e}\][^${b}]*${b}//g" | tr -s ' ')
   grep -aqE "(hit your [A-Za-z]+ limit|Usage limit reached)" <<<"$text" || return 0
   at=$(grep -aoE "(continuing automatically at|resets) [A-Za-z0-9:, ]*[0-9](am|pm)?" <<<"$text" \
        | tail -n 1 | sed -E 's/^(continuing automatically at|resets) //; s/,//g')
-  t=$(date -d "$at" +%s 2>/dev/null) || { echo unknown; return 0; }
+  t=$(parse_clock "$at") || { echo unknown; return 0; }
   now=$(date +%s)
   # a bare clock time earlier than now more than an hour ago means tomorrow
   [ -n "$at" ] && [ "$t" -lt $(( now - 3600 )) ] && t=$(( t + 86400 ))
@@ -145,7 +170,7 @@ kill_jobs() {  # since (epoch s) -> kill every launch_job.sh job registered sinc
   for f in "$JOBS"/*; do
     [ -e "$f" ] || continue
     pid=${f##*/}
-    [ "$(stat -c %Y "$f")" -ge "$since" ] || continue
+    [ "$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f")" -ge "$since" ] || continue
     if [ "$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')" = "$pid" ]; then
       kill -TERM -- "-$pid" 2>/dev/null && groups+=("$pid") && log "killing job $pid: $(head -n 1 "$f")" \
         && { ! grep -q ' :: ' "$f" \
@@ -313,7 +338,7 @@ while true; do
           --disallowedTools "EnterWorktree,ExitWorktree" \
           --permission-mode auto --model "$model" --effort "$effort" \
           --settings "$SESSION_SETTINGS" "$prompt" 2>&1)
-    id=$(grep -oP 'backgrounded · \K[0-9a-f]+' <<<"$out")
+    id=$(grep -oE 'backgrounded · [0-9a-f]+' <<<"$out" | grep -oE '[0-9a-f]+$')
     [ -n "$id" ] || halt "batch $batch: claude --bg failed to start a session ($out)"
     log "batch $batch: $cause → $action on $model/$effort (session $id, named $sname)"
     echo "$last_was_fix" > "$STATE/last_was_fix"
@@ -340,10 +365,10 @@ while true; do
         wait_s=$(( reset - now ))
         if [ "$wait_s" -gt "$LIMIT_WAIT_MAX" ]; then
           claude stop "$id" >/dev/null 2>&1
-          halt "batch $batch: session $id hit a usage limit resetting at $(date -d "@$reset" '+%F %H:%M') ($(( wait_s / 60 )) min, past the cache window) → stopped it (jobs left running)"
+          halt "batch $batch: session $id hit a usage limit resetting at $(fmt_epoch "$reset" '+%F %H:%M') ($(( wait_s / 60 )) min, past the cache window) → stopped it (jobs left running)"
         fi
         limit_at=$reset; limit_phase=waiting
-        log "batch $batch: session $id hit a usage limit resetting at $(date -d "@$reset" +%H:%M) ($(( wait_s > 0 ? wait_s / 60 : 0 )) min, inside the cache window) → waiting for the reset"
+        log "batch $batch: session $id hit a usage limit resetting at $(fmt_epoch "$reset" +%H:%M) ($(( wait_s > 0 ? wait_s / 60 : 0 )) min, inside the cache window) → waiting for the reset"
       fi
       if [ "$limit_phase" = waiting ] && [ "$state" != blocked ] && [ "$now" -ge "$limit_at" ]; then
         limit_phase=resumed

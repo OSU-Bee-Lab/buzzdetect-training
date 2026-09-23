@@ -15,12 +15,12 @@
 # dirty there. DRY_RUN=1 prints the git and write steps instead of running them.
 # Run the main checkout's copy: a worktree's tools/ is frozen at its branch point.
 _main="$(dirname "$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-format=absolute --git-common-dir)")/tools/$(basename "$0")"
-[ "$(realpath "$0")" = "$(realpath -m "$_main")" ] || [ ! -f "$_main" ] || exec bash "$_main" "$@"
+[ ! -f "$_main" ] || [ "$(realpath "$0")" = "$(realpath "$_main")" ] || exec bash "$_main" "$@"
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PY=/home/luke/anaconda3/envs/buzzdetect-train/bin/python
+source "$ROOT/tools/python_path.sh"  # sets PY
 slug=${1:?usage: finish_experiment.sh <slug> --summary ... --model ... --hypothesis ... --trust ... --conclusion ...}
 shift
 WT="$ROOT/.local/worktrees/$slug"

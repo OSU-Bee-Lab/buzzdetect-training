@@ -122,6 +122,8 @@ A leading `sleep` in a Bash call is blocked outright. launch_job exists for exac
 - **Tools always run from the main checkout.** Each `tools/*.sh` re-runs the main
   checkout's copy, because a worktree's `tools/` is frozen at its branch point.
   A branch from before 2026-09-14 lacks that redirect: merge main into it first.
+- **Tools find Python via `paths.local.json`'s `"python"`** (`tools/python_path.sh`),
+  falling back to `<conda base>/envs/buzzdetect-train`. They run on Linux and macOS.
 - **`launch_job.sh` uses the GPU by default.** `--cpu` hides it. If a GPU job dies out of memory, deciding whether to re-run it with `--cpu` is up to you; a re-run resumes where it stopped. First check where it died: an OOM after a fold's training finished (scoring, surprisal, export) is an unbatched `model()` call, not a fold too big for the card; batch that call like `_score_fold` does instead of falling back to `--cpu`, which can be ~100x slower on trunk embedders. The 4 GB card fits one GPU job at a time: don't launch a second alongside it.
 
 ## Hardware settings (benchmarked on `bench/gpu-vs-cpu` branch)

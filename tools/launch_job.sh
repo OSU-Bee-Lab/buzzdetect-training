@@ -11,10 +11,11 @@
 #
 # A .py command runs under the buzzdetect-train python, unbuffered, with
 # MALLOC_ARENA_MAX=2. Stage 2 also gets BUZZDETECT_CHUNK_FRAMES=48, and any
-# pipeline main.py gets --verbose. Other commands run as given. Env vars set by
+# pipeline main.py (not 04_deploy) gets --verbose. Other commands run as given. Env vars set by
 # the caller pass through.
 #
-# The GPU is visible by default. --cpu hides it (CUDA_VISIBLE_DEVICES=); use it
+# The GPU is visible by default. --cpu hides it (CUDA_VISIBLE_DEVICES= for CUDA,
+# BUZZDETECT_NO_GPU=1 for Apple Metal, which ignores the former); use it
 # to re-run a job that ran out of GPU memory (stage 3 skips the folds already
 # finished and stage 2 resumes per ident). The 4 GB card fits one GPU job at a
 # time; don't launch a second alongside it.
@@ -27,11 +28,10 @@
 
 # Run the main checkout's copy: a worktree's tools/ is frozen at its branch point.
 _main="$(dirname "$(git -C "$(dirname "$(realpath "$0")")" rev-parse --path-format=absolute --git-common-dir)")/tools/$(basename "$0")"
-[ "$(realpath "$0")" = "$(realpath -m "$_main")" ] || [ ! -f "$_main" ] || exec bash "$_main" "$@"
+[ ! -f "$_main" ] || [ "$(realpath "$0")" = "$(realpath "$_main")" ] || exec bash "$_main" "$@"
 
 set -euo pipefail
 
-PY=/home/luke/anaconda3/envs/buzzdetect-train/bin/python
 usage="usage: launch_job.sh [--cpu] <log> -- <command...>"
 cpu=0
 while [ $# -gt 0 ]; do
@@ -46,19 +46,29 @@ log=${1:?$usage}; shift
 [ $# -gt 0 ] || { echo "$usage" >&2; exit 2; }
 
 envs=(PYTHONUNBUFFERED=1)
-[ "$cpu" = 1 ] && envs+=(CUDA_VISIBLE_DEVICES=)
+[ "$cpu" = 1 ] && envs+=(CUDA_VISIBLE_DEVICES= BUZZDETECT_NO_GPU=1)
 cmd=("$@")
 if [[ $1 == *.py ]]; then
+  source "$(dirname "$(realpath "$0")")/python_path.sh"  # sets PY
   envs+=(MALLOC_ARENA_MAX=2)
   [[ $1 == *02_set/main.py ]] && envs+=("BUZZDETECT_CHUNK_FRAMES=${BUZZDETECT_CHUNK_FRAMES:-48}")
-  [[ $1 == *main.py && " $* " != *" --verbose "* ]] && cmd+=(--verbose)
+  # 04_deploy/main.py has no --verbose; only stages 1-3 and the root chain do
+  [[ $1 == *main.py && $1 != *04_deploy/main.py && " $* " != *" --verbose "* ]] && cmd+=(--verbose)
   cmd=("$PY" -u "${cmd[@]}")
 fi
 
-log=$(realpath -m "$log")
+mkdir -p "$(dirname "$log")"
+log="$(cd "$(dirname "$log")" && pwd -P)/$(basename "$log")"
 # setsid makes the job its own process group (pgid = pid), so one signal to the
-# group reaches every worker it spawned
-nohup setsid env "${envs[@]}" bash -c '
+# group reaches every worker it spawned. macOS has no setsid(1); perl's
+# POSIX::setsid is the same call. $BASH, not bash: the inner printf's %(...)T
+# needs bash >= 4.2, and macOS's /bin/bash is 3.2.
+if command -v setsid >/dev/null; then
+  detach=(setsid)
+else
+  detach=(perl -MPOSIX -e 'POSIX::setsid() or die "setsid: $!"; exec @ARGV or die "exec: $!"')
+fi
+nohup "${detach[@]}" env "${envs[@]}" "$BASH" -c '
   "$@" 2>&1 | while IFS= read -r line; do printf "%(%m-%d %T)T %s\n" -1 "$line"; done
   echo "[launch_job] exit ${PIPESTATUS[0]}"' launch_job "${cmd[@]}" \
   > "$log" 2>&1 < /dev/null &
