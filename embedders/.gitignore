@@ -40,6 +40,11 @@
 !yamnet_trunk_pitchshift_depth12
 !perch_centred
 !perch_centred_pitchshift
+!yamnet_pooled.py
+!yamnet_triple
+!yamnet_triple_overlay
+!yamnet_triple_squeeze
+!yamnet_expand
 
 # Ignore binary model files within unignored embedders
 panns_cnn14/*.pth
