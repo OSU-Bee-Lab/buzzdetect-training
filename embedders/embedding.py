@@ -110,13 +110,16 @@ def load_embedder(embeddername: str, framehop_prop: float, initialize: bool):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    # Find the embedder class (should inherit from BaseEmbedder)
+    # Find the embedder class (should inherit from BaseEmbedder). Only classes
+    # defined in this file count: an embedder that imports another embedder's
+    # class to subclass it would otherwise load whichever sorts first in dir().
     embedder_class = None
     for item_name in dir(module):
         item = getattr(module, item_name)
         if (isinstance(item, type) and
                 issubclass(item, BaseEmbedder) and
-                item is not BaseEmbedder):
+                item is not BaseEmbedder and
+                item.__module__ == module.__name__):
             embedder_class = item
             break
 
