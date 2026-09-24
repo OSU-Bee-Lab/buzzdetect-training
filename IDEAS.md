@@ -148,41 +148,6 @@ using only rows whose `label` does not contain `ins_buzz`.
 
 Ranked best-first by expected value on the headline and the hard folds, cost second. **Item 18 is a free diagnostic: run it while item 19's extraction runs**, not before it — it only changes how 19 is read. Item 23 is high-ceiling but blocked on Luke, which is why it sits low.
 
-## 2. Perch as a further block — the only representation measured to separate the jet
-
-*Evidence: **E3** for the separation numbers
-(`diagnostics/2026-09-09_jet_1_95/README.md`); Perch 2.0 is the strongest
-linear-probe encoder on BEANS (arXiv:2508.01277) and trains on insects.
-Retargeted 2026-09-14 onto the lead.*
-
-Held-out jet probe, P(wave-1 jet frame outranks a `1_95` buzz frame), lower is
-better, with a same-fold control: yamnet 0.860 (2.6x control), aves 0.558
-(1.5x), **perch 0.239 (1.2x)**. `1_95` is still the lowest fold on the lead
-(0.170), and its threshold is still aircraft-set.
-
-**`perch-probe`'s E3 verdict is not evidence against this.** It died of a
-frame-length confound: `overlap_event_s` scales with frame length, so Perch's
-5 s frame demanded 1.0 s of overlap and per-fold label dilution predicted the
-delta. This design keeps the lead's frame grid and labels.
-
-**Broadcast-joining Perch's existing 5 s cache onto the lead's frame grid
-without re-extracting is forbidden** (LOOP.md constraints: no artificial
-frame/embedding cache). A prior attempt (`perch-broadcast-join`, closed
-unfinished 2026-09) duplicated one 5 s Perch row across every ~1 s frame near
-it and zero-filled ~2.87% of frames with no real Perch frame nearby — real risk
-of the same inflation as `context-stack`'s cached-row leak, on isolated
-short-buzz frames specifically. Do not resume it as written.
-
-**Centred Perch, extracted for real.** Perch on a 5 s window centred on each
-1.0 s frame, extracted in `.local/venv-perch-extract` (TF 2.21) as a genuine
-new embedder/extraction pass — the only compliant design.
-
-*Falsifier:* **`1_95` is the test, not the headline.** A headline gain with
-`1_95` inside its delta SD is a rich-fold gain. The extra ~2.5 s of real
-context each side means comparing the per-fold signature against the honest
-`yamnet_context` pattern (rich folds up, hard folds flat) before crediting
-Perch.
-
 ## 20. All 12 AVES layers, then a learned layer mix
 
 *Evidence: **E4** `aves-mid` (layers 6/9/12 beat layer 12 alone, +0.026 to
