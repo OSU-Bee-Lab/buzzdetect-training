@@ -63,3 +63,17 @@ write.csv(
   'summary.csv',
   row.names=F
 )
+
+
+folds <- annotations_combined %>% 
+  select(ident) %>% 
+  mutate(
+    fold = ident,
+    role = 'train'
+  )
+
+write.csv(
+  folds,
+  'folds.csv',
+  row.names=F
+)

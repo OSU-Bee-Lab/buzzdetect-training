@@ -1,0 +1,23 @@
+{
+  "annotationDirectory": {
+    "kind": "relative",
+    "path": "./annotations"
+  },
+  "buzzdetectDirectory": {
+    "kind": "absolute",
+    "path": "/Volumes/Expansion/audio_bee_detection/buzzdetect/models/yamnet_moderate/output"
+  },
+  "buzzdetectTrimActivationPrefix": true,
+  "filenameTimeFormat": "YYMMDD_HHMM",
+  "mediaDirectory": {
+    "kind": "absolute",
+    "path": "/Volumes/Expansion/audio_bee_detection/experiments"
+  },
+  "nameGradientColors": [
+    "#9b2c79",
+    "#f9d9a0"
+  ],
+  "outputFormat": "txt",
+  "outputRoundingDecimals": 4,
+  "projectName": "Hard Negatives"
+}

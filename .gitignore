@@ -88,3 +88,7 @@ diagnostics/**
 
 # Root-level scratch logs from long jobs (launch_job.sh <log>)
 /*.log
+
+
+# SeeNote model deep dive
+SeeNote/

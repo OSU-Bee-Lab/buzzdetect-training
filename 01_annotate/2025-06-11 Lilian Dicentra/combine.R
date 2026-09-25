@@ -60,12 +60,12 @@ annotation_counts <- paths_annotations %>%
   summarize(snips_annotated=n())
 
 folds <- annotations_combined %>% 
+  select(ident) %>% 
+  unique() %>% 
   mutate(
     fold = ident,
     role = 'train'
-  ) %>% 
-  select(ident, fold) %>% 
-  unique()
+  )
   
 
 write.csv(

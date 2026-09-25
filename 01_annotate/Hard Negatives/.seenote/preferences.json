@@ -1,0 +1,95 @@
+{
+  "autoPullRemoteChanges": true,
+  "bandPassFilter": null,
+  "buzzdetectFileFilter": "annotated",
+  "dateTimeFormat": "friendly",
+  "fileFilter": "all",
+  "spectrogramSettings": {
+    "displayCeil": -7,
+    "displayFloor": -80,
+    "fftSize": 2048,
+    "frequencyScale": "mel",
+    "maxFreq": 22050,
+    "minFreq": 0
+  },
+  "toolHotkeys": {
+    "ambient_music": "1",
+    "animal_dog": "3",
+    "mech_auto_car": "2"
+  },
+  "uiSettings": {
+    "activeTrackPath": "Luke - Diel Drivers/2026-04-13/1_2/260417_1917.mp3",
+    "buzzdetectBinWidthOverride": 10,
+    "buzzdetectEnabled": true,
+    "buzzdetectHiddenNeurons": [
+      "ambient_background",
+      "ambient_music",
+      "ambient_noise",
+      "ambient_ringing",
+      "animal",
+      "human",
+      "ins_trill",
+      "mech_ac",
+      "mech_auto",
+      "mech_beep",
+      "mech_hum",
+      "mech_hum_chainsaw",
+      "mech_plane",
+      "mech_tool",
+      "static"
+    ],
+    "buzzdetectMinDetectionRate": 0.4,
+    "buzzdetectNeuronColors": {},
+    "buzzdetectPinnedNeurons": [
+      "ins_buzz"
+    ],
+    "buzzdetectSeriesMode": "detectionRate",
+    "buzzdetectSubsetBuffer": 8,
+    "buzzdetectSubsetEnabled": true,
+    "buzzdetectSubsetThresholds": {
+      "ins_buzz": -1
+    },
+    "buzzdetectThresholds": {
+      "ambient_background": 0.312,
+      "ambient_music": -0.085,
+      "ambient_noise": -1.136,
+      "animal": -0.004,
+      "human": -0.097,
+      "ins_buzz": -1,
+      "ins_trill": 0.752,
+      "mech_auto": 0.208,
+      "mech_hum": 0.32,
+      "mech_machinery": 1.207,
+      "mech_plane": 0.178
+    },
+    "fallbackTimeDisplayUnit": "hms",
+    "filePanelCollapsed": false,
+    "findPanelWidthRatio": 0.11812021520846988,
+    "lastDefinedSpeed": 1.5,
+    "leftPanelWidthRatio": 0.361712802433024,
+    "playbackSpeed": 1,
+    "playheadLocked": false,
+    "sidebarSections": {
+      "files": {
+        "collapsed": false,
+        "weight": 0.10953801195726244
+      },
+      "labels": {
+        "collapsed": false,
+        "weight": 0.1357424904818385
+      },
+      "neurons": {
+        "collapsed": true,
+        "weight": 1.1547194975608992
+      }
+    },
+    "splitRatio": 0.5,
+    "timeDisplayUnit": "datetime",
+    "videoBrightness": 100,
+    "videoCollapsed": false,
+    "videoContrast": 100,
+    "videoMode": "fast",
+    "volume": 4.43,
+    "zoomSec": 30
+  }
+}
