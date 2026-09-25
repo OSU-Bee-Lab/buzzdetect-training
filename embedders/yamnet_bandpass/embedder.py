@@ -63,3 +63,44 @@ class EmbedderYamnetBandpass(BaseEmbedder):
         filtered = tf.nn.conv1d(x, self._filter_kernel, stride=1, padding='SAME')
         filtered = tf.squeeze(filtered, axis=[0, 2])
         return self.model(filtered)
+
+    def to_onnx(self, opset=17):
+        """Waveform -> bandpass FIR -> YAMNet trunk, as one ONNX graph.
+
+        The default BaseEmbedder.to_onnx() exports self.model alone, i.e. the
+        *unfiltered* trunk -- embed()'s conv1d bandpass never makes it into the
+        graph. This prepends the same Hamming-windowed sinc FIR as a
+        'SAME'-padded Conv (stride 1, odd kernel -> pad NUM_TAPS//2 each side,
+        matching TF's SAME rule for this case) ahead of the trunk's input, so
+        the graph sees the same filtered audio the model does in embed().
+        TF's conv1d and ONNX's Conv are both cross-correlation with the same
+        weight-order convention, so the kernel carries over unchanged.
+        """
+        import onnx
+        from onnx import TensorProto, helper, numpy_helper
+
+        trunk = super().to_onnx(opset=opset)
+        graph = trunk.graph
+        yam_in = graph.input[0].name
+
+        kernel = self._filter_kernel.numpy().reshape(1, 1, self.NUM_TAPS)
+        half = (self.NUM_TAPS - 1) // 2
+        new_in = 'bp_waveform'
+
+        graph.initializer.extend([
+            numpy_helper.from_array(kernel.astype(np.float32), 'bp_kernel'),
+            helper.make_tensor('bp_frame_shape', TensorProto.INT64, [3], [1, 1, -1]),
+            helper.make_tensor('bp_flat_shape', TensorProto.INT64, [1], [-1]),
+        ])
+        front = [
+            helper.make_node('Reshape', [new_in, 'bp_frame_shape'], ['bp_framed']),
+            helper.make_node('Conv', ['bp_framed', 'bp_kernel'], ['bp_filtered'],
+                             pads=[half, half], strides=[1], kernel_shape=[self.NUM_TAPS]),
+            helper.make_node('Reshape', ['bp_filtered', 'bp_flat_shape'], [yam_in]),
+        ]
+        del graph.input[:]
+        graph.input.append(helper.make_tensor_value_info(new_in, TensorProto.FLOAT, ['samples']))
+        for node in reversed(front):
+            graph.node.insert(0, node)
+
+        return trunk

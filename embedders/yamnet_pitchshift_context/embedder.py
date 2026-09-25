@@ -78,3 +78,17 @@ class EmbedderYamnetPitchshiftContext(_pitchshift.EmbedderYamnetPitchshift):
     def embed(self, audio):
         """Contiguous audio in, one context-widened embedding per frame out."""
         return self.stack_context(self.embed_frames(audio))
+
+    def to_onnx(self, opset=17):
+        """yamnet_pitchshift's [YAMNet | shifted] graph (already cropped to
+        whole frames) plus the context-stack stack_context() does in numpy:
+        only the unshifted 1024 block is widened -- see embedders/onnx_context.py.
+        """
+        from embedders.onnx_context import add_context_stack
+
+        trunk_onnx = super().to_onnx(opset=opset)
+        return add_context_stack(
+            trunk_onnx, k=self.context_frames,
+            widen_dim=_YAMNET_DIMS,
+            total_dim=_pitchshift.EmbedderYamnetPitchshift.n_embeddings,
+            n_embeddings=self.n_embeddings)

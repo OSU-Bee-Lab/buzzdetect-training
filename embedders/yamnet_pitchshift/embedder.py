@@ -109,3 +109,89 @@ class EmbedderYamnetPitchshift(BaseEmbedder):
         shifted = np.asarray(self.model(shifted_frames.reshape(-1)), dtype=np.float32)
 
         return np.concatenate([unshifted, shifted], axis=1)
+
+    def _resample_kernel(self):
+        """The FIR that librosa.resample(sr -> sr/2) applies, as a conv kernel.
+
+        librosa's resampler is linear and, for a 2:1 ratio, time-invariant
+        up to the stride: y[m] = sum_k h[2m - k] x[k] with zero padding at the
+        frame edges. h is read off by resampling two unit impulses (one on an
+        even input sample, one on an odd one) rather than re-deriving
+        soxr's filter, so the ONNX graph tracks whatever librosa does.
+        Returned flipped (Conv is cross-correlation), with its half-width L;
+        max deviation from librosa.resample on noise is ~6e-7.
+        """
+        n = self._frame_samples
+        centre = n // 2
+        taps = {}
+        for k0 in (centre, centre + 1):
+            impulse = np.zeros(n, dtype=np.float32)
+            impulse[k0] = 1
+            out = self._librosa.resample(
+                impulse, orig_sr=self.samplerate, target_sr=self._half_sr)
+            for m in np.nonzero(out)[0]:
+                taps[2 * int(m) - k0] = out[m]
+        half = max(abs(o) for o in taps)
+        h = np.zeros(2 * half + 1, dtype=np.float32)
+        for o, v in taps.items():
+            h[o + half] = v
+        return h[::-1].copy(), half
+
+    def to_onnx(self, opset=17):
+        """Waveform -> [YAMNet | YAMNet(pitch-shifted)] as one ONNX graph.
+
+        The default BaseEmbedder.to_onnx() exports self.model alone, i.e. the
+        unshifted 1024 block only. This wraps that trunk: whole 0.96 s frames
+        are downsampled 2:1 with the librosa-equivalent FIR (_resample_kernel)
+        as a stride-2 Conv, tiled 2x, and appended to the unshifted frames, so
+        a second copy of the YAMNet trunk embeds them, and the two outputs are
+        concatenated along the feature axis (embed()'s two separate calls).
+        """
+        import onnx
+        from onnx import TensorProto, compose, helper, numpy_helper
+
+        from embedders.onnx_context import crop_waveform_to_whole_frames
+
+        trunk = super().to_onnx(opset=opset)
+        # Second copy of the trunk for the shifted block, merged into the same
+        # graph. One copy over the concatenated 2n frames is NOT equivalent:
+        # YAMNet's edge padding means the last unshifted frame would see the
+        # first shifted one as context (error ~0.4 on that row).
+        twin = compose.add_prefix(onnx.ModelProto.FromString(trunk.SerializeToString()),
+                                  prefix='ps_twin_')
+        kernel, half = self._resample_kernel()
+        n_s = self._frame_samples
+        graph = trunk.graph
+        yam_in = graph.input[0].name
+        yam_out = graph.output[0].name
+        twin_in = twin.graph.input[0].name
+        twin_out = twin.graph.output[0].name
+        new_in = 'ps_waveform'
+        graph.node.extend(twin.graph.node)
+        graph.initializer.extend(twin.graph.initializer)
+        graph.value_info.extend(twin.graph.value_info)
+
+        graph.initializer.extend([
+            numpy_helper.from_array(kernel.reshape(1, 1, -1), 'ps_kernel'),
+            helper.make_tensor('ps_frames_shape', TensorProto.INT64, [3], [-1, 1, n_s]),
+            helper.make_tensor('ps_flat_shape', TensorProto.INT64, [1], [-1]),
+        ])
+        front = [
+            helper.make_node('Identity', [new_in], [yam_in]),
+            helper.make_node('Reshape', [new_in, 'ps_frames_shape'], ['ps_frames']),
+            helper.make_node('Conv', ['ps_frames', 'ps_kernel'], ['ps_down'],
+                             pads=[half, half], strides=[2], kernel_shape=[len(kernel)]),
+            helper.make_node('Concat', ['ps_down', 'ps_down'], ['ps_tiled'], axis=2),
+            helper.make_node('Reshape', ['ps_tiled', 'ps_flat_shape'], [twin_in]),
+        ]
+        back = [helper.make_node('Concat', [yam_out, twin_out], ['ps_embeddings'], axis=1)]
+        del graph.input[:]
+        graph.input.append(helper.make_tensor_value_info(new_in, TensorProto.FLOAT, ['samples']))
+        for node in reversed(front):
+            graph.node.insert(0, node)
+        graph.node.extend(back)
+        graph.output[0].name = 'ps_embeddings'
+        del graph.output[0].type.tensor_type.shape.dim[:]
+
+        # embed() drops the ragged tail and returns 0 rows under one frame
+        return crop_waveform_to_whole_frames(trunk, n_s)
