@@ -38,6 +38,8 @@
 !yamnet_trunk_pitchshift
 !yamnet_trunk_pitchshift_contrast
 !yamnet_trunk_pitchshift_depth12
+!yamnet_trunk_context_depth12
+!yamnet_trunk_pitchshift_context_depth12
 !perch_centred
 !perch_centred_pitchshift
 !yamnet_pooled.py

@@ -51,7 +51,7 @@ class EmbedderYamnetTrunkDepth12(_trunk.EmbedderYamnetTrunk):
         self.embed(np.zeros(int(self.framelength_s * self.samplerate), dtype=np.float32))
 
     def build_head(self, n_classes, lr_backbone=0.0, lr_head=2e-4, dropout=0.2,
-                   name=None):
+                   name=None, hidden=0):
         """Reshape(12288 -> 6,4,512) -> [YAMNet layers 12-14 + GAP] -> Dropout
         -> Dense(n_classes) logits. One block deeper than yamnet_trunk's tail."""
         import keras
@@ -81,6 +81,9 @@ class EmbedderYamnetTrunkDepth12(_trunk.EmbedderYamnetTrunk):
             x = keras.layers.TimeDistributed(tail)(x)
             x = keras.layers.Flatten()(x)
         x = keras.layers.Dropout(dropout)(x)
+        if hidden:
+            # optional ReLU layer between the pooled trunk code and the logits
+            x = keras.layers.Dense(hidden, activation='relu', name='hidden')(x)
         out = keras.layers.Dense(n_classes)(x)
         model = keras.Model(inp, out, name=name)
 

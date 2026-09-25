@@ -37,7 +37,7 @@ JOBS="$(dirname "$common")/.local/jobs"   # launch_job.sh's registry
 
 # Anchored to launch_job's timestamp prefix: Keras progress bars and TF's
 # allocator warnings otherwise match error words mid-line.
-EVENTS='^\[launch_job\] exit|^[0-9-]+ [0-9:]+ (\[[^]]+\] sens@fpr[^ ]* per deployment: |\[shipped\] )'
+EVENTS='^\[launch_job\] exit|^[0-9-]+ [0-9:]+ (\[[^]]+\] sens@fpr[^ ]* per deployment: |\[shipped\] |\[queue\] )'
 ERRORS='^[0-9-]+ [0-9:]+ (Traceback|[A-Za-z_.]*(Error|Exception)( |:|$)|.*line [0-9]+: +[0-9]+ (Killed|Segmentation fault))'
 
 state() {  # <pid> <log> -> one line: where the job stands

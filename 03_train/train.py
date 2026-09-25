@@ -410,7 +410,8 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         # 12-14) live in the head, optionally trainable.
         model = embedder.build_head(
             len(data.classes), lr_backbone=float(os.environ.get('TRUNK_LR_BACKBONE', 0)),
-            lr_head=float(os.environ.get('TRUNK_LR_HEAD', 2e-4)), dropout=dropout, name=tf_name)
+            lr_head=float(os.environ.get('TRUNK_LR_HEAD', 2e-4)), dropout=dropout, name=tf_name,
+            **({'hidden': int(os.environ['TRUNK_HIDDEN'])} if os.environ.get('TRUNK_HIDDEN') else {}))
         optimizer = model.optimizer
 
     # Per-class weights go in the loss, not in fit(class_weight=). Keras'

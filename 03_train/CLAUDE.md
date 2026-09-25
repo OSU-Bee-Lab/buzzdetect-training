@@ -166,7 +166,9 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
 - **Fine-tunable `yamnet_trunk*` embedders** (merged 2026-09-22; every trunk
   experiment had hand-ported it before): an embedder with `build_head()` builds
   its own head in `_train_one`, read from `TRUNK_LR_BACKBONE` (default 0,
-  frozen) and `TRUNK_LR_HEAD` (2e-4). Their 12288-d+ float16 embeddings need
+  frozen) and `TRUNK_LR_HEAD` (2e-4); `TRUNK_HIDDEN=<n>` (default unset, no
+  hidden layer) puts a ReLU Dense(n) between the pooled trunk code and the
+  logits (only `yamnet_trunk` and `yamnet_trunk_depth12` family heads). Their 12288-d+ float16 embeddings need
   `TRUNK_FP16=1` (`_to_tf_lowmem`, one float16 copy) and `TRUNK_BATCH=1024`, or
   the first fold OOMs the GPU with "Dst tensor is not initialized".
   `_to_tf_lowmem` must stay pure tf.data: anything Python-fed (`from_generator`,
