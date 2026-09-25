@@ -20,9 +20,11 @@ TEST_EPOCHS = 50 # this value, in particular, needs to be cranked up. Early stop
 
 
 def load_stage(path, module_name):
+    root_dir = os.path.dirname(os.path.abspath(__file__))
     stage_dir = os.path.dirname(os.path.abspath(path))
-    if stage_dir not in sys.path:
-        sys.path.insert(0, stage_dir)
+    for d in (root_dir, stage_dir):
+        if d not in sys.path:
+            sys.path.insert(0, d)
     spec = importlib.util.spec_from_file_location(module_name, path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
