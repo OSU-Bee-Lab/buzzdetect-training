@@ -64,4 +64,8 @@ trains nothing there.
 1. Log each model with `tools/log_entry.py`. `cv-baseline-v4` is the era anchor;
    read the `v4-ft*` grid against it and against `v4-ft`.
 2. `cv-baseline-v4` finished: 0.324 (0.262 incl. quiet), recorded in LOOP.md; still needs its log entry.
-3. Delete this file when the queue is logged.
+3. **Epoch check:** `v4-ft` was still rising slowly at epoch 30 (mean val sens incl. quiet
+   0.297 at epoch 20, 0.305 at 25, 0.307 at 30; 2/8 folds peaked at 30). All grid runs share
+   the 30-epoch budget, so comparisons within the grid are matched. Re-run the grid's winner
+   at 60 epochs before treating its number as final.
+4. Delete this file when the queue is logged.
