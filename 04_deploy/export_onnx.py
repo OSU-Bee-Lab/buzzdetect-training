@@ -117,16 +117,27 @@ AGREE_FP16 = 0.98
 #
 # A few optional keys ride along for people rather than for the engine, which
 # ignores all of them: `description` (one line, written by hand -- the app shows
-# it under the model picker), `thresholds`/`threshold_stats` (written by
-# 03_train/thresholds.py when the shipped model is trained; the engine copies
-# `thresholds` into each output folder's buzzdetect_manifest.json), and
-# `metadata` (bundled below from the training config's `set`, `trained_date`
-# and `overlap_event_prop` -- provenance for a person looking at the model,
+# it under the model picker), `center_stats` (written by
+# 03_train/thresholds.py; its keys are the classes shifted below), and
+# `metadata` (bundled below from the training config's `embeddername`, `set`,
+# `trained_date` and `overlap_event_prop` -- provenance for a person looking at the model,
 # not anything the engine or buzzdetect reads). A hand-written description, or
 # a metadata field the training config lacks, survives a re-export from the
 # destination's existing config.
-CONFIG_PASSTHROUGH = ('description', 'thresholds', 'threshold_stats')
-METADATA_KEYS = ('set', 'trained_date', 'overlap_event_prop')
+#
+# The training config's `activation_centers` are not shipped: they are
+# subtracted from the head's logits inside the graph (see class_centers), so
+# every class that has one ships with its suggested threshold at 0.
+# `center_stats` describes that shift, so it is taken from the source config
+# only -- never carried over from a previous export, where it might describe a
+# shift this export no longer makes.
+#
+# A config from before centers (`thresholds`/`threshold_stats`: model_general_v3,
+# or a model whose card was never refreshed) exports unshifted, and those two
+# keys pass through from the source as they always did.
+CONFIG_PASSTHROUGH = ('description',)
+LEGACY_THRESHOLD_KEYS = ('thresholds', 'threshold_stats')
+METADATA_KEYS = ('embeddername', 'set', 'trained_date', 'overlap_event_prop')
 FNAME_README = 'README.md'
 
 
@@ -226,15 +237,24 @@ def flatten_trunk_output(trunk_onnx, embedder):
     return trunk_onnx
 
 
-def head_to_onnx(head, n_embeddings):
-    """The trained classifier alone, as its own ONNX graph: embeddings in,
-    predictions out. Wrapping it in a throwaway keras.Model first is what
-    makes this work for both a model.keras head (already a keras.Model, so
-    this is a no-op wrapper) and the legacy SavedModel/TFSMLayer head (which
-    has no .export() of its own but can still be called inside one)."""
+def class_centers(config):
+    """The per-class logit center baked into the shipped graph: the training
+    config's `activation_centers` (each class's raw suggested threshold), 0 for
+    a class without one. Subtracting it puts every suggested threshold at 0."""
+    centers = config.get('activation_centers') or {}
+    unknown = sorted(set(centers) - set(config['classes']))
+    if unknown:
+        raise SystemExit(f'activation_centers name classes the model lacks: {unknown}')
+    return np.array([centers.get(c, 0.0) for c in config['classes']], dtype=np.float32)
+
+
+def wrap_head(head, n_embeddings):
+    """The trained classifier as a keras.Model with one plain tensor output.
+    Wrapping it in a throwaway keras.Model is what makes this work for both a
+    model.keras head (already a keras.Model) and the legacy SavedModel/TFSMLayer
+    head (which has no .export() of its own but can still be called inside
+    one)."""
     import keras
-    import onnx
-    import tempfile
 
     inp = keras.Input((n_embeddings,), dtype='float32', name='embeddings')
     out = head(inp)
@@ -243,11 +263,35 @@ def head_to_onnx(head, n_embeddings):
         (out,) = out.values()
     head_model = keras.Model(inp, out, name='head')
     head_model(np.zeros((1, n_embeddings), dtype=np.float32))
+    return head_model
+
+
+def head_to_onnx(head, centers):
+    """The head (a wrap_head() model) alone, as its own ONNX graph:
+    embeddings in, predictions minus `centers` out.
+
+    The subtraction is appended as an ONNX Sub node on a constant initializer
+    rather than written into the Keras model: Keras's ONNX export turns a
+    constant captured in the call graph into a required graph input."""
+    import onnx
+    import tempfile
+    from onnx import helper, numpy_helper
 
     with tempfile.TemporaryDirectory() as d:
         path = os.path.join(d, 'head.onnx')
-        head_model.export(path, format='onnx', verbose=False, opset_version=OPSET)
-        return onnx.load(path)
+        head.export(path, format='onnx', verbose=False, opset_version=OPSET)
+        model = onnx.load(path)
+
+    graph = model.graph
+    out = graph.output[0]
+    raw_name = out.name + '_raw'
+    for node in graph.node:
+        node.output[:] = [raw_name if o == out.name else o for o in node.output]
+    graph.initializer.append(numpy_helper.from_array(centers[None, :], 'activation_centers'))
+    graph.node.append(helper.make_node('Sub', [raw_name, 'activation_centers'], [out.name],
+                                       name='subtract_activation_centers'))
+    onnx.checker.check_model(model)
+    return model
 
 
 def merge_trunk_head(trunk_onnx, head_onnx):
@@ -917,15 +961,24 @@ def export(modelname, dir_dest, force=False, path_audio=None,
 
     print(f"building {modelname} from {dir_src} on embedder '{embeddername}'")
     trunk_onnx, embedder = build_trunk_onnx(embeddername)
-    head = load_head(dir_src, embedder.n_embeddings)
-    head_onnx = head_to_onnx(head, embedder.n_embeddings)
+    centers = class_centers(config)
+    shifted = [c for c in config['classes'] if c in (config.get('activation_centers') or {})]
+    print(f'activation centers (raw value moved to 0): '
+          f'{", ".join(f"{c} = {o:g}" for c, o in zip(config["classes"], centers) if c in shifted) or "none"}')
+    raw = [c for c in config['classes'] if c not in shifted]
+    if raw:
+        print(f'  no center, shipped raw: {", ".join(raw)}')
+    head = wrap_head(load_head(dir_src, embedder.n_embeddings), embedder.n_embeddings)
+    head_onnx = head_to_onnx(head, centers)
     model = merge_trunk_head(trunk_onnx, head_onnx)
 
     path_onnx = os.path.join(dir_stage, 'model.onnx')
     export_graph(model, path_onnx)
 
     print('checking the graph against embed() and the head it came from')
-    verify(path_onnx, embedder, head, path_audio, assume_yes=assume_yes)
+    # The reference applies the centers itself, so parity also checks the shift.
+    verify(path_onnx, embedder, lambda e: np.asarray(head(e)) - centers, path_audio,
+           assume_yes=assume_yes)
     samples_hop, samples_min, floor_nonzero, float32_quotient = probe_framing(
         path_onnx, embedder)
     n_session = verify_fixed_length(path_onnx, embedder, samples_hop, samples_min,
@@ -964,6 +1017,13 @@ def export(modelname, dir_dest, force=False, path_audio=None,
             config_out[key] = config[key]
         elif config_dest.get(key) not in (None, '', {}):
             config_out[key] = config_dest[key]
+    stats = {c: v for c, v in (config.get('center_stats') or {}).items() if c in shifted}
+    if stats:
+        config_out['center_stats'] = stats
+    elif 'activation_centers' not in config:
+        for key in LEGACY_THRESHOLD_KEYS:
+            if config.get(key) not in (None, '', {}):
+                config_out[key] = config[key]
 
     metadata = {k: config[k] for k in METADATA_KEYS if config.get(k) not in (None, '')}
     if metadata:

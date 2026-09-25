@@ -429,17 +429,33 @@ models/<name>/
 
 `model.py` is generated so `models.load_model('<name>')` works for inference.
 
-**Suggested thresholds** are written once the shipped model is trained, by
-`03_train/thresholds.py`: for every class, the mean over rotations of the
-threshold that puts that held-out fold at 0.5% FPR (the same convention as
-`folds_sx.csv`'s `total` row, so the ins_buzz numbers agree). They go into
-`config_model.json` as `thresholds` (`{class: number}`, nothing else) and
-`threshold_stats` (SD, 95% t-interval over folds, folds reached, events,
-frames), and into `README.md`, whose `<!-- generated:... -->` blocks carry a
-suggestion table and per-class operating points at several FPR and precision
-targets. An existing README keeps everything outside those blocks. Add a
-one-line `description` to the config by hand; `04_deploy/export_onnx.py` carries
-`description`, `thresholds`, `threshold_stats` and the README to buzzdetect.
+**The activation centers** are written once the shipped model is trained, by
+`03_train/thresholds.py`. A class's center is the mean over rotations of the
+lowest threshold that puts that held-out fold at 95% precision (totalized like
+`folds_sx.csv`'s `total` row). Precision depends on each fold's positive
+fraction, so this suits a deployment with about the folds' typical one. Every
+class is centered, on however many folds it appears in; one is enough. A class
+no fold brings to 95% is centered on each fold's best-precision threshold
+instead, and only a class absent from every rotate fold is left uncentered.
+Override any class by hand in `models/<name>/centers_manual.json`
+(`{"ambient_rain": 0.0}`, raw units), which survives regeneration. Both land
+in `config_model.json` as `activation_centers` (`{class: number}`, raw logit
+units) and `center_stats` (`source` cv/manual; for cv also the precision
+target, folds used, precision actually reached, mean sensitivity (and for
+ins_buzz excluding faint/quiet), mean false positive rate, the fold thresholds'
+spread around the center, events, frames). A README skeleton, stating the
+threshold and naming any uncentered class, is written only if there is none;
+an existing README is left alone, and export carries it over.
+
+**The shipped model's suggested threshold is 0.** Export subtracts each class's
+center from its logit inside the ONNX graph, so buzzdetect results are on a
+shifted scale: positive means detected at the suggestion, for every class
+with a center; a class without one ships raw. `activation_centers` itself
+is not shipped. Everything under `models/<name>/` stays in raw units; subtract
+`activation_centers[class]` to compare with buzzdetect output. A config from
+before centers (`thresholds`, e.g. model_general_v3) exports unshifted.
+Add a one-line `description` to the config by hand; `04_deploy/export_onnx.py`
+carries `description`, `center_stats` and the README to buzzdetect.
 `04_deploy/model_card.py <name>` redoes this for a model already on disk, falling
 back to `surprisal/` for models trained before `predictions_classes.csv`.
 

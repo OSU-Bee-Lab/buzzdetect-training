@@ -239,7 +239,7 @@ def _score_fold(model, setname, embeddername, fold, translation, classes):
     Returns (predictions, predictions_classes), or (None, None) if the fold has
     no usable frames. `predictions` is the ins_buzz frame-level (activation,
     correct) table; `predictions_classes` carries every class's logit and
-    target for thresholds.py, which suggests a threshold per class. Every reported number is derived from this: it is the
+    target, read by thresholds.py for the suggested ins_buzz threshold. Every reported number is derived from this: it is the
     only per-fold result kept on disk, and sx.py and resummarize.py rebuild the
     sweeps from it on demand.
     """
@@ -952,7 +952,7 @@ def train_set(name, embeddername, setname, name_translation,
                 data.translation, data.classes,
             )
 
-    # Suggested per-class thresholds, from the rotations' held-out predictions
+    # The suggested ins_buzz threshold, from the rotations' held-out predictions
     # (not the shipped model, which has no held-out audio of its own), into
     # config_model.json -- where 04_deploy/export_onnx.py picks them up -- and a
     # README skeleton to fill in. See thresholds.py.

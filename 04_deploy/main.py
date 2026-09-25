@@ -1,10 +1,10 @@
 """
-Deploy a trained model: refresh its threshold/README card, then export it to
+Deploy a trained model: refresh its centers/README card, then export it to
 buzzdetect as ONNX.
 
     conda run -n buzzdetect-train python 04_deploy/main.py cv_baseline
 
-Chains 04_deploy/model_card.py (thresholds + README, from the CV rotations'
+Chains 04_deploy/model_card.py (activation centers + README, from the CV rotations'
 predictions) and 04_deploy/export_onnx.py (the fused ONNX graph, carried over
 to buzzdetect) the same way root main.py chains stages 2-3. Run either step on
 its own -- `python 04_deploy/model_card.py <name>...` or
@@ -81,7 +81,7 @@ def main(modelname, dir_dest, force=False, path_audio=None, dir_src=None,
         return
 
     if not skip_card:
-        print('=== model card (thresholds + README) ===')
+        print('=== model card (activation centers + README) ===')
         model_card = load_module(os.path.join(here, 'model_card.py'), 'deploy_model_card')
         dir_model = dir_src or os.path.join(cfg.DIR_MODELS, modelname)
         if os.path.exists(os.path.join(dir_model, 'config_model.json')):
@@ -118,7 +118,7 @@ if __name__ == '__main__':
                         help='rebuild only model.fp16.onnx from the model.onnx already '
                              'in the destination; no card, weights or embedder')
     parser.add_argument('--skip-card', action='store_true',
-                        help='export as-is; do not refresh thresholds/README first')
+                        help='export as-is; do not refresh centers/README first')
     parser.add_argument('-y', '--yes', dest='assume_yes', action='store_true',
                         help='auto-accept a failed parity check instead of prompting '
                              '(for non-interactive runs; read the printed diagnostic '

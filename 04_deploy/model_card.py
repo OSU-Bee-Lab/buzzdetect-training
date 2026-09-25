@@ -1,10 +1,10 @@
-"""Suggested thresholds and a README skeleton for an already-trained model.
+"""The activation centers and a README skeleton for an already-trained model.
 
 A training run with --train-shipped does this itself (03_train/thresholds.py).
 This is for a model trained before it did, or to regenerate after changing
-thresholds.py. It merges `thresholds` and `threshold_stats` into
-models/<name>/config_model.json and writes README.md -- or, if one exists,
-rewrites only its generated blocks.
+thresholds.py. It merges `activation_centers` and `center_stats` into
+models/<name>/config_model.json and writes a README.md skeleton if there is
+none; an existing README is left alone.
 
     conda run -n buzzdetect-train python 04_deploy/model_card.py <name>...
 
