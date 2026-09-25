@@ -32,6 +32,9 @@ def dir_embeddings_raw(setname, embeddername):
 def dir_embeddings_fold(setname, embeddername, fold):
     return os.path.join(SET_DIR, setname, SET_SUBDIR_EMBEDDINGS, embeddername, SET_SUBDIR_RAW, fold)
 
+def dir_embeddings_augment(setname, embeddername, aug_dirname):
+    return os.path.join(SET_DIR, setname, SET_SUBDIR_EMBEDDINGS, embeddername, aug_dirname)
+
 
 # test
 SUBDIR_TESTS = 'tests'

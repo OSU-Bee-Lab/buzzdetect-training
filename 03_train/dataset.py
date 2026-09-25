@@ -3,8 +3,6 @@ import os
 import pickle
 import warnings
 
-import pandas as pd
-
 import config as cfg
 from train_utils import build_classes, labels_from_path, Sample
 
@@ -96,28 +94,18 @@ def build_fold_dataset(dir_samples, translation, labels_keep_raw=None, exclusive
     return samples_out
 
 
-def load_augment_noise(setname, translation, name_noise):
-    augment_df = pd.read_csv(os.path.join(cfg.SET_DIR, setname, 'augment_noise_' + name_noise + '.csv'))
-    data_augment = []
+def load_augmented(setname, embeddername, aug_dirnames, translation):
+    """Load augmented embeddings for training.
 
-    props = augment_df['prop'].unique()
-    for prop in props:
-        classes_keep = augment_df[augment_df['prop'] == prop]['class'].unique()
-        augmenttype = 'augment_noise_prop' + str(prop)
-        data_augment += build_fold_dataset(setname=setname, fold_keep='train', translation=translation, augmenttype=augmenttype, labels_keep_raw=classes_keep, exclusive=False)
-
-    return data_augment
-
-
-def load_augment_volume(setname, translation, name_volume):
-    augment_df = pd.read_csv(os.path.join(cfg.SET_DIR, setname, 'augment_volume_' + name_volume + '.csv'))
-    data_augment = []
-
-    props = augment_df['prop'].unique()
-    for prop in props:
-        classes_keep = augment_df[augment_df['prop'] == prop]['class'].unique()
-        augmenttype = 'augment_volume_prop' + str(prop)
-        data_augment += build_fold_dataset(setname=setname, fold_keep='train', translation=translation,
-                                           augmenttype=augmenttype, labels_keep_raw=classes_keep, exclusive=False)
-
-    return data_augment
+    aug_dirnames: list of augmentation subdirectory names under embeddings/<embeddername>/,
+    e.g. ['augment_noise_0.05', 'augment_volume_2.5', 'augment_combine'].
+    Produced by 02_set/augment.py.
+    """
+    data = []
+    for aug_dirname in aug_dirnames:
+        dir_embed = os.path.join(cfg.dir_embeddings_augment(setname, embeddername, aug_dirname), 'train')
+        if not os.path.isdir(dir_embed):
+            print(f'DATASET: augmented embeddings not found: {aug_dirname}')
+            continue
+        data += build_fold_dataset(dir_embed, translation)
+    return data

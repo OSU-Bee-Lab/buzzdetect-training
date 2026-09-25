@@ -22,7 +22,7 @@ def load_stage(path, module_name):
     spec.loader.exec_module(mod)
     return mod
 
-def main(modelname, setname, embeddername, name_translation, epochs_max, clear):
+def main(modelname, setname, embeddername, name_translation, epochs_max, clear, aug_dirnames=None):
     model_dir = os.path.join(config.DIR_MODELS, modelname)
 
     if clear and os.path.exists(model_dir):
@@ -46,6 +46,7 @@ def main(modelname, setname, embeddername, name_translation, epochs_max, clear):
         setname=setname,
         name_translation=name_translation,
         epochs_max=epochs_max,
+        aug_dirnames=aug_dirnames,
     )
 
     print('\n=== 04 test ===')
@@ -62,6 +63,8 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, required=True)
     parser.add_argument('--no-clear', action='store_false', dest='clear',
                         help='Skip clearing existing model dir')
+    parser.add_argument('--augment', nargs='*', dest='aug_dirnames', metavar='AUG_DIRNAME',
+                        help='Augmented embedding dirs to include in training (must be built via 02_set/augment.py first)')
     args = parser.parse_args()
 
     main(
@@ -71,4 +74,5 @@ if __name__ == '__main__':
         name_translation=args.translation,
         epochs_max=args.epochs,
         clear=args.clear,
+        aug_dirnames=args.aug_dirnames,
     )
