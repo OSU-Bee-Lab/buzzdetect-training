@@ -29,8 +29,24 @@ def _path_matches_labels(path, labels):
     return any(l in _labels_from_path(path) for l in labels)
 
 
-def _apply_noise(frames, prop):
-    return [f + prop * np.random.uniform(-1, 1, len(f)) for f in frames]
+def _apply_noise_snr(frames, snr_db):
+    out = []
+    target_ratio = 10 ** (-snr_db / 20)
+    for f in frames:
+        rms = np.sqrt(np.mean(np.square(f)))
+        if rms == 0:
+            out.append(f)
+            continue
+        noise = np.random.normal(0, 1, len(f)).astype(f.dtype)
+        noise *= (rms * target_ratio) / np.sqrt(np.mean(np.square(noise)))
+        out.append(f + noise)
+    return out
+
+
+def _apply_noise(frames, spec):
+    if spec.snr_db is not None:
+        return _apply_noise_snr(frames, spec.snr_db)
+    return [f + spec.prop * np.random.uniform(-1, 1, len(f)) for f in frames]
 
 
 def _apply_volume(frames, prop):
@@ -92,7 +108,7 @@ def _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrit
             frames_aug = read_pickle_exhaustive(path_audio_out)
         else:
             frames = read_pickle_exhaustive(path_in)
-            frames_aug = _apply_noise(frames, spec.prop) if isinstance(spec, NoiseSpec) else _apply_volume(frames, spec.prop)
+            frames_aug = _apply_noise(frames, spec) if isinstance(spec, NoiseSpec) else _apply_volume(frames, spec.prop)
             _save_audio(frames_aug, path_audio_out)
 
         _embed_and_save(frames_aug, path_embed_out, embedder)
@@ -153,18 +169,32 @@ def _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite
     print(f'{time.time()-t0:.1f}s - AUGMENT: {spec.class_source}+{spec.class_augment}: {len(frames_combined)} frames combined')
 
 
-def augment_set(setname, embeddername, specs, fold='train', overwrite=False, verbose=False):
+def _all_fold_ids(setname, embeddername):
+    """Every real (non-excluded) fold id from folds.csv, e.g. 'JamesU -
+    MustardBumbler/1_29' -- the compound source/fold strings dir_embeddings_fold
+    and load_augmented both index on. Under the current era's all-rotate CV
+    layout there is no literal 'train' directory, so a run that wants every
+    training fold covered (any fold might end up in a rotation's training
+    pool) needs this instead of the historical --fold train default.
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '03_train'))
+    from dataset import read_fold_roles
+    return sorted(read_fold_roles(setname, embeddername).keys())
+
+
+def augment_set(setname, embeddername, specs, folds, overwrite=False, verbose=False):
     t0 = time.time()
     embedder = load_embedder(embeddername, framehop_prop=1, initialize=True)
 
     for spec in specs:
-        print(f'{time.time()-t0:.1f}s - AUGMENT: {spec}')
-        if isinstance(spec, (NoiseSpec, VolumeSpec)):
-            _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=verbose)
-        elif isinstance(spec, CombineSpec):
-            _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=verbose)
-        else:
-            raise ValueError(f'unknown spec type {type(spec)}')
+        for fold in folds:
+            print(f'{time.time()-t0:.1f}s - AUGMENT: {spec} - {fold}')
+            if isinstance(spec, (NoiseSpec, VolumeSpec)):
+                _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=verbose)
+            elif isinstance(spec, CombineSpec):
+                _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=verbose)
+            else:
+                raise ValueError(f'unknown spec type {type(spec)}')
 
     print(f'{time.time()-t0:.1f}s - AUGMENT: complete')
 
@@ -183,28 +213,46 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--set', required=True, dest='setname')
     parser.add_argument('--embedder', required=True)
-    parser.add_argument('--fold', default='train')
+    parser.add_argument('--fold', default=None,
+                        help='a single compound fold id, e.g. "JamesU - MustardBumbler/1_29". '
+                             'Mutually exclusive with --all-folds.')
+    parser.add_argument('--all-folds', action='store_true',
+                        help='augment every non-excluded fold in folds.csv (read via '
+                             '03_train/dataset.py::read_fold_roles). Needed for the current '
+                             'all-rotate CV layout, where any fold may end up in a rotation\'s '
+                             'training pool and there is no literal "train" directory.')
     parser.add_argument('--overwrite', action='store_true')
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--noise', nargs='+', type=float, metavar='PROP',
                         help='noise augmentation prop values (default set used if neither --noise nor --volume given)')
     parser.add_argument('--volume', nargs='+', type=float, metavar='PROP',
                         help='volume augmentation prop values')
+    parser.add_argument('--snr', nargs='+', type=float, metavar='DB',
+                        help='SNR-relative noise augmentation (dB below each frame\'s own RMS), '
+                             'instead of --noise\'s fixed absolute amplitude')
     args = parser.parse_args()
 
-    if args.noise is not None or args.volume is not None:
+    if args.fold is None and not args.all_folds:
+        parser.error('one of --fold or --all-folds is required')
+    if args.fold is not None and args.all_folds:
+        parser.error('--fold and --all-folds are mutually exclusive')
+
+    if args.noise is not None or args.volume is not None or args.snr is not None:
         specs = (
             [NoiseSpec(prop=p) for p in (args.noise or [])] +
+            [NoiseSpec(snr_db=db) for db in (args.snr or [])] +
             [VolumeSpec(prop=p) for p in (args.volume or [])]
         )
     else:
         specs = DEFAULT_SPECS
 
+    folds = _all_fold_ids(args.setname, args.embedder) if args.all_folds else [args.fold]
+
     augment_set(
         setname=args.setname,
         embeddername=args.embedder,
         specs=specs,
-        fold=args.fold,
+        folds=folds,
         overwrite=args.overwrite,
         verbose=args.verbose,
     )
