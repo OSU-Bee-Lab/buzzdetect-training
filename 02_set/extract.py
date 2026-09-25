@@ -136,10 +136,10 @@ def collapse_labels(labellist):
 
 # What soundfile can read directly, plus formats buzzdetect handles via its own
 # drivers (engine/src/stream/drivers/) rather than soundfile. Mirrors how
-# buzzdetect itself builds driver_map in stream/audio.py. Only the drivers
-# vendored into audio_drivers/ are actually read with them; mp4/mts still go
-# to soundfile and fail.
-EXTENSIONS_AUDIO = set(sf.available_formats().keys()) | {'mp3', 'mp4', 'mts'} | DRIVER_EXTENSIONS
+# buzzdetect itself builds driver_map in stream/audio.py. mp3 has no vendored
+# driver and goes to soundfile, which can drop the last ~0.17% of a long raw
+# recording (see buzzdetect's drivers/README.md).
+EXTENSIONS_AUDIO = set(sf.available_formats().keys()) | {'mp3'} | DRIVER_EXTENSIONS
 EXTENSIONS_AUDIO = {ext.lower() for ext in EXTENSIONS_AUDIO}
 
 
