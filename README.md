@@ -250,7 +250,10 @@ The framed-audio cache and the embeddings carry the same fingerprint (an
 disk was built from annotations that have since changed, so that ident's cached
 audio, embeddings, and any augmented derivatives are deleted and re-extracted —
 everyone else's are left alone. An ident dropped from `annotations.csv`
-altogether has its snips and outputs removed. There is no longer any reason to
+altogether (an effort switched off in `build.R`, say) has its framed audio and
+embeddings removed, since stage 3 trains on every pickle under a fold directory.
+Its snips are kept, so switching the effort back on reads nothing off the
+source drive; `python tools/prune_snips.py <set> [--delete]` removes them. There is no longer any reason to
 delete a set's audio by hand after an annotation pass.
 
 A directory extracted before fingerprinting existed carries no fingerprint and

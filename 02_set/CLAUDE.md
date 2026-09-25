@@ -26,7 +26,7 @@ timestamp; embedding row *i* is frame *i* (`extract_ident_both`).
 - **Idents and fold names are both path-like**, of no fixed depth. Never glob a
   fixed number of `*` components to find an ident's directory, and never read
   the top level of `audio/snips/` as a list of idents — walk (`_find_ident_dirs`,
-  `_find_snip_dirs`). Getting this wrong deletes data.
+  `_find_snip_dirs`, `_purge_orphan_outputs`). Getting this wrong deletes data.
 - **Every fold is embedded regardless of role**, including `exclude`, so
   flipping a role never costs a re-extraction. Roles are training-time policy
   (`03_train/dataset.py::read_fold_roles`).

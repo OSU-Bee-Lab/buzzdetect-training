@@ -287,6 +287,34 @@ def _purge_ident_outputs(setname, ident, audio_key=None, embeddername=None):
     return removed
 
 
+def _purge_orphan_outputs(setname, idents_known):
+    """Delete the cached audio and embeddings of every ident not in idents_known.
+
+    One walk for the whole set, not one per orphan: an output directory is a leaf
+    holding pickles or extraction sidecars, and whether it belongs to a known ident
+    is read off its trailing path components (the fold above it is path-like too).
+    """
+    dir_snips_base = cfg.dir_snips(setname)
+    markers = (FNAME_FINGERPRINT, FNAME_FRAMETIMES, FNAME_INCOMPLETE)
+    removed = []
+    for root in (cfg.dir_audio(setname),
+                 os.path.join(cfg.dir_set(setname), cfg.SET_SUBDIR_EMBEDDINGS)):
+        for dirpath, dirnames, filenames in os.walk(root):
+            if dirpath == dir_snips_base:
+                dirnames.clear()
+                continue
+            if not any(n.endswith('.pickle') or n in markers for n in filenames):
+                continue
+            parts = os.path.relpath(dirpath, root).split(os.sep)
+            if any('/'.join(parts[i:]) in idents_known for i in range(len(parts))):
+                dirnames.clear()
+                continue
+            shutil.rmtree(dirpath)
+            dirnames.clear()
+            removed.append(dirpath)
+    return removed
+
+
 def _snip_paths(dir_snips_ident):
     """Snips of one ident, sorted. The directory name comes from an ident (a file
     path), so it is escaped — a '[' in a site name is not a character class."""
@@ -505,18 +533,19 @@ def extract_snips(setname: str, verbose=False, n_workers=2):
             print(f'{time.time()-t0:.1f}s - extract_snips: [{n_done}/{len(idents)}] {ident} — '
                   f'{status} ({written} written, {deleted} deleted)', flush=True)
 
-    # An ident dropped from the annotations entirely: every snip it has is superseded.
-    # An ident is a source-audio path, so its snip directory sits at an arbitrary depth
-    # under dir_snips_base — walk for directories that actually hold snips rather than
-    # reading the top level as a list of idents.
+    # An ident dropped from annotations.csv (often an effort switched off in build.R)
+    # keeps its snips, so switching it back on costs no reads off the source drive;
+    # tools/prune_snips.py deletes them when the space is wanted. Its framed audio and
+    # embeddings do go: stage 3 trains on every pickle under a fold directory.
     known = set(idents)
-    for path_orphan, ident_orphan in sorted(_find_snip_dirs(dir_snips_base)):
-        if ident_orphan in known:
-            continue
-        warnings.warn(f'extract_snips: {ident_orphan} is no longer in annotations.csv; removing its snips')
-        shutil.rmtree(path_orphan)
-        for path_removed in _purge_ident_outputs(setname, ident_orphan):
-            warnings.warn(f'extract_snips: removed stale output {path_removed}')
+    n_orphan = sum(1 for _, ident in _find_snip_dirs(dir_snips_base) if ident not in known)
+    if n_orphan:
+        print(f'{time.time()-t0:.1f}s - extract_snips: {n_orphan} ident(s) with snips are not in '
+              f'annotations.csv; snips kept (tools/prune_snips.py removes them)')
+    removed = _purge_orphan_outputs(setname, known)
+    if removed:
+        warnings.warn(f'extract_snips: removed {len(removed)} framed-audio/embedding dir(s) '
+                      f'of idents not in annotations.csv')
 
     n_updated = sum(1 for s in status_by_ident.values() if s == 'updated')
     n_unchanged = sum(1 for s in status_by_ident.values() if s == 'unchanged')
