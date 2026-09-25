@@ -1,0 +1,143 @@
+# trunk-pitchshift-contrast
+
+## Hypothesis
+
+Two results this era point the same direction but disagree on `1_114`
+(trill confusion): `pitchshift-contrast` (frozen YAMNet, explicit signed
+contrast `[e_t, e_t - e_shifted(t)]`, +0.048 over a fresh matched control,
+`1_114` **+0.153**, the largest single-fold gain logged this era) and
+`trunk-ft-pitchshift` (fine-tuned trunk tail, plain CONCAT `[code_plain,
+code_shifted]` of the same two views, +0.040 over its own frozen concat
+control, but `1_114` **-0.038**, the wrong direction).
+
+The mechanism `asym-context-yamnet` established (a linear readout of a raw
+concat cannot compute a contrast; an explicit contrast channel beats it,
++0.046 vs +0.030 at the same budget) predicts the concat design is throwing
+away exactly the information the contrast channel would hand it directly.
+This embedder applies the contrast explicitly downstream of the SAME
+fine-tuned trunk tail `trunk-ft-pitchshift` uses, instead of the frozen
+YAMNet embedding `pitchshift-contrast` used: `[code_plain, code_plain -
+code_shifted]`, where both codes come from the one shared, jointly
+fine-tuned layers-13-14 tail (`TimeDistributed`, inherited from
+`yamnet_trunk_context`'s mechanism).
+
+Prediction: if the contrast channel's benefit is orthogonal to fine-tuning,
+this should recover `1_114`'s clean win while keeping fine-tuning's own
+gain over the frozen baseline -- beating both `pitchshift-contrast`'s frozen
+number and `trunk-ft-pitchshift`'s concat number on `1_114` specifically.
+If fine-tuning already learns to extract the contrast internally (the tail
+is shared and jointly trained across both views, unlike the frozen case),
+the explicit contrast should buy little on top of concat.
+
+## Changes
+
+New embedder `embedders/yamnet_trunk_pitchshift_contrast/embedder.py`:
+inherits `embed()`/`initialize()`/`_pitch_up_octave` unchanged from
+`yamnet_trunk_pitchshift` (same 2 x 12288 float16 cache), overrides only
+`build_head()` to join the tail's two 1024-d codes with `Subtract()` +
+`Concatenate()` (`[plain, plain - shifted]`) instead of `Flatten()`
+(`[plain, shifted]`). Same head width (2048-d), same trainable tail, same
+optimizer/LR-multiplier mechanism -- only the join changes.
+
+Smoke test on `lite` first (`03_train`'s TimeDistributed + slicing path is
+new; check the graph builds and trains before committing to `medium`).
+
+```bash
+tools/launch_job.sh --cpu smoke_extract.log -- 02_set/main.py --set lite --embedder yamnet_trunk_pitchshift_contrast --workers 1 --verbose
+TRUNK_LR_BACKBONE=1e-5 TRUNK_FP16=1 TRUNK_BATCH=1024 tools/launch_job.sh smoke_train.log -- 03_train/main.py --name test_trunkps_contrast_smoke --set lite --embedder yamnet_trunk_pitchshift_contrast --translation general --epochs 5 -y
+```
+
+Then, if the smoke test is clean:
+
+```bash
+tools/launch_job.sh extract.log -- 02_set/main.py --set medium --embedder yamnet_trunk_pitchshift_contrast --workers 1
+TRUNK_LR_BACKBONE=0 TRUNK_FP16=1 TRUNK_BATCH=1024 tools/launch_job.sh train_frozen.log -- 03_train/main.py --name trunkpscontrast-frozen --set medium --embedder yamnet_trunk_pitchshift_contrast --translation general --epochs 60 -y
+TRUNK_LR_BACKBONE=1e-5 TRUNK_FP16=1 TRUNK_BATCH=1024 tools/launch_job.sh train_ft.log -- 03_train/main.py --name trunkpscontrast-ft-1e5 --set medium --embedder yamnet_trunk_pitchshift_contrast --translation general --epochs 60 -y
+```
+
+Comparators (already trained, read directly): `trunk-ft-pitchshift`'s
+`trunkps-frozen`/`trunkps-ft-1e5`e (`.local/worktrees/trunk-ft-pitchshift/models/`)
+-- same tail depth, same pitch-shift mechanism, concat instead of contrast.
+
+*Falsifier:* `1_114` is the named test. If `trunkpscontrast-ft-1e5`'s
+`1_114` delta (vs `trunkpscontrast-frozen`, or vs `trunkps-ft-1e5` directly)
+is not clearly positive, the contrast mechanism's benefit does not survive
+being placed behind a jointly fine-tuned shared tail -- concat and
+contrast are equivalent once the tail can adapt. A clean `1_114` win **and**
+a headline at or above `trunkps-ft-1e5`'s 0.434 would confirm the explicit-
+contrast lever generalizes past the frozen case.
+
+(Training was interrupted mid-run by an unrelated loop restart/usage-limit
+halt on 2026-09-22/23 -- host-RAM OOM killed the first attempt at fold 4/8,
+same recurring `yamnet_trunk`-family leak logged in `trunk-ft-pitchshift`
+and reported again in this batch's friction. Relaunching the identical
+command resumed cleanly at fold 5/8 via `can_write()`; no data lost.)
+
+## Results
+
+vs own frozen control (`trunkpscontrast-frozen` -> `trunkpscontrast-ft-1e5`):
+
+| fold | frozen | ft-1e5 | delta | ± SD | buzz events |
+|---|---|---|---|---|---|
+| 1_29 | 0.465 | 0.489 | +0.024 | 0.030 | 32 |
+| 53 | 0.435 | 0.541 | +0.106 | 0.052 | 28 |
+| 1_11 | 0.430 | 0.549 | +0.119 | 0.034 | 26 |
+| 1_143 | 0.505 | 0.559 | +0.054 | 0.035 | 22 |
+| 1_150 | 0.269 | 0.303 | +0.034 | 0.053 | 21 |
+| 1_95 | 0.080 | 0.159 | +0.079 | 0.027 | 46 |
+| 1_37 | 0.466 | 0.516 | +0.050 | 0.043 | 14 |
+| 1_114 | 0.398 | 0.341 | -0.057 | 0.039 | 28 |
+
+headline (exclquiet): 0.381 -> 0.432 (+0.051 ± 0.014, ~3.6 sigma), incl.
+quiet: 0.311 -> 0.354, 7/8 folds up. `loud` +0.015, `untagged` +0.050,
+`background` +0.075, `quiet` +0.020 -- fine-tuning's usual broad gain
+reproduces cleanly a fourth time, concentrated in `background`/`untagged`
+as in every other trunk fine-tune this era.
+
+Head-to-head vs `trunk-ft-pitchshift`'s concat `trunkps-ft-1e5` (same tail
+depth, same pitch-shift mechanism, contrast instead of concat):
+
+| fold | concat (baseline) | contrast (this) | delta | ± SD | buzz events |
+|---|---|---|---|---|---|
+| 1_29 | 0.454 | 0.489 | +0.035 | 0.041 | 32 |
+| 53 | 0.573 | 0.541 | -0.032 | 0.019 | 28 |
+| 1_11 | 0.565 | 0.549 | -0.016 | 0.028 | 26 |
+| 1_143 | 0.550 | 0.559 | +0.009 | 0.030 | 22 |
+| 1_150 | 0.287 | 0.303 | +0.016 | 0.053 | 21 |
+| 1_95 | 0.156 | 0.159 | +0.003 | 0.020 | 46 |
+| 1_37 | 0.493 | 0.516 | +0.023 | 0.035 | 14 |
+| 1_114 | 0.398 | 0.341 | -0.057 | 0.042 | 28 |
+
+headline (exclquiet): 0.434 -> 0.432 (-0.002 ± 0.012, well inside noise),
+incl. quiet: 0.359 -> 0.354. Every tier delta is within ±0.015 of flat
+(`loud` -0.015, `untagged` +0.001, `background` -0.003, `quiet` -0.004) --
+concat and contrast land statistically indistinguishable once behind the
+shared fine-tuned tail.
+
+**`1_114`, the named falsifier, moved the wrong direction against both
+comparators**, by the same amount (-0.057 ± 0.039 vs frozen, -0.057 ± 0.042
+vs concat -- both ~1.4 sigma, inside noise but consistently negative, not
+just flat). This is the opposite of `pitchshift-contrast`'s frozen result
+(`1_114` +0.153) and matches, rather than reverses, `trunk-ft-pitchshift`'s
+own wrong-direction `1_114` (-0.038 there vs its frozen concat control).
+
+## Conclusion
+
+Falsifier **not cleared**: `1_114` did not recover, in either comparison,
+and the headline against the concat comparator is flat (-0.002 ± 0.012) --
+not the generalizing win the hypothesis needed. This confirms the
+hypothesis's own fallback prediction instead: once the trunk tail is
+jointly fine-tuned across both pitch views, it already extracts whatever
+the explicit contrast channel would otherwise hand a frozen linear head,
+so making the contrast explicit buys nothing further (and on `1_114`
+specifically, costs a bit, though not past noise). Concat and contrast are
+equivalent downstream of a shared fine-tuned tail; the explicit-contrast
+lever from `asym-context-yamnet`/`pitchshift-contrast` does not generalize
+past the frozen-probe regime where it was established. Fine-tuning's own
+gain reproduces cleanly again (+0.051 ± 0.014, `background`/`untagged`
+lifted), so this experiment adds a fourth confirmation of that, independent
+of the contrast-vs-concat question it was built to test.
+
+Trust: clean (both training arms completed all 8 folds; the OOM interruption
+mid-run only affected wall time, not the data -- resumed byte-identical via
+`can_write()`).

@@ -6,7 +6,9 @@
 # 1. cv-baseline-v4: the era anchor, frozen yamnet linear probe (default 400 epochs).
 # 2. The retrain grid, every combination of {context, pitch-shift, dense head}, all
 #    at the previous era's best settings: depth-12 cut (layers 12-14 trainable),
-#    TRUNK_LR_BACKBONE=1e-5, 60 epochs, fp16. Dense = TRUNK_HIDDEN=1024 (ReLU).
+#    TRUNK_LR_BACKBONE=1e-5, 30 epochs, fp16. Dense = TRUNK_HIDDEN=1024 (ReLU).
+#    (30, not last era's 60: trunkpsd12-ft-1e5-r2's cross-fold mean val sens is flat from
+#    epoch 20 to 40, 0.378, and 0.374 at 60.)
 # 3. moderate (the era's big-data set) extraction: yamnet and
 #    yamnet_trunk_pitchshift_depth12. No training on it.
 #
@@ -53,20 +55,20 @@ train cv-baseline-v4 yamnet 400
 
 # 2. grid, cheapest first so the widest embedder (most likely to OOM) runs last
 extract medium yamnet_trunk_depth12
-train v4-ft              yamnet_trunk_depth12                    60 $FT TRUNK_BATCH=1024
-train v4-ft-dense        yamnet_trunk_depth12                    60 $FT TRUNK_BATCH=1024 $DENSE
+train v4-ft              yamnet_trunk_depth12                    30 $FT TRUNK_BATCH=1024
+train v4-ft-dense        yamnet_trunk_depth12                    30 $FT TRUNK_BATCH=1024 $DENSE
 
 extract medium yamnet_trunk_pitchshift_depth12
-train v4-ft-ps           yamnet_trunk_pitchshift_depth12         60 $FT TRUNK_BATCH=1024
-train v4-ft-ps-dense     yamnet_trunk_pitchshift_depth12         60 $FT TRUNK_BATCH=1024 $DENSE
+train v4-ft-ps           yamnet_trunk_pitchshift_depth12         30 $FT TRUNK_BATCH=1024
+train v4-ft-ps-dense     yamnet_trunk_pitchshift_depth12         30 $FT TRUNK_BATCH=1024 $DENSE
 
 extract medium yamnet_trunk_context_depth12
-train v4-ft-ctx          yamnet_trunk_context_depth12            60 $FT TRUNK_BATCH=512
-train v4-ft-ctx-dense    yamnet_trunk_context_depth12            60 $FT TRUNK_BATCH=512 $DENSE
+train v4-ft-ctx          yamnet_trunk_context_depth12            30 $FT TRUNK_BATCH=512
+train v4-ft-ctx-dense    yamnet_trunk_context_depth12            30 $FT TRUNK_BATCH=512 $DENSE
 
 extract medium yamnet_trunk_pitchshift_context_depth12
-train v4-ft-psctx        yamnet_trunk_pitchshift_context_depth12 60 $FT TRUNK_BATCH=512
-train v4-ft-psctx-dense  yamnet_trunk_pitchshift_context_depth12 60 $FT TRUNK_BATCH=512 $DENSE
+train v4-ft-psctx        yamnet_trunk_pitchshift_context_depth12 30 $FT TRUNK_BATCH=512
+train v4-ft-psctx-dense  yamnet_trunk_pitchshift_context_depth12 30 $FT TRUNK_BATCH=512 $DENSE
 
 # 3. big-data set, extraction only
 extract moderate yamnet

@@ -5,10 +5,11 @@ One experiment is one hypothesis, one worktree, one CV against a matched control
 and one line in `log.jsonl`.
 Results from different eras may be directionally informative within an era, but are not numerically comparable between eras.
 
-**This era (`cv-medium-v3`) started 2026-09-11.
-Three things moved at the cutover: the annotations were revised (adding
-a `_quiet` tag), scoring split into `sensitivity` and `sensitivity_exclquiet`,
-and the fixed `--epochs` budget became the stopping rule, worth +0.031 to +0.040 by itself.
+**This era (`cv-medium-v4`) started 2026-09-25.
+One thing moved at the cutover: the Hard Negatives annotation effort (non-buzz
+audio that drew high `ins_buzz` activation) joined the training pool. Rotating
+folds and metric are unchanged from `cv-medium-v3` (archived), but its numbers
+are not comparable. `moderate` (framehop 0.2) replaces `large` as the big-data set.
 Old verdicts are leads, not answers: `temporal-context` was a clear negative in
 era 1 and, rerun, the largest gain in era 2. Rerun rather than defer.
 
@@ -47,7 +48,8 @@ even if a prior experiment has shown a greater improvement using a different met
 If you're building off of a prior experiment, that experiment serves as your baseline and you must show a
 meaningful improvement in metrics against that experiment's model.
 
-This era's baseline is  `cv-baseline-v3`
+This era's baseline is `cv-baseline-v4` (frozen `yamnet` linear probe, 400 epochs; queued
+2026-09-25, see HANDOFF.md). Until it has a number there is no baseline.
 
 The baseline model is **not** the last era's best.
 Its purpose is not to stack the gains of a prior era.

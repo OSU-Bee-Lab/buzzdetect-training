@@ -70,3 +70,6 @@ machine's disk is the single point of failure.
 
 <!-- added by archive_era.py -->
 | [`2026-09-08_cv-medium-v2`](2026-09-08_cv-medium-v2/) | 24 | 2026-09-08 → 09-11 | mean per-fold sens@fpr0.005, 5 rotating folds on `medium`, three epoch rules | Annotation revision + the `_quiet` scoring split + `--fixed-epochs` as the default rule, 2026-09-11 |
+
+<!-- added by archive_era.py -->
+| [`2026-09-11_cv-medium-v3`](2026-09-11_cv-medium-v3/) | 46 | 2026-09-11 → 2026-09-25 | mean per-fold sens_exclquiet@fpr0.005, 8 rotating folds on `medium`, fixed epochs | Hard Negatives annotations added to the training pool, 2026-09-25 |
