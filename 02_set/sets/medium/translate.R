@@ -92,6 +92,8 @@ translation_general <- translation_blank %>%
       from == 'unknown' ~ 'ignore',
       from == 'mech_hum_construction' ~ 'ignore',
 
+      from == 'mech_quadcopter' ~ 'mech_machinery',
+
       T ~ from
     )
   )
