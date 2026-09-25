@@ -48,8 +48,8 @@ even if a prior experiment has shown a greater improvement using a different met
 If you're building off of a prior experiment, that experiment serves as your baseline and you must show a
 meaningful improvement in metrics against that experiment's model.
 
-This era's baseline is `cv-baseline-v4` (frozen `yamnet` linear probe, 400 epochs; queued
-2026-09-25, see HANDOFF.md). Until it has a number there is no baseline.
+This era's baseline is `cv-baseline-v4` = **0.324** (0.262 incl. quiet; frozen `yamnet` linear probe, 400 epochs; run
+2026-09-25 from HANDOFF.md's queue).
 
 The baseline model is **not** the last era's best.
 Its purpose is not to stack the gains of a prior era.

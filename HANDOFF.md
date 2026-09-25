@@ -63,5 +63,5 @@ trains nothing there.
 
 1. Log each model with `tools/log_entry.py`. `cv-baseline-v4` is the era anchor;
    read the `v4-ft*` grid against it and against `v4-ft`.
-2. Fill in `cv-baseline-v4`'s number in LOOP.md's Baseline section.
+2. `cv-baseline-v4` finished: 0.324 (0.262 incl. quiet), recorded in LOOP.md; still needs its log entry.
 3. Delete this file when the queue is logged.
