@@ -11,6 +11,7 @@ dependencies:
     - protobuf>=3.20.3,<5  # perch-hoplite's gcloud deps pull protobuf 7, which breaks TF 2.16's generated code
     - librosa
     - soundfile
+    - av  # PyAV: audio_drivers/wma.py
     - numpy<2
     - pandas
     - matplotlib

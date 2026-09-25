@@ -23,6 +23,7 @@ import soundfile as sf
 from numpy.lib.stride_tricks import sliding_window_view
 
 import config as cfg
+from audio_drivers import open_audio, DRIVER_EXTENSIONS
 from embedders.embedding import load_embedder, BaseEmbedder
 from utils import read_pickle_exhaustive
 
@@ -135,8 +136,10 @@ def collapse_labels(labellist):
 
 # What soundfile can read directly, plus formats buzzdetect handles via its own
 # drivers (engine/src/stream/drivers/) rather than soundfile. Mirrors how
-# buzzdetect itself builds driver_map in stream/audio.py.
-EXTENSIONS_AUDIO = set(sf.available_formats().keys()) | {'mp3', 'mp4', 'mts', 'wma'}
+# buzzdetect itself builds driver_map in stream/audio.py. Only the drivers
+# vendored into audio_drivers/ are actually read with them; mp4/mts still go
+# to soundfile and fail.
+EXTENSIONS_AUDIO = set(sf.available_formats().keys()) | {'mp3', 'mp4', 'mts'} | DRIVER_EXTENSIONS
 EXTENSIONS_AUDIO = {ext.lower() for ext in EXTENSIONS_AUDIO}
 
 
@@ -365,7 +368,7 @@ def _sync_snips_ident(ident: str, annotations_sub: pd.DataFrame, path_audio: str
 
     os.makedirs(dir_out, exist_ok=True)
 
-    with sf.SoundFile(path_audio) as track:
+    with open_audio(path_audio) as track:
         duration = track.frames / track.samplerate
         sr = track.samplerate
         chunks_raw = _buffer_and_merge(melt_coverage(annotations_sub), cfg.SNIP_BUFFER_S, duration)
