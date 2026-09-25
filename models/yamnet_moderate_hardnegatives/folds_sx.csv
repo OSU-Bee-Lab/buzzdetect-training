@@ -1,0 +1,7 @@
+fold,fpr,threshold,sensitivity,precision,sensitivity_exclquiet,sensitivity_faint,sensitivity_quiet,sensitivity_background,sensitivity_untagged,sensitivity_normal,sensitivity_loud,buzz_frames,buzz_events,buzz_events_exclquiet,faint_frames,quiet_frames,background_frames,untagged_frames,normal_frames,loud_frames,neg_frames,frames_val,best_epoch
+JamesU - MustardBumbler/1_29,0.005,-1.621,0.39,0.969,0.402,0.0,0.092,0.31,0.553,,0.211,10632,39,34,6,404,6306,3897,0,19,134,37587,400
+Lily - Fit+Fast/2023_R3_Marysville/53,0.005,-1.748,0.347,0.917,0.36,,0.21,0.213,0.58,,0.975,5149,37,32,0,467,3106,1292,0,284,162,37587,400
+Lily Adam - One Hive/recorders/willard/2024-08-07/1_11,0.005,-1.919,0.288,0.705,0.445,0.0,0.033,,0.392,,0.761,1494,48,32,24,542,0,794,0,134,180,37596,400
+Lily Adam - One Hive/recorders/wooster/2024-07-26/1_143,0.005,-1.786,0.328,0.719,0.501,,0.087,,0.451,,0.915,938,37,26,0,391,0,488,0,59,120,25050,400
+Luke - Various Opportunistic Recordings/2025-07-03/1_37,0.005,-1.768,0.315,0.806,0.401,0.2,0.089,,0.355,,0.841,1553,26,15,5,427,0,1014,0,107,117,25063,400
+total,0.005,-1.768,0.334,0.823,0.422,0.067,0.102,0.262,0.466,,0.741,19766,187,139,35,2231,9412,7485,0,603,713,162883,400
