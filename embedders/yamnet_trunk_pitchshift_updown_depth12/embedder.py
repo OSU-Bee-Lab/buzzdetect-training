@@ -4,11 +4,14 @@ fine-tuned depth12 tail (TimeDistributed, n_ctx=3), codes concatenated into the
 head.
 
 Proposal (Luke, 2026-09-26): `v4-ft-ps` (octave-up twin) won the v4 grid at
-0.452 vs `v4-ft` 0.375. Octave-up moves buzz fundamentals (~100-400 Hz) into a
-band YAMNet's AudioSet features resolve better. Octave-down is the other
-direction: it pushes harmonics above 4 kHz back into range, and stretches each
-buzz to twice its length. Whether the two views add is the question.
-Comparator: `v4-ft-ps`, same config otherwise.
+0.452 vs `v4-ft` 0.375. Octave-up moves buzz fundamentals (honey bee ~230 Hz)
+off YAMNet's 125 Hz mel floor into denser filterbank (see yamnet_pitchshift).
+Octave-down goes the other way, and so works against that mechanism: 230 Hz
+lands at 115 Hz, below the mel floor, so this view sees harmonics only. The
+audio is 16 kHz and YAMNet's mel top is 7.5 kHz, so shifting down adds only the
+7.5-8 kHz sliver as new content. What it does add is time-stretch (each buzz
+twice as long) and a second, coarser look at the harmonic stack. Whether that
+helps is an empirical question. Comparator: `v4-ft-ps`, same config otherwise.
 
 Octave-down mechanism, mirroring the up shift: take the centre half of the
 0.96 s frame (0.24-0.72 s), upsample it 2:1 with librosa and relabel the
