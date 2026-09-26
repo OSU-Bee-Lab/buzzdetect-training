@@ -39,6 +39,13 @@
 !yamnet_trunk_pitchshift_contrast
 !yamnet_trunk_pitchshift_depth12
 !yamnet_trunk_pitchshift_updown_depth12
+!trunk_views.py
+!yamnet_trunk_pitchshift_down_depth12
+!yamnet_trunk_pitchshift_halves_down_depth12
+!yamnet_trunk_pitchshift_halves_updown_depth12
+!yamnet_trunk_vocoder_down_depth12
+!yamnet_trunk_vocoder_up_depth12
+!yamnet_trunk_vocoder_updown_depth12
 !yamnet_trunk_context_depth12
 !yamnet_trunk_pitchshift_context_depth12
 !perch_centred

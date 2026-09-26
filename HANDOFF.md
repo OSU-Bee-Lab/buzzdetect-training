@@ -1,33 +1,91 @@
-# Handoff: era cv-medium-v4 follow-up queue
+# Handoff: era cv-medium-v4, pitch-shift method x direction grid
 
-The opening grid (`queue_v4_grid.sh`) finished 2026-09-26 02:23 and is logged in
-`log.jsonl`. Winner: `v4-ft-ps` = 0.452. Both `v4-ft-psctx*` runs were killed
-for host RAM; per Luke, psctx will not be fixed.
-
-Launched 2026-09-26 ~08:28, expected ~4-5 h.
+Launched 2026-09-26 18:04. Luke is out of office and asked for all six runs at
+once instead of gating the later ones on down-alone.
 
 | | |
 |---|---|
-| Script | `tools/queue_v4_psud.sh` (read its header; it's the plan) |
-| PID | `2953300` (the outer `launch_job` pid) |
-| Log | `queue_v4_psud.log` (project root) |
-| Launched as | `tools/launch_job.sh queue_v4_psud.log -- tools/queue_v4_psud.sh` |
+| Script | `tools/queue_v4_psd.sh` (its header is the plan) |
+| PID | `2998219` (the outer `launch_job` pid) |
+| Log | `queue_v4_psd.log` (project root) |
+| Launched as | `tools/launch_job.sh queue_v4_psd.log -- tools/queue_v4_psd.sh` |
 
-Watch it with `tools/watch_job.sh --adopt 2953300` as a Monitor. If it died
-without an exit line, re-run the launch command: it resumes where it stopped.
+Watch it with `tools/watch_job.sh --adopt 2998219` as a Monitor. If it died
+without an exit line, re-run the launch command: it resumes where it stopped
+(finished extractions and folds are skipped).
 
-## What it runs
+Expected time: about 12-14 h. Each CV is ~1.5 h of training (8 folds, ~11 min
+each at `v4-ft-psud`'s pace; four views will be slower) plus extraction. Vocoder
+extraction is slower than resample: ~0.9 s per 48 frames for up+down, against
+~0.3 s for resample.
 
-1. `v4-ft-psud`: embedder `yamnet_trunk_pitchshift_updown_depth12`, views
-   [plain, octave-up, octave-down], 30 epochs. Compare it to `v4-ft-ps`.
-2. `v4-ft-ps-e60`: `v4-ft-ps` at 60 epochs. This is the epoch confirmation.
+## Where the grid came from
 
-## Next (Luke's plan)
+Already logged (`log.jsonl`):
 
-- Log both runs.
-- Train the overall winner on `moderate`. Luke asked for this explicitly: it's
-  his call, not a loop experiment. Use 60 epochs if `-e60` holds up.
-- The updown embedder has no `to_onnx()`. It needs one before any deployment.
-- Dense heads are overfitting, not under-trained. Their val loss is lowest at
-  epoch 3-5 and their val sens is flat or falling after epoch 10. So 60 epochs
-  would not rescue them.
+- `v4-ft-psud` [plain, up, centre-down] = 0.452, the same as `v4-ft-ps`
+  [plain, up] = 0.452. Adding down to up was flat.
+- `v4-ft-ps-e60` = 0.468, +0.016 over 30 epochs. That is about one delta SD
+  (~0.014) and under the ~0.027 MDE, so it's weak evidence. 60 epochs is fine
+  for the moderate run.
+
+Luke's mechanism for down: halving every frequency drops truck and prop-plane
+rumble below YAMNet's 125 Hz mel floor, while buzz harmonics stay in range. So
+the down direction gets its own tests, across three methods.
+
+## The six runs (in queue order, all 30 epochs, matched to `v4-ft-ps`)
+
+| Model | Views after plain | Embedder |
+|---|---|---|
+| `v4-ft-psd` | resample down, centre half | `yamnet_trunk_pitchshift_down_depth12` |
+| `v4-ft-pshd` | resample down, first half + second half | `yamnet_trunk_pitchshift_halves_down_depth12` |
+| `v4-ft-vd` | vocoder down | `yamnet_trunk_vocoder_down_depth12` |
+| `v4-ft-vu` | vocoder up | `yamnet_trunk_vocoder_up_depth12` |
+| `v4-ft-vud` | vocoder up, vocoder down | `yamnet_trunk_vocoder_updown_depth12` |
+| `v4-ft-pshud` | resample up, down first half, down second half | `yamnet_trunk_pitchshift_halves_updown_depth12` |
+
+The full grid, with existing results:
+
+| | down | up | down+up |
+|---|---|---|---|
+| Resample (centre) | `v4-ft-psd` | `v4-ft-ps` 0.452 | `v4-ft-psud` 0.452 |
+| Resample (both halves) | `v4-ft-pshd` | = resample up | `v4-ft-pshud` |
+| Phase vocoder | `v4-ft-vd` | `v4-ft-vu` | `v4-ft-vud` |
+
+The no-shift baseline is `v4-ft` = 0.375 (same fine-tuned depth12 trunk, same
+LRs and epochs).
+
+The new embedders share `embedders/trunk_views.py`: a list of views, each
+through the one shared tail. A smoke test confirmed the following before launch:
+
+- The plain view is bit-identical across all six.
+- `psd`'s down view matches `psud`'s exactly.
+- The base's up view reproduces `v4-ft-ps`'s exactly.
+- The vocoder views really differ from the resample views.
+
+None of the embedders has `to_onnx()`, so they are CV only.
+
+## Risks
+
+- **`v4-ft-pshud` is four views**, the biggest host-RAM load yet on this trunk.
+  `v4-ft-psud` (three views) used 10-12 GB of host RAM; the `psctx` runs were
+  killed at a larger footprint. It runs last on purpose. If it dies from RAM,
+  the other five are done anyway; report it rather than fixing it (Luke's
+  standing call on psctx).
+- Disk: about 30 GB of new embeddings; 143 GB was free at launch.
+
+## Next
+
+1. Log each run with `tools/log_entry.py --baseline-model models/v4-ft-ps
+   --baseline-name v4-ft-ps --branch main`, and state the delta against
+   `v4-ft` (0.375) in the conclusion too for the down-only runs.
+2. Read the grid:
+   - Direction: are the down-only runs above `v4-ft`?
+   - Method: vocoder vs resample, per direction.
+   - Coverage: both-halves vs centre.
+   Differences under ~0.027 are noise-level. Repeat any winner before trusting
+   it, and check the hard folds (1_150, 1_95, willard) per fold with ± SD.
+3. A vocoder winner has a deployment cost: phase vocoder per frame in
+   buzzdetect. Measure it before recommending it.
+4. Still pending from before: train the overall winner on `moderate` at 60
+   epochs. That's Luke's call, not a loop experiment.
