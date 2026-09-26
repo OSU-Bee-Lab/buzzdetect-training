@@ -4,7 +4,7 @@ The opening grid (`queue_v4_grid.sh`) finished 2026-09-26 02:23 and is logged in
 `log.jsonl`. Winner: `v4-ft-ps` = 0.452. Both `v4-ft-psctx*` runs were killed
 for host RAM; per Luke, psctx will not be fixed.
 
-Launched 2026-09-26 ~08:50, expected ~4-5 h.
+Launched 2026-09-26 ~08:28, expected ~4-5 h.
 
 | | |
 |---|---|
