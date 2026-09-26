@@ -19,6 +19,9 @@ each at `v4-ft-psud`'s pace; four views will be slower) plus extraction. Vocoder
 extraction is slower than resample: ~0.9 s per 48 frames for up+down, against
 ~0.3 s for resample.
 
+Checked at 18:35: `psd` extraction took 9 min, and two folds finished cleanly
+(~8 min each, host RAM ~8 GB, no errors). Fold sens: 1_29 0.506, 53 0.514.
+
 ## Where the grid came from
 
 Already logged (`log.jsonl`):
