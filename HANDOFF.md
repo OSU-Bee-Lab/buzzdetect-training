@@ -1,5 +1,7 @@
 # Handoff: era cv-medium-v4, pitch-shift method x direction grid
 
+**Done 2026-09-27 03:53, all six clean (no retries, pshud not RAM-killed); logged in `log.jsonl`.** Verdict: up is the effect (0.452-0.455), down alone ~0.39-0.40 (noise-level over `v4-ft`), vocoder = resample, down added to up is flat. `v4-ft-ps` stays the pick. Next open items: steps 3-4 below (step 3 moot unless a vocoder variant is revisited).
+
 Launched 2026-09-26 18:04. Luke is out of office and asked for all six runs at
 once instead of gating the later ones on down-alone.
 
