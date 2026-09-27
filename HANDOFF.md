@@ -28,3 +28,11 @@ These are not loop experiments (moderate is final confirmation), so there is no
 log.jsonl entry and no matched moderate control. Compare the two against each
 other with `tools/results.py`, and note moderate has 5 rotating folds, not medium's 8.
 Shipped models are left untrained.
+
+## Shipped models (queued 2026-09-27 ~18:00)
+
+`tools/queue_v4_moderate_ship.sh` (launch_job pid `3110322`, log
+`queue_v4_moderate_ship.log`) waits for the CV queue to exit, then trains both
+shipped models with `--skip-cv`. It skips any model whose CV has fewer than 5
+folds. Re-launch with the same command (pass no pid if the CV queue is gone).
+vu has no ONNX export, so its shipped model can't go through stage 4 yet.
