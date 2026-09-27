@@ -1,6 +1,6 @@
 import importlib
 
-import numpy as np
+from embedders.recipe import Branch, Keras, Recipe, UP_OCTAVE
 
 # Through the module, so load_embedder()'s scan finds only this class.
 _ps = importlib.import_module('embedders.yamnet_pitchshift.embedder')
@@ -33,23 +33,6 @@ preserving shifter).
 class EmbedderYamnetPitchshiftContrast(_ps.EmbedderYamnetPitchshift):
     embeddername = "yamnet_pitchshift_contrast"
     n_embeddings = 2048  # 1024 unshifted + 1024 signed contrast (unshifted - shifted)
-
-    def embed(self, audio):
-        audio = np.asarray(audio, dtype=np.float32)
-        n = len(audio) // self._frame_samples
-        if n == 0:
-            return np.empty((0, self.n_embeddings), dtype=np.float32)
-        usable = audio[:n * self._frame_samples]
-
-        unshifted = np.asarray(self.model(usable), dtype=np.float32)
-        if len(unshifted) != n:
-            raise ValueError(
-                f'{self.embeddername}: YAMNet returned {len(unshifted)} frames '
-                f'for {n} input frames'
-            )
-
-        frames = usable.reshape(n, self._frame_samples)
-        shifted_frames = np.stack([self._pitch_up_octave(f) for f in frames])
-        shifted = np.asarray(self.model(shifted_frames.reshape(-1)), dtype=np.float32)
-
-        return np.concatenate([unshifted, unshifted - shifted], axis=1)
+    recipe = Recipe(branches=(Branch(Keras()),
+                              Branch(Keras(), UP_OCTAVE)),
+                    combine='contrast')

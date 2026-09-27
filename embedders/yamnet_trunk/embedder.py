@@ -87,6 +87,7 @@ class EmbedderYamnetTrunk(BaseEmbedder):
     samplerate = 16000
     n_embeddings = int(np.prod(_TRUNK_SHAPE))  # 12288
     dtype_in = 'float32'
+    embed_is_model = True  # embed() is self.model(audio): BaseEmbedder.to_onnx() exports it
 
     def _yamnet_dir(self):
         # embedders/yamnet is a sibling (a symlink in a worktree); its

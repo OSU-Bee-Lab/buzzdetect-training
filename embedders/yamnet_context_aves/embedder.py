@@ -1,9 +1,7 @@
 import importlib
 
-import numpy as np
-
-import config as cfg
 from embedders.embedding import BaseEmbedder  # noqa: F401  -- load_embedder's scan
+from embedders.recipe import Context, Recipe
 
 """YAMNet-with-context + AVES on one shared 1.0 s frame grid.
 
@@ -52,57 +50,6 @@ class EmbedderYamnetContextAves(_yav.EmbedderYamnetAves):
     context_frames = CONTEXT_FRAMES
     n_embeddings = _YAMNET_DIMS * (2 * CONTEXT_FRAMES + 1) + (
         _yav.EmbedderYamnetAves.n_embeddings - _YAMNET_DIMS)
-
-    def embed_frames(self, audio):
-        """Plain per-frame [YAMNet | AVES] for a contiguous buffer, (n, 1792).
-
-        Chunked at cfg.CHUNK_FRAMES for the same memory reason 02_set chunks,
-        but on frame boundaries and here rather than in the caller — the caller
-        must not split the buffer itself or frames at each split lose their
-        neighbours.
-        """
-        audio = np.asarray(audio, dtype=np.float32)
-        n = len(audio) // self.samplerate
-        if n == 0:
-            return np.empty((0, _yav.EmbedderYamnetAves.n_embeddings), dtype=np.float32)
-
-        out = []
-        for lo in range(0, n, cfg.CHUNK_FRAMES):
-            hi = min(lo + cfg.CHUNK_FRAMES, n)
-            piece = audio[lo * self.samplerate: hi * self.samplerate]
-            out.append(super().embed(piece))
-        return np.concatenate(out, axis=0)
-
-    def stack_context(self, embeddings):
-        """(n, 1792) -> (n, 3840): YAMNet block widened, AVES block as-is."""
-        embeddings = np.asarray(embeddings, dtype=np.float32)
-        k = self.context_frames
-        n = len(embeddings)
-        if n == 0:
-            return np.zeros((0, self.n_embeddings), dtype=np.float32)
-        yam, av = embeddings[:, :_YAMNET_DIMS], embeddings[:, _YAMNET_DIMS:]
-        if k == 0:
-            return np.concatenate([yam, av], axis=1)
-        idx = np.arange(n)
-        blocks = [yam[np.clip(idx + offset, 0, n - 1)] for offset in range(-k, k + 1)]
-        return np.concatenate(blocks + [av], axis=1)
-
-    def embed(self, audio):
-        """Contiguous audio in, one context-widened embedding per frame out."""
-        return self.stack_context(self.embed_frames(audio))
-
-    def to_onnx(self, opset=17):
-        """yamnet_aves's own [YAMNet | AVES] to_onnx(), cropped to whole
-        frames the way embed_frames() crops its input, plus the context-stack
-        stack_context() applies to the YAMNet block in numpy -- see
-        embedders/onnx_context.py. The AVES block passes through unwidened.
-        """
-        from embedders.onnx_context import add_context_stack, crop_waveform_to_whole_frames
-
-        trunk_onnx = super().to_onnx(opset=opset)
-        trunk_onnx = crop_waveform_to_whole_frames(trunk_onnx, self.samplerate)
-        return add_context_stack(
-            trunk_onnx, k=self.context_frames,
-            widen_dim=_YAMNET_DIMS,
-            total_dim=_yav.EmbedderYamnetAves.n_embeddings,
-            n_embeddings=self.n_embeddings)
+    # yamnet_aves's branches; only the YAMNet block is widened with its neighbours
+    recipe = Recipe(branches=_yav.EmbedderYamnetAves.recipe.branches,
+                    context=Context(k=CONTEXT_FRAMES, branches=1), chunk=True)

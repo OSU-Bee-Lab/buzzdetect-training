@@ -97,5 +97,7 @@ class EmbedderYamnetPooled(BaseEmbedder):
         # also the call Keras needs before it will export
         self.embed(np.zeros(int(self.framelength_s * self.samplerate), dtype=np.float32))
 
+    embed_is_model = True  # embed() is self.model(audio): BaseEmbedder.to_onnx() exports it
+
     def embed(self, audio):
         return self.model(audio)

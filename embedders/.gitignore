@@ -4,7 +4,7 @@
 
 # Unignore these shared embedders (code only, not binaries)
 !embedding.py
-!onnx_context.py
+!recipe.py
 !yamnet
 !yamnet_k2
 !nighthawk
@@ -39,7 +39,6 @@
 !yamnet_trunk_pitchshift_contrast
 !yamnet_trunk_pitchshift_depth12
 !yamnet_trunk_pitchshift_updown_depth12
-!trunk_views.py
 !yamnet_trunk_pitchshift_down_depth12
 !yamnet_trunk_pitchshift_halves_down_depth12
 !yamnet_trunk_pitchshift_halves_updown_depth12

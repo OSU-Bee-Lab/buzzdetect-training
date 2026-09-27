@@ -17,39 +17,20 @@ Down view is the updown embedder's `_pitch_down_octave` unchanged: the centre
 half of the frame, upsampled 2:1 and relabelled 16 kHz. The outer quarters of
 the frame are not seen by the down view.
 
-to_onnx() is inherited: trunk_views.views_to_onnx() over `onnx_views`.
+embed() and to_onnx() both come from the recipe (embedders/recipe.py).
 """
 import importlib
 
-import numpy as np
+from embedders.recipe import Branch, Keras, Recipe, RecipeEmbedder, DOWN_OCTAVE_CENTRE
 
-_psud = importlib.import_module('embedders.yamnet_trunk_pitchshift_updown_depth12.embedder')
 _trunk12 = importlib.import_module('embedders.yamnet_trunk_depth12.embedder')
 
 
-class EmbedderYamnetTrunkPitchshiftDownDepth12(_psud.EmbedderYamnetTrunkPitchshiftUpdownDepth12):
+class EmbedderYamnetTrunkPitchshiftDownDepth12(RecipeEmbedder, _trunk12.EmbedderYamnetTrunkDepth12):
     embeddername = "yamnet_trunk_pitchshift_down_depth12"
-    n_ctx = 2  # [plain, octave-down] -- shared trunk tail, TimeDistributed in build_head
-    n_embeddings = _trunk12.EmbedderYamnetTrunkDepth12.n_embeddings * 2  # 24576
-    onnx_views = ('resample_down_centre',)
-
-    def embed(self, audio):
-        audio = np.asarray(audio, dtype=np.float32)
-        n = len(audio) // self._frame_samples
-        if n == 0:
-            return np.empty((0, self.n_embeddings), dtype=np.float16)
-        usable = audio[:n * self._frame_samples]
-
-        # go straight to the trunk; the parents' embed() would add an up view
-        trunk_embed = _trunk12.EmbedderYamnetTrunkDepth12.embed
-        plain = trunk_embed(self, usable)
-        if len(plain) != n:
-            raise ValueError(
-                f'{self.embeddername}: trunk returned {len(plain)} frames for {n} input frames'
-            )
-
-        frames = usable.reshape(n, self._frame_samples)
-        down_frames = np.stack([self._pitch_down_octave(f) for f in frames])
-        down = trunk_embed(self, down_frames.reshape(-1))
-
-        return np.concatenate([plain, down], axis=1).astype(np.float16)
+    # [plain, octave-down (centre)], each through the depth12 trunk
+    recipe = Recipe(branches=(Branch(Keras()),
+                              Branch(Keras(), DOWN_OCTAVE_CENTRE)),
+                    dtype='float16')
+    n_ctx = len(recipe.branches)  # one shared trunk tail per view, TimeDistributed in build_head
+    n_embeddings = _trunk12.EmbedderYamnetTrunkDepth12.n_embeddings * n_ctx

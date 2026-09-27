@@ -20,49 +20,21 @@ centred on the same instant as the plain view, so the frame grid is unchanged.
 The outer quarters of the frame are not in this view. The up view still covers
 them, tiled.
 
-to_onnx() is inherited: trunk_views.views_to_onnx() over `onnx_views`.
+embed() and to_onnx() both come from the recipe (embedders/recipe.py).
 """
 import importlib
 
-import numpy as np
+from embedders.recipe import Branch, Keras, Recipe, RecipeEmbedder, DOWN_OCTAVE_CENTRE, UP_OCTAVE
 
-_ps12 = importlib.import_module('embedders.yamnet_trunk_pitchshift_depth12.embedder')
 _trunk12 = importlib.import_module('embedders.yamnet_trunk_depth12.embedder')
 
 
-class EmbedderYamnetTrunkPitchshiftUpdownDepth12(_ps12.EmbedderYamnetTrunkPitchshiftDepth12):
+class EmbedderYamnetTrunkPitchshiftUpdownDepth12(RecipeEmbedder, _trunk12.EmbedderYamnetTrunkDepth12):
     embeddername = "yamnet_trunk_pitchshift_updown_depth12"
-    n_ctx = 3  # [plain, octave-up, octave-down] -- shared trunk tail, TimeDistributed in build_head
-    n_embeddings = _trunk12.EmbedderYamnetTrunkDepth12.n_embeddings * 3  # 36864
-    onnx_views = ('resample_up', 'resample_down_centre')
-
-    def _pitch_down_octave(self, frame):
-        q = self._frame_samples // 4
-        centre = frame[q:q + self._frame_samples // 2]
-        shifted = self._librosa.resample(
-            centre, orig_sr=self.samplerate, target_sr=self.samplerate * 2,
-        ).astype(np.float32)
-        if len(shifted) < self._frame_samples:
-            shifted = np.pad(shifted, (0, self._frame_samples - len(shifted)))
-        return shifted[:self._frame_samples]
-
-    def embed(self, audio):
-        audio = np.asarray(audio, dtype=np.float32)
-        n = len(audio) // self._frame_samples
-        if n == 0:
-            return np.empty((0, self.n_embeddings), dtype=np.float16)
-        usable = audio[:n * self._frame_samples]
-
-        # plain + octave-up, (n, 24576) float16, from the parent
-        plain_up = super().embed(usable)
-        if len(plain_up) != n:
-            raise ValueError(
-                f'{self.embeddername}: parent returned {len(plain_up)} frames for {n} input frames'
-            )
-
-        frames = usable.reshape(n, self._frame_samples)
-        down_frames = np.stack([self._pitch_down_octave(f) for f in frames])
-        # skip the parent's embed() (it would add its own up view); go straight to the trunk
-        down = _trunk12.EmbedderYamnetTrunkDepth12.embed(self, down_frames.reshape(-1))
-
-        return np.concatenate([plain_up, down], axis=1).astype(np.float16)
+    # [plain, octave-up, octave-down (centre)], each through the depth12 trunk
+    recipe = Recipe(branches=(Branch(Keras()),
+                              Branch(Keras(), UP_OCTAVE),
+                              Branch(Keras(), DOWN_OCTAVE_CENTRE)),
+                    dtype='float16')
+    n_ctx = len(recipe.branches)  # one shared trunk tail per view, TimeDistributed in build_head
+    n_embeddings = _trunk12.EmbedderYamnetTrunkDepth12.n_embeddings * n_ctx

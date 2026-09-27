@@ -24,56 +24,16 @@ audio transform, no new architecture piece.
 """
 import importlib
 
-import numpy as np
+from embedders.recipe import Branch, Keras, Recipe, RecipeEmbedder, UP_OCTAVE
 
 _trunk12 = importlib.import_module('embedders.yamnet_trunk_depth12.embedder')
-_ps = importlib.import_module('embedders.yamnet_trunk_pitchshift.embedder')
-_views = importlib.import_module('embedders.trunk_views')
 
 
-class EmbedderYamnetTrunkPitchshiftDepth12(_trunk12.EmbedderYamnetTrunkDepth12):
+class EmbedderYamnetTrunkPitchshiftDepth12(RecipeEmbedder, _trunk12.EmbedderYamnetTrunkDepth12):
     embeddername = "yamnet_trunk_pitchshift_depth12"
-    n_ctx = 2  # [plain, octave-up] -- shared trunk tail, TimeDistributed in build_head
-    n_embeddings = _trunk12.EmbedderYamnetTrunkDepth12.n_embeddings * 2  # 24576
-    onnx_views = ('resample_up',)  # embed()'s views after plain, named as in trunk_views.ONNX_VIEWS
-
-    def initialize(self):
-        import librosa
-        self._librosa = librosa
-        self._frame_samples = int(round(self.framelength_s * self.samplerate))
-        self._half_sr = self.samplerate // 2
-        super().initialize()  # loads self.model = trunk through layer11, warms it
-
-    # identical mechanism to yamnet_trunk_pitchshift._pitch_up_octave -- held
-    # as its own copy since this class's MRO runs through
-    # EmbedderYamnetTrunkDepth12, not EmbedderYamnetTrunkPitchshift.
-    def _pitch_up_octave(self, frame):
-        shifted = self._librosa.resample(
-            frame, orig_sr=self.samplerate, target_sr=self._half_sr,
-        ).astype(np.float32)
-        tiled = np.tile(shifted, 2)
-        if len(tiled) < self._frame_samples:
-            tiled = np.pad(tiled, (0, self._frame_samples - len(tiled)))
-        return tiled[:self._frame_samples]
-
-    def to_onnx(self, opset=17):
-        return _views.views_to_onnx(self, self.onnx_views, opset=opset)
-
-    def embed(self, audio):
-        audio = np.asarray(audio, dtype=np.float32)
-        n = len(audio) // self._frame_samples
-        if n == 0:
-            return np.empty((0, self.n_embeddings), dtype=np.float16)
-        usable = audio[:n * self._frame_samples]
-
-        plain = super().embed(usable)  # (n, 12288) float16, layer11 features
-        if len(plain) != n:
-            raise ValueError(
-                f'{self.embeddername}: trunk returned {len(plain)} frames for {n} input frames'
-            )
-
-        frames = usable.reshape(n, self._frame_samples)
-        shifted_frames = np.stack([self._pitch_up_octave(f) for f in frames])
-        shifted = super().embed(shifted_frames.reshape(-1))
-
-        return np.concatenate([plain, shifted], axis=1).astype(np.float16)
+    # [plain, octave-up], each through the depth12 trunk
+    recipe = Recipe(branches=(Branch(Keras()),
+                              Branch(Keras(), UP_OCTAVE)),
+                    dtype='float16')
+    n_ctx = len(recipe.branches)  # one shared trunk tail per view, TimeDistributed in build_head
+    n_embeddings = _trunk12.EmbedderYamnetTrunkDepth12.n_embeddings * n_ctx

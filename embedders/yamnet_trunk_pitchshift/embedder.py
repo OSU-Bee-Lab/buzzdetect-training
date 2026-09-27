@@ -25,52 +25,16 @@ and the shared-tail mechanism from `yamnet_trunk_context`, combined.
 """
 import importlib
 
-import numpy as np
+from embedders.recipe import Branch, Keras, Recipe, RecipeEmbedder, UP_OCTAVE
 
 _trunk = importlib.import_module('embedders.yamnet_trunk.embedder')
-_ps = importlib.import_module('embedders.yamnet_pitchshift.embedder')
 
 
-class EmbedderYamnetTrunkPitchshift(_trunk.EmbedderYamnetTrunk):
+class EmbedderYamnetTrunkPitchshift(RecipeEmbedder, _trunk.EmbedderYamnetTrunk):
     embeddername = "yamnet_trunk_pitchshift"
-    n_ctx = 2  # [plain, octave-up] -- shared trunk tail, TimeDistributed in build_head
+    # [plain, octave-up], each through the layer-12 trunk
+    recipe = Recipe(branches=(Branch(Keras()),
+                              Branch(Keras(), UP_OCTAVE)),
+                    dtype='float16')
+    n_ctx = 2  # shared trunk tail, TimeDistributed in build_head
     n_embeddings = _trunk.EmbedderYamnetTrunk.n_embeddings * 2  # 24576
-
-    def initialize(self):
-        import librosa
-        self._librosa = librosa
-        self._frame_samples = int(round(self.framelength_s * self.samplerate))
-        self._half_sr = self.samplerate // 2
-        super().initialize()  # loads self.model = trunk through layer12, warms it (calls embed())
-
-    # identical mechanism to yamnet_pitchshift._pitch_up_octave -- resample to
-    # half-rate (relabelled 16 kHz), tile 2x, crop to one frame. Held as its
-    # own copy (not inherited) since this class's MRO runs through
-    # EmbedderYamnetTrunk, not EmbedderYamnetPitchshift.
-    def _pitch_up_octave(self, frame):
-        shifted = self._librosa.resample(
-            frame, orig_sr=self.samplerate, target_sr=self._half_sr,
-        ).astype(np.float32)
-        tiled = np.tile(shifted, 2)
-        if len(tiled) < self._frame_samples:
-            tiled = np.pad(tiled, (0, self._frame_samples - len(tiled)))
-        return tiled[:self._frame_samples]
-
-    def embed(self, audio):
-        audio = np.asarray(audio, dtype=np.float32)
-        n = len(audio) // self._frame_samples
-        if n == 0:
-            return np.empty((0, self.n_embeddings), dtype=np.float16)
-        usable = audio[:n * self._frame_samples]
-
-        plain = super().embed(usable)  # (n, 12288) float16, layer12 features
-        if len(plain) != n:
-            raise ValueError(
-                f'{self.embeddername}: trunk returned {len(plain)} frames for {n} input frames'
-            )
-
-        frames = usable.reshape(n, self._frame_samples)
-        shifted_frames = np.stack([self._pitch_up_octave(f) for f in frames])
-        shifted = super().embed(shifted_frames.reshape(-1))
-
-        return np.concatenate([plain, shifted], axis=1).astype(np.float16)

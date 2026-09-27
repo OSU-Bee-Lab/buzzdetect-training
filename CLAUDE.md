@@ -25,6 +25,11 @@ Environment: `conda run -n buzzdetect-train python <script>` for anything short;
 long jobs are below. Embedder interface: `embedders/embedding.py`. Model loader:
 `models/models.py`.
 
+An embedder built from framing, per-frame ops (slice, resample, tile) and
+models (YAMNet cuts, AVES) is a `Recipe` in `embedders/recipe.py`: one
+declaration drives both `embed()` and the ONNX export. Never hand-write a
+`to_onnx()`; add a missing step's numpy and ONNX forms to `recipe.py` instead.
+
 `DEPLOYMENTS.md` maps each fold to its crop, site and date.
 Check if you need further interpretation on folds.
 

@@ -29,6 +29,8 @@ class EmbedderYamnet(BaseEmbedder):
         # this the first embed() call after librosa.resample deadlocks on macOS.
         self.embed(np.zeros(int(self.framelength_s * self.samplerate), dtype=np.float32))
 
+    embed_is_model = True  # embed() is self.model(audio): BaseEmbedder.to_onnx() exports it
+
     def embed(self, audio):
         """
         Generate embeddings for audio data

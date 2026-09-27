@@ -56,18 +56,25 @@ class BaseEmbedder(ABC):
         long as embed() and this graph agree; that agreement is what
         export_onnx.py's parity check (verify()) is checking.
 
-        The default here covers a trunk that is one Keras model (self.model):
-        export it with Keras's own ONNX exporter. A trunk that spans more
-        than one framework or more than one model -- see
-        embedders/yamnet_aves/embedder.py for an example combining a Keras
-        model and a PyTorch model -- overrides this and builds the ONNX graph
-        itself, typically by exporting each piece through its own framework's
-        exporter and stitching them together with onnx.compose (see that
-        module for the pattern: a waveform-to-frames reshape, a crop or split
-        per sub-model, the sub-models' own exported graphs, a Concat on their
-        outputs). Nothing outside this method needs to change to support a
-        new combination of embedders; only this method does.
+        Two ways to satisfy it:
+
+        - A recipe (embedders/recipe.py): an embedder assembled from framing,
+          per-frame ops and models declares them as data, and RecipeEmbedder
+          derives both embed() and this method from that one description.
+          This is the way for anything beyond a single model.
+        - This default: embed() is nothing but `self.model(audio)` on one Keras
+          model, exported with Keras's own ONNX exporter. The class that
+          defines embed() vouches for that with `embed_is_model = True` in its
+          own body; a subclass that overrides embed() does not inherit the
+          vouch, so it cannot silently export its parent's graph.
         """
+        owner = next(c for c in type(self).__mro__ if 'embed' in c.__dict__)
+        if not owner.__dict__.get('embed_is_model', False):
+            raise NotImplementedError(
+                f'{self.embeddername}: embed() (defined in {owner.__name__}) does '
+                f'more than call self.model, and there is no recipe to export it '
+                f'from. Express it as a recipe (embedders/recipe.py) to export it.')
+
         import keras
 
         if not isinstance(self.model, keras.Model):

@@ -171,11 +171,11 @@ def build_trunk_onnx(embeddername):
 
     Loaded through the embedder plugin interface rather than by reaching for
     a .keras path, so whatever that plugin does at load time -- retuning the
-    patch hop, in yamnet's case -- is done here too. The actual ONNX-building
-    is the embedder's own job (BaseEmbedder.to_onnx(), overridden per
-    embedder as needed -- see embedders/yamnet_aves/embedder.py for a trunk
-    spanning two frameworks); a new embedder, however it's built, needs no
-    change in this file, only in its own to_onnx().
+    patch hop, in yamnet's case -- is done here too. The graph comes from the
+    embedder's to_onnx(): its recipe (embedders/recipe.py) for anything
+    assembled from framing, per-frame ops and models, or BaseEmbedder's default
+    for an embedder whose embed() is a single Keras model call. A new embedder
+    needs no change in this file.
     """
     from embedders.embedding import load_embedder
 
@@ -431,11 +431,10 @@ def verify(path_onnx, embedder, head, path_audio, assume_yes=False):
 
     if worst > TOL:
         msg = (f'parity FAILED: {worst:.2e} > {TOL}. This can be real numeric '
-               f'drift (e.g. a chunked embed_frames() zero-padding at a memory-'
-               f'chunk boundary the unchunked ONNX graph does not reproduce -- '
-               f'see embedders/yamnet_aves/embedder.py\'s module docstring for '
-               f'the same effect there) or an actual export bug -- ship anyway '
-               f'only once you know which.')
+               f'drift (e.g. embed() storing float16, as the trunk embedders do, '
+               f'which puts ~1e-3 on the logits; or a chunked embed() whose '
+               f'YAMNet sees a chunk edge the unchunked graph does not) or an '
+               f'actual export bug -- ship anyway only once you know which.')
         if assume_yes:
             print(f'{msg}\n  --yes passed: shipping anyway')
         else:

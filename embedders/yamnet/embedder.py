@@ -12,6 +12,7 @@ class EmbedderYamnet(BaseEmbedder):
     samplerate = 16000  # Hz
     n_embeddings = 1024
     dtype_in = 'float32'
+    embed_is_model = True  # embed() is self.model(audio): BaseEmbedder.to_onnx() exports it
 
     def initialize(self):
         # Deferred import: TF must not be imported in the parent process before fork

@@ -556,6 +556,14 @@ against the Keras model it came from, and carries it into buzzdetect's
 `04_deploy/model_card.py <name>...` or `04_deploy/export_onnx.py <name>
 --dest ...` — see each script's header for its own flags.
 
+The embedder half of the graph comes from the embedder's recipe
+(`embedders/recipe.py`), the same description its `embed()` runs, so any
+embedder assembled from existing steps exports with no extra code. An
+embedder whose `embed()` does something no recipe step covers refuses to
+export rather than exporting the wrong graph. The parity check compares the
+graph against `embed()`; embedders that store float16 (the trunk family) sit
+around 1e-3 there, which is that rounding, not an export bug.
+
 ---
 
 ## Reading the results
