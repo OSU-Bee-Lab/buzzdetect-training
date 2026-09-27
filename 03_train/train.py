@@ -127,6 +127,74 @@ def _to_tf_lowmem(data, size_batch, free=False):
     )
 
 
+class _StreamPool:
+    """TRUNK_STREAM=1: the training pool as one float16 file on disk, memory-
+    mapped, instead of _to_tf_lowmem's in-RAM Variable. For pools bigger than
+    host RAM (a two-view trunk on `moderate` is ~18 GB of float16 against a
+    23 GB host; building the lowmem Variable also holds the loaded samples
+    beside it, so the peak is ~2x that).
+
+    Samples are appended fold by fold as they load and their embeddings are
+    dropped at once, so at most one fold's samples are in RAM. Row order is the
+    sample order _to_tf_lowmem uses, and the dataset below draws the same
+    reshuffled-every-epoch, sorted-per-batch indices, so training sees the same
+    thing; only where the rows live changes. The file is unlinked as soon as it
+    is mapped: the mapping keeps it readable, and nothing is left on disk after
+    close() or a crash."""
+
+    def __init__(self):
+        os.makedirs(cfg.DIR_STREAM_SCRATCH, exist_ok=True)
+        self.path = os.path.join(cfg.DIR_STREAM_SCRATCH, f'{os.getpid()}_{len(_streams)}.f16')
+        self.f = open(self.path, 'wb')
+        self.n, self.width, self.arr = 0, None, None
+
+    def append(self, samples):
+        for s in samples:
+            block = np.asarray(s.embeddings, dtype=np.float16)
+            self.width = self.width or block.shape[1]
+            self.f.write(block.tobytes())
+            self.n += len(block)
+            s.embeddings = None
+
+    def dataset(self, data, size_batch):
+        self.f.close()
+        self.arr = np.memmap(self.path, dtype=np.float16, mode='r', shape=(self.n, self.width))
+        os.unlink(self.path)
+        _streams.append(self)
+        tgt = tf.constant(np.concatenate(
+            [np.tile(s.target_array, (s.frames, 1)) for s in data]).astype(np.float32))
+        width = self.width
+
+        # numpy_function keeps this closure alive in TF's py-function registry
+        # past the fold (see _to_tf_lowmem), so it holds `self`, never the
+        # array: close() drops the mapping whatever the registry keeps.
+        def read(idx):
+            return self.arr[idx]
+
+        def gather(idx):
+            idx = tf.sort(idx)
+            emb = tf.numpy_function(read, [idx], tf.float16, stateful=False)
+            emb.set_shape((None, width))
+            return tf.cast(emb, tf.float32), tf.gather(tgt, idx)
+
+        return (
+            tf.data.Dataset.range(self.n).shuffle(self.n, reshuffle_each_iteration=True)
+            .batch(size_batch).map(gather, num_parallel_calls=tf.data.AUTOTUNE)
+            .prefetch(tf.data.AUTOTUNE)
+        )
+
+    def close(self):
+        self.arr = None
+
+
+_streams = []
+
+
+def _close_streams():
+    while _streams:
+        _streams.pop().close()
+
+
 def _eval_arrays(samples, classes):
     """Frame-level (embeddings, is_buzz, is_quiet_buzz, sample_id) for a fold,
     in sample order.
@@ -174,11 +242,17 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     translation = pd.read_csv(cfg.path_translation(setname, name_translation))
     classes = build_classes(translation)
 
+    pool = _StreamPool() if os.environ.get('TRUNK_STREAM') else None
+    if pool is not None and aug_dirnames:
+        raise NotImplementedError('TRUNK_STREAM does not stream augmented embeddings')
     data_train = []
     for fold in folds_train:
-        data_train += build_fold_dataset(
+        samples = build_fold_dataset(
             cfg.dir_embeddings_fold(setname, embeddername, fold), translation,
         )
+        if pool is not None:
+            pool.append(samples)
+        data_train += samples
     frames_train = sum(s.frames for s in data_train)
 
     data_val = None
@@ -217,7 +291,8 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     size_shuffle = 10 * size_batch
 
     return TrainingData(
-        train_tf=_to_tf(data_train, size_batch, size_shuffle, free=True),
+        train_tf=(pool.dataset(data_train, size_batch) if pool is not None
+                  else _to_tf(data_train, size_batch, size_shuffle, free=True)),
         val_tf=_to_tf(data_val, size_batch, size_shuffle) if data_val is not None else None,
         classes=classes,
         weight_dict=weight_dict,
@@ -850,6 +925,7 @@ def train_set(name, embeddername, setname, name_translation,
         # exp/trunk-ft-v3; hit on a plain 2048-d probe in pitchshift-contrast).
         del model, data
         tf.keras.backend.clear_session()
+        _close_streams()
         gc.collect()
 
     summary_rows, predictions_pooled = _collect_fold_results(dir_folds, folds_scored)

@@ -176,6 +176,12 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
   array alive and the host OOMs 2-4 folds in. The per-fold line prints host RAM;
   it should stay flat. Other embedders never
   reach any of this, so they train exactly as before.
+- **`TRUNK_STREAM=1` streams the training pool from disk** (`train._StreamPool`,
+  2026-09-27) for pools past host RAM: a two-view trunk on `moderate` is ~18 GB
+  of float16 on a 23 GB host. Each fold writes its pool to an unlinked file
+  under `cfg.DIR_STREAM_SCRATCH` and memory-maps it; row order and per-epoch
+  shuffling match `_to_tf_lowmem` (checked row-for-row on medium). Validation
+  and scoring stay in RAM. Needs `TRUNK_FP16=1`; no augmented dirs.
 - Per-frame class activations + multi-label loss for finding bad annotations and
   hard negatives, on by default (`--no-surprisal`) — `surprisal.py`, written to
   `<model>/surprisal/<ident>_surprisal.csv`

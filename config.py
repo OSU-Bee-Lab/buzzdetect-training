@@ -35,6 +35,9 @@ def local(key, default=None):
 
 DIR_EMBEDDERS = _p('embedders')
 DIR_MODELS = _p('models')
+# Scratch for TRUNK_STREAM's per-fold disk-backed training pool (03_train/train.py).
+# Rebuilt every fold and deleted after it; never a cache.
+DIR_STREAM_SCRATCH = _p('.local', 'stream_scratch')
 # Legacy project-wide translation tables. Translations are per-set now (built by
 # the set's own build.R into <set>/translations/); this stays as the fallback for
 # sets whose build.R has not been updated yet. See path_translation().
