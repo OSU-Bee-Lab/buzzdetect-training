@@ -28,12 +28,14 @@ import numpy as np
 
 _trunk12 = importlib.import_module('embedders.yamnet_trunk_depth12.embedder')
 _ps = importlib.import_module('embedders.yamnet_trunk_pitchshift.embedder')
+_views = importlib.import_module('embedders.trunk_views')
 
 
 class EmbedderYamnetTrunkPitchshiftDepth12(_trunk12.EmbedderYamnetTrunkDepth12):
     embeddername = "yamnet_trunk_pitchshift_depth12"
     n_ctx = 2  # [plain, octave-up] -- shared trunk tail, TimeDistributed in build_head
     n_embeddings = _trunk12.EmbedderYamnetTrunkDepth12.n_embeddings * 2  # 24576
+    onnx_views = ('resample_up',)  # embed()'s views after plain, named as in trunk_views.ONNX_VIEWS
 
     def initialize(self):
         import librosa
@@ -53,6 +55,9 @@ class EmbedderYamnetTrunkPitchshiftDepth12(_trunk12.EmbedderYamnetTrunkDepth12):
         if len(tiled) < self._frame_samples:
             tiled = np.pad(tiled, (0, self._frame_samples - len(tiled)))
         return tiled[:self._frame_samples]
+
+    def to_onnx(self, opset=17):
+        return _views.views_to_onnx(self, self.onnx_views, opset=opset)
 
     def embed(self, audio):
         audio = np.asarray(audio, dtype=np.float32)

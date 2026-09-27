@@ -7,7 +7,7 @@ and the shared-tail mechanism live in embedders/trunk_views.py. Comparators:
 `v4-ft` (no shift, 0.375), `v4-ft-ps` (resample up, 0.452), `v4-ft-psud`
 (resample up + centre down, 0.452), `v4-ft-psd` (resample centre down).
 
-No to_onnx(): CV only. Add an export before deploying this embedder.
+No ONNX form for vocoder views: to_onnx() raises. CV only.
 """
 import importlib
 

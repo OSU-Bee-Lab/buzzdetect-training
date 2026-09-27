@@ -20,7 +20,7 @@ centred on the same instant as the plain view, so the frame grid is unchanged.
 The outer quarters of the frame are not in this view. The up view still covers
 them, tiled.
 
-No to_onnx(): CV only. Add an export before deploying this embedder.
+to_onnx() is inherited: trunk_views.views_to_onnx() over `onnx_views`.
 """
 import importlib
 
@@ -34,6 +34,7 @@ class EmbedderYamnetTrunkPitchshiftUpdownDepth12(_ps12.EmbedderYamnetTrunkPitchs
     embeddername = "yamnet_trunk_pitchshift_updown_depth12"
     n_ctx = 3  # [plain, octave-up, octave-down] -- shared trunk tail, TimeDistributed in build_head
     n_embeddings = _trunk12.EmbedderYamnetTrunkDepth12.n_embeddings * 3  # 36864
+    onnx_views = ('resample_up', 'resample_down_centre')
 
     def _pitch_down_octave(self, frame):
         q = self._frame_samples // 4

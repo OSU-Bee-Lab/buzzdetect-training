@@ -17,7 +17,7 @@ Down view is the updown embedder's `_pitch_down_octave` unchanged: the centre
 half of the frame, upsampled 2:1 and relabelled 16 kHz. The outer quarters of
 the frame are not seen by the down view.
 
-No to_onnx(): CV only. Add an export before deploying this embedder.
+to_onnx() is inherited: trunk_views.views_to_onnx() over `onnx_views`.
 """
 import importlib
 
@@ -31,6 +31,7 @@ class EmbedderYamnetTrunkPitchshiftDownDepth12(_psud.EmbedderYamnetTrunkPitchshi
     embeddername = "yamnet_trunk_pitchshift_down_depth12"
     n_ctx = 2  # [plain, octave-down] -- shared trunk tail, TimeDistributed in build_head
     n_embeddings = _trunk12.EmbedderYamnetTrunkDepth12.n_embeddings * 2  # 24576
+    onnx_views = ('resample_down_centre',)
 
     def embed(self, audio):
         audio = np.asarray(audio, dtype=np.float32)

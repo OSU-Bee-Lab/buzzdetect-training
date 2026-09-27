@@ -82,7 +82,15 @@ def fold_batchnorm(model):
             continue
 
         w_folded = (w * scale.reshape(-1, 1, 1, 1)).astype(np.float32)
-        initializer[name_w].CopyFrom(numpy_helper.from_array(w_folded, name_w))
+        if len(consumers.get(name_w, [])) > 1:
+            # A weight shared by several Convs (tf2onnx does this for a
+            # TimeDistributed tail): scaling it in place would scale it once
+            # per Conv, so this Conv gets a folded copy of its own.
+            name_w = f'{name_w}_folded_{n_folded}'
+            graph.initializer.append(numpy_helper.from_array(w_folded, name_w))
+            conv.input[1] = name_w
+        else:
+            initializer[name_w].CopyFrom(numpy_helper.from_array(w_folded, name_w))
         name_bias = name_w + '_folded_bias'
         graph.initializer.append(
             numpy_helper.from_array(shift.astype(np.float32), name_bias))
