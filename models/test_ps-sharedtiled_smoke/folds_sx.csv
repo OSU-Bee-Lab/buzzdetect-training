@@ -1,0 +1,12 @@
+fold,fpr,threshold,sensitivity,precision,sensitivity_exclquiet,sensitivity_faint,sensitivity_quiet,sensitivity_background,sensitivity_untagged,sensitivity_normal,sensitivity_loud,buzz_frames,buzz_events,buzz_events_exclquiet,faint_frames,quiet_frames,background_frames,untagged_frames,normal_frames,loud_frames,neg_frames,frames_val,best_epoch
+JamesU - MustardBumbler/1_29,0.005,-1.376,0.006,0.349,0.006,,,,0.006,,,2144,14,14,0,0,0,2144,0,0,23,6887,2
+Lily - Fit+Fast/2023_R3_Marysville/53,0.005,-1.412,0.129,0.893,0.129,,,,0.129,,,1031,13,13,0,0,0,1031,0,0,15,4211,2
+Lily Adam - One Hive/recorders/willard/2024-08-07/1_11,0.005,-0.989,0.095,0.583,0.095,,,,0.095,,,305,20,20,0,0,0,305,0,0,20,4458,2
+Luke - Diel Drivers/2026-04-08/1_150,0.005,-0.695,0.0,0.0,0.0,,,,0.0,,,146,14,14,0,0,0,146,0,0,18,3915,2
+Luke - Diel Drivers/2026-05-06/1_95,0.005,-1.163,0.069,0.666,0.069,,,,0.069,,,433,59,59,0,0,0,433,0,0,15,3439,2
+Luke - Various Opportunistic Recordings/2025-06-23/1_23,0.005,-1.338,0.229,0.888,0.229,,,,0.229,,,35,5,5,0,0,0,35,0,0,1,238,2
+Luke - Various Opportunistic Recordings/2025-07-03/1_37,0.005,-1.544,0.013,0.182,0.013,,,,0.013,,,307,8,8,0,0,0,307,0,0,17,3892,2
+Luke - Various Opportunistic Recordings/2025-08-05/31,0.005,-0.068,0.091,0.934,0.091,,,,0.091,,,411,17,17,0,0,0,411,0,0,2,942,2
+Luke - Various Opportunistic Recordings/2025-08-12/1_114,0.005,-1.445,0.153,0.764,0.153,,,,0.153,,,361,28,28,0,0,0,361,0,0,17,3768,2
+Luke - Various Opportunistic Recordings/2025-08-27/48,0.005,-0.697,0.002,0.096,0.002,,,,0.002,,,299,9,9,0,0,0,299,0,0,5,1434,2
+total,0.005,-1.073,0.079,0.536,0.079,,,,0.079,,,5472,187,187,0,0,0,5472,0,0,133,33184,2
