@@ -38,6 +38,7 @@ See buzzdetect's benchmarks/onnx-vs-tf/{RESULTS.md,COREML.md} for the numbers.
 import tensorflow  # noqa: F401  (import-order guard, see above)
 
 import argparse
+import dataclasses
 import json
 import os
 import shutil
@@ -398,8 +399,20 @@ def verify(path_onnx, embedder, head, path_audio, assume_yes=False):
     print(f'  {os.path.getsize(path_onnx) / 1e6:.2f} MB, '
           f'in {session.get_inputs()[0].shape} out {session.get_outputs()[0].shape}')
 
+    # A recipe's embed() rounds to its storage dtype (float16 for the trunk
+    # family) and may run YAMNet in CHUNK_FRAMES blocks; the graph does
+    # neither. Both are how embeddings are stored, not what the graph should
+    # compute, so the reference drops them and TOL stays tight enough to
+    # catch a real export bug.
+    recipe = getattr(embedder, 'recipe', None)
+    if recipe is not None:
+        recipe = dataclasses.replace(recipe, dtype='float32', chunk=False)
+        embed = lambda samples: recipe.numpy(embedder, samples)
+    else:
+        embed = embedder.embed
+
     def reference(samples):
-        embeddings = np.asarray(embedder.embed(samples), dtype=np.float32)
+        embeddings = np.asarray(embed(samples), dtype=np.float32)
         predictions = head(embeddings)
         if isinstance(predictions, dict):
             (predictions,) = predictions.values()
@@ -430,11 +443,11 @@ def verify(path_onnx, embedder, head, path_audio, assume_yes=False):
         print(f'  {label:<34} {str(got.shape):<12} max|d|={d:.2e}  agree={agree:.4f}')
 
     if worst > TOL:
-        msg = (f'parity FAILED: {worst:.2e} > {TOL}. This can be real numeric '
-               f'drift (e.g. embed() storing float16, as the trunk embedders do, '
-               f'which puts ~1e-3 on the logits; or a chunked embed() whose '
-               f'YAMNet sees a chunk edge the unchunked graph does not) or an '
-               f'actual export bug -- ship anyway only once you know which.')
+        msg = (f'parity FAILED: {worst:.2e} > {TOL}. A recipe embedder is '
+               f'compared at float32 and unchunked, so for one this is an export '
+               f'bug. An embedder without a recipe can still drift for real '
+               f'(its embed() storing float16, or chunking YAMNet) -- ship '
+               f'anyway only once you know which.')
         if assume_yes:
             print(f'{msg}\n  --yes passed: shipping anyway')
         else:
@@ -638,7 +651,12 @@ def verify_fixed_length(path_onnx, embedder, samples_hop, samples_min, floor_non
             raise SystemExit(f'padded n={n}: {got.shape} against '
                              f'{expected.shape} unpadded')
         worst = max(worst, float(np.abs(expected - got).max()))
-    print(f'fixed-length parity OK at {seconds:g}s: {worst:.2e}')
+    # Not a pass/fail: a ragged tail's samples sit in the last frame's STFT
+    # overhang once padded, where the unpadded graph sees nothing, so that one
+    # frame differs by design (~0.1-0.3 on logits, one frame per file in
+    # buzzdetect). Only the shapes above are enforced.
+    print(f'fixed-length shapes OK at {seconds:g}s; '
+          f'max|d| {worst:.2e} (last frame of a ragged chunk; informational)')
     return n_fixed
 
 

@@ -561,8 +561,10 @@ The embedder half of the graph comes from the embedder's recipe
 embedder assembled from existing steps exports with no extra code. An
 embedder whose `embed()` does something no recipe step covers refuses to
 export rather than exporting the wrong graph. The parity check compares the
-graph against `embed()`; embedders that store float16 (the trunk family) sit
-around 1e-3 there, which is that rounding, not an export bug.
+graph against the recipe's `embed()` run at float32 and unchunked, since the
+float16 storage cast (the trunk family) and CHUNK_FRAMES blocks are how
+embeddings are stored, not what the graph computes; a failure on a recipe
+embedder is an export bug.
 
 ---
 
