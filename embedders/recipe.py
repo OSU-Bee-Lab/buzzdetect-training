@@ -173,6 +173,8 @@ class Resample(FrameOp):
     """
     to: str  # 'half' | 'double'
 
+    TRIM = 1e-7  # taps below this fraction of the peak are dropped from the ONNX FIR
+
     def target(self, sr):
         return sr // 2 if self.to == 'half' else sr * 2
 
@@ -198,7 +200,13 @@ class Resample(FrameOp):
                 # 'half': y[m] = sum_k h(2m - k) x[k];  'double': y[m] = sum_k h(m - 2k) x[k]
                 d = 2 * int(m) - k0 if self.to == 'half' else int(m) - 2 * k0
                 taps[d] = out[m]
-        lo, hi = min(taps), max(taps)
+        # soxr's impulse response is ~1660 taps, but all outside the central ~380
+        # sum to ~3e-6 (L1): drop them. Kept whole, this one Conv cost more than
+        # both YAMNets together in the exported graph.
+        peak = max(abs(v) for v in taps.values())
+        kept = [d for d, v in taps.items() if abs(v) > self.TRIM * peak]
+        lo, hi = min(kept), max(kept)
+        taps = {d: v for d, v in taps.items() if lo <= d <= hi}
         w = np.zeros(hi - lo + 1, dtype=np.float32)
         for d, v in taps.items():
             w[hi - d] = v  # Conv is cross-correlation: w[t] = h(pad_left - t)
