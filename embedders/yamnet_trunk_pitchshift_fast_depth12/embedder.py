@@ -41,9 +41,11 @@ _UP_SHAPE = (3, 4, 512)
 _FIRST_LAYER = 'layer1_conv'
 
 
-def _dual_features_layer(params):
+def _dual_features_layer(params, tile=False):
     """Waveform -> (plain patches (n, 96, 64, 1), up patches (n, 48, 64, 1))
-    from one STFT. The plain half repeats yamnet/features.py op for op."""
+    from one STFT. The plain half repeats yamnet/features.py op for op.
+    tile=True repeats each up patch end to end to 96 frames, as v4-ft-ps's
+    resampled view was (yamnet_trunk_pitchshift_sharedtiled_depth12)."""
     import keras
     import tensorflow as tf
 
@@ -71,6 +73,8 @@ def _dual_features_layer(params):
             plain = tf.signal.frame(plain, patch, patch_hop, axis=0)
             up = tf.math.log(tf.matmul(mag[::2], tf.constant(mel_up)) + params.log_offset)
             up = tf.signal.frame(up, patch // 2, patch_hop // 2, axis=0)[:tf.shape(plain)[0]]
+            if tile:
+                up = tf.concat([up, up], axis=1)
             return plain[..., tf.newaxis], up[..., tf.newaxis]
 
     return DualFeatures(name='dual_features')
