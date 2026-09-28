@@ -707,7 +707,7 @@ Each tool's header documents its options.
 | `results.py` | a notes.md Results section for two models: per-fold deltas ± SD, headline, tiers |
 | `compare_folds.py` | the per-fold join of two `folds_sx.csv` files |
 | `eval_sampling_sd.py` | event-blocked bootstrap SD of a model's per-fold and headline sensitivity, or of a paired delta |
-| `log_entry.py` | build one `log.jsonl` line from `folds_sx.csv` |
+| `log_entry.py` | build one `log.jsonl` line from `folds_sx.csv`, per-fold sensitivities included |
 | `finish_experiment.sh` | commit and push the experiment branch, then log and commit in main |
 | `human/agent_loop.sh` | run LOOP.md in back-to-back fresh sessions, N experiments each |
 | `loop_signal.sh` | how a looped agent reports `done`, `issue`, `halt`, `friction` or `stop`, from any worktree |
@@ -715,7 +715,7 @@ Each tool's header documents its options.
 | `check_sens_at_fpr.py` | pin `metrics.sens_at_fpr` to the `metrics_by_group` → `metrics_at_fpr` pair it restates |
 | `setup_worktree.sh` | create an experiment worktree at `.local/worktrees/<slug>` and link the shared data into it; `--relink <slug>` adds links for embedders/sets made since |
 | `smoke_model.py`, `honest_epoch.py` | model smoke test; cross-fold epoch re-scoring |
-| `human/log_viewer.html` | browser view of `log.jsonl`, for reading by hand; no agent uses it |
+| `human/log_viewer.html` | browser view of `log.jsonl` and archived eras, for reading by hand; no agent uses it. `list` tab: the entries; `graphs` tab: headline by run, per-fold heatmap (absolute or Δ vs baseline), each fold across runs, and a two-run compare. Serve the repo root (`python -m http.server`) and open `/tools/human/log_viewer.html` so it can fetch; over `file://`, drop the files on it |
 
 `03_train/resummarize.py` rebuilds `folds_sx.csv` from `predictions.csv` without
 TensorFlow.

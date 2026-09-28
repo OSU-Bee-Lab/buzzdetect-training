@@ -14,6 +14,11 @@ Directory names are `<first-entry-date>_<slug>` so they sort in the order the
 eras ran. Each holds:
 
 - `log.jsonl` — the entries, verbatim as they were written
+- `per_fold.jsonl` — per-fold sensitivities recovered on 2026-09-28 from
+  surviving model dirs (main's `models/` or a worktree's), one line per entry by
+  `name`, with the `model_dir` it came from. Only dirs whose `folds_sx.csv`
+  reproduces the logged headline were used; entries with no such dir are
+  absent. *(v2 and v3 only; later eras carry `per_fold` in `log.jsonl` itself)*
 - `README.md` — what made these numbers comparable, and what ended that
 - `notes/` — the per-experiment working notes
 - `set/` — a snapshot of the training set as of the cutover *(where it survives)*

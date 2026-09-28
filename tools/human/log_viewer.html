@@ -2,38 +2,47 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>buzzdetect experiment log</title>
 <style>
   :root {
     --bg: #f7f6f3;
     --panel: #ffffff;
     --border: #e2e0da;
+    --grid: #ecEAe4;
     --text: #2a2924;
     --muted: #7a776d;
     --mono-bg: #efece4;
     --up: #1f7a3f;
     --up-bg: #e6f4ea;
+    --up-rgb: 31, 122, 63;
     --down: #a4272c;
     --down-bg: #fbe9e9;
+    --down-rgb: 164, 39, 44;
     --neutral: #7a776d;
     --neutral-bg: #eeece6;
     --accent: #8a5a2f;
+    --accent-rgb: 138, 90, 47;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #1c1b18;
       --panel: #262420;
       --border: #3a382f;
+      --grid: #312f29;
       --text: #eae7de;
       --muted: #9c988a;
       --mono-bg: #302e27;
       --up: #6fcf8f;
       --up-bg: #1e3324;
+      --up-rgb: 111, 207, 143;
       --down: #e5898d;
       --down-bg: #3a2224;
+      --down-rgb: 229, 137, 141;
       --neutral: #9c988a;
       --neutral-bg: #33312a;
       --accent: #d3a06c;
+      --accent-rgb: 211, 160, 108;
     }
   }
   * { box-sizing: border-box; }
@@ -44,30 +53,36 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     line-height: 1.5;
   }
-  header {
-    padding: 28px 24px 16px;
-    max-width: 900px;
-    margin: 0 auto;
+  header, .toolbar, #status, #summary, #sourceStatus, main, .tabs {
+    max-width: 1100px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 24px;
+    padding-right: 24px;
   }
+  header { padding-top: 28px; padding-bottom: 8px; }
   h1 {
     font-size: 1.4rem;
     margin: 0 0 4px;
     letter-spacing: -0.01em;
   }
-  .subtitle {
-    color: var(--muted);
-    font-size: 0.9rem;
+  h2 {
+    font-size: 1.02rem;
+    margin: 28px 0 2px;
   }
+  .subtitle, .caption {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .caption { margin: 0 0 10px; }
   .toolbar {
-    max-width: 900px;
-    margin: 12px auto 0;
-    padding: 0 24px;
+    margin-top: 12px;
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
     align-items: center;
   }
-  input[type="search"] {
+  input[type="search"], input[type="text"] {
     flex: 1;
     min-width: 180px;
     padding: 8px 12px;
@@ -85,13 +100,30 @@
     color: var(--text);
     font-size: 0.85rem;
     cursor: pointer;
+    max-width: 100%;
   }
   .file-btn { position: relative; overflow: hidden; }
   .file-btn input[type="file"] {
     position: absolute; inset: 0; opacity: 0; cursor: pointer;
   }
+  .tabs {
+    margin-top: 16px;
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tabs button {
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 8px 14px;
+  }
+  .tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
   #dropzone {
-    max-width: 900px;
+    max-width: 1052px;
     margin: 16px auto;
     padding: 40px 24px;
     border: 2px dashed var(--border);
@@ -104,16 +136,17 @@
     border-color: var(--accent);
     color: var(--accent);
   }
-  #dropzone code {
+  code {
     background: var(--mono-bg);
     padding: 1px 6px;
     border-radius: 4px;
+    font-size: 0.85em;
   }
   main {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 8px 24px 60px;
+    padding-top: 8px;
+    padding-bottom: 60px;
   }
+  #cards { max-width: 900px; }
   .card {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -199,90 +232,229 @@
     font-size: 0.78rem;
     color: var(--muted);
   }
-  #status {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 0 24px;
-    color: var(--muted);
-    font-size: 0.85rem;
-  }
-  #summary {
-    max-width: 900px;
-    margin: 4px auto 0;
-    padding: 0 24px;
+  #status, #summary, #sourceStatus {
     color: var(--muted);
     font-size: 0.85rem;
   }
   .hidden { display: none !important; }
+
+  /* graphs */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    overflow-x: auto;
+  }
+  .panel svg { display: block; width: 100%; height: auto; }
+  svg text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+  svg .grid { stroke: var(--grid); }
+  svg .axis { stroke: var(--border); }
+  svg .hit { cursor: pointer; }
+  .legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin: 6px 0 0;
+  }
+  .legend svg { display: inline-block; vertical-align: middle; width: auto; }
+  .graph-controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin: 4px 0 10px;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .graph-controls select { padding: 5px 8px; }
+  table.heat {
+    border-collapse: separate;
+    border-spacing: 2px;
+    font-size: 0.78rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  table.heat th {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-weight: 600;
+    color: var(--muted);
+    padding: 2px 6px;
+    white-space: nowrap;
+  }
+  table.heat th.row { text-align: right; color: var(--text); cursor: pointer; }
+  table.heat th .sub { display: block; font-weight: 400; font-size: 0.72rem; }
+  table.heat td {
+    min-width: 58px;
+    padding: 3px 6px;
+    text-align: center;
+    border-radius: 4px;
+  }
+  table.heat td.head-col { outline: 1px solid var(--border); }
+  table.heat td.ref { color: var(--muted); }
+  .multiples {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 10px;
+  }
+  .multiples .panel { padding: 8px 10px; }
+  .multiples .title { font-size: 0.85rem; font-weight: 600; }
+  .multiples .title .sub { color: var(--muted); font-weight: 400; }
+  #tip {
+    position: fixed;
+    z-index: 10;
+    pointer-events: none;
+    max-width: 360px;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  }
+  #tip .muted { color: var(--muted); }
+  @media (max-width: 600px) {
+    header, .toolbar, #status, #summary, #sourceStatus, main, .tabs {
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+  }
 </style>
 </head>
 <body>
 
 <header>
   <h1>buzzdetect experiment log</h1>
-  <div class="subtitle">reads <code>log.jsonl</code> from the project root</div>
+  <div class="subtitle">reads <code>log.jsonl</code> from the project root; archived eras from <code>archive/&lt;era&gt;/</code></div>
 </header>
 
 <div class="toolbar">
-  <input type="text" id="fetchpath" placeholder="path or URL to fetch, e.g. ../log.jsonl">
+  <input type="text" id="fetchpath" placeholder="path or URL to fetch, e.g. ../../log.jsonl">
   <button id="reload-btn" title="retry fetching the path above">reload</button>
-  <label class="file-btn">load log.jsonl…
-    <input type="file" id="filepicker" accept=".jsonl,.json,.txt">
+  <label class="file-btn">load files…
+    <input type="file" id="filepicker" accept=".jsonl,.json,.txt,.md" multiple>
   </label>
+  <select id="era" title="archived eras are fetched from archive/ beside the log"></select>
 </div>
-<div id="sourceStatus" class="subtitle"></div>
+<div id="sourceStatus"></div>
 
-<div class="toolbar">
-  <input type="search" id="search" placeholder="filter by name, hypothesis, conclusion…">
-  <select id="sort">
-    <option value="file">file order</option>
-    <option value="date-desc">newest first</option>
-    <option value="date-asc">oldest first</option>
-    <option value="delta-desc">best delta first</option>
-  </select>
-  <select id="trustFilter">
-    <option value="">any trust</option>
-    <option value="clean">clean only</option>
-    <option value="caveated">caveated only</option>
-    <option value="artifact">artifact only</option>
-  </select>
+<div class="tabs">
+  <button data-tab="list" class="active">list</button>
+  <button data-tab="graphs">graphs</button>
 </div>
-
-<div id="status"></div>
-<div id="summary"></div>
 
 <div id="dropzone">
-  drop <code>log.jsonl</code> here, or use "load log.jsonl…" above<br>
-  <span style="font-size:0.82rem">the fetch path is remembered, and the last file you load is cached, so most opens need neither</span>
+  drop <code>log.jsonl</code> here, or use "load files…" above<br>
+  <span style="font-size:0.82rem">add an era's <code>per_fold.jsonl</code> and <code>DEPLOYMENTS.md</code> in the same drop for per-fold graphs and crop names.
+  The fetch path is remembered, and the last log you load is cached, so most opens need neither.</span>
 </div>
 
-<main id="cards"></main>
+<section id="tab-list">
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="filter by name, hypothesis, conclusion…">
+    <select id="sort">
+      <option value="file">file order</option>
+      <option value="date-desc">newest first</option>
+      <option value="date-asc">oldest first</option>
+      <option value="delta-desc">best delta first</option>
+    </select>
+    <select id="trustFilter">
+      <option value="">any trust</option>
+      <option value="clean">clean only</option>
+      <option value="caveated">caveated only</option>
+      <option value="artifact">artifact only</option>
+    </select>
+  </div>
+  <div id="status"></div>
+  <div id="summary"></div>
+  <main id="cards"></main>
+</section>
+
+<section id="tab-graphs" class="hidden">
+  <main>
+    <div class="graph-controls">
+      <label>sensitivity
+        <select id="quiet">
+          <option value="excl">excl. quiet (headline)</option>
+          <option value="incl">incl. quiet</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="hideArtifact" checked> hide artifact runs</label>
+    </div>
+
+    <h2>Headline, run by run</h2>
+    <p class="caption">Each run against its own logged baseline. Click a point to open its card.</p>
+    <div class="panel" id="g-headline"></div>
+    <div class="legend" id="g-headline-legend"></div>
+
+    <h2>Per-fold sensitivity</h2>
+    <p class="caption">Per-fold SD from eval sampling alone is ~0.03–0.13 (<code>tools/eval_sampling_sd.py</code>):
+      a single fold's delta is a lead to investigate, the headline column is the estimate.</p>
+    <div class="graph-controls">
+      <label>show
+        <select id="heatMode">
+          <option value="abs">sensitivity</option>
+          <option value="base">Δ vs each run's logged baseline</option>
+          <option value="ref">Δ vs one run…</option>
+        </select>
+      </label>
+      <select id="heatRef" class="hidden"></select>
+    </div>
+    <div class="panel" id="g-heat"></div>
+
+    <h2>Each fold across runs</h2>
+    <p class="caption">One panel per fold, runs in log order on a shared y axis; the dashed line is the era's first run.</p>
+    <div class="multiples" id="g-multiples"></div>
+
+    <h2>Compare two runs</h2>
+    <div class="graph-controls">
+      <select id="cmpA"></select> → <select id="cmpB"></select>
+    </div>
+    <div class="panel" id="g-compare"></div>
+  </main>
+</section>
+
+<div id="tip" class="hidden"></div>
 
 <script>
+const KEY = "sens_at_fpr0.005_persite";
+const KEY_INCL = KEY + "_inclquiet";
+const NS = "http://www.w3.org/2000/svg";
+
 let entries = [];
+let deployments = {};
+let eraSlugs = [];
 
 function fmt(n) {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
   return n.toFixed(3);
 }
+function signed(d) { return d == null ? "—" : `${d >= 0 ? "+" : ""}${d.toFixed(3)}`; }
 
 function deltaInfo(entry) {
-  const sens = entry.metrics && entry.metrics["sens_at_fpr0.005_persite"] !== undefined
-    ? entry.metrics["sens_at_fpr0.005_persite"] : undefined;
-  const base = entry.baseline && entry.baseline["sens_at_fpr0.005_persite"] !== undefined
-    ? entry.baseline["sens_at_fpr0.005_persite"] : null;
+  const sens = entry.metrics && entry.metrics[KEY] !== undefined ? entry.metrics[KEY] : undefined;
+  const base = entry.baseline && entry.baseline[KEY] !== undefined ? entry.baseline[KEY] : null;
   if (sens === undefined || base === null || base === undefined) {
     return { label: sens !== undefined ? fmt(sens) : "—", cls: "neutral", value: -Infinity };
   }
   const d = sens - base;
   const cls = d > 0.0005 ? "up" : d < -0.0005 ? "down" : "neutral";
-  const sign = d >= 0 ? "+" : "";
-  return { label: `${sign}${d.toFixed(3)}`, cls, value: d };
+  return { label: signed(d), cls, value: d };
 }
 
 const TRUST_LABEL = { clean: "clean", caveated: "⚠ caveated", artifact: "✕ artifact" };
 
-function render() {
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+/* ---------- list view ---------- */
+
+function renderList() {
   const q = document.getElementById("search").value.trim().toLowerCase();
   const sortMode = document.getElementById("sort").value;
   const trustMode = document.getElementById("trustFilter").value;
@@ -300,7 +472,6 @@ function render() {
   if (sortMode === "date-desc") list.sort((a, b) => (b.e.date || "").localeCompare(a.e.date || "") || b.i - a.i);
   else if (sortMode === "date-asc") list.sort((a, b) => (a.e.date || "").localeCompare(b.e.date || "") || a.i - b.i);
   else if (sortMode === "delta-desc") list.sort((a, b) => b.d.value - a.d.value);
-  // "file" order: leave as-is
 
   const cardsEl = document.getElementById("cards");
   cardsEl.innerHTML = "";
@@ -310,7 +481,7 @@ function render() {
     card.className = "card";
 
     const baselineNote = e.baseline
-      ? `vs <b>${e.baseline.model ?? "?"}</b> (${fmt(e.baseline["sens_at_fpr0.005_persite"])})`
+      ? `vs <b>${escapeHtml(e.baseline.model ?? "?")}</b> (${fmt(e.baseline[KEY])})`
       : "reference baseline";
 
     card.innerHTML = `
@@ -325,7 +496,7 @@ function render() {
       <div class="meta">
         <span class="badge ${d.cls}">${d.label}</span>
         ${e.trust ? `<span class="trust ${escapeHtml(e.trust)}">${escapeHtml(TRUST_LABEL[e.trust] ?? e.trust)}</span>` : ""}
-        <span>sens@fpr0.005 = ${fmt(e.metrics ? e.metrics["sens_at_fpr0.005_persite"] : null)}</span>
+        <span>sens@fpr0.005 = ${fmt(e.metrics ? e.metrics[KEY] : null)}</span>
         <span>·</span>
         <span>${baselineNote}</span>
       </div>
@@ -339,11 +510,337 @@ function render() {
     entries.length ? `${list.length} of ${entries.length} experiments shown` : "";
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[c]));
+/* ---------- graph helpers ---------- */
+
+function S(tag, attrs = {}, parent = null, text = null) {
+  const el = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) if (v !== null && v !== undefined) el.setAttribute(k, v);
+  if (text !== null) el.textContent = text;
+  if (parent) parent.appendChild(el);
+  return el;
 }
+function lin(d0, d1, r0, r1) { return v => r0 + (v - d0) / ((d1 - d0) || 1) * (r1 - r0); }
+function ticks(lo, hi, n = 5) {
+  const span = (hi - lo) || 1;
+  let step = Math.pow(10, Math.floor(Math.log10(span / n)));
+  const err = span / n / step;
+  if (err >= 7.5) step *= 10; else if (err >= 3.5) step *= 5; else if (err >= 1.5) step *= 2;
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(6));
+  return out;
+}
+function yAxis(svg, y, lo, hi, x0, x1) {
+  for (const t of ticks(lo, hi)) {
+    S("line", { x1: x0, x2: x1, y1: y(t), y2: y(t), class: "grid" }, svg);
+    S("text", { x: x0 - 6, y: y(t) + 4, "text-anchor": "end" }, svg, t.toFixed(2));
+  }
+}
+
+const tipEl = document.getElementById("tip");
+function tip(el, html) {
+  el.addEventListener("mouseenter", () => { tipEl.innerHTML = html; tipEl.classList.remove("hidden"); });
+  el.addEventListener("mousemove", ev => {
+    const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+    let x = ev.clientX + 14, y = ev.clientY + 14;
+    if (x + w > window.innerWidth - 8) x = ev.clientX - w - 14;
+    if (y + h > window.innerHeight - 8) y = ev.clientY - h - 14;
+    tipEl.style.left = Math.max(4, x) + "px";
+    tipEl.style.top = Math.max(4, y) + "px";
+  });
+  el.addEventListener("mouseleave", () => tipEl.classList.add("hidden"));
+}
+
+const norm = s => String(s ?? "").toLowerCase().replace(/_/g, "-");
+function metricKey() { return document.getElementById("quiet").value === "incl" ? KEY_INCL : KEY; }
+function headlineOf(e, key = metricKey()) { return e?.metrics?.[key] ?? null; }
+function foldOf(e, fold, key = metricKey()) { return e?.per_fold?.[fold]?.[key] ?? null; }
+function byName(name) { return entries.find(e => norm(e.name) === norm(name)); }
+function baselineValue(e, key = metricKey()) { return e?.baseline?.[key] ?? null; }
+
+function graphEntries() {
+  const hide = document.getElementById("hideArtifact").checked;
+  return entries.filter(e => !(hide && e.trust === "artifact"));
+}
+function foldList(list) {
+  const seen = [];
+  for (const e of list) for (const f of Object.keys(e.per_fold || {})) if (!seen.includes(f)) seen.push(f);
+  return seen;
+}
+function foldLabel(fold) {
+  const id = fold.split("/").pop();
+  const dep = deployments[fold];
+  return { target: dep ? dep.target : "", id, full: fold };
+}
+function trustFill(e) {
+  return e.trust === "caveated" ? "var(--accent)" : e.trust === "artifact" ? "var(--down)" : "var(--text)";
+}
+function entryTip(e, v, extra = "") {
+  const b = baselineValue(e);
+  const isBase = norm(e.baseline?.model) === norm(e.name);
+  const conc = e.conclusion ? escapeHtml(e.conclusion.length > 280 ? e.conclusion.slice(0, 280) + "…" : e.conclusion) : "";
+  return `<b>${escapeHtml(e.name)}</b> <span class="muted">${escapeHtml(e.date ?? "")} · ${escapeHtml(e.trust ?? "")}</span><br>
+    ${fmt(v)}${!isBase && b != null && v != null ? ` · ${signed(v - b)} vs ${escapeHtml(e.baseline.model)}` : ""}${extra}
+    ${conc ? `<div class="muted" style="margin-top:4px">${conc}</div>` : ""}`;
+}
+function openCard(name) {
+  document.getElementById("search").value = name;
+  setTab("list");
+  renderList();
+}
+function dumbbellColor(d) { return d > 0.0005 ? "var(--up)" : d < -0.0005 ? "var(--down)" : "var(--muted)"; }
+
+/* ---------- headline chart ---------- */
+
+function renderHeadline() {
+  const box = document.getElementById("g-headline");
+  box.innerHTML = "";
+  const list = graphEntries().filter(e => headlineOf(e) != null);
+  if (!list.length) { box.textContent = "no entries carry this metric"; return; }
+
+  const W = 1040, H = 360, ml = 48, mr = 14, mt = 14, mb = 120;
+  const vals = list.flatMap(e => [headlineOf(e), baselineValue(e)]).filter(v => v != null);
+  const lo = Math.max(0, Math.min(...vals) - 0.02), hi = Math.min(1, Math.max(...vals) + 0.02);
+  const step = (W - ml - mr) / list.length;
+  const x = i => ml + step * (i + 0.5);
+  const y = lin(lo, hi, H - mb, mt);
+  const svg = S("svg", { viewBox: `0 0 ${W} ${H}` }, box);
+  yAxis(svg, y, lo, hi, ml, W - mr);
+
+  // best so far, over the runs the chart shows
+  let best = -Infinity, pts = [];
+  list.forEach((e, i) => {
+    best = Math.max(best, headlineOf(e));
+    pts.push(`${x(i) - step / 2},${y(best)}`, `${x(i) + step / 2},${y(best)}`);
+  });
+  S("polyline", { points: pts.join(" "), fill: "none", stroke: "var(--muted)", "stroke-dasharray": "3 3", "stroke-width": 1 }, svg);
+
+  list.forEach((e, i) => {
+    const v = headlineOf(e), b = baselineValue(e);
+    const isBase = norm(e.baseline?.model) === norm(e.name);
+    if (b != null && !isBase) {
+      S("line", { x1: x(i), x2: x(i), y1: y(b), y2: y(v), stroke: dumbbellColor(v - b), "stroke-width": 2 }, svg);
+      S("line", { x1: x(i) - 6, x2: x(i) + 6, y1: y(b), y2: y(b), stroke: "var(--muted)", "stroke-width": 2 }, svg);
+    }
+    S("circle", { cx: x(i), cy: y(v), r: 5, fill: trustFill(e), stroke: "var(--panel)", "stroke-width": 1.5 }, svg);
+    const lbl = S("text", { x: x(i), y: H - mb + 14, "text-anchor": "end", style: list.length > 30 ? "font-size: 9px" : null,
+      transform: `rotate(-45 ${x(i)} ${H - mb + 14})` }, svg, e.name.length > 26 ? e.name.slice(0, 25) + "…" : e.name);
+    const hit = S("rect", { x: x(i) - step / 2, y: mt, width: step, height: H - mt, fill: "transparent", class: "hit" }, svg);
+    tip(hit, entryTip(e, v));
+    hit.addEventListener("click", () => openCard(e.name));
+    lbl.style.pointerEvents = "none";
+  });
+
+  document.getElementById("g-headline-legend").innerHTML = `
+    <span><svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="var(--text)"/></svg> clean</span>
+    <span><svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="var(--accent)"/></svg> caveated</span>
+    <span><svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="var(--down)"/></svg> artifact</span>
+    <span><svg width="16" height="14"><line x1="2" x2="14" y1="7" y2="7" stroke="var(--muted)" stroke-width="2"/></svg> logged baseline, joined to the run</span>
+    <span><svg width="22" height="14"><line x1="1" x2="21" y1="7" y2="7" stroke="var(--muted)" stroke-dasharray="3 3"/></svg> best so far</span>`;
+}
+
+/* ---------- per-fold heatmap ---------- */
+
+function renderHeat() {
+  const box = document.getElementById("g-heat");
+  box.innerHTML = "";
+  const list = graphEntries().filter(e => e.per_fold);
+  if (!list.length) { box.textContent = "no per-fold data in this era (older eras need their per_fold.jsonl)"; return; }
+  const folds = foldList(list);
+  const mode = document.getElementById("heatMode").value;
+  const refSel = document.getElementById("heatRef");
+  refSel.classList.toggle("hidden", mode !== "ref");
+  const ref = mode === "ref" ? byName(refSel.value) : null;
+
+  const reference = e => mode === "base" ? byName(e.baseline?.model) : ref;
+  const absMax = Math.max(...list.flatMap(e => folds.map(f => foldOf(e, f) ?? 0)), headlineOf(list[0]) ?? 0) || 1;
+
+  const t = document.createElement("table");
+  t.className = "heat";
+  const hr = t.insertRow();
+  hr.appendChild(document.createElement("th"));
+  for (const f of folds) {
+    const th = document.createElement("th");
+    const l = foldLabel(f);
+    th.innerHTML = `${escapeHtml(l.target || l.id)}<span class="sub">${l.target ? escapeHtml(l.id) : "&nbsp;"}</span>`;
+    th.title = f;
+    hr.appendChild(th);
+  }
+  const hh = document.createElement("th");
+  hh.innerHTML = `headline<span class="sub">mean</span>`;
+  hr.appendChild(hh);
+
+  for (const e of list) {
+    const tr = t.insertRow();
+    const th = document.createElement("th");
+    th.className = "row";
+    th.textContent = e.name;
+    th.addEventListener("click", () => openCard(e.name));
+    tr.appendChild(th);
+    const r = reference(e);
+    // an era anchor has no baseline at all: show its values plainly, not as "?"
+    const isRef = mode !== "abs" && ((r && norm(r.name) === norm(e.name))
+      || (mode === "base" && !r && baselineValue(e) == null));
+    const cells = folds.map(f => [f, foldOf(e, f), r ? foldOf(r, f) : null]);
+    cells.push(["headline", headlineOf(e), r ? headlineOf(r) : (mode === "base" ? baselineValue(e) : null)]);
+    for (const [f, v, rv] of cells) {
+      const td = tr.insertCell();
+      if (f === "headline") td.className = "head-col";
+      if (v == null) { td.textContent = "·"; td.classList.add("ref"); continue; }
+      if (mode === "abs") {
+        td.textContent = v.toFixed(3);
+        td.style.background = `rgba(var(--accent-rgb), ${(0.08 + 0.72 * v / absMax).toFixed(3)})`;
+        tip(td, `<b>${escapeHtml(e.name)}</b><br>${escapeHtml(f)}<br>${fmt(v)}`);
+      } else if (isRef) {
+        td.textContent = v.toFixed(3);
+        td.classList.add("ref");
+        tip(td, `<b>${escapeHtml(e.name)}</b> ${r ? "is the reference" : "has no baseline"}<br>${escapeHtml(f)}: ${fmt(v)}`);
+      } else if (rv == null) {
+        td.textContent = "?";
+        td.classList.add("ref");
+        tip(td, `<b>${escapeHtml(e.name)}</b><br>${escapeHtml(f)}: ${fmt(v)}<br><span class="muted">no reference value${mode === "base" ? ` (baseline ${escapeHtml(e.baseline?.model ?? "?")} has no per-fold row here)` : ""}</span>`);
+      } else {
+        const d = v - rv;
+        td.textContent = signed(d);
+        const a = Math.min(Math.abs(d) / 0.15, 1) * 0.75;
+        td.style.background = `rgba(var(${d >= 0 ? "--up-rgb" : "--down-rgb"}), ${a.toFixed(3)})`;
+        tip(td, `<b>${escapeHtml(e.name)}</b> vs ${escapeHtml(mode === "base" ? e.baseline.model : r.name)}<br>${escapeHtml(f)}<br>${fmt(rv)} → ${fmt(v)} (${signed(d)})`);
+      }
+    }
+  }
+  box.appendChild(t);
+}
+
+/* ---------- small multiples ---------- */
+
+function renderMultiples() {
+  const box = document.getElementById("g-multiples");
+  box.innerHTML = "";
+  const list = graphEntries().filter(e => e.per_fold);
+  if (!list.length) { box.textContent = "no per-fold data in this era"; return; }
+  const folds = foldList(list);
+  const series = [{ key: "headline", get: e => headlineOf(e), title: "headline", sub: "mean over folds" }]
+    .concat(folds.map(f => { const l = foldLabel(f); return { key: f, get: e => foldOf(e, f), title: l.target || l.id, sub: l.target ? l.id : "" }; }));
+  const hi = Math.min(1, Math.max(...series.flatMap(s => list.map(s.get)).filter(v => v != null)) + 0.03);
+  const W = 280, H = 150, ml = 32, mr = 8, mt = 8, mb = 16;
+  const x = lin(0, Math.max(list.length - 1, 1), ml + 4, W - mr - 4);
+  const y = lin(0, hi, H - mb, mt);
+
+  for (const s of series) {
+    const panel = document.createElement("div");
+    panel.className = "panel";
+    panel.innerHTML = `<div class="title">${escapeHtml(s.title)} <span class="sub">${escapeHtml(s.sub)}</span></div>`;
+    if (s.key !== "headline") panel.title = s.key;
+    const svg = S("svg", { viewBox: `0 0 ${W} ${H}` }, panel);
+    yAxis(svg, y, 0, hi, ml, W - mr);
+    const first = list.map(s.get).find(v => v != null);
+    if (first != null) S("line", { x1: ml, x2: W - mr, y1: y(first), y2: y(first), stroke: "var(--muted)", "stroke-dasharray": "3 3" }, svg);
+    // a missing value breaks the line rather than bridging it
+    let seg = [];
+    const flush = () => { if (seg.length > 1) S("polyline", { points: seg.join(" "), fill: "none", stroke: "var(--accent)", "stroke-width": 1.5 }, svg); seg = []; };
+    list.forEach((e, i) => { const v = s.get(e); if (v == null) flush(); else seg.push(`${x(i)},${y(v)}`); });
+    flush();
+    list.forEach((e, i) => {
+      const v = s.get(e);
+      if (v == null) return;
+      S("circle", { cx: x(i), cy: y(v), r: 2.8, fill: trustFill(e) }, svg);
+      const hit = S("circle", { cx: x(i), cy: y(v), r: 8, fill: "transparent", class: "hit" }, svg);
+      const b = s.key === "headline" ? baselineValue(e) : foldOf(byName(e.baseline?.model), s.key);
+      const isBase = norm(e.baseline?.model) === norm(e.name);
+      tip(hit, `<b>${escapeHtml(e.name)}</b><br>${escapeHtml(s.title)}: ${fmt(v)}${!isBase && b != null ? ` · ${signed(v - b)} vs ${escapeHtml(e.baseline.model)}` : ""}`);
+      hit.addEventListener("click", () => openCard(e.name));
+    });
+    box.appendChild(panel);
+  }
+}
+
+/* ---------- compare ---------- */
+
+function fillCompareSelects() {
+  const list = entries.filter(e => e.metrics);
+  const A = document.getElementById("cmpA"), B = document.getElementById("cmpB"), R = document.getElementById("heatRef");
+  const prev = [A.value, B.value, R.value];
+  for (const sel of [A, B, R]) {
+    sel.innerHTML = "";
+    for (const e of list) sel.add(new Option(e.name, e.name));
+  }
+  const last = list[list.length - 1];
+  const lastBase = last && byName(last.baseline?.model);
+  A.value = byName(prev[0]) ? prev[0] : (lastBase ? lastBase.name : list[0]?.name);
+  B.value = byName(prev[1]) ? prev[1] : last?.name;
+  R.value = byName(prev[2]) ? prev[2] : list[0]?.name;
+}
+
+function renderCompare() {
+  const box = document.getElementById("g-compare");
+  box.innerHTML = "";
+  const a = byName(document.getElementById("cmpA").value), b = byName(document.getElementById("cmpB").value);
+  if (!a || !b) return;
+  const folds = foldList([a, b]);
+  const rows = folds.map(f => ({ f, l: foldLabel(f), va: foldOf(a, f), vb: foldOf(b, f) }));
+  rows.push({ f: "headline", l: { target: "headline", id: "mean over folds" }, va: headlineOf(a), vb: headlineOf(b), head: true });
+
+  const W = 1040, rowH = 30, ml = 200, mr = 90, mt = 22, mb = 24;
+  const H = mt + rowH * rows.length + mb;
+  const vals = rows.flatMap(r => [r.va, r.vb]).filter(v => v != null);
+  const hi = Math.min(1, (Math.max(...vals, 0.1)) + 0.03);
+  const x = lin(0, hi, ml, W - mr);
+  const svg = S("svg", { viewBox: `0 0 ${W} ${H}` }, box);
+  for (const t of ticks(0, hi)) {
+    S("line", { x1: x(t), x2: x(t), y1: mt - 6, y2: H - mb, class: "grid" }, svg);
+    S("text", { x: x(t), y: H - mb + 14, "text-anchor": "middle" }, svg, t.toFixed(2));
+  }
+  S("text", { x: W - mr + 8, y: mt - 8 }, svg, "Δ");
+  rows.forEach((r, i) => {
+    const cy = mt + rowH * (i + 0.5);
+    if (r.head) S("line", { x1: 8, x2: W - 8, y1: cy - rowH / 2, y2: cy - rowH / 2, class: "axis" }, svg);
+    const t = S("text", { x: ml - 10, y: cy - 1, "text-anchor": "end", style: `fill: var(--text); font-weight: ${r.head ? 700 : 600}` }, svg, r.l.target || r.l.id);
+    S("text", { x: ml - 10, y: cy + 11, "text-anchor": "end", style: "font-size: 10px" }, svg, r.l.target ? r.l.id : "");
+    if (r.va != null && r.vb != null) {
+      const d = r.vb - r.va;
+      S("line", { x1: x(r.va), x2: x(r.vb), y1: cy, y2: cy, stroke: dumbbellColor(d), "stroke-width": 3 }, svg);
+      S("text", { x: W - mr + 8, y: cy + 4, style: `fill: ${dumbbellColor(d)}; font-family: ui-monospace, Menlo, monospace` }, svg, signed(d));
+    } else {
+      S("text", { x: W - mr + 8, y: cy + 4 }, svg, "—");
+    }
+    if (r.va != null) S("circle", { cx: x(r.va), cy, r: 5, fill: "var(--panel)", stroke: "var(--text)", "stroke-width": 2 }, svg);
+    if (r.vb != null) S("circle", { cx: x(r.vb), cy, r: 5, fill: "var(--text)" }, svg);
+    const hit = S("rect", { x: 0, y: cy - rowH / 2, width: W, height: rowH, fill: "transparent" }, svg);
+    tip(hit, `<b>${escapeHtml(r.head ? "headline" : r.f)}</b><br>${escapeHtml(a.name)}: ${fmt(r.va)}<br>${escapeHtml(b.name)}: ${fmt(r.vb)}${r.va != null && r.vb != null ? `<br>Δ ${signed(r.vb - r.va)}` : ""}`);
+    t.style.pointerEvents = "none";
+  });
+  const leg = document.createElement("div");
+  leg.className = "legend";
+  leg.innerHTML = `
+    <span><svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="var(--panel)" stroke="var(--text)" stroke-width="2"/></svg> ${escapeHtml(a.name)}</span>
+    <span><svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="var(--text)"/></svg> ${escapeHtml(b.name)}</span>`;
+  box.appendChild(leg);
+}
+
+function renderGraphs() {
+  if (document.getElementById("tab-graphs").classList.contains("hidden")) return;
+  renderHeadline();
+  renderHeat();
+  renderMultiples();
+  renderCompare();
+}
+
+function render() {
+  renderList();
+  renderGraphs();
+}
+
+/* ---------- tabs ---------- */
+
+function setTab(name) {
+  for (const b of document.querySelectorAll(".tabs button")) b.classList.toggle("active", b.dataset.tab === name);
+  document.getElementById("tab-list").classList.toggle("hidden", name !== "list");
+  document.getElementById("tab-graphs").classList.toggle("hidden", name !== "graphs");
+  try { localStorage.setItem(LS_TAB, name); } catch (e) {}
+  if (name === "graphs") renderGraphs();
+}
+for (const b of document.querySelectorAll(".tabs button")) b.addEventListener("click", () => setTab(b.dataset.tab));
+
+/* ---------- loading ---------- */
 
 function parseJsonl(text) {
   return text.split("\n")
@@ -353,9 +850,31 @@ function parseJsonl(text) {
     .filter(Boolean);
 }
 
+// DEPLOYMENTS.md's table: | `fold` | target | site | date |
+function parseDeployments(text) {
+  const out = {};
+  for (const m of text.matchAll(/^\|\s*`([^`]+)`\s*\|([^|]*)\|([^|]*)\|([^|]*)\|/gm)) {
+    out[m[1]] = { target: m[2].trim(), site: m[3].trim(), date: m[4].trim() };
+  }
+  return out;
+}
+
+// an archived era's per_fold.jsonl: {name, model_dir, per_fold}, joined by name
+function mergePerFold(list, sidecar) {
+  const byN = new Map(sidecar.map(r => [r.name, r]));
+  for (const e of list) {
+    const r = byN.get(e.name);
+    if (r && !e.per_fold) { e.per_fold = r.per_fold; e.per_fold_source = r.model_dir; }
+  }
+  return list;
+}
+
 const LS_PATH = "buzzdetect_log_viewer.fetch_path";
 const LS_TEXT = "buzzdetect_log_viewer.cached_text";
 const LS_META = "buzzdetect_log_viewer.cached_meta"; // {source, time}
+const LS_DEPLOY = "buzzdetect_log_viewer.deployments";
+const LS_TAB = "buzzdetect_log_viewer.tab";
+const DEFAULT_PATH = "../../log.jsonl";
 
 function relTime(ms) {
   const s = Math.round((Date.now() - ms) / 1000);
@@ -367,61 +886,125 @@ function relTime(ms) {
   return `${Math.round(h / 24)}d ago`;
 }
 
-function loadText(text, opts = {}) {
-  entries = parseJsonl(text);
+function loadEntries(list, opts = {}) {
+  entries = list;
   document.getElementById("dropzone").classList.add("hidden");
   const best = entries.reduce((acc, e) => {
-    const v = e.metrics ? e.metrics["sens_at_fpr0.005_persite"] : null;
+    const v = e.metrics ? e.metrics[KEY] : null;
     return v != null && (!acc || v > acc.v) ? { v, name: e.name } : acc;
   }, null);
-  document.getElementById("summary").textContent = best
+  const nFold = entries.filter(e => e.per_fold).length;
+  document.getElementById("summary").textContent = (best
     ? `${entries.length} experiments logged · best sens@fpr0.005: ${fmt(best.v)} (${best.name})`
-    : `${entries.length} experiments logged`;
+    : `${entries.length} experiments logged`) + ` · ${nFold} with per-fold results`;
 
   const statusEl = document.getElementById("sourceStatus");
   if (opts.fromCache) {
     statusEl.textContent = `showing a cached copy (${opts.source}, loaded ${relTime(opts.time)}) — reload or drop a fresh file to update`;
   } else {
     statusEl.textContent = `loaded from ${opts.source}`;
-    try {
-      localStorage.setItem(LS_TEXT, text);
-      localStorage.setItem(LS_META, JSON.stringify({ source: opts.source, time: Date.now() }));
-    } catch (e) { /* storage unavailable or full; not fatal */ }
+    if (opts.cacheText) {
+      try {
+        localStorage.setItem(LS_TEXT, opts.cacheText);
+        localStorage.setItem(LS_META, JSON.stringify({ source: opts.source, time: Date.now() }));
+      } catch (e) { /* storage unavailable or full; not fatal */ }
+    }
   }
+  fillCompareSelects();
   render();
 }
 
-document.getElementById("search").addEventListener("input", render);
-document.getElementById("sort").addEventListener("change", render);
-document.getElementById("trustFilter").addEventListener("change", render);
-document.getElementById("filepicker").addEventListener("change", (ev) => {
-  const f = ev.target.files[0];
-  if (!f) return;
-  f.text().then(text => loadText(text, { source: f.name }));
-});
+function loadDeployments(text) {
+  deployments = parseDeployments(text);
+  try { localStorage.setItem(LS_DEPLOY, text); } catch (e) {}
+}
+
+// a drop or pick can hold a log, an era's per_fold.jsonl and DEPLOYMENTS.md together
+async function loadFiles(files) {
+  let log = null, logName = "", sidecar = [];
+  for (const f of files) {
+    const text = await f.text();
+    if (/\.md$/i.test(f.name)) { loadDeployments(text); continue; }
+    const rows = parseJsonl(text);
+    if (rows.length && rows.every(r => r.per_fold && !r.metrics)) sidecar = sidecar.concat(rows);
+    else { log = { rows, text }; logName = f.name; }
+  }
+  document.getElementById("era").value = "";
+  if (log) loadEntries(mergePerFold(log.rows, sidecar), { source: logName, cacheText: log.text });
+  else if (sidecar.length) { mergePerFold(entries, sidecar); loadEntries(entries, { source: "per_fold.jsonl merged" }); }
+  else render();
+}
+
+document.getElementById("search").addEventListener("input", renderList);
+document.getElementById("sort").addEventListener("change", renderList);
+document.getElementById("trustFilter").addEventListener("change", renderList);
+for (const id of ["quiet", "hideArtifact", "heatMode", "heatRef"]) {
+  document.getElementById(id).addEventListener("change", renderGraphs);
+}
+for (const id of ["cmpA", "cmpB"]) document.getElementById(id).addEventListener("change", renderCompare);
+document.getElementById("filepicker").addEventListener("change", ev => loadFiles([...ev.target.files]));
 
 const dz = document.getElementById("dropzone");
 ["dragenter", "dragover"].forEach(evt =>
-  dz.addEventListener(evt, e => { e.preventDefault(); dz.classList.add("drag"); }));
+  document.addEventListener(evt, e => { e.preventDefault(); dz.classList.add("drag"); }));
 ["dragleave", "drop"].forEach(evt =>
-  dz.addEventListener(evt, e => { e.preventDefault(); dz.classList.remove("drag"); }));
-dz.addEventListener("drop", e => {
-  const f = e.dataTransfer.files[0];
-  if (f) f.text().then(text => loadText(text, { source: f.name }));
+  document.addEventListener(evt, e => { e.preventDefault(); dz.classList.remove("drag"); }));
+document.addEventListener("drop", e => {
+  const files = [...(e.dataTransfer?.files || [])];
+  if (files.length) loadFiles(files);
 });
 
 const pathInput = document.getElementById("fetchpath");
-pathInput.value = localStorage.getItem(LS_PATH) || "../log.jsonl";
+let storedPath = null;
+try { storedPath = localStorage.getItem(LS_PATH); } catch (e) {}
+// "../log.jsonl" was the default before the viewer moved into tools/human/
+pathInput.value = !storedPath || storedPath === "../log.jsonl" ? DEFAULT_PATH : storedPath;
 pathInput.addEventListener("change", () => {
   try { localStorage.setItem(LS_PATH, pathInput.value.trim()); } catch (e) {}
 });
 
+const rootOf = path => path.replace(/[^/]*$/, "");
+const fetchText = p => fetch(p).then(r => r.ok ? r.text() : Promise.reject(new Error("http " + r.status)));
+
+// the era list comes from archive/README.md, the only listing a browser can fetch
+function loadEraList(root) {
+  const sel = document.getElementById("era");
+  const fill = () => {
+    const cur = sel.value;
+    sel.innerHTML = "";
+    sel.add(new Option("current era", "current"));
+    for (const s of eraSlugs) sel.add(new Option(s, s));
+    sel.add(new Option("(dropped files)", ""));
+    sel.value = [...sel.options].some(o => o.value === cur) ? cur : "current";
+  };
+  fetchText(root + "archive/README.md")
+    .then(text => {
+      eraSlugs = [...new Set([...text.matchAll(/\b(\d{4}-\d{2}(?:-\d{2})?_[A-Za-z0-9-]+)\//g)].map(m => m[1]))].sort();
+      fill();
+    })
+    .catch(fill);
+}
+
+document.getElementById("era").addEventListener("change", ev => {
+  const slug = ev.target.value;
+  if (slug === "current") return attemptLoad();
+  if (!slug) return;
+  const root = rootOf(pathInput.value.trim() || DEFAULT_PATH) + `archive/${slug}/`;
+  Promise.all([fetchText(root + "log.jsonl"), fetchText(root + "per_fold.jsonl").catch(() => "")])
+    .then(([log, pf]) => loadEntries(mergePerFold(parseJsonl(log), parseJsonl(pf)), { source: root + "log.jsonl" }))
+    .catch(() => {
+      document.getElementById("sourceStatus").textContent =
+        `couldn't fetch ${root}log.jsonl — drop it (and its per_fold.jsonl) here instead`;
+    });
+});
+
 function attemptLoad() {
-  const path = pathInput.value.trim() || "../log.jsonl";
+  const path = pathInput.value.trim() || DEFAULT_PATH;
   try { localStorage.setItem(LS_PATH, path); } catch (e) {}
-  fetch(path)
-    .then(r => r.ok ? r.text() : Promise.reject(new Error("http " + r.status)))
-    .then(text => loadText(text, { source: path }))
+  document.getElementById("era").value = "current";
+  fetchText(rootOf(path) + "DEPLOYMENTS.md").then(loadDeployments).catch(() => {});
+  fetchText(path)
+    .then(text => loadEntries(parseJsonl(text), { source: path, cacheText: text }))
     .catch(() => {
       let cachedText, cachedMeta;
       try {
@@ -429,7 +1012,7 @@ function attemptLoad() {
         cachedMeta = JSON.parse(localStorage.getItem(LS_META) || "null");
       } catch (e) {}
       if (cachedText && cachedMeta) {
-        loadText(cachedText, { fromCache: true, source: cachedMeta.source, time: cachedMeta.time });
+        loadEntries(parseJsonl(cachedText), { fromCache: true, source: cachedMeta.source, time: cachedMeta.time });
       } else {
         document.getElementById("dropzone").classList.remove("hidden");
         document.getElementById("sourceStatus").textContent =
@@ -438,7 +1021,16 @@ function attemptLoad() {
     });
 }
 
-document.getElementById("reload-btn").addEventListener("click", attemptLoad);
+try { const d = localStorage.getItem(LS_DEPLOY); if (d) deployments = parseDeployments(d); } catch (e) {}
+loadEraList(rootOf(pathInput.value.trim() || DEFAULT_PATH));
+document.getElementById("reload-btn").addEventListener("click", () => {
+  loadEraList(rootOf(pathInput.value.trim() || DEFAULT_PATH));
+  attemptLoad();
+});
+let startTab = "list";
+try { startTab = localStorage.getItem(LS_TAB) || "list"; } catch (e) {}
+if (["list", "graphs"].includes(location.hash.slice(1))) startTab = location.hash.slice(1);
+setTab(startTab);
 attemptLoad();
 </script>
 

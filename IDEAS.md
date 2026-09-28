@@ -274,6 +274,71 @@ list for Luke. Scope it when full-day raw audio access is worth an extraction.
 
 ---
 
+# Low priority — deploy speed, not accuracy
+
+**Luke, 2026-09-25: low priority, "mostly fun".** Neither item aims at the
+headline. buzzdetect analyses are IO-bound on slow drives, but on NVMe the
+network's compute should be a material share of the time. Pick these up only
+when the queue above is empty or blocked, never ahead of it. **Profile first:**
+time a deploy run on NVMe split into decode/front end vs ONNX inference. If
+inference is a small share, both items stop there. In stage 2 the GPU sat ~10%
+busy, held back by the CPU (CLAUDE.md).
+
+## 26. Post-training int8 quantization of the shipped ONNX graph
+
+*Evidence: untagged proposal. Background: per-channel PTQ of MobileNetV1
+usually costs little; per-tensor PTQ of depthwise convs is the known failure.*
+
+Quantize the exported model (`04_deploy/export_onnx.py` output) with
+onnxruntime's static quantization. Use per-channel weights, calibrated on
+training-pool frames. Nothing gets installed into `buzzdetect-train`, and
+nothing retrains. Measure two things. **Speed:** CPU and GPU, fp32 vs int8, on
+NVMe. **Fidelity:** score every rotating fold with both graphs and compare the
+headline, per-fold sensitivity, **and each fold's threshold**. `1_95`'s
+threshold is set by one jet flyover, so rounding noise can move a threshold
+while mean agreement looks fine.
+
+*Escalation, only if PTQ loses fidelity:* quantization-aware training (fake-
+quant nodes in fp32 training). `tensorflow_model_optimization` does not
+support Keras 3. Any QAT path needs a separate env (TF pin hazard) or a
+PyTorch/ONNX route, so scope it before building.
+
+*Falsifier:* if PTQ gives under ~1.5x end-to-end on NVMe, close it. If it moves
+any fold's sensitivity beyond that fold's eval-sampling SD, don't ship it.
+
+## 27. Distil the fine-tuned model into a smaller MobileNet student
+
+*Evidence: untagged proposal. YAMNet's embedding is ~89% zeros per frame
+(`archive/2026-09-08_cv-medium-v2/notes/recorder-center.md`). That is
+activation sparsity, not dead channels, so structured pruning of frozen
+YAMNet frees under ~10% of the multiply-adds (last layer only). Distillation
+is the route that actually shrinks the network.*
+
+**Data.** Labels are not the limit. ~72k annotated frames are far too few to
+train from scratch, but the teacher labels raw audio, and **~200,000 h of raw
+deployment audio exists** (Luke, 2026-09-25). The risk is rarity: buzz and jet
+frames are a tiny share of raw audio. Oversample frames where the teacher fires
+or is uncertain, and add the annotated frames with true labels as a second loss
+term.
+
+**Design.**
+- Teacher: the current shipped/lead model.
+- Student: a MobileNetV1 at width 0.5 (~4x fewer multiply-adds), or YAMNet
+  with slimmed late layers. Initialise it from YAMNet's weights, not random.
+- Loss: match the teacher's layer-11 map (6×4×512) plus its 15 logits.
+  Feature distillation gives much more signal per frame than logits alone.
+- Pipeline: cache the teacher's outputs once, like stage 2 embeddings. A
+  student this small trains on the 1650.
+- Evaluation: the student goes through the normal CV against the teacher.
+  Small students lose rare cases first, so read `1_95`/`1_150`/willard before
+  the headline. Pairs naturally with item 26 (quantize the student).
+
+*Falsifier:* if the student loses more than MDE (~0.027) on the headline, or
+any hard fold drops beyond its SD, at <3x end-to-end speedup on NVMe, the trade
+isn't worth it.
+
+---
+
 # Needs Luke
 
 ## 8. night-negatives — blocked on a data decision

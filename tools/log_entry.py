@@ -7,6 +7,10 @@ of taking numbers by hand. The headline is `sensitivity_exclquiet`, and the
 inclusive figure rides alongside it under `..._inclquiet`. `main_commit`,
 `branch` and `date` are filled in from git and the name unless overridden.
 
+`per_fold` carries each held-out fold's sensitivity under the same two keys,
+so the log alone can be read (and graphed, tools/human/log_viewer.html) per
+fold after the model dir is gone. The baseline's folds live on its own entry.
+
     conda run -n buzzdetect-train python tools/log_entry.py \\
       --name class-weight-fix \\
       --model .local/worktrees/class-weight-fix/models/class_weight_fix \\
@@ -31,7 +35,7 @@ from datetime import date
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from compare_folds import read_headline, SENS_COL, SENS_COL_INCL
+from compare_folds import read_fold_sens, read_headline, SENS_COL, SENS_COL_INCL
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TRUST_VALUES = ('clean', 'caveated', 'artifact')
@@ -72,6 +76,12 @@ def build_entry(name, model, baseline_model, hypothesis, trust, conclusion,
             out[metric_key_incl] = round(float(incl), 3)
         return out
 
+    def per_fold(model):
+        return {fold: {key: (None if v.get(col) is None else round(v[col], 3))
+                       for key, col in ((metric_key, SENS_COL), (metric_key_incl, SENS_COL_INCL))
+                       if col in v}
+                for fold, v in read_fold_sens(model, fpr).items()}
+
     return {
         'name': name,
         'branch': branch or f'exp/{name}',
@@ -84,6 +94,7 @@ def build_entry(name, model, baseline_model, hypothesis, trust, conclusion,
         'hypothesis': hypothesis,
         'metrics': metrics(sens, sens_incl),
         'baseline': {'model': baseline_name, **metrics(baseline_sens, baseline_sens_incl)},
+        'per_fold': per_fold(model),
         'trust': trust,
         'conclusion': conclusion,
     }

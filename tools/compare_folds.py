@@ -92,6 +92,18 @@ def read_headline(name, fpr=0.005, column=SENS_COL):
     return total.iloc[0][col]
 
 
+def read_fold_sens(name, fpr=0.005):
+    """{fold: {column: sensitivity}} for the headline and inclusive columns.
+
+    A pre-quiet-split model carries only SENS_COL_INCL; its rows then hold
+    just that key, and no fallback is dressed up as the headline.
+    """
+    sx = _read_sx(name, fpr)
+    cols = [c for c in (SENS_COL, SENS_COL_INCL) if sens_col(sx, c)]
+    return {row['fold']: {c: (None if pd.isna(row[c]) else float(row[c])) for c in cols}
+            for _, row in sx.iterrows()}
+
+
 def read_headline_pair(name, fpr=0.005):
     """(excl-quiet, inclusive) headline, for reporting both."""
     return read_headline(name, fpr, SENS_COL), read_headline(name, fpr, SENS_COL_INCL)
