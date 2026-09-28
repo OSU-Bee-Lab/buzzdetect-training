@@ -80,10 +80,14 @@ def _to_tf(data, size_batch, size_shuffle, free=False):
     idx = np.random.permutation(len(embeddings))
     emb_np = np.array(embeddings, dtype=np.float32)[idx]
     tgt_np = np.array(targets, dtype=np.float32)[idx]
-    return (
-        tf.data.Dataset.from_tensor_slices((emb_np, tgt_np))
-        .cache().shuffle(size_shuffle).batch(size_batch).prefetch(tf.data.AUTOTUNE)
-    )
+    # Pin the pool to host memory: left to itself, from_tensor_slices places the
+    # whole array on the GPU as one constant, and moderate's yamnet pool OOMs a
+    # 4 GB card before the first epoch. Batches still move to the GPU for fit.
+    with tf.device('/CPU:0'):
+        return (
+            tf.data.Dataset.from_tensor_slices((emb_np, tgt_np))
+            .cache().shuffle(size_shuffle).batch(size_batch).prefetch(tf.data.AUTOTUNE)
+        )
 
 
 def _to_tf_lowmem(data, size_batch, free=False):
