@@ -47,6 +47,7 @@
 !yamnet_trunk_vocoder_updown_depth12
 !yamnet_trunk_context_depth12
 !yamnet_trunk_pitchshift_context_depth12
+!yamnet_trunk_pitchshift_fast_depth12
 !perch_centred
 !perch_centred_pitchshift
 !yamnet_pooled.py
