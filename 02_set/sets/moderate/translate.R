@@ -50,9 +50,6 @@ write.csv(
 translation_general <- translation_blank %>% 
   mutate(
     to = case_when(
-      # Background sounds
-      from %in% c('ambient_wind') ~ 'ambient_noise',
-
       str_detect(from, 'music') ~ 'ambient_music',
 
       # this is somewhere between wind chimes and construction backup beeps...not really sure.
@@ -61,12 +58,14 @@ translation_general <- translation_blank %>%
       from == 'ambient_ringing' ~ 'ambient_music',
 
       from %in% c(
+        'aambient_scraping',
         'ambient_bang',
         'ambient_noise',
         'ambient_rustle',
         'ambient_scraping',
         'ambient_scrape',
-        'ambient_squeak'
+        'ambient_squeak',
+        'ambient_wind'
       ) ~ 'ambient_noise',
       
       str_detect(from, '^animal_') ~ 'animal', 
@@ -85,7 +84,7 @@ translation_general <- translation_blank %>%
       from %in% c('mech_hum', 'mech_hum_auto', 'ambient_hum_traffic', 'mech_hum_RECLASSIFY', 'mech_hum_traffic') ~ 'mech_hum',
 
       # Loud droning power tools; mech_ac is an outlier that I don't love
-      from %in% c('mech_chainsaw', 'mech_weedwhacker', 'mech_lawnmower', 'mech_ac') ~ 'mech_tool',
+      from %in% c('mech_chainsaw', 'mech_weedwhacker', 'mech_lawnmower', 'mech_ac', 'mech_quadcopter') ~ 'mech_tool',
 
       # TODO: double check if mech_drone == quad copter
       from == 'mech_drone' ~ 'ignore',

@@ -1,5 +1,5 @@
 "from","to"
-"aambient_scraping","aambient_scraping"
+"aambient_scraping","ambient_noise"
 "ambient_background","ambient_background"
 "ambient_music","ambient_music"
 "ambient_noise","ambient_noise"
@@ -29,4 +29,4 @@
 "mech_machinery","mech_machinery"
 "mech_plane","mech_plane"
 "mech_plane_prop","mech_plane"
-"mech_quadcopter","mech_quadcopter"
+"mech_quadcopter","mech_tool"
