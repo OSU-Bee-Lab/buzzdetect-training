@@ -6,7 +6,7 @@ This is the project for training new passive acoustic monitoring pollinator dete
   outputs mean, why folds are deployments. Read the relevant section before
   changing pipeline behaviour.
 - `LOOP.md` is the experiment protocol for autoresearch.
-- `02_set/CLAUDE.md` and `03_train/CLAUDE.md` hold stage-local gotchas.
+- `02_set/CLAUDE.md`, `03_train/CLAUDE.md` and `05_distill/CLAUDE.md` hold stage-local gotchas.
 
 
 ## Layout
@@ -17,9 +17,13 @@ This is the project for training new passive acoustic monitoring pollinator dete
 | 2\. Build a set, extract embeddings | `02_set/sets/<set>/build.R`, `02_set/main.py` | R, Python |
 | 3\. Train (leave-one-fold-out CV) | `03_train/main.py` | Python |
 | 4\. Deploy (export to buzzdetect) | `04_deploy/main.py` | Python |
+| 5\. Distill a deployed model into a lite student | `05_distill/main.py` | Python |
 
 Root `main.py` chains 2→3 and only works from the project root. Stage 4 is
-separate and manual.
+separate and manual. Stage 5 is separate too: it distils an already-deployed
+teacher (`--teacher <model>`, any probe-headed model) into faster students, is
+resumable at stage and training-checkpoint level, and has its own operator's
+guide in `05_distill/README.md`.
 
 Environment: `conda run -n buzzdetect-train python <script>` for anything short;
 long jobs are below. Embedder interface: `embedders/embedding.py`. Model loader:

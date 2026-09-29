@@ -107,3 +107,7 @@ def dir_snips(setname):
 
 
 
+
+# 05_distill: audio tree and the teacher-target cache (both per-machine).
+AUDIO_ROOT = local('audio_root')
+DISTILL_CACHE = local('distill_cache')

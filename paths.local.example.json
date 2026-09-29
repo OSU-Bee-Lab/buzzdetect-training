@@ -1,13 +1,15 @@
 {
   "_comment": "Copy this file to paths.local.json (gitignored) and fill in the paths for this machine. Keys are looked up by config.py's local() / config.R's path_local(); a missing key or missing file just means the caller falls back to its own default or errors asking you to set it.",
-
   "python": "/path/to/envs/buzzdetect-train/bin/python",
   "_python_comment": "Used by tools/*.sh (launch_job, finish_experiment). Optional: falls back to <conda base>/envs/buzzdetect-train.",
-
   "buzzdetect_dest": "/path/to/buzzdetect/engine/models",
-
   "audio_sources": {
     "_comment": "Raw source-audio directories that live outside this repo, keyed by the 01_annotate effort directory name that needs them.",
     "Even Sample": "/path/to/audio_bee_detection/experiments"
-  }
+  },
+  "audio_root": "/path/to/experiments",
+  "_audio_root_comment": "05_distill: root of all deployment audio (read-only).",
+  "distill_cache": "/path/to/distill-cache",
+  "_distill_cache_comment": "05_distill: the directory holding one subdirectory per teacher model (<distill-cache>/<teacher>/: teacher targets, plan) plus the teacher-independent _mel/ (spectrograms) and _shared/ (durations); big, on the audio drive.",
+  "_distill_optional": "05_distill also reads, when set: distill_teacher (default teacher), distill_baseline (CV baseline model the headline is compared to), distill_onnx_python (interpreter with onnxruntime-gpu for plan/cache; default .local/venv-onnx/bin/python)."
 }
