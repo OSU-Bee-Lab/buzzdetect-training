@@ -126,24 +126,55 @@ def infer(a):
     print(f'[infer] {a.onnx} on {sess.get_providers()[0]}, {len(folds)} folds', flush=True)
     all_logits, index = [], []
     t0 = time.time()
+    zero = np.zeros(15360, np.float32)
+
+    def run_group(frs):
+        """Logits for frames scored as if alone. Packed: frame, silent frame, frame, ...
+        The silent frame is what an isolated frame's zero padding is, and the graph's hop is
+        welded to 15360 so frames land on hop boundaries; row 2i is frame i.
+        (`--isolated` runs one call per frame; the two are compared in the README table.)"""
+        if a.isolated:
+            outs = []
+            for fr in frs:
+                x = fr if len(fr) >= min_samples else np.pad(fr, (0, min_samples - len(fr)))
+                y = sess.run(None, {key: x})[0]
+                if len(y) == 0:
+                    y = sess.run(None, {key: np.pad(fr, (0, max(0, 30719 - len(fr))))})[0]
+                outs.append(y[0])
+            return np.stack(outs)
+        parts = []
+        for i, fr in enumerate(frs):
+            parts += [fr, zero] if i < len(frs) - 1 else [fr]
+        x = np.concatenate(parts)
+        if len(x) < min_samples:
+            x = np.pad(x, (0, min_samples - len(x)))
+        y = sess.run(None, {key: x})[0]
+        assert len(y) >= 2 * len(frs) - 1, (len(y), len(frs))
+        return y[0:2 * len(frs) - 1:2]
+
     for fold in folds:
         samples = fold_samples(fold)
-        rows, n = [], 0
+        rows, group, n0 = [], [], len(all_logits)
+        n = 0
+
+        def flush():
+            if group:
+                all_logits.extend(run_group(group).astype(np.float32))
+                group.clear()
+
         for sid, (path, raw, trn, buzz, tier) in enumerate(samples):
             for fi, fr in enumerate(read_frames(path)):
                 if a.max_frames and n >= a.max_frames:
                     break
-                x = fr if len(fr) >= min_samples else np.pad(fr, (0, min_samples - len(fr)))
-                y = sess.run(None, {key: x})[0]
-                if len(y) == 0:
-                    x = np.pad(fr, (0, max(0, 30719 - len(fr))))
-                    y = sess.run(None, {key: x})[0]
-                all_logits.append(y[0].astype(np.float32))
+                group.append(fr)
                 rows.append((sid, buzz, tier))
                 index.append((fold, sid, fi))
                 n += 1
+                if len(group) == a.pack:
+                    flush()
+        flush()
         df = pd.DataFrame(rows, columns=['sample', 'correct', 'loudness'])
-        df['activation_ins_buzz'] = [l[8] for l in all_logits[len(all_logits) - n:]]
+        df['activation_ins_buzz'] = [l[8] for l in all_logits[n0:]]
         d = os.path.join(a.out, 'folds', fold)
         os.makedirs(d, exist_ok=True)
         df[['activation_ins_buzz', 'correct', 'loudness', 'sample']].to_csv(
@@ -152,11 +183,12 @@ def infer(a):
     np.save(os.path.join(a.out, 'logits.npy'), np.stack(all_logits))
     pd.DataFrame(index, columns=['fold', 'sample', 'frame']).to_csv(
         os.path.join(a.out, 'frames.csv'), index=False)
-    json.dump({'onnx': os.path.abspath(a.onnx), 'mode': 'isolated frames', 'set': SET,
+    json.dump({'onnx': os.path.abspath(a.onnx), 'mode': 'isolated' if a.isolated else f'packed x{a.pack}', 'set': SET,
                'translation': TRANSLATION}, open(os.path.join(a.out, 'eval.json'), 'w'))
 
 
 def score(a):
+    sys.path.insert(0, ROOT)
     sys.path.insert(0, os.path.join(ROOT, '03_train'))
     import tensorflow  # noqa: F401  (train_utils imports it; must precede pandas users)
     from sx import summarize_folds, format_sx_report, read_fold_predictions, SENS_EXCL
@@ -198,6 +230,7 @@ def run(a):
         cmd += ['--folds', *a.folds]
     if a.max_frames:
         cmd += ['--max-frames', str(a.max_frames)]
+    cmd += ['--pack', str(a.pack)] + (['--isolated'] if a.isolated else [])
     subprocess.run(cmd, check=True)
     score(a)
 
@@ -210,6 +243,8 @@ if __name__ == '__main__':
     ap.add_argument('--out', required=True)
     ap.add_argument('--folds', nargs='*')
     ap.add_argument('--cpu', action='store_true')
+    ap.add_argument('--pack', type=int, default=64, help='frames per ORT call (silent-frame interleaved)')
+    ap.add_argument('--isolated', action='store_true', help='one call per frame (slow, reference)')
     ap.add_argument('--max-frames', type=int, default=0, help='per fold, dev only')
     ap.add_argument('--check-labels', action='store_true',
                     help='score: compare correct/loudness with cv-baseline-v4-moderate predictions')
