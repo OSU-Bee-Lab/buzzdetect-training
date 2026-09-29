@@ -359,12 +359,17 @@
       <option value="date-desc">newest first</option>
       <option value="date-asc">oldest first</option>
       <option value="delta-desc">best delta first</option>
+      <option value="sens-desc">best sensitivity first</option>
+      <option value="sens-asc">worst sensitivity first</option>
     </select>
     <select id="trustFilter">
       <option value="">any trust</option>
       <option value="clean">clean only</option>
       <option value="caveated">caveated only</option>
       <option value="artifact">artifact only</option>
+    </select>
+    <select id="setFilter">
+      <option value="">any set</option>
     </select>
   </div>
   <div id="status"></div>
@@ -458,20 +463,25 @@ function renderList() {
   const q = document.getElementById("search").value.trim().toLowerCase();
   const sortMode = document.getElementById("sort").value;
   const trustMode = document.getElementById("trustFilter").value;
+  const setMode = document.getElementById("setFilter").value;
 
   let list = entries.filter(e => {
     if (trustMode && e.trust !== trustMode) return false;
+    if (setMode && (e.set || "") !== setMode) return false;
     if (!q) return true;
     const hay = [e.name, e.hypothesis, e.conclusion, e.branch]
       .filter(Boolean).join(" ").toLowerCase();
     return hay.includes(q);
   });
 
-  list = list.map((e, i) => ({ e, i, d: deltaInfo(e) }));
+  const sens = e => { const v = e.metrics ? e.metrics[KEY] : null; return v == null ? -Infinity : v; };
+  list = list.map((e, i) => ({ e, i, d: deltaInfo(e), s: sens(e) }));
 
   if (sortMode === "date-desc") list.sort((a, b) => (b.e.date || "").localeCompare(a.e.date || "") || b.i - a.i);
   else if (sortMode === "date-asc") list.sort((a, b) => (a.e.date || "").localeCompare(b.e.date || "") || a.i - b.i);
   else if (sortMode === "delta-desc") list.sort((a, b) => b.d.value - a.d.value);
+  else if (sortMode === "sens-desc") list.sort((a, b) => b.s - a.s);
+  else if (sortMode === "sens-asc") list.sort((a, b) => a.s - b.s);
 
   const cardsEl = document.getElementById("cards");
   cardsEl.innerHTML = "";
@@ -496,6 +506,7 @@ function renderList() {
       <div class="meta">
         <span class="badge ${d.cls}">${d.label}</span>
         ${e.trust ? `<span class="trust ${escapeHtml(e.trust)}">${escapeHtml(TRUST_LABEL[e.trust] ?? e.trust)}</span>` : ""}
+        ${e.set ? `<span class="branch">${escapeHtml(e.set)}</span>` : ""}
         <span>sens@fpr0.005 = ${fmt(e.metrics ? e.metrics[KEY] : null)}</span>
         <span>·</span>
         <span>${baselineNote}</span>
@@ -559,7 +570,8 @@ function baselineValue(e, key = metricKey()) { return e?.baseline?.[key] ?? null
 
 function graphEntries() {
   const hide = document.getElementById("hideArtifact").checked;
-  return entries.filter(e => !(hide && e.trust === "artifact"));
+  const setMode = document.getElementById("setFilter").value;
+  return entries.filter(e => !(hide && e.trust === "artifact") && (!setMode || (e.set || "") === setMode));
 }
 function foldList(list) {
   const seen = [];
@@ -886,6 +898,15 @@ function relTime(ms) {
   return `${Math.round(h / 24)}d ago`;
 }
 
+function fillSetFilter() {
+  const sel = document.getElementById("setFilter");
+  const prev = sel.value;
+  const sets = [...new Set(entries.map(e => e.set).filter(Boolean))].sort();
+  sel.innerHTML = `<option value="">any set</option>`;
+  for (const s of sets) sel.add(new Option(s, s));
+  sel.value = sets.includes(prev) ? prev : "";
+}
+
 function loadEntries(list, opts = {}) {
   entries = list;
   document.getElementById("dropzone").classList.add("hidden");
@@ -910,6 +931,7 @@ function loadEntries(list, opts = {}) {
       } catch (e) { /* storage unavailable or full; not fatal */ }
     }
   }
+  fillSetFilter();
   fillCompareSelects();
   render();
 }
@@ -938,7 +960,8 @@ async function loadFiles(files) {
 document.getElementById("search").addEventListener("input", renderList);
 document.getElementById("sort").addEventListener("change", renderList);
 document.getElementById("trustFilter").addEventListener("change", renderList);
-for (const id of ["quiet", "hideArtifact", "heatMode", "heatRef"]) {
+document.getElementById("setFilter").addEventListener("change", renderList);
+for (const id of ["quiet", "hideArtifact", "heatMode", "heatRef", "setFilter"]) {
   document.getElementById(id).addEventListener("change", renderGraphs);
 }
 for (const id of ["cmpA", "cmpB"]) document.getElementById(id).addEventListener("change", renderCompare);

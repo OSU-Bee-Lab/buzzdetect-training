@@ -88,3 +88,8 @@ clip (`ffmpeg -t 600 -i <recording> -ac 1 -ar 16000 -f f32le $INT8_WORK/real10mi
 Per-layer sensitivity with the corrected skip logic, AdaRound / bias correction / SmoothQuant-style rescaling,
 QAT (needs a separate env or a PyTorch route), other calibration pools, the sensitivity-at-FPR and threshold
 re-centering evaluation, and any speed measurement on AVX2/VNNI or ARM hardware.
+
+## Update — sensitivity at fpr 0.005 (partial)
+
+See `HANDOFF.md`: fp32 and weights-only int8 both score 0.584 (in-sample, shipped model; CV held-out is 0.470), i.e. weights-only
+int8 costs nothing at fpr 0.005. Activation-quantized graphs are not yet scored. Scripts and results are in `sens/`.

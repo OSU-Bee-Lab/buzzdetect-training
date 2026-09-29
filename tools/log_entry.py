@@ -11,6 +11,9 @@ inclusive figure rides alongside it under `..._inclquiet`. `main_commit`,
 so the log alone can be read (and graphed, tools/human/log_viewer.html) per
 fold after the model dir is gone. The baseline's folds live on its own entry.
 
+`set` is read straight off the model's own config_model.json (e.g. "medium",
+"moderate") and omitted if that file has no `set` key.
+
     conda run -n buzzdetect-train python tools/log_entry.py \\
       --name class-weight-fix \\
       --model .local/worktrees/class-weight-fix/models/class_weight_fix \\
@@ -35,7 +38,7 @@ from datetime import date
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from compare_folds import read_fold_sens, read_headline, SENS_COL, SENS_COL_INCL
+from compare_folds import read_fold_sens, read_headline, resolve_dir_model, SENS_COL, SENS_COL_INCL
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TRUST_VALUES = ('clean', 'caveated', 'artifact')
@@ -46,6 +49,18 @@ def _git_short_head(cwd):
         ['git', 'rev-parse', '--short', 'HEAD'], cwd=cwd,
         capture_output=True, text=True, check=True,
     ).stdout.strip()
+
+
+def read_set(model):
+    """The training set name (e.g. "medium", "moderate") from the model's own
+    config_model.json, so log entries can be told apart without re-opening the
+    model dir — moderate-set runs are final-confirmation only (CLAUDE.md) and
+    must not get mixed into a loop's medium-set comparisons."""
+    path = os.path.join(resolve_dir_model(model), 'config_model.json')
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
+        return json.load(f).get('set')
 
 
 def build_entry(name, model, baseline_model, hypothesis, trust, conclusion,
@@ -82,7 +97,9 @@ def build_entry(name, model, baseline_model, hypothesis, trust, conclusion,
                        if col in v}
                 for fold, v in read_fold_sens(model, fpr).items()}
 
-    return {
+    entry_set = read_set(model)
+
+    entry = {
         'name': name,
         'branch': branch or f'exp/{name}',
         'date': entry_date or date.today().isoformat(),
@@ -98,6 +115,9 @@ def build_entry(name, model, baseline_model, hypothesis, trust, conclusion,
         'trust': trust,
         'conclusion': conclusion,
     }
+    if entry_set is not None:
+        entry['set'] = entry_set
+    return entry
 
 
 if __name__ == '__main__':

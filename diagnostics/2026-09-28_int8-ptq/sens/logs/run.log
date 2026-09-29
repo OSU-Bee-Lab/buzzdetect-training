@@ -1,0 +1,11 @@
+09-28 22:52:45 fp32 fold 0 150s
+09-28 22:55:15 fp32 fold 1 150s
+09-28 22:57:49 fp32 fold 2 154s
+09-28 22:59:31 fp32 fold 3 102s
+09-28 23:01:15 fp32 fold 4 104s
+09-28 23:03:52 wonly fold 0 157s
+09-28 23:06:25 wonly fold 1 153s
+09-28 23:08:57 wonly fold 2 152s
+09-28 23:10:38 wonly fold 3 101s
+09-28 23:12:20 wonly fold 4 103s
+09-28 23:18:04 entropy_u8 fold 0 343s
