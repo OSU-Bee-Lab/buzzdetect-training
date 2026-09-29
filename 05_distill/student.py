@@ -49,27 +49,67 @@ def student_params(n_out):
     return p
 
 
-def build_student(filters, n_out=15, stop_at_features=False, name='student'):
-    """waveform -> logits (frames, n_out).
+def main_checkout():
+    """The main checkout's root. A worktree lacks the gitignored data (YAMNet
+    weights, sets, models), so data reads go through here."""
+    marker = os.sep + '.claude' + os.sep + 'worktrees' + os.sep
+    return ROOT.split(marker)[0] if marker in ROOT else ROOT
+
+
+def _stack(net, filters, params):
+    for i, f in enumerate(filters):
+        fun, kernel, stride, _ = _YAMNET_LAYER_DEFS[i]
+        net = fun(f'layer{i + 1}', kernel, stride, int(f), params)(net)
+    return net
+
+
+def build_student(filters, n_out=15, stop_at_features=False, name='student',
+                  input_type='waveform', expose_code=False):
+    """The student, waveform-in (deploy graph) or mel-in (training graph).
 
     filters: list of per-layer filter counts, len 1..14 (layer i uses
         _YAMNET_LAYER_DEFS[i]'s kernel/stride and filters[i]).
-    stop_at_features: return the log-mel patches (frames, 96, 64) instead --
+    input_type: 'waveform' -> input (num_samples,), output (frames, n_out),
+        YAMNet front end inside. 'mel' -> input (96, 64) log-mel patches, a
+        batch of frames, no front end (it is not learned, so training skips
+        it). Conv/BN/Dense layers carry the same names either way, so weights
+        move between the two graphs by layer name (`copy_weights`).
+    expose_code: also output the GAP code (the head's input) as a second
+        output: outputs [logits, code].
+    stop_at_features: waveform only; return the log-mel patches instead --
         the front end alone, for timing its floor.
     """
     assert 1 <= len(filters) <= len(_YAMNET_LAYER_DEFS)
     params = student_params(n_out)
-    waveform = layers.Input(shape=(), dtype=tf.float32, name='waveform')
-    _, feats = WaveformFeatures(params)(waveform)
-    if stop_at_features:
-        return Model(name=name + '_frontend', inputs=waveform, outputs=feats)
+    if input_type == 'mel':
+        assert not stop_at_features
+        inp = layers.Input(shape=(params.patch_frames, params.patch_bands), name='mel')
+        feats = inp
+    else:
+        assert input_type == 'waveform'
+        inp = layers.Input(shape=(), dtype=tf.float32, name='waveform')
+        _, feats = WaveformFeatures(params)(inp)
+        if stop_at_features:
+            return Model(name=name + '_frontend', inputs=inp, outputs=feats)
     net = layers.Reshape((params.patch_frames, params.patch_bands, 1))(feats)
-    for i, f in enumerate(filters):
-        fun, kernel, stride, _ = _YAMNET_LAYER_DEFS[i]
-        net = fun(f'layer{i + 1}', kernel, stride, int(f), params)(net)
-    emb = layers.GlobalAveragePooling2D()(net)
+    net = _stack(net, filters, params)
+    emb = layers.GlobalAveragePooling2D(name='gap')(net)
     logits = layers.Dense(units=n_out, use_bias=True, name='logits')(emb)
-    return Model(name=name, inputs=waveform, outputs=logits)
+    return Model(name=name, inputs=inp, outputs=[logits, emb] if expose_code else logits)
+
+
+def copy_weights(src, dst):
+    """Copy every same-named weighted layer src -> dst (mel <-> waveform)."""
+    n = 0
+    for layer in dst.layers:
+        if layer.weights:
+            try:
+                s = src.get_layer(layer.name)
+            except ValueError:
+                continue
+            layer.set_weights(s.get_weights())
+            n += 1
+    return n
 
 
 def macs_per_frame(filters, n_out=15, h=96, w=64):
