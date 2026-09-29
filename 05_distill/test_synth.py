@@ -5,7 +5,7 @@ own GAP code (1024-d, tiled to 2048) and a fixed random linear head on it, with
 the two dead classes' logits offset high. Writes train/val shards under
 /tmp/dl/synth and prints the command that trains on them:
 
-    conda run -n buzzdetect-train python 05_distill/test_synth.py [--n 6000]
+    conda run -n buzzdetect-train python 05_distill/test_synth.py [--frames 6000]
 """
 import argparse
 import json
@@ -38,15 +38,15 @@ def write(d, mel, model_full, head):
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
-    ap.add_argument('--n', type=int, default=6000)
+    ap.add_argument('--frames', type=int, default=6000)
     a = ap.parse_args()
-    mel = si.mel_of(si.frames_from_folds(a.n + 1500, seed=3))
+    mel = si.mel_of(si.frames_from_folds(a.frames + 1500, seed=3))
     full = st.build_student(st.widths_for(1.0), input_type='mel', expose_code=True)
     si.init_from_yamnet(full, si.load_yamnet())
     rng = np.random.default_rng(0)
     head = (rng.normal(0, 0.15, (1024, 15)).astype(np.float32), rng.normal(0, 1, 15).astype(np.float32))
-    write('/tmp/dl/synth/train', mel[:a.n], full, head)
-    write('/tmp/dl/synth/val', mel[a.n:], full, head)
+    write('/tmp/dl/synth/train', mel[:a.frames], full, head)
+    write('/tmp/dl/synth/val', mel[a.frames:], full, head)
     print('wrote /tmp/dl/synth/{train,val}; train with:\n  python 05_distill/distill_train.py '
           '--rung A --steps 300 --batch 256 --eval-every 100 --name synth '
           '--shards /tmp/dl/synth/train --val-shards /tmp/dl/synth/val')

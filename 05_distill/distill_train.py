@@ -160,7 +160,7 @@ def val_flips(model, val, limit=None, batch=512):
     S, T = [], []
     for i in range(0, n, batch):
         mel, _, lg = val.take(idx[i:i + batch])
-        S.append(model(mel, training=False).numpy())
+        S.append(model(mel, training=False)[0].numpy())
         T.append(lg)
     S, T = np.concatenate(S), np.concatenate(T)
     sp, tp = S > 0, T > 0
@@ -193,15 +193,19 @@ def ridge(x, y, lam):
 def build_and_init(a, tr, mu, sd):
     filters = st.widths_for(a.alpha)
     model = st.build_student(filters, input_type='mel', expose_code=True, name='student_mel')
+    for l in model.layers:                      # moving stats must track fast: the init's BN is
+        if isinstance(l, tf.keras.layers.BatchNormalization):   # identity+bias (refit), not YAMNet's
+            l.momentum = a.bn_momentum
     aux = tf.keras.layers.Dense(2048, name='aux')
     aux.build((None, filters[-1]))
-    if a.init == 'yamnet':
-        si.init_from_yamnet(model)
+    sels = si.init_from_yamnet(model) if a.init in ('yamnet', 'select') else None
     rng = np.random.default_rng(1)
     idx = np.sort(rng.choice(tr.n, min(a.init_frames, tr.n), replace=False))
     mel, code, lg = tr.take(idx)
-    if a.init == 'yamnet':
+    if a.init == 'select':
         si.recalibrate_bn(model, mel)
+    elif a.init == 'yamnet':
+        si.refit_layerwise(model, mel, sels)
     gap = np.concatenate([model(mel[i:i + 256], training=False)[1].numpy() for i in range(0, len(mel), 256)])
     # head + aux: ridge onto teacher logits / standardised code
     w, b = ridge(gap, lg, a.ridge)
@@ -226,9 +230,11 @@ def main():
     ap.add_argument('--huber', type=float, default=1.0)
     ap.add_argument('--eval-every', type=int, default=1000)
     ap.add_argument('--val-limit', type=int, default=40000, help='frames per periodic val pass (final is full)')
-    ap.add_argument('--init', choices=['yamnet', 'random'], default='yamnet')
-    ap.add_argument('--init-frames', type=int, default=8192)
+    ap.add_argument('--init', choices=['yamnet', 'select', 'random'], default='yamnet',
+                    help='yamnet: channel selection + layer-wise refit; select: selection + BN recalibration only')
+    ap.add_argument('--init-frames', type=int, default=12000)
     ap.add_argument('--ridge', type=float, default=1.0)
+    ap.add_argument('--bn-momentum', type=float, default=0.9)
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--shards', help='override shard dir for the train rung (selftest)')
     ap.add_argument('--val-shards', help='override shard dir for validation (selftest)')

@@ -131,6 +131,82 @@ def recalibrate_bn(student, mel, batch=256):
         bn.set_weights([beta, mean.astype(np.float32), var.astype(np.float32)])
 
 
+def _patches(x, stride):
+    """(N,H,W,C) -> (N,Ho,Wo,9,C): 3x3 'SAME' windows in conv order."""
+    p = tf.image.extract_patches(x, [1, 3, 3, 1], [1, stride, stride, 1], [1, 1, 1, 1], 'SAME').numpy()
+    n, ho, wo, _ = p.shape
+    return p.reshape(n, ho, wo, 9, x.shape[-1])
+
+
+def _set_bn_identity(bn, bias):
+    """BN (centre only) -> y = x + bias."""
+    bn.set_weights([bias.astype(np.float32), np.zeros_like(bias, np.float32),
+                    np.full_like(bias, 1.0 - BN_EPS, np.float32)])
+
+
+def refit_layerwise(student, mel, sels, yamnet=None, positions=40000, ridge_lam=1e-3, seed=0):
+    """Greedy layer-wise regression init, after channel selection.
+
+    Selection alone loses the signal by depth (dropping half the inputs of every
+    layer compounds). Here each depthwise and pointwise layer, in order, is refit
+    by least squares so that, fed the student's *own* (already refit) activations,
+    it reproduces YAMNet's pre-ReLU output on the channels it kept: per-channel 3x3
+    taps for depthwise layers, a (Cs+1)->k linear map for pointwise layers. The
+    layer's BN is then set to identity plus the fitted intercept. Layer 1 keeps
+    its selected weights (it already correlates ~0.99).
+    """
+    yamnet = yamnet or load_yamnet()
+    full = st.build_student(st.widths_for(1.0), input_type='mel', name='full_ref')
+    init_from_yamnet(full, yamnet)
+    rng = np.random.default_rng(seed)
+    h, w_ = 96, 64
+    for i in range(1, len(sels)):
+        n = f'layer{i + 1}'
+        prev, sel = sels[i - 1], sels[i]
+        stride = st.STRIDES[i]
+        h, w_ = -(-h // stride), -(-w_ // stride)
+        # enough frames for `positions` output positions: deep layers have few per frame
+        x = mel[:min(len(mel), max(256, int(np.ceil(1.5 * positions / (h * w_)))))]
+
+        def act(model, name):
+            probe = tf.keras.Model(model.input, model.get_layer(name).output)
+            return np.concatenate([probe(x[j:j + 256], training=False).numpy()
+                                   for j in range(0, len(x), 256)])
+
+        # depthwise: input = student's previous post-ReLU output
+        prev_name = 'layer1_relu' if i == 1 else f'layer{i}_pointwise_conv_relu'
+        xin = act(student, prev_name)
+        tgt = act(full, n + '_depthwise_conv_bn')[..., prev]
+        pt = _patches(tf.constant(xin), stride)               # N,Ho,Wo,9,C
+        flat = pt.reshape(-1, 9, pt.shape[-1])
+        m = min(positions, len(flat))
+        pick = rng.choice(len(flat), m, replace=False)
+        A = np.concatenate([flat[pick], np.ones((m, 1, flat.shape[-1]), np.float32)], 1).astype(np.float64)
+        y = tgt.reshape(-1, tgt.shape[-1])[pick].astype(np.float64)
+        G = np.einsum('mkc,mlc->ckl', A, A) + ridge_lam * np.eye(10)
+        b = np.einsum('mkc,mc->ck', A, y)
+        w = np.linalg.solve(G, b[..., None])[..., 0]           # C,10
+        kern = w[:, :9].T.reshape(3, 3, -1, 1).astype(np.float32)
+        student.get_layer(n + '_depthwise_conv').set_weights([kern])
+        _set_bn_identity(student.get_layer(n + '_depthwise_conv_bn'), w[:, 9])
+
+        # pointwise: input = student's depthwise post-ReLU output
+        xin = act(student, n + '_depthwise_conv_relu')
+        tgt = act(full, n + '_pointwise_conv_bn')[..., sel]
+        X = xin.reshape(-1, xin.shape[-1])
+        Y = tgt.reshape(-1, tgt.shape[-1])
+        pick = rng.choice(len(X), min(positions, len(X)), replace=False)
+        wt, bt = ridge(X[pick], Y[pick], ridge_lam * len(pick))
+        student.get_layer(n + '_pointwise_conv').set_weights([wt.reshape(1, 1, *wt.shape)])
+        _set_bn_identity(student.get_layer(n + '_pointwise_conv_bn'), bt)
+
+
+def ridge(x, y, lam):
+    x1 = np.c_[x, np.ones(len(x), np.float32)].astype(np.float64)
+    w = np.linalg.solve(x1.T @ x1 + lam * np.eye(x1.shape[1]), x1.T @ y.astype(np.float64))
+    return w[:-1].astype(np.float32), w[-1].astype(np.float32)
+
+
 def _has(student, i):
     try:
         student.get_layer(f'layer{i + 1}_' + ('conv' if i == 0 else 'pointwise_conv'))
@@ -174,7 +250,9 @@ def main():
     a = ap.parse_args()
     yam = load_yamnet()
     mel = mel_of(frames_from_folds(a.frames))
-    print('mel patches', mel.shape, flush=True)
+    cut = int(len(mel) * 0.6)
+    fitm, mel = mel[:cut], mel[cut:]   # fit on the first 60%, every readout on the rest
+    print('mel patches: fit', fitm.shape, 'eval', mel.shape, flush=True)
 
     # YAMNet's own code on the same patches: the width-1.0 student IS YAMNet.
     full = st.build_student(st.widths_for(1.0), input_type='mel', expose_code=True, name='full')
@@ -191,8 +269,12 @@ def main():
     stud = st.build_student(filters, input_type='mel', expose_code=True, name='stud')
     sels = init_from_yamnet(stud, yam)
     c_raw = np.concatenate([stud(mel[i:i + 256], training=False)[1].numpy() for i in range(0, len(mel), 256)])
-    calib = mel[::3]  # every third patch; the stats need no more
+    calib = fitm[::3]
     recalibrate_bn(stud, calib)
+    c_recal = np.concatenate([stud(mel[i:i + 256], training=False)[1].numpy() for i in range(0, len(mel), 256)])
+    stud = st.build_student(filters, input_type='mel', expose_code=True, name='stud2')
+    sels = init_from_yamnet(stud, yam)
+    refit_layerwise(stud, fitm, sels, yam)
     rand = st.build_student(filters, input_type='mel', expose_code=True, name='rand')
 
     def codes(model):
@@ -220,6 +302,8 @@ def main():
         lay.append(f'{np.nanmean(np.nan_to_num(pearson(u, v))):.2f}')
     print('  per-layer mean Pearson (post-ReLU, layers 1..14):', ' '.join(lay))
     r_raw = pearson(c_raw, c_ref)
+    print(f'  (channel selection + BN recalibration only: mean Pearson {pearson(c_recal, c_ref).mean():.3f}; '
+          f'below: selection + layer-wise refit)')
     print(f'  (before BN recalibration: mean Pearson {r_raw.mean():.3f}, '
           f'{(c_raw.std(0) < 1e-6).mean():.0%} of channels constant)')
     r_stud, r_rand = pearson(c_stud, c_ref), pearson(c_rand, c_ref)
