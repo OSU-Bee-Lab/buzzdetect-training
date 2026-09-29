@@ -1,0 +1,33 @@
+09-28 21:13:16 == entropy
+09-28 21:13:53 55 convs, 54 trunk
+09-28 21:13:53 Collecting tensor data and making histogram ...
+09-28 21:13:53 Finding optimal threshold for each tensor using 'entropy' algorithm ...
+09-28 21:13:53 Number of tensors : 195
+09-28 21:13:53 Number of histogram bins : 128 (The number may increase depends on the data it collects)
+09-28 21:13:53 Number of quantized bins : 128
+09-28 21:13:53 wrote /tmp/claude-1001/-home-luke-projects-buzzdetect-training/256b36d1-ee89-4a21-8d46-b86010d6da7c/scratchpad/q_entropy_u8.onnx
+09-28 21:13:53 exit 0
+09-28 21:13:53 == percentile
+09-28 21:14:05 55 convs, 54 trunk
+09-28 21:14:05 Collecting tensor data and making histogram ...
+09-28 21:14:05 Traceback (most recent call last):
+09-28 21:14:05   File "/tmp/claude-1001/-home-luke-projects-buzzdetect-training/256b36d1-ee89-4a21-8d46-b86010d6da7c/scratchpad/quant.py", line 40, in <module>
+09-28 21:14:05     quantize_static(S+'/pre.onnx',S+f'/q_{method}_{actt}.onnx',R(),quant_format=QuantFormat.QDQ,per_channel=True,
+09-28 21:14:05   File "/home/luke/projects/buzzdetect-training/.local/venv-quant/lib/python3.12/site-packages/onnxruntime/quantization/quantize.py", line 859, in quantize_static
+09-28 21:14:05     calibrator.collect_data(calibration_data_reader)
+09-28 21:14:05   File "/home/luke/projects/buzzdetect-training/.local/venv-quant/lib/python3.12/site-packages/onnxruntime/quantization/calibrate.py", line 735, in collect_data
+09-28 21:14:05     self.collector.collect(clean_merged_dict)
+09-28 21:14:05   File "/home/luke/projects/buzzdetect-training/.local/venv-quant/lib/python3.12/site-packages/onnxruntime/quantization/calibrate.py", line 913, in collect
+09-28 21:14:05     return self.collect_absolute_value(name_to_arr)
+09-28 21:14:05            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+09-28 21:14:05   File "/home/luke/projects/buzzdetect-training/.local/venv-quant/lib/python3.12/site-packages/onnxruntime/quantization/calibrate.py", line 948, in collect_absolute_value
+09-28 21:14:05     hist, hist_edges = np.histogram(data_arr_np, bins=self.num_bins)
+09-28 21:14:05                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+09-28 21:14:05   File "/home/luke/projects/buzzdetect-training/.local/venv-quant/lib/python3.12/site-packages/numpy/lib/_histograms_impl.py", line 792, in histogram
+09-28 21:14:05     bin_edges, uniform_bins = _get_bin_edges(a, bins, range, weights)
+09-28 21:14:05                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+09-28 21:14:05   File "/home/luke/projects/buzzdetect-training/.local/venv-quant/lib/python3.12/site-packages/numpy/lib/_histograms_impl.py", line 449, in _get_bin_edges
+09-28 21:14:05     raise ValueError(
+09-28 21:14:05 ValueError: Too many bins for data range. Cannot create 2048 finite-sized bins.
+09-28 21:14:05 exit 0
+[launch_job] exit 0
