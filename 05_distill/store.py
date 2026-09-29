@@ -53,14 +53,14 @@ def write_stamp(d, fp, **detail):
     os.replace(tmp, os.path.join(d, 'fingerprint.json'))
 
 
-def stamp_or_refuse(d, fp, what, **detail):
+def stamp_or_refuse(d, fp, label, **detail):
     """Adopt `d` if it has no stamp yet, keep it if the stamp matches, stop if it differs.
     For products too costly to rebuild by accident."""
     cur = read_stamp(d)
     if cur is None:
         write_stamp(d, fp, **detail)
     elif cur['fingerprint'] != fp:
-        sys.exit(f'{what}: {d} was built from something else ({cur.get("what", cur["fingerprint"])}) than '
+        sys.exit(f'{label}: {d} was built from something else ({cur.get("what", cur["fingerprint"])}) than '
                  f'now ({detail.get("what", fp)}). Delete it to rebuild, or rename what changed.')
 
 
