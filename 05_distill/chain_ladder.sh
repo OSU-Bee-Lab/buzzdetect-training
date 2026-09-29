@@ -1,4 +1,6 @@
 #!/bin/bash
+# NOTE (2026-09-29): pre-generalization chain. Hard-codes the single-teacher layout under .local/distill and the old
+# _fe cache; kept as the record of the runs it made. New work: 05_distill/main.py (README.md), same runs, any teacher.
 # The distillation ladder: A/seed1, A/seed2, B/seed1, each train -> V flips ->
 # export -> eval on the 5 rotating folds -> ladder.jsonl line; then the table and
 # the speed comparison for the rung-B model. Stops on the first failure; every

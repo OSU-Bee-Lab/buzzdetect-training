@@ -1,9 +1,9 @@
-# Distillation ladder: protocol (written before the first run)
+# Distillation ladder: protocol (written before the first run; closed at rung B, see FRONTENDS.md)
 
 Step budget: 7000 (measured 2.4 step/s, ~49 min per run; 12000 would be ~83 min).
 Fixed for every run: student alpha 0.5 initialised from YAMNet (channel selection +
 layer-wise refit), batch 512, lr 1e-3 cosine, lambda 0.1, Huber delta 1, **one
-step budget for all rungs** (see `.local/distill/ladder.jsonl` / the chain script
+step budget for all rungs** (see `.local/distill/<teacher>/ladder.jsonl` / the chain script
 for the number), so only the data varies. Runs: rung A seed 1, rung A seed 2, rung B seed 1.
 
 Metric: V pool (100 h, 31 held-out deployments, never trained on). Detections at

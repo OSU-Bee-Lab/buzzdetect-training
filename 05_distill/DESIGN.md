@@ -1,23 +1,28 @@
 # Distillation design (contract for the 05_distill scripts)
 
-Decided 2026-09-28 with Luke. Target: a single-pass width-0.5 YAMNet-shaped student
-(`student.py`, alpha 0.5, YAMNet's own log-mel front end) distilled from the teacher
-`v4-ft-ps-e60-moderate`. Step 0 (README.md) measured it at 1.47x regular YAMNet on GPU;
+Decided 2026-09-28 with Luke; generalized to any teacher 2026-09-29 (`dpaths.py`, `main.py`; this file
+describes `v4-ft-ps-e60-moderate`, the first teacher, wherever it gives a number, and the teacher-independent
+rule otherwise). Target: a single-pass width-0.5 YAMNet-shaped student
+(`student.py`, alpha 0.5, YAMNet's own log-mel front end; later also cheaper front ends, FRONTENDS.md)
+distilled from a teacher. Step 0 (README.md) measured it at 1.47x regular YAMNet on GPU;
 Luke: fine. Floors: >= ~1.5x normal on GPU inference, and >= 50% of the era baseline's
 sensitivity (`cv-baseline-v4`, 0.324) at the same FPR. "Just try and see": no kill rule.
 
 ## Teacher
 
-The shipped ONNX `/home/luke/projects/buzzdetect/engine/models/v4-ft-ps-e60-moderate/model.onnx`
-(waveform -> 15 predictions with `activation_centers` already subtracted, so detection is
-logit > 0). Targets per 0.96 s frame (non-overlapping frames, exactly the deployed framing,
+Any deployed probe-headed model: `<buzzdetect_dest>/<name>/model.onnx` plus `models/<name>/`
+(`classes`, `activation_centers`, `set`, `folds_train`), selected by `--teacher` / `DISTILL_TEACHER`. The first one
+is `v4-ft-ps-e60-moderate`: the shipped ONNX (waveform -> 15 predictions with `activation_centers` already
+subtracted, so detection is logit > 0). Targets per 0.96 s frame (non-overlapping frames, exactly the deployed framing,
 frame k = samples [k*15360, (k+1)*15360) of a 16 kHz mono slice):
 - `logits`: the graph's 15 outputs, float32 (the deployed detection scale).
 - `code`: the 2048-d tensor feeding the head (two 1024-d views concatenated), float16.
   Obtained by adding a graph output to the ONNX at the head's input (surgery, check the
   extra-output graph reproduces `logits` to 1e-5 on real audio).
-Classes 0 (`aambient_scraping`) and 14 (`mech_quadcopter`) have no center and sit above 0
-everywhere: give them zero loss weight and ignore them in every parity/flip readout.
+Classes without an `activation_center` (for v4: 0 `aambient_scraping` and 14 `mech_quadcopter`) sit above 0
+everywhere: give them zero loss weight and ignore them in every parity/flip readout. The code width (2048 for
+v4) is read off the graph and recorded in `teacher.json`; class count and buzz index come from the config.
+The slice geometry (62 frames of 0.96 s at 16 kHz) is fixed: a teacher framed differently is refused.
 
 ## Audio: what is used and what is off limits
 
@@ -27,7 +32,7 @@ so slices are windowed reads (ffmpeg -ss/-t, resample to 16 kHz mono float32).
 
 Excluded: `[trash]`, `Luke - External Data Sources` (ESC-50, InsectSound1000: public datasets,
 not deployments), weather data, and the **blacklist** (`blacklist.py`): every deployment
-sharing a grandparent dir with any moderate-set annotation fold, since the teacher trained on
+sharing a grandparent dir with any annotation fold in the teacher's `folds_train`/`folds.csv`, since the teacher trained on
 all of them (this covers the 5 rotating eval deployments). The deployment of a file is
 `dirname(dirname(file))`, a file directly under a project counts as its own project; use the
 stricter reading for `Reed - Illinois Soybean` (blacklist the date dir, e.g.
@@ -51,21 +56,26 @@ rank, first_rung) and prints rung sizes in hours and deployments. Hold out 10% o
 
 ## Cache (mirrors the input tree)
 
-Root: `/media/server storage/distill-cache/v4-ft-ps-e60-moderate/` (one subdirectory per teacher model under `distill-cache/`; sibling of
-`experiments/`; the subdirectory name is the teacher it holds targets for). Add `distill_cache` and `audio_root` keys to
-paths.local.json (gitignored; a worktree lacks the file, so copy the main checkout's) and to
-paths.local.example.json; read them through config.py, never as literals.
+Root: `<distill_cache>` (paths.local.json; `/media/server storage/distill-cache/`), one level per kind of product,
+each shared as widely as what it depends on (README.md has the table). The audio drive keeps these outside the repo.
 
 ```
-<cache>/README.md                      what this is, how it was made, how to regenerate
-<cache>/_manifest/{plan.csv,teacher.json,blacklist.txt}   teacher.json: onnx path + sha256, code tensor, ONNX opset, git commit
-<cache>/<relpath of source file, no extension>/h<hour:06d>.npz
+<distill_cache>/_shared/durations.csv                    ffprobe durations, keyed (relpath, size): every teacher
+<distill_cache>/_mel/<spec>/<relpath, no ext>/h<hour:06d>.npz   student-input spectrograms per front end (+ fingerprint.json)
+<distill_cache>/<teacher>/README.md                      what this is, how it was made, how to regenerate
+<distill_cache>/<teacher>/_manifest/{plan.csv,teacher.json,teacher_ext.onnx,blacklist.txt}
+<distill_cache>/<teacher>/<relpath, no ext>/h<hour:06d>.npz     the teacher's targets
 ```
-each npz (uncompressed): `mel` float16 (62,96,64) = YAMNet log-mel patches of the plain frame;
-`code` float16 (62,2048); `logits` float32 (62,15); `start_s` scalar. About 16 KB per frame plus 4 KB code.
-The student trains from `mel` (its front end is not learned, so decode and STFT never run
-during training). `cache.py` is resumable (skips existing npz), runs `--rung`, and is one GPU process
-fed by N decode workers (default 16, like buzzdetect's streamers).
+Targets npz (uncompressed): `code` float16 (62,D) = the head input, `logits` float32 (62,C), `start_s` scalar.
+`mel` float16 (62,96,64) is YAMNet's log-mel of the plain frame, `_mel/yamnet/...`: the mel depends on the
+audio only, so a second teacher does not store another copy (about 80% of the bytes). Caches made before the
+split hold `mel` inside the targets npz and `_fe/<spec>` under the teacher; readers accept both
+(`store.mel_path`) and `migrate_layout.py` moves `_fe` up to `_mel`. About 16 KB of mel plus 4 KB of code
+per frame. `teacher.json` records the onnx path + sha256 (`cache.py` refuses a changed ONNX), code tensor and
+width, opset, git commit. The student trains from `mel` (its front end is not learned, so decode and STFT
+never run during training). `cache.py` is resumable (skips existing npz, the targets file is the done marker),
+runs `--rung`, and is one GPU process fed by N decode workers (default 16, like buzzdetect's streamers).
+`plan.csv` is kept once written; `plan.py --replan` rewrites it.
 
 ## Student and loss
 
@@ -100,4 +110,4 @@ the repeat-run spread at the previous rung; stop at the first rung that doesn't.
 
 Everything longer than a minute goes through `tools/launch_job.sh`, watched with ONE Monitor
 (`tools/watch_job.sh`, 30 min, re-armed at every expiry). One GPU job at a time. No polling.
-Commit as you go on branch `worktree-distill-lite`; never push to main.
+Commit as you go on the distill branch; never push to main. `main.py` is the chained, resumable form of all of this.

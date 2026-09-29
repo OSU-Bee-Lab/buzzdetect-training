@@ -1,13 +1,19 @@
 """Distil the teacher into the width-alpha student, on the cached teacher targets.
 
     tools/launch_job.sh <log> -- conda run -n buzzdetect-train python \
-        05_distill/distill_train.py --rung A --steps 6000 --name a05_A
+        05_distill/distill_train.py --rung A --steps 6000 --name a05_A     # teacher: DISTILL_TEACHER / main.py --teacher
+
+Resumable: a checkpoint (weights, BN statistics, optimizer state, curve) is written at every
+--eval-every steps to runs/<name>/ckpt.npz, a rerun continues from it, and TRAIN_DONE marks a
+finished run (a rerun is then a no-op). Same name with other settings stops.
 
 Data: `<cache>/_manifest/plan.csv` says which slices belong to a rung (first_rung
-<= rung in A<B<C<D; `V` is the held-out validation deployments). The npz files
-(mel f16 (62,96,64), code f16 (62,2048), logits f32 (62,15)) are packed once
-into contiguous local shards `.local/distill/shards/<rung>/{mel,code,logits}.npy`
-(float16 memmaps, written in plan order so the HDD is read sequentially) and
+<= rung in A<B<C<D; `V` is the held-out validation deployments). Per slice, the targets npz
+(code f16 (n,D), logits f32 (n,C)) and the front end's mel (shared `_mel/<frontend>`, or the
+`mel` a pre-split cache embeds) are packed once into contiguous local shards
+`.local/distill/<teacher>/shards/<rung>[__<frontend>]/{mel,code,logits}.npy`
+(float16 memmaps, written in plan order so the HDD is read sequentially; reused while
+meta.json's fingerprint of teacher, plan, front end and slices present still matches) and
 training reads those. Batches are frame-level random draws from a full
 permutation, so a shuffle buffer is not needed; on-disk shards stay page-cached.
 

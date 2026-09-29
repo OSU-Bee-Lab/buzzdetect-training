@@ -1,4 +1,6 @@
 #!/bin/bash
+# NOTE (2026-09-29): pre-generalization chain. Hard-codes the single-teacher layout under .local/distill and the old
+# _fe cache; kept as the record of the runs it made. New work: 05_distill/main.py (README.md), same runs, any teacher.
 # Front-end frontier at rung B (seed 1, 7000 steps, same recipe as the ladder's B runs).
 # Question: how fast can the student go, and what does each front end cost in sensitivity?
 #   1 cache the front ends' inputs for rung B and V (cache_fe.py: decode once, all specs)

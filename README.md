@@ -18,6 +18,7 @@ it produces. `CLAUDE.md` is the orientation file for agents editing the code.
 - [Stage 2 — build a set and extract](#stage-2--build-a-set-and-extract)
 - [Stage 3 — train](#stage-3--train)
 - [Stage 4 — deploy](#stage-4--deploy)
+- [Stage 5 — distill (optional)](#stage-5--distill-optional)
 - [Reading the results](#reading-the-results)
 - [Tools](#tools)
 - [Design: why folds are deployments](#design-why-folds-are-deployments)
@@ -69,10 +70,11 @@ audio/ + 01_annotate/<effort>/data/
         │
         │  4.  04_deploy/main.py           → buzzdetect's engine/models/<name>/  (ONNX)
         ▼
+05_distill/main.py  (optional)             → lite students distilled from a deployed model
 ```
 
 Stages are normally run one at a time. Root `main.py` chains 2→3 for
-convenience; deploying (stage 4) is separate and manual.
+convenience; deploying (stage 4) and distilling (stage 5) are separate and manual.
 
 ---
 
@@ -565,6 +567,24 @@ graph against the recipe's `embed()` run at float32 and unchunked, since the
 float16 storage cast (the trunk family) and CHUNK_FRAMES blocks are how
 embeddings are stored, not what the graph computes; a failure on a recipe
 embedder is an export bug.
+
+---
+
+## Stage 5 — distill (optional)
+
+```bash
+tools/launch_job.sh <log> -- conda run -n buzzdetect-train python 05_distill/main.py \
+    --teacher <deployed model> --rung B --runs "yamnet:a0.50:select fast32:a0.50"
+conda run -n buzzdetect-train python 05_distill/main.py --runs fast32:a0.50 --dry-run   # status, runs nothing
+```
+
+Distils an already-deployed model (`--teacher`, any probe-headed model with a `models/<name>/` and an ONNX in
+buzzdetect) into a faster single-pass student, judged on the same rotating CV folds. It caches the teacher's
+outputs on a large pool of *unlabelled* deployment audio (never the teacher's own training deployments),
+trains each student on them, exports it, scores it, times it, records it and, with `--deploy`, copies it into
+buzzdetect. Re-running the same command after a crash or a quit resumes: every stage skips when its artifact
+exists, and training resumes from its last checkpoint. The caches and outputs live under `distill_cache` and
+`.local/distill/<teacher>/` (per-machine, gitignored). Full operator's guide: `05_distill/README.md`.
 
 ---
 

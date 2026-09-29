@@ -32,7 +32,7 @@ Students never see labels or eval deployments, but inherit fold knowledge throug
 ## Finding 1: speed is set by the front end, and by FFT length
 
 `chain_frontier_speed.sh` (random weights, engine venv, GPU, x YAMNet; results
-`.local/distill/arch_fe/` and `arch_fe2/`, `time_20.txt` / `time_200.txt`). YAMNet's own front end alone is 1.65x at 200 s, so no
+`.local/distill/arch_fe/` and `arch_fe2/` (`_shared/arch_fe*` after `migrate_layout.py`), `time_20.txt` / `time_200.txt`). YAMNet's own front end alone is 1.65x at 200 s, so no
 YAMNet-front-end student can beat that. Front-end cost tracks **FFT length** (bands barely matter):
 fft 256 ~2.7-3.1x, fft 512 (YAMNet) 1.65-2.0x, fft 1024 ~0.95x, fft 2048 ~0.45x. Any front end with a window
 long enough to resolve a ~200 Hz fundamental (fft >= 1024) is *slower than YAMNet*. Lowering the frame rate
@@ -56,11 +56,13 @@ it does not rule out band-limited front ends, but gives no reason to expect a bi
   cut into patches, mel matrix = `tf.signal.linear_to_mel_weight_matrix`. `python 05_distill/frontends.py`
   describes every spec. `test_frontends.py` checks numpy vs Keras vs YAMNet's own layer (all < 3e-5).
 - `student.py`: `build_student(..., frontend=name)`; `'yamnet'` is the untouched original path.
-- `cache_fe.py`: decodes each slice that already has a main-cache npz and writes `mel` only to
-  `<cache>/_fe/<spec>/...` (float16 (n, frames, bands, channels)). Teacher `code`/`logits` are reused (they do not
+- `cache_fe.py`: decodes each slice that already has a targets npz and writes `mel` only to
+  `<distill_cache>/_mel/<spec>/...` (float16 (n, frames, bands, channels); before 2026-09-29 the chains wrote
+  `<teacher cache>/_fe/<spec>/`, which readers still find and `migrate_layout.py` moves). It stamps each spec dir with
+  a fingerprint of the spec, so editing a spec without renaming it now stops the next run. Teacher `code`/`logits` are reused (they do not
   depend on the student front end). `check_cache_align.py`: numpy 'yamnet' spec vs stored mel agrees to ~2e-3
   except a few first-window elements of some mp3 slices (decode start effect, negligible).
-- `distill_train.py --frontend X`: packs shards to `.local/distill/shards/<rung>__<X>` (mel from `_fe`, targets
+- `distill_train.py --frontend X`: packs shards to `.local/distill/shards/<rung>__<X>` (mel from `_mel`, targets
   from the main cache). In-memory loader only. `--arch` gained `a0.25`.
   **Init:** a non-YAMNet front end cannot use the layer-wise refit (it pairs activations position by position,
   and the frequencies at those positions differ), so `--init yamnet` silently becomes `select` (channel
@@ -74,7 +76,15 @@ it does not rule out band-limited front ends, but gives no reason to expect a bi
 
 ## Running jobs (as of 2026-09-29 ~09:30; check `tools/watch_job.sh` or the logs)
 
-- `chain_frontends.sh` (launch_job pid 1161007, log `.local/distill/chain_frontends.log`): caches `_fe` inputs for
+**Since 2026-09-29 afternoon:** `main.py` (README.md) replaces these chains for new work: `main.py --runs "yamnet:a0.50:select fast32:a0.50 ..."`
+is the same list, resumable per stage and mid-training, and works for any teacher. The chains below ran from the
+`distill-lite` worktree against the pre-teacher layout; the generalization lives on branch `distill-generic` and
+must not be merged into `distill-lite` while a chain runs from it (bash reads a running script incrementally, and
+python scripts are re-read at every stage). After the chains finish: merge, `python 05_distill/migrate_layout.py`
+(dry run, then `--apply`), point paths.local.json's `distill_cache` at the parent `.../distill-cache/` directory, and
+`main.py --dry-run` should then show every finished run as done.
+
+- `chain_frontends.sh` (launch_job pid 1161007, log `.local/distill/chain_frontends.log`): caches `_fe` (now `_mel`) inputs for
   rung B + V, then per run: train -> export -> eval -> speed -> record -> print frontier table. Resumable
   (re-running skips finished stages). Run list (`RUNS` env overrides): control `yamnet:a0.50:select`, then
   fast32, fast32h16, fast32h32, twofast32 (a0.50); fast32h16 a0.375 / a0.25, fast32h32 a0.25; two32, lo32
@@ -120,5 +130,5 @@ memory noise-floor-cv). One seed per run, so read gaps below ~0.03 as ties.
 
 Checkpoints and curves `.local/distill/runs/<name>/`; ONNX `.local/distill/models/<name>/`; eval
 `.local/distill/eval/<name>/folds_sx.csv`; table `.local/distill/ladder.jsonl`; caches under the `distill_cache` path
-(`_fe/<spec>/`); shards `.local/distill/shards/`. All of `.local/` is gitignored and lives in the main checkout.
+(`_mel/<spec>/`, formerly `_fe/<spec>/`); shards `.local/distill/shards/`. Per-teacher locations are `.local/distill/<teacher>/...` once migrated (README.md). All of `.local/` is gitignored and lives in the main checkout.
 Code is in the `worktree-distill-lite` worktree, uncommitted as of this writing.

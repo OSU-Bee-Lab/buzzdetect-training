@@ -1,4 +1,6 @@
 #!/bin/bash
+# NOTE (2026-09-29): pre-generalization chain. Hard-codes the single-teacher layout under .local/distill and the old
+# _fe cache; kept as the record of the runs it made. New work: 05_distill/main.py (README.md), same runs, any teacher.
 # Ladder chain 2 (same rules as chain_ladder.sh: stop on failure, resumable, one
 # ladder.jsonl line per run, 7000 steps, eval after every run):
 #   1 cache rung C          2 train C (a0.50, seed 1, in-memory loader)

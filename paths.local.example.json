@@ -9,6 +9,7 @@
   },
   "audio_root": "/path/to/experiments",
   "_audio_root_comment": "05_distill: root of all deployment audio (read-only).",
-  "distill_cache": "/path/to/distill-cache/v4-ft-ps-e60-moderate",
-  "_distill_cache_comment": "05_distill: teacher-target cache (mel, code, logits per slice); big, on the audio drive. Layout: <distill-cache>/<teacher model name>/."
+  "distill_cache": "/path/to/distill-cache",
+  "_distill_cache_comment": "05_distill: the directory holding one subdirectory per teacher model (<distill-cache>/<teacher>/: teacher targets, plan) plus the teacher-independent _mel/ (spectrograms) and _shared/ (durations); big, on the audio drive.",
+  "_distill_optional": "05_distill also reads, when set: distill_teacher (default teacher), distill_baseline (CV baseline model the headline is compared to), distill_onnx_python (interpreter with onnxruntime-gpu for plan/cache; default .local/venv-onnx/bin/python)."
 }

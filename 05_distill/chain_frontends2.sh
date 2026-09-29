@@ -1,4 +1,6 @@
 #!/bin/bash
+# NOTE (2026-09-29): pre-generalization chain. Hard-codes the single-teacher layout under .local/distill and the old
+# _fe cache; kept as the record of the runs it made. New work: 05_distill/main.py (README.md), same runs, any teacher.
 # Second front-end chain: band-placement twins of fast32 / fast32h16 (same window, hop and bands, so the
 # same speed; only the band range moves from 125-7500 Hz to 100-2500 Hz). Waits for chain_frontends.sh
 # (its launch_job pid, WAIT_PID) so the one GPU job at a time rule holds, then runs it with a custom list.
