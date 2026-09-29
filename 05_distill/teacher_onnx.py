@@ -88,7 +88,7 @@ class Teacher:
         x = np.ascontiguousarray(wav, np.float32)
         mel = self.mel.run(None, {'waveform': x})[0]
         logits, code = self.ext.run(None, {'waveform': x})
-        return mel, logits, code
+        return mel[:len(logits)], logits, code   # mel graph may emit one extra trailing patch
 
 
 def main():
@@ -116,7 +116,7 @@ def main():
 
     # mel front end on the whole fixture and alignment checks
     mel_full = session(FRONTEND_ONNX, n, gpu=False).run(None, {'waveform': x})[0]
-    print('mel', mel_full.shape, mel_full.dtype, f'range {mel_full.min():.2f}..{mel_full.max():.2f}')
+    print('mel (may have +1 trailing patch vs logits)', mel_full.shape, mel_full.dtype, f'range {mel_full.min():.2f}..{mel_full.max():.2f}')
     assert mel_full.shape[1:] == (96, 64), mel_full.shape
     k = 5
     cut = np.ascontiguousarray(x[k * HOP:])
@@ -132,7 +132,7 @@ def main():
     t = Teacher()
     mel, lg, cd = t(sl)
     print('slice shapes', mel.shape, lg.shape, cd.shape,
-          f'logit diff vs full run {np.abs(lg - p0[:62]).max():.2e}, mel diff {np.abs(mel - mel_full[:62]).max():.2e}')
+          f'logit diff vs full run {np.abs(lg - p0[:62]).max():.2e}, mel diff {np.abs(mel - mel_full[:len(mel)]).max():.2e}')
     assert mel.shape == (62, 96, 64) and lg.shape == (62, 15)
 
     try:
