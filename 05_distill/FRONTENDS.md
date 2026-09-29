@@ -74,30 +74,43 @@ it does not rule out band-limited front ends, but gives no reason to expect a bi
   init-control rows. `ladder_record.py frontier` prints every rung-B run by 200 s speed with headline and % of baseline.
 - `bench_arch.py` names: `a0.50@two32` (trunk on front end), `fe@two32` (front end alone), `a0.25` etc; `--out DIR`.
 
-## Running jobs (as of 2026-09-29 ~09:30; check `tools/watch_job.sh` or the logs)
+## Running job (as of 2026-09-29 13:30; the handoff: enough to resume or take over)
 
-**Since 2026-09-29 afternoon:** `main.py` (README.md) replaces these chains for new work: `main.py --runs "yamnet:a0.50:select fast32:a0.50 ..."`
-is the same list, resumable per stage and mid-training, and works for any teacher. The chains below ran from the
-`distill-lite` worktree against the pre-teacher layout; the generalization lives on branch `distill-generic` and
-must not be merged into `distill-lite` while a chain runs from it (bash reads a running script incrementally, and
-python scripts are re-read at every stage). After the chains finish: merge, `python 05_distill/migrate_layout.py`
-(dry run, then `--apply`), point paths.local.json's `distill_cache` at the parent `.../distill-cache/` directory, and
-`main.py --dry-run` should then show every finished run as done.
+One job runs everything, `main.py`, launched from the `distill-lite` worktree (branch `worktree-distill-lite`, which now
+holds all of `main` plus this work; **do not edit `.py`/`.sh` under `05_distill/` there while it runs**, docs are safe):
 
-- `chain_frontends.sh` (launch_job pid 1161007, log `.local/distill/chain_frontends.log`): caches `_fe` (now `_mel`) inputs for
-  rung B + V, then per run: train -> export -> eval -> speed -> record -> print frontier table. Resumable
-  (re-running skips finished stages). Run list (`RUNS` env overrides): control `yamnet:a0.50:select`, then
-  fast32, fast32h16, fast32h32, twofast32 (a0.50); fast32h16 a0.375 / a0.25, fast32h32 a0.25; two32, lo32
-  (sensitivity-only: slower than YAMNet); twofast32 a0.375. Run names `fe_B_<frontend>_<arch>_s1[_select]`.
-- `chain_frontends2.sh` (pid 1270986, log `chain_frontends2.log`): waits for chain 1, then caches and runs the
-  band-placement twins `fast32lo` (100-2500 Hz) and `fast32h16lo`, same window/hop/bands as `fast32` / `fast32h16`
-  so speed is identical and only band placement differs.
-- ETA (estimate): chain 1 ~21:00, chain 2 ~00:00 on 2026-09-30. One GPU job at a time (4 GB card).
-- Per CLAUDE.md, one Monitor on `tools/watch_job.sh`, re-armed at each expiry.
-- If a chain died: relaunch the same command; finished stages skip. Chain 1 stages log `[chain] <name> <stage>`.
+```bash
+tools/launch_job.sh .local/distill/main_stage5.log -- /home/luke/anaconda3/envs/buzzdetect-train/bin/python \
+  05_distill/main.py --rung B --runs "fast32h16:a0.25 fast32h16:a0.25:lam=0 \
+  fast32h16:a0.25:classes=ins_buzz+ambient_rain+human fast32h16:a0.25:classes=ins_buzz+ambient_rain+human:lam=0 \
+  twofast32:a0.50 fast32h16:a0.375 fast32h32:a0.25 two32:a0.50 lo32:a0.50 twofast32:a0.375 fast32lo:a0.50 fast32h16lo:a0.50"
+```
+(launch_job pid 2020483 at 13:28; log `.local/distill/main_stage5.log`, stage lines `[chain] <label>: start/done/FAILED`.)
+Order: the class-subset experiment first (below), then the rest of the frontier list. 12 runs, ~40-60 min each plus ~25 min
+of shard packing for each front end not packed yet (two32, lo32, fast32lo, fast32h16lo; fast32h32 a0.25 reuses
+fast32h32's): **ETA about 10-12 h, i.e. ~00:00-02:00 on 2026-09-30**. One GPU job at a time (4 GB card): do not start another.
+
+- **Resume / restart:** rerun the same command (or a shorter `--runs`): finished stages skip, an interrupted training resumes from
+  its last checkpoint (every 2000 steps). A failed stage stops the job with `[chain] <label>: FAILED exit N` and a nonzero
+  `[launch_job] exit`; read the log above it. `main.py --dry-run` with the same `--runs` shows done/pending per stage.
+- **Cancel:** `kill` the launch_job pid and its `main.py` / `distill_train.py` children by PID (never `pkill -f`, see CLAUDE.md).
+- The chains that ran before (`chain_frontends*.sh`, pre-generalization) were killed at 13:27 by hand, with `twofast32`
+  packed and just starting to train; their runs' data were migrated to `.local/distill/<teacher>/` and are all recognised
+  by `main.py`. They are kept as the record; do not relaunch them (they hard-code the old layout).
+- Data layout was migrated on 2026-09-29 13:28 (`migrate_layout.py`): `.local/distill/v4-ft-ps-e60-moderate/{runs,models,eval,shards,ladder.jsonl}`,
+  `.local/distill/_shared/arch*`, and `<distill_cache>/_mel/<spec>` (was `<teacher>/_fe/<spec>`). paths.local.json's
+  `distill_cache` is the parent `/media/server storage/distill-cache`.
+- Branch state: `main` is an ancestor of `worktree-distill-lite`, so a fast-forward merge of that branch in the main
+  checkout (`git merge --ff-only worktree-distill-lite`) finishes the merge. It was not done automatically because the
+  main checkout has uncommitted changes (`diagnostics/2026-09-28_int8-ptq/README.md`, `tools/human/log_viewer.html`,
+  `tools/log_entry.py`; none overlap the merge). The `distill-generic` worktree/branch is fully merged and can be removed.
 
 ## Results so far (append as runs land; `ladder_record.py frontier` is the source of truth)
 
+- 2026-09-29 (rung B, seed 1, 7000 steps, a0.50 trunk, init select, headline `sensitivity_exclquiet` @ fpr 0.005; speed x YAMNet at 200 s):
+  `fast32h32` **0.572** at 2.56x, `fast32h16` 0.562 at 2.51x, `fast32` 0.606 at 2.17x, against the YAMNet-front-end control 0.694 at
+  1.39x. So the faster front ends cost ~0.09-0.13 headline for ~1.6-1.8x more speed, all still ~136-146% of the 0.414 baseline (floor
+  0.207). Band-placement twins, `twofast32`, the smaller trunks and the class-subset runs are still to come.
 - 2026-09-29 09:48 control `fe_B_yamnet_a0.50_s1_select` (YAMNet front end, `--init select`): headline **0.694**
   (incl. quiet 0.580) vs 0.625 for the same model with the layer-wise refit init. So the simpler init did not hurt
   (it scored higher; one seed, a 0.07 gap is well above the ~0.02 noise, so the refit is not helping at 7000 steps).

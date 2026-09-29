@@ -31,7 +31,8 @@
 - **Never edit scripts here while a chain runs from this worktree.** A chain re-reads its python stage scripts
   at every stage and bash reads a running script incrementally. Work on another branch/worktree, merge after.
   (2026-09-29: the generalization was written on `distill-generic` for exactly this reason.)
-- **`migrate_layout.py` before the first `main.py` on data made under the old layout**: until then
+- **`migrate_layout.py` before the first `main.py` on data made under the old layout** (done for the v4 teacher on
+  2026-09-29; a checkout that predates that still needs it): until then
   `.local/distill/<teacher>/` is empty, so main.py sees nothing done and would redo everything. It refuses to
   run while a distillation job is alive. After migrating, `distill_cache` in paths.local.json must be the
   parent `.../distill-cache/`, not the teacher directory.
