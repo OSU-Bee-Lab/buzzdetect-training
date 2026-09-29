@@ -17,14 +17,17 @@ import sys
 
 import pandas as pd
 
-MAIN = os.path.dirname(os.path.dirname(os.path.abspath(__file__))).split('/.claude/worktrees/')[0]
-LOCAL = os.path.join(MAIN, '.local', 'distill')
-LADDER = os.path.join(LOCAL, 'ladder.jsonl')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import dpaths as D  # noqa: E402
+
+MAIN = D.MAIN
+LOCAL = D.LOCAL                # .local/distill/<teacher>
+LADDER = D.LADDER
 COL = 'sensitivity_exclquiet'
 TIERS = ['faint', 'quiet', 'background', 'untagged', 'normal', 'loud']
 HEADLINE_TOL = 0.03
-REFS = [('baseline cv-baseline-v4-moderate', os.path.join(MAIN, 'models', 'cv-baseline-v4-moderate', 'folds_sx.csv')),
-        ('teacher honest rotation (v4-ft-ps-e60-moderate)', os.path.join(MAIN, 'models', 'v4-ft-ps-e60-moderate', 'folds_sx.csv')),
+REFS = [(f'baseline {D.BASELINE}', os.path.join(MAIN, 'models', D.BASELINE, 'folds_sx.csv')),
+        (f'teacher honest rotation ({D.TEACHER})', os.path.join(MAIN, 'models', D.TEACHER, 'folds_sx.csv')),
         ('teacher ONNX via harness (trained on folds, inflated)', os.path.join(LOCAL, 'eval', 'teacher', 'folds_sx.csv'))]
 
 

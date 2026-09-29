@@ -40,46 +40,47 @@ sys.path.insert(0, os.path.dirname(HERE))
 import student as st  # noqa: E402
 import student_init as si  # noqa: E402
 import frontends as fes  # noqa: E402
+import dpaths as D  # noqa: E402
+import store  # noqa: E402
 
-MAIN = st.main_checkout()
-LOCAL = os.path.join(MAIN, '.local', 'distill')
-CLASSES = ['aambient_scraping', 'ambient_background', 'ambient_music', 'ambient_noise',
-           'ambient_rain', 'ambient_thunder', 'animal', 'human', 'ins_buzz', 'ins_trill',
-           'mech_auto', 'mech_hum', 'mech_machinery', 'mech_plane', 'mech_quadcopter']
-BUZZ = CLASSES.index('ins_buzz')
-DEAD = (0, 14)                      # no center: above 0 everywhere, zero weight
-LIVE = [i for i in range(15) if i not in DEAD]
+LOCAL = D.LOCAL
+SP = D.spec()                       # the teacher's classes; classes without an activation center are dead
+CLASSES = SP.classes
+BUZZ = SP.buzz
+DEAD = tuple(SP.dead)               # no center: above 0 everywhere, zero weight
+LIVE = SP.live
+N_CLASSES = SP.n_classes
 RUNG_ORDER = 'ABCDE'
 ARCHS = {'a0.50': (0.5, 14), 'a0.50_d12': (0.5, 12), 'a0.375': (0.375, 14), 'a0.25': (0.25, 14)}   # name -> (alpha, depth)
 
 
 def cache_root(arg=None):
-    if arg:
-        return arg
-    import config
-    if not config.DISTILL_CACHE:
-        sys.exit('set distill_cache in paths.local.json')
-    return config.DISTILL_CACHE
+    return arg or D.need_cache()
 
 
 # ---------------------------------------------------------------- packing
 
-def slice_path(cache, relpath, hour):
-    return os.path.join(cache, os.path.splitext(relpath)[0], f'h{int(hour):06d}.npz')
+slice_path = D.slice_path
 
 
-def fe_path(cache, frontend, relpath, hour):
-    return slice_path(os.path.join(cache, '_fe', frontend), relpath, hour)
+def pack_fingerprint(cache, rung, frontend, n_avail):
+    """Everything a packed shard set is derived from: a different teacher build, plan, front end
+    definition, or a rung that has gained slices since (n_avail) means the pack is stale and is
+    rebuilt (it is derived data)."""
+    return store.fingerprint({'rung': rung, 'frontend': frontend, 'code_dim': SP.code_dim, 'n_avail': n_avail,
+                              'teacher_sha': json.load(open(D.TEACHER_JSON))['onnx_sha256'],
+                              'plan_sha': store.file_sha(os.path.join(cache, '_manifest', 'plan.csv')),
+                              'mel': store.mel_fingerprint(frontend) if frontend != 'yamnet' else 'yamnet'})
 
 
 def pack(cache, rung, out_dir=None, frontend='yamnet'):
-    """npz -> contiguous shards. Returns the shard dir. Skips if meta.json exists.
-    frontend != 'yamnet': `mel` comes from the `_fe/<frontend>` cache (cache_fe.py), targets from the
-    main cache; slices missing from either are dropped together."""
+    """npz -> contiguous shards. Returns the shard dir. Reused when meta.json's fingerprint matches what
+    it would be built from now (a pack from before fingerprints is trusted); a stale pack is deleted and
+    rebuilt. `mel` comes from the shared `_mel/<frontend>` level (or a pre-split cache's embedded /
+    `_fe` copy, store.mel_path), targets from the teacher's cache; slices missing either are dropped
+    together."""
     fe = None if frontend == 'yamnet' else fes.get(frontend)
-    out = out_dir or os.path.join(LOCAL, 'shards', rung if fe is None else f'{rung}__{frontend}')
-    if os.path.exists(os.path.join(out, 'meta.json')):
-        return out
+    out = out_dir or os.path.join(D.SHARDS, rung if fe is None else f'{rung}__{frontend}')
     plan = pd.read_csv(os.path.join(cache, '_manifest', 'plan.csv'))
     if rung == 'V':
         plan = plan[plan['first_rung'] == 'V']
@@ -87,28 +88,35 @@ def pack(cache, rung, out_dir=None, frontend='yamnet'):
         ok = [r for r in RUNG_ORDER[:RUNG_ORDER.index(rung) + 1]]
         plan = plan[plan['first_rung'].isin(ok)]
     plan = plan.sort_values(['relpath', 'hour'])
+    avail = []                                   # (plan row, targets npz, mel npz) for slices with both
+    for r in plan.itertuples():
+        p = slice_path(cache, r.relpath, r.hour)
+        pf = store.mel_path(frontend, r.relpath, r.hour, cache) if os.path.exists(p) else None
+        if pf is not None:
+            avail.append((r, p, pf))
+    fp = pack_fingerprint(cache, rung, frontend, len(avail))
+    if os.path.exists(os.path.join(out, 'meta.json')):
+        have = json.load(open(os.path.join(out, 'meta.json'))).get('fingerprint')
+        if have in (None, fp):
+            return out
+        print(f'[pack {rung}] {out} is stale (fingerprint {have} != {fp}): rebuilding', flush=True)
+        import shutil
+        shutil.rmtree(out)
     cap = int(plan['n_frames'].sum())
     os.makedirs(out, exist_ok=True)
     mel_shape = (96, 64) if fe is None else (fe.frames, fe.bands, fe.n_channels)
     fm = {k: np.lib.format.open_memmap(os.path.join(out, k + '.npy'), mode='w+', dtype=dt, shape=(cap,) + sh)
-          for k, dt, sh in (('mel', np.float16, mel_shape), ('code', np.float16, (2048,)),
-                            ('logits', np.float32, (15,)))}
-    n, missing, sl = 0, 0, []
+          for k, dt, sh in (('mel', np.float16, mel_shape), ('code', np.float16, (SP.code_dim,)),
+                            ('logits', np.float32, (N_CLASSES,)))}
+    n, sl = 0, []
+    missing = len(plan) - len(avail)
     t0 = time.time()
-    for i, r in enumerate(plan.itertuples()):
-        p = slice_path(cache, r.relpath, r.hour)
-        pf = p if fe is None else fe_path(cache, frontend, r.relpath, r.hour)
-        if not (os.path.exists(p) and os.path.exists(pf)):
-            missing += 1
-            continue
+    for i, (r, p, pf) in enumerate(avail):
         with np.load(p) as z:
             m = len(z['logits'])
-            if fe is None:
-                fm['mel'][n:n + m] = z['mel']
-            else:
-                with np.load(pf) as zf:
-                    assert len(zf['mel']) == m, (pf, len(zf['mel']), m)
-                    fm['mel'][n:n + m] = zf['mel']
+            mel = store.load_mel(pf)
+            assert len(mel) == m, (pf, len(mel), m)
+            fm['mel'][n:n + m] = mel
             fm['code'][n:n + m] = z['code']
             fm['logits'][n:n + m] = z['logits']
         sl.append((r.deployment, n, m))
@@ -117,10 +125,10 @@ def pack(cache, rung, out_dir=None, frontend='yamnet'):
             print(f'[pack {rung}] {i}/{len(plan)} slices, {n} frames, {time.time() - t0:.0f} s', flush=True)
     for v in fm.values():
         v.flush()
-    # frames beyond n are unused; meta records the real count
+    # frames beyond n are unused; meta records the real count (written last: its presence is "done")
     dep = [d for d, _, _ in sl]
     json.dump({'frames': n, 'slices': len(sl), 'missing_slices': missing, 'capacity': cap,
-               'slice_index': sl, 'deployments': len(set(dep))},
+               'slice_index': sl, 'deployments': len(set(dep)), 'fingerprint': fp},
               open(os.path.join(out, 'meta.json'), 'w'))
     print(f'[pack {rung}] {n} frames from {len(sl)} slices ({missing} missing) -> {out}', flush=True)
     return out
@@ -206,20 +214,72 @@ def ridge(x, y, lam):
     return w[:-1].astype(np.float32), w[-1].astype(np.float32)
 
 
-def build_and_init(a, tr, mu, sd):
+RESUME_KEYS = ('rung', 'steps', 'name', 'alpha', 'depth', 'frontend', 'arch', 'loader', 'batch', 'lr', 'lam',
+               'huber', 'init', 'init_frames', 'ridge', 'bn_momentum', 'seed')
+
+
+def ckpt_path(out):
+    return os.path.join(out, 'ckpt.npz')
+
+
+def save_ckpt(out, step, model, aux, opt, curve):
+    """Everything a resume needs: model + aux weights (BN moving stats included), the optimizer's slots and
+    iteration count (the cosine schedule is a function of it), and the curve so far. Atomic."""
+    arrays = {'step': np.int64(step), 'curve': np.frombuffer(json.dumps(curve, default=float).encode(), np.uint8)}
+    for tag, ws in (('m', model.get_weights()), ('a', aux.get_weights()),
+                    ('o', [np.array(v.numpy() if hasattr(v, 'numpy') else v) for v in opt.variables])):
+        arrays.update({f'{tag}{i}': w for i, w in enumerate(ws)})
+    tmp = ckpt_path(out) + '.tmp'
+    with open(tmp, 'wb') as f:
+        np.savez(f, **arrays)
+    os.replace(tmp, ckpt_path(out))
+
+
+def load_resume_state(out, cli):
+    """'done' if this run already finished, the checkpoint's arrays if it was interrupted, else None.
+    A run dir left by other settings under the same name stops the run (a mix-up, not a resume)."""
+    def same(prev):
+        diff = {k: (prev[k], cli[k]) for k in cli if k in prev and prev[k] != cli[k]}
+        if diff:
+            sys.exit(f'{out} was trained with other settings {diff}: pick another --name or delete it')
+    if os.path.exists(os.path.join(out, 'TRAIN_DONE')):
+        cv = os.path.join(out, 'curve.json')
+        if os.path.exists(cv):
+            same(json.load(open(cv)).get('cli', {}))
+        return 'done'
+    if os.path.exists(ckpt_path(out)):
+        z = dict(np.load(ckpt_path(out)))
+        same(json.loads(bytes(z['curve']).decode()).get('cli', {}))
+        return z
+    return None
+
+
+def restore(z, model, aux, opt):
+    def group(tag):
+        return [z[f'{tag}{i}'] for i in range(sum(1 for k in z if k[0] == tag and k[1:].isdigit()))]
+    model.set_weights(group('m'))
+    aux.set_weights(group('a'))
+    for v, w in zip(opt.variables, group('o')):
+        v.assign(w)
+    return int(z['step']), json.loads(bytes(z['curve']).decode())
+
+
+def build_and_init(a, tr, mu, sd, skip_fit=False):
     filters = st.widths_for(a.alpha, a.depth)
-    model = st.build_student(filters, input_type='mel', expose_code=True, name='student_mel',
+    model = st.build_student(filters, n_out=N_CLASSES, input_type='mel', expose_code=True, name='student_mel',
                              frontend=a.frontend)
     for l in model.layers:                      # moving stats must track fast: the init's BN is
         if isinstance(l, tf.keras.layers.BatchNormalization):   # identity+bias (refit), not YAMNet's
             l.momentum = a.bn_momentum
-    aux = tf.keras.layers.Dense(2048, name='aux')
+    aux = tf.keras.layers.Dense(SP.code_dim, name='aux')
     aux.build((None, filters[-1]))
     if a.frontend != 'yamnet' and a.init == 'yamnet':
         # the layer-wise refit pairs student and YAMNet activations position by position; a different
         # front end puts different frequencies at those positions, so only selection + BN moments apply
         print('[init] front end != yamnet: init yamnet -> select (channel selection + BN recalibration)', flush=True)
         a.init = 'select'
+    if skip_fit:                                # resuming: every weight comes from the checkpoint
+        return model, aux
     sels = si.init_from_yamnet(model) if a.init in ('yamnet', 'select') else None
     rng = np.random.default_rng(1)
     idx = np.sort(rng.choice(tr.n, min(a.init_frames, tr.n), replace=False))
@@ -244,7 +304,6 @@ def main():
     ap.add_argument('--rung', default='A')
     ap.add_argument('--steps', type=int, required=True, help='fixed budget, stated up front')
     ap.add_argument('--name', required=True)
-    ap.add_argument('--cache')
     ap.add_argument('--alpha', type=float, default=0.5)
     ap.add_argument('--depth', type=int, default=14)
     ap.add_argument('--frontend', default='yamnet', choices=list(fes.FRONTENDS),
@@ -267,6 +326,7 @@ def main():
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--shards', help='override shard dir for the train rung (selftest)')
     ap.add_argument('--val-shards', help='override shard dir for validation (selftest)')
+    ap.add_argument('--halt-at', type=int, default=0, help=argparse.SUPPRESS)   # test hook, see test_distill.py
     a = ap.parse_args()
 
     for g in tf.config.list_physical_devices('GPU'):
@@ -274,7 +334,14 @@ def main():
     tf.keras.utils.set_random_seed(a.seed)
     if a.arch:
         a.alpha, a.depth = ARCHS[a.arch]
-    cache = None if a.shards else cache_root(a.cache)
+    cache = None if a.shards else cache_root()
+    out = os.path.join(D.RUNS, a.name)
+    os.makedirs(out, exist_ok=True)
+    cli = {k: v for k, v in vars(a).items() if k in RESUME_KEYS}
+    resume = load_resume_state(out, cli)                 # None, or the checkpoint's (step, curve, arrays)
+    if resume == 'done':
+        print(f'[done] {out} already trained (TRAIN_DONE); delete it to retrain', flush=True)
+        return
     if a.frontend != 'yamnet':
         assert a.loader == 'mem', 'front-end experiments train from the in-memory pack (rung B)'
     if a.loader == 'stream':
@@ -290,18 +357,21 @@ def main():
           f'= {a.steps * a.batch / total:.2f} passes; arch alpha {a.alpha} depth {a.depth} '
           f'frontend {a.frontend}', flush=True)
     mu, sd = tr.code_stats()
-    model, aux = build_and_init(a, tr, mu, sd)
-    out = os.path.join(LOCAL, 'runs', a.name)
-    os.makedirs(out, exist_ok=True)
-    curve = {'args': vars(a), 'train': [], 'val': []}
-    v0 = val_flips(model, val, a.val_limit)
-    print(fmt_val(0, v0), flush=True)
-    curve['val'].append({'step': 0, **v0})
-
+    model, aux = build_and_init(a, tr, mu, sd, skip_fit=resume is not None)
     sched = tf.keras.optimizers.schedules.CosineDecay(a.lr, a.steps, alpha=0.01)
     opt = tf.keras.optimizers.Adam(sched)
-    live = tf.constant([0. if i in DEAD else 1. for i in range(15)])
     tvars = model.trainable_variables + aux.trainable_variables
+    opt.build(tvars)
+    if resume is None:
+        curve = {'args': vars(a), 'cli': cli, 'train': [], 'val': []}
+        v0 = val_flips(model, val, a.val_limit)
+        print(fmt_val(0, v0), flush=True)
+        curve['val'].append({'step': 0, **v0})
+        start = 0
+    else:
+        start, curve = restore(resume, model, aux, opt)
+        print(f'[resume] {out}: continuing from step {start} of {a.steps}', flush=True)
+    live = tf.constant([0. if i in DEAD else 1. for i in range(N_CLASSES)])
     mu_t, sd_t = tf.constant(mu), tf.constant(sd)
 
     @tf.function
@@ -320,9 +390,11 @@ def main():
         np.savez(os.path.join(out, 'aux.npz'), w=aux.get_weights()[0], b=aux.get_weights()[1], mu=mu, sd=sd)
         json.dump(curve, open(os.path.join(out, 'curve.json'), 'w'))
 
+    # a resumed run draws a fresh batch sequence (seed + start): statistically the same, not bit-identical
+    left, seed = a.steps - start, a.seed + start
+    gen = tr.batches(a.batch, left, seed) if hasattr(tr, 'batches') else batches(tr, a.batch, left, seed)
     t0, acc = time.time(), []
-    for i, (mel, code, lg) in enumerate((tr.batches(a.batch, a.steps, a.seed) if hasattr(tr, 'batches')
-                                    else batches(tr, a.batch, a.steps, a.seed)), 1):
+    for i, (mel, code, lg) in enumerate(gen, start + 1):
         loss, hub, cmse = step(tf.constant(mel), tf.constant(code), tf.constant(lg))
         acc.append([float(loss), float(hub), float(cmse)])
         if i % 100 == 0 or i == a.steps:
@@ -331,16 +403,23 @@ def main():
             curve['train'].append({'step': i, 'loss': m[0], 'huber': m[1], 'code_mse': m[2]})
             if i % 500 == 0 or i == a.steps:
                 print(f'[train {i}/{a.steps}] loss {m[0]:.4f} huber {m[1]:.4f} code_mse {m[2]:.4f} '
-                      f'{i / (time.time() - t0):.1f} step/s', flush=True)
+                      f'{(i - start) / (time.time() - t0):.1f} step/s', flush=True)
         if i % a.eval_every == 0 and i != a.steps:
             v = val_flips(model, val, a.val_limit)
             print(fmt_val(i, v), flush=True)
             curve['val'].append({'step': i, **v})
             save()
+            save_ckpt(out, i, model, aux, opt, curve)
+            if a.halt_at == i:                            # test hook: simulate a crash right after a checkpoint
+                print(f'[halt] --halt-at {i}', flush=True)
+                sys.exit(3)
     v = val_flips(model, val)
     print(fmt_val(a.steps, v) + ' FINAL', flush=True)
     curve['val'].append({'step': a.steps, 'final': True, **v})
     save()
+    open(os.path.join(out, 'TRAIN_DONE'), 'w').close()
+    if os.path.exists(ckpt_path(out)):
+        os.remove(ckpt_path(out))
     print(f'[done] {out}', flush=True)
 
 

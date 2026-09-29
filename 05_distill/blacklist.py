@@ -17,21 +17,18 @@ import argparse, collections, csv, json, os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 import config  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import dpaths as D  # noqa: E402
 
 AUDIO_EXT = {'.wav', '.mp3', '.wma', '.flac', '.m4a', '.ogg', '.mp4', '.mts'}
 # Not deployment audio: public datasets, trash, weather data. Never used.
 NOT_DEPLOYMENT = {'[trash]', 'weather station data', 'Luke - External Data Sources'}
 STRICT_PROJECTS = {'Reed - Illinois Soybean'}   # blacklist the date dir (2 components)
-TEACHER = 'v4-ft-ps-e60-moderate'
 
 
-def teacher_model_dir(name=TEACHER):
-    """models/<name>, falling back to the main checkout when run from a worktree."""
-    d = os.path.join(config.DIR_MODELS, name)
-    if os.path.isfile(os.path.join(d, 'config_model.json')):
-        return d
-    main = ROOT.split(os.sep + '.claude' + os.sep + 'worktrees' + os.sep)[0]
-    return os.path.join(main, 'models', name)
+def teacher_model_dir():
+    """The teacher's model dir (its folds are what it trained on), from the main checkout."""
+    return D.TEACHER_MODEL_DIR
 
 
 def deployment(rel):
@@ -81,7 +78,7 @@ def walk_audio(root):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--audio-root', default=config.AUDIO_ROOT)
+    ap.add_argument('--audio-root', default=D.AUDIO_ROOT)
     ap.add_argument('--model-dir', default=None)
     ap.add_argument('--out', default=None, help='write the blacklist here')
     a = ap.parse_args()

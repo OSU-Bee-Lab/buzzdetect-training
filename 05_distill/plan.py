@@ -8,10 +8,16 @@ short slice at 0 with floor(dur/0.96) frames), ranks them deterministically
 per-deployment floor. 10% of deployments (sha1 of the deployment) are a
 validation pool: never in A-D, sampled separately as rung V.
 
-Writes <cache>/_manifest/plan.csv (+ blacklist.txt, durations.csv), prints the
-rung table. Run (no GPU):
+Writes <cache>/_manifest/plan.csv (+ blacklist.txt) and prints the rung table. The ffprobe
+durations are shared across teachers (<distill_cache>/_shared/durations.csv), so a second
+teacher's plan never probes the audio tree again. Run (no GPU):
     python 05_distill/plan.py            # any python with numpy-free stdlib
 Rung targets (hours) and floors are the RUNGS constant below.
+
+An existing plan.csv is kept (like a set's config_extract.json): the cached slices belong
+to *this* plan, so it is only rewritten with --replan (new audio on the drive, changed
+RUNGS). The cache is keyed by (relpath, hour) and the rank is a hash of that key, so a
+replan reuses every cached slice that stays in the plan.
 """
 import argparse, bisect, collections, csv, hashlib, os, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
@@ -19,7 +25,8 @@ from concurrent.futures import ThreadPoolExecutor
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import blacklist as bl  # noqa: E402
-import config  # noqa: E402
+import dpaths as D  # noqa: E402
+import store  # noqa: E402
 
 FRAME_S = 0.96
 SLICE_FRAMES = 62
@@ -108,19 +115,23 @@ def choose(items, target_h, floor):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--audio-root', default=config.AUDIO_ROOT)
-    ap.add_argument('--cache', default=config.DISTILL_CACHE)
+    ap.add_argument('--audio-root', default=D.AUDIO_ROOT)
     ap.add_argument('--workers', type=int, default=16)
+    ap.add_argument('--replan', action='store_true', help='rewrite an existing plan.csv')
     a = ap.parse_args()
-    man = os.path.join(a.cache, '_manifest')
+    D.need_cache()
+    man = D.MANIFEST
     os.makedirs(man, exist_ok=True)
+    if os.path.exists(D.PLAN) and not a.replan:
+        print(f'{D.PLAN} exists: keeping it (--replan to rewrite)')
+        return
 
     black = bl.blacklist_dirs()
     open(os.path.join(man, 'blacklist.txt'), 'w').write('\n'.join(black) + '\n')
     bset = set(black)
     files = [(r, s) for r, s in bl.walk_audio(a.audio_root) if not bl.excluded(r, bset)]
     print(f'files kept {len(files)}', flush=True)
-    dur = durations(files, a.audio_root, os.path.join(man, 'durations.csv'), a.workers)
+    dur = durations(files, a.audio_root, store.durations_csv(), a.workers)
     bad = [r for r, d in dur.items() if d is None]
     print(f'unprobeable files {len(bad)}; too short (<{MIN_FRAMES} frames) '
           f'{sum(1 for d in dur.values() if d is not None and d < MIN_FRAMES * FRAME_S)}')

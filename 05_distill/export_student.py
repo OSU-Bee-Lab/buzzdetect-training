@@ -32,12 +32,13 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(ROOT, '04_deploy'))
 import student as st  # noqa: E402
+import dpaths as D  # noqa: E402
 
-MAIN = st.main_checkout()
-LOCAL = os.path.join(MAIN, '.local', 'distill')
-TEACHER_CFG = os.path.join(MAIN, 'models', 'v4-ft-ps-e60-moderate', 'config_model.json')
-ENGINE_CFG = '/home/luke/projects/buzzdetect/engine/models/v4-ft-ps-e60-moderate/config_model.json'
-FIXTURE = os.path.join(ROOT, '04_deploy', 'fixtures', '230808_1208_s89520.flac')
+MAIN = D.MAIN
+LOCAL = D.LOCAL                    # .local/distill/<teacher>
+TEACHER_CFG = os.path.join(D.TEACHER_MODEL_DIR, 'config_model.json')
+ENGINE_CFG = os.path.join(D.TEACHER_ENGINE_DIR, 'config_model.json')     # template for the student's engine config
+FIXTURE = D.FIXTURE
 TOL = 1e-4
 
 
@@ -95,7 +96,8 @@ def do_export(a):
     mel = load_mel(a)
     filters = filters_of(mel)
     fe_name = run_frontend(a)
-    wav = st.build_student(filters, name=a.name.replace('-', '_').replace('.', '_'), frontend=fe_name)
+    wav = st.build_student(filters, n_out=D.spec().n_classes, name=a.name.replace('-', '_').replace('.', '_'),
+                           frontend=fe_name)
     n = st.copy_weights(mel, wav)
     centers, tcfg = centers_vector()
     head = wav.get_layer('logits')
@@ -119,9 +121,9 @@ def do_export(a):
     cfg = json.load(open(ENGINE_CFG))
     # one patch needs 15360 samples plus the STFT window's tail (25 ms window: 15600)
     cfg['samples_min'] = 15600 if fe_name == 'yamnet' else 15360 - st.fes.get(fe_name).hop + st.fes.get(fe_name).max_window
-    cfg['metadata'] = {'embeddername': 'distilled_student', 'set': 'moderate',
+    cfg['metadata'] = {'embeddername': 'distilled_student', 'set': D.spec().set,
                        'trained_date': __import__('datetime').date.today().isoformat(),
-                       'teacher': 'v4-ft-ps-e60-moderate', 'filters': filters,
+                       'teacher': D.TEACHER, 'filters': filters,
                        'source_run': None if a.init_only else a.run, 'frontend': fe_name,
                        'note': 'distilled single-pass student; activation_centers folded into the head bias'}
     json.dump(cfg, open(os.path.join(d, 'config_model.json'), 'w'), indent=2)
@@ -156,7 +158,7 @@ def do_time(a):
         r = json.load(open(os.path.join(bench_arch.OUT, 'results.json')))
         row = {'seconds': secs, 'repeats': a.repeats, 'gpu': r[a.name]['GPU']['rate'],
                'yamnet_gpu': r['yamnet_large_general']['GPU']['rate'],
-               'teacher_gpu': r['v4-ft-ps-e60-moderate']['GPU']['rate']}
+               'teacher_gpu': r[D.TEACHER]['GPU']['rate']}
         row['x_yamnet'] = row['gpu'] / row['yamnet_gpu']
         json.dump(row, open(os.path.join(bench_arch.OUT, a.name, f'speed_{secs}.json'), 'w'))
 

@@ -32,12 +32,11 @@ import pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.dirname(HERE))
+import dpaths as D  # noqa: E402
+import store  # noqa: E402
 GROUPS = 'ABCD'
 SLICES_PER_SHARD = 66
-
-
-def slice_path(cache, relpath, hour):
-    return os.path.join(cache, os.path.splitext(relpath)[0], f'h{int(hour):06d}.npz')
+slice_path = D.slice_path
 
 
 def shard_root(cache):
@@ -61,14 +60,22 @@ def pack(cache, rung, workers=8):
     plan = _plan(cache)
     for g in GROUPS[:GROUPS.index(rung) + 1]:
         d = os.path.join(root, g)
-        if os.path.exists(os.path.join(d, 'index.json')):
-            print(f'[shards {g}] index exists, skip', flush=True)
-            continue
-        os.makedirs(d, exist_ok=True)
         rows = plan[plan['first_rung'] == g].copy()
         rows['h'] = [int(hashlib.sha1(f'{r}:{h}'.encode()).hexdigest()[:13], 16) for r, h in zip(rows.relpath, rows.hour)]
         rows = rows.sort_values('h')
         recs = list(rows.itertuples())
+        # what this group's shards are derived from: the teacher build, its code width, the group's slice list
+        fp = store.fingerprint({'group': g, 'code_dim': D.spec().code_dim, 'teacher_sha': store.teacher_sha(),
+                                'slices': store.fingerprint([[r.relpath, int(r.hour)] for r in recs])})
+        if os.path.exists(os.path.join(d, 'index.json')):
+            have = json.load(open(os.path.join(d, 'index.json'))).get('fingerprint')
+            if have in (None, fp):
+                print(f'[shards {g}] index exists, skip', flush=True)
+                continue
+            print(f'[shards {g}] stale (fingerprint {have} != {fp}): rebuilding', flush=True)
+            import shutil
+            shutil.rmtree(d)
+        os.makedirs(d, exist_ok=True)
         files, frames, t0 = [], [], time.time()
         pool = ThreadPoolExecutor(workers)
 
@@ -76,8 +83,11 @@ def pack(cache, rung, workers=8):
             p = slice_path(cache, r.relpath, r.hour)
             if not os.path.exists(p):
                 return None
+            mp = store.mel_path('yamnet', r.relpath, r.hour, cache)
+            if mp is None:
+                return None
             with np.load(p) as z:
-                return z['mel'], z['code'], z['logits']
+                return store.load_mel(mp), z['code'], z['logits']
 
         for k, s in enumerate(range(0, len(recs), SLICES_PER_SHARD)):
             fn = os.path.join(d, f's{k:05d}.npz')
@@ -96,7 +106,7 @@ def pack(cache, rung, workers=8):
             if k % 20 == 0:
                 print(f'[shards {g}] shard {k} of {-(-len(recs) // SLICES_PER_SHARD)}, {sum(frames)} frames, '
                       f'{time.time() - t0:.0f} s', flush=True)
-        json.dump({'files': files, 'frames': frames}, open(os.path.join(d, 'index.json'), 'w'))
+        json.dump({'files': files, 'frames': frames, 'fingerprint': fp}, open(os.path.join(d, 'index.json'), 'w'))
         print(f'[shards {g}] {len(files)} shards, {sum(frames)} frames', flush=True)
 
 
@@ -116,15 +126,16 @@ class StreamPool:
             self.files += [os.path.join(root, g, f) for f in idx['files']]
             self.frames += idx['frames']
         self.total = int(sum(self.frames))
-        per_frame = 96 * 64 * 2 + 2048 * 2 + 15 * 4
+        code_dim, n_cls = D.spec().code_dim, D.spec().n_classes
+        per_frame = 96 * 64 * 2 + code_dim * 2 + n_cls * 4
         gb = buffer_gb or min(8.0, 0.4 * free_ram_gb())
         self.n = int(min(self.total, gb * 1e9 / per_frame))
         plan = _plan(cache)
         sel = plan[plan['first_rung'].isin(list(GROUPS[:GROUPS.index(rung) + 1]))]
         self.meta = {'slices': len(sel), 'deployments': int(sel['deployment'].nunique())}
         self.mel = np.empty((self.n, 96, 64), np.float16)
-        self.code = np.empty((self.n, 2048), np.float16)
-        self.logits = np.empty((self.n, 15), np.float32)
+        self.code = np.empty((self.n, code_dim), np.float16)
+        self.logits = np.empty((self.n, n_cls), np.float32)
         self._seed = seed
         self._q = None
         print(f'[stream] {len(self.files)} shards, {self.total} frames; shuffle buffer {self.n} frames '
@@ -191,7 +202,5 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('phase', choices=['pack'])
     ap.add_argument('--rung', required=True, choices=list(GROUPS))
-    ap.add_argument('--cache')
     a = ap.parse_args()
-    import config
-    pack(a.cache or config.DISTILL_CACHE, a.rung)
+    pack(D.need_cache(), a.rung)

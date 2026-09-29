@@ -45,13 +45,18 @@ import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-MAIN = ROOT.split(os.sep + '.claude' + os.sep + 'worktrees' + os.sep)[0]
-SET = 'moderate'
-TRANSLATION = 'general'
-AUDIO = os.path.join(MAIN, '02_set', 'sets', SET, 'audio', 'sr16000_fl0.96', 'raw')
-ENGINE_PY = '/home/luke/projects/buzzdetect/engine/.venv/bin/python3'
-BASELINE = os.path.join(MAIN, 'models', 'cv-baseline-v4-moderate')
-TEACHER_ONNX = '/home/luke/projects/buzzdetect/engine/models/v4-ft-ps-e60-moderate/model.onnx'
+sys.path.insert(0, HERE)
+import dpaths as D  # noqa: E402
+
+MAIN = D.MAIN
+SP = D.spec()
+SET = SP.set                    # the teacher's set: its rotating folds are the eval deployments
+TRANSLATION = SP.translation
+AUDIO = SP.audio_dir
+BUZZ = SP.buzz
+ENGINE_PY = D.ENGINE_PY
+BASELINE = os.path.join(MAIN, 'models', D.BASELINE)
+TEACHER_ONNX = D.TEACHER_ONNX
 
 # train_utils.TIER_MARKERS / TIERS, copied so infer runs without TensorFlow.
 # `score --check-labels` proves the copy agrees with the pipeline's own labels.
@@ -174,7 +179,7 @@ def infer(a):
                     flush()
         flush()
         df = pd.DataFrame(rows, columns=['sample', 'correct', 'loudness'])
-        df['activation_ins_buzz'] = [l[8] for l in all_logits[n0:]]
+        df['activation_ins_buzz'] = [l[BUZZ] for l in all_logits[n0:]]
         d = os.path.join(a.out, 'folds', fold)
         os.makedirs(d, exist_ok=True)
         df[['activation_ins_buzz', 'correct', 'loudness', 'sample']].to_csv(
@@ -191,6 +196,9 @@ def score(a):
     sys.path.insert(0, ROOT)
     sys.path.insert(0, os.path.join(ROOT, '03_train'))
     import tensorflow  # noqa: F401  (train_utils imports it; must precede pandas users)
+    if not os.path.isdir(BASELINE):
+        a.check_labels = False      # the label cross-check needs the baseline CV run's predictions
+        print(f'[labels] no {BASELINE}: skipping --check-labels')
     from sx import summarize_folds, format_sx_report, read_fold_predictions, SENS_EXCL
 
     dfp = read_fold_predictions(os.path.join(a.out, 'folds'))

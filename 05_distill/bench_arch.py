@@ -23,9 +23,12 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-OUT = '/home/luke/projects/buzzdetect-training/.local/distill/arch'
-ENGINE = '/home/luke/projects/buzzdetect/engine'
-REFERENCES = ['yamnet_large_general', 'v4-ft-ps-e60-moderate']
+sys.path.insert(0, HERE)
+import dpaths as D  # noqa: E402
+
+OUT = D.ARCH                                  # random-weight timings: independent of the teacher
+ENGINE = D.ENGINE
+REFERENCES = ['yamnet_large_general', D.TEACHER]
 
 # name -> (kind, alpha, depth)
 CANDIDATES = {
@@ -146,7 +149,7 @@ def do_time(seconds, repeats, warmup, names):
     json.dump(results, open(os.path.join(OUT, 'results.json'), 'w'), indent=1)
 
     g = results['yamnet_large_general']['GPU']['rate']
-    t = results['v4-ft-ps-e60-moderate']['GPU']['rate']
+    t = results[D.TEACHER]['GPU']['rate']
     print(f'\n{seconds:g} s audio/run, {repeats} runs ({warmup} warmup); '
           f'CPU is an i7-2600, informational only')
     print(f'{"model":24s} {"GPU s/s":>8s} {"xYAM":>6s} {"xTeach":>7s} {"CPU s/s":>8s} '
