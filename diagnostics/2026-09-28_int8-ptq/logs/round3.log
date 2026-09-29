@@ -1,0 +1,11 @@
+09-28 21:29:49 wrote wonly
+09-28 21:30:17 55 convs, 12 quantized, mode pw_skiplast4
+09-28 21:30:17 Number of quantized bins : 128
+09-28 21:30:17 wrote /tmp/claude-1001/-home-luke-projects-buzzdetect-training/256b36d1-ee89-4a21-8d46-b86010d6da7c/scratchpad/q_entropy_u8_pw_skiplast4.onnx
+09-28 21:30:46 55 convs, 12 quantized, mode pw_skipfirst4
+09-28 21:30:46 Number of quantized bins : 128
+09-28 21:30:46 wrote /tmp/claude-1001/-home-luke-projects-buzzdetect-training/256b36d1-ee89-4a21-8d46-b86010d6da7c/scratchpad/q_entropy_u8_pw_skipfirst4.onnx
+09-28 21:36:17 ins_buzz logit |d|: mean 0.065 p99 0.211 max 0.362
+09-28 21:36:17 ins_buzz logit |d|: mean 0.066 p99 0.244 max 0.544
+09-28 21:36:17 ins_buzz logit |d|: mean 0.056 p99 0.200 max 0.632
+[launch_job] exit 0

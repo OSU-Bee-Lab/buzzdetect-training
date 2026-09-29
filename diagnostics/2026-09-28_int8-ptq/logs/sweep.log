@@ -1,0 +1,6 @@
+09-28 21:07:34 == percentile u8
+09-28 21:08:29 == entropy u8
+09-28 21:09:22 == percentile s8
+09-28 21:10:26 ref model.onnx: 2.56s  234x rt  (ORT 1.30.0, 4 thr)
+09-28 21:10:26 q_minmax_u8.onnx: 5.74s 104x rt speedup 0.45x | logit max|d|=4.602 mean=0.5521 top1 agree=0.971 buzz(ins_buzz idx8) corr=0.6899
+[launch_job] exit 0

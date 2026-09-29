@@ -1,0 +1,76 @@
+09-28 21:42:09 105 clips over 5 folds
+09-28 21:42:09 reference: 1124 ins_buzz detections in 13125 frames
+09-28 21:42:09 
+09-28 21:42:09 ## q_wonly.onnx
+09-28 21:42:09 class                  ref+  gained lost   (of frames)
+09-28 21:42:09 mech_machinery         11496   196   228   13125
+09-28 21:42:09 ins_trill               4575    17    54   13125
+09-28 21:42:09 ins_buzz                1124     4    32   13125
+09-28 21:42:09 ambient_background        60    19     2   13125
+09-28 21:42:09 ambient_music             76     2     6   13125
+09-28 21:42:09 ambient_thunder          112     1     2   13125
+09-28 21:42:09 mech_auto                  3     2     0   13125
+09-28 21:42:09 mech_plane                25     1     1   13125
+09-28 21:42:09 mech_hum                   3     1     0   13125
+09-28 21:42:09 aambient_scraping      13125     0     0   13125
+09-28 21:42:09 ambient_rain             377     0     0   13125
+09-28 21:42:09 human                      8     0     0   13125
+09-28 21:42:09 mech_quadcopter        13125     0     0   13125
+09-28 21:42:09 ins_buzz by fold: ref+ / gained / lost
+09-28 21:42:09   e Hive/recorders/willard/2024-08-07/1_11   45    0    1
+09-28 21:42:09    Hive/recorders/wooster/2024-07-26/1_143   30    0    5
+09-28 21:42:09   JamesU - MustardBumbler/1_29              608    3    6
+09-28 21:42:09   Lily - Fit+Fast/2023_R3_Marysville/53     257    0   13
+09-28 21:42:09   Opportunistic Recordings/2025-07-03/1_37   70    1    6
+09-28 21:42:09   FIXTURE                                   114    0    1
+09-28 21:42:09 ins_buzz logit |d|: mean 0.065 p99 0.211 max 0.362
+09-28 21:42:09 
+09-28 21:42:09 ## q_entropy_u8_pw_skiplast4.onnx
+09-28 21:42:09 class                  ref+  gained lost   (of frames)
+09-28 21:42:09 mech_machinery         11496   260   235   13125
+09-28 21:42:09 ins_trill               4575    48    46   13125
+09-28 21:42:09 ins_buzz                1124    29     9   13125
+09-28 21:42:09 ambient_background        60    10     6   13125
+09-28 21:42:09 ambient_music             76     3     6   13125
+09-28 21:42:09 mech_plane                25     4     4   13125
+09-28 21:42:09 ambient_thunder          112     0     4   13125
+09-28 21:42:09 human                      8     2     0   13125
+09-28 21:42:09 mech_hum                   3     2     0   13125
+09-28 21:42:09 animal                     0     1     0   13125
+09-28 21:42:09 mech_auto                  3     1     0   13125
+09-28 21:42:09 aambient_scraping      13125     0     0   13125
+09-28 21:42:09 ambient_rain             377     0     0   13125
+09-28 21:42:09 mech_quadcopter        13125     0     0   13125
+09-28 21:42:09 ins_buzz by fold: ref+ / gained / lost
+09-28 21:42:09   e Hive/recorders/willard/2024-08-07/1_11   45    2    0
+09-28 21:42:09    Hive/recorders/wooster/2024-07-26/1_143   30    2    1
+09-28 21:42:09   JamesU - MustardBumbler/1_29              608   14    3
+09-28 21:42:09   Lily - Fit+Fast/2023_R3_Marysville/53     257    4    4
+09-28 21:42:09   Opportunistic Recordings/2025-07-03/1_37   70    5    1
+09-28 21:42:09   FIXTURE                                   114    2    0
+09-28 21:42:09 ins_buzz logit |d|: mean 0.066 p99 0.244 max 0.544
+09-28 21:42:09 
+09-28 21:42:09 ## q_entropy_u8_pw_skipfirst4.onnx
+09-28 21:42:09 class                  ref+  gained lost   (of frames)
+09-28 21:42:09 mech_machinery         11496   191   230   13125
+09-28 21:42:09 ins_trill               4575    30    55   13125
+09-28 21:42:09 ins_buzz                1124     6    23   13125
+09-28 21:42:09 ambient_background        60    10     6   13125
+09-28 21:42:09 ambient_music             76     3    10   13125
+09-28 21:42:09 ambient_thunder          112     2     3   13125
+09-28 21:42:09 mech_plane                25     2     2   13125
+09-28 21:42:09 mech_auto                  3     1     0   13125
+09-28 21:42:09 mech_hum                   3     1     0   13125
+09-28 21:42:09 aambient_scraping      13125     0     0   13125
+09-28 21:42:09 ambient_rain             377     0     0   13125
+09-28 21:42:09 human                      8     0     0   13125
+09-28 21:42:09 mech_quadcopter        13125     0     0   13125
+09-28 21:42:09 ins_buzz by fold: ref+ / gained / lost
+09-28 21:42:09   e Hive/recorders/willard/2024-08-07/1_11   45    0    1
+09-28 21:42:09    Hive/recorders/wooster/2024-07-26/1_143   30    0    1
+09-28 21:42:09   JamesU - MustardBumbler/1_29              608    3    9
+09-28 21:42:09   Lily - Fit+Fast/2023_R3_Marysville/53     257    2    5
+09-28 21:42:09   Opportunistic Recordings/2025-07-03/1_37   70    1    5
+09-28 21:42:09   FIXTURE                                   114    0    2
+09-28 21:42:09 ins_buzz logit |d|: mean 0.056 p99 0.200 max 0.632
+[launch_job] exit 0
