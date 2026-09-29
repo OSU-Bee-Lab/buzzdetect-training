@@ -103,7 +103,8 @@ fast32h32's): **ETA about 10-12 h, i.e. ~00:00-02:00 on 2026-09-30**. One GPU jo
 - Branch state: `main` is an ancestor of `worktree-distill-lite`, so a fast-forward merge of that branch in the main
   checkout (`git merge --ff-only worktree-distill-lite`) finishes the merge. It was not done automatically because the
   main checkout has uncommitted changes (`diagnostics/2026-09-28_int8-ptq/README.md`, `tools/human/log_viewer.html`,
-  `tools/log_entry.py`; none overlap the merge). The `distill-generic` worktree/branch is fully merged and can be removed.
+  `tools/log_entry.py`; none overlap the merge). The `distill-generic` worktree and branch were fully merged and removed (2026-09-29), so `distill-lite` is the only
+place the code lives; the models and data are all under `.local/distill/` in the main checkout, never in a worktree.
 
 ## Results so far (append as runs land; `ladder_record.py frontier` is the source of truth)
 
