@@ -45,7 +45,7 @@ Stage list and the stage-to-script map are in `main.py`'s docstring.
    `<buzzdetect_dest>/<name>/model.onnx`. It must be probe-headed (a MatMul head on a code tensor) and
    16 kHz / 0.96 s framed; `teacher_onnx.py` checks both and stops otherwise.
 2. `main.py --teacher <name> --rung B --runs ...`. Its cache lives in `<distill_cache>/<name>/`, its runs
-   under `.local/distill/<name>/`. The class list, the dead classes (no activation center: zero loss, no
+   under `05_distill/data/<name>/`. The class list, the dead classes (no activation center: zero loss, no
    readout), the code width, the eval set and the deployments to blacklist all come from the teacher's own
    files; nothing in this directory names a teacher except `dpaths.py`'s default.
 3. Optional: `DISTILL_BASELINE` (or `distill_baseline` in paths.local.json) names the CV baseline model the
@@ -63,9 +63,9 @@ depends on, and stamped so a stale product is caught instead of silently mixed:
 | spectrograms | `<distill_cache>/_mel/<spec>/<relpath>/h<hour>.npz` + `fingerprint.json` | audio + front-end definition | all teachers, all architectures |
 | plan (slices, rungs, blacklist) | `<distill_cache>/<teacher>/_manifest/` | the teacher's training deployments | that teacher's students |
 | teacher targets | `<distill_cache>/<teacher>/<relpath>/h<hour>.npz` (`code`, `logits`) | audio + teacher ONNX | that teacher's students |
-| packed rungs | `.local/distill/<teacher>/shards/<rung>[__<frontend>]` | rung + front end + teacher + plan | all architectures of a (rung, front end) |
-| runs, models, eval, `ladder.jsonl` | `.local/distill/<teacher>/` | one student | - |
-| random-weight speed timings, `frontend_only.onnx` | `.local/distill/_shared/arch/` | the architecture | all teachers |
+| packed rungs | `05_distill/data/<teacher>/shards/<rung>[__<frontend>]` | rung + front end + teacher + plan | all architectures of a (rung, front end) |
+| runs, models, eval, `ladder.jsonl` | `05_distill/data/<teacher>/` | one student | - |
+| random-weight speed timings, `frontend_only.onnx` | `05_distill/data/_shared/arch/` | the architecture | all teachers |
 
 Pre-split caches embedded the YAMNet `mel` in every targets npz; readers still accept that
 (`store.mel_path`), so an old teacher cache works unchanged and a new teacher's targets are small.
@@ -118,7 +118,7 @@ own (flips vs cached teacher logits on the held-out V pool) and against labels (
 ## Step 0: speed of the architecture alone (2026-09-28, GTX 1650, audio s per wall s)
 
 `bench_arch.py export` (train env) then `time` (engine venv) time random-weight candidates; outputs in
-`.local/distill/_shared/arch/`. Method matches `buzzdetect/benchmarks/model-speed`: 20 s audio, 2 warmup +
+`05_distill/data/_shared/arch/`. Method matches `buzzdetect/benchmarks/model-speed`: 20 s audio, 2 warmup +
 15 timed runs. CPU rates are informational only (i7-2600, no AVX2).
 
 | model | GPU | x YAMNet | x teacher | CPU | params | MMACs/frame |

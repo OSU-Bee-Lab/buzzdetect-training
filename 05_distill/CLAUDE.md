@@ -10,7 +10,7 @@
   write a teacher name, a class index (`8`, `(0, 14)`), `15` or `2048` in a script; add it to the spec instead.
   Anything that needs the teacher reads `DISTILL_TEACHER` (main.py sets it for its subprocesses).
 - **Share at the level a product depends on** (README's table): spectrograms in `<distill_cache>/_mel/<spec>`
-  (audio + front end only), targets under `<distill_cache>/<teacher>/`, runs under `.local/distill/<teacher>/`.
+  (audio + front end only), targets under `<distill_cache>/<teacher>/`, runs under `05_distill/data/<teacher>/`.
   A new derived product gets a fingerprint (`store.stamp_or_refuse` for costly ones, a meta fingerprint that
   triggers a rebuild for cheap ones), never a bare "exists means current".
 - **Presence means done.** Write npz through `store.write_npz` (temp name + rename); order writes so the last
@@ -33,7 +33,7 @@
   (2026-09-29: the generalization was written on `distill-generic` for exactly this reason.)
 - **`migrate_layout.py` before the first `main.py` on data made under the old layout** (done for the v4 teacher on
   2026-09-29; a checkout that predates that still needs it): until then
-  `.local/distill/<teacher>/` is empty, so main.py sees nothing done and would redo everything. It refuses to
+  `05_distill/data/<teacher>/` is empty, so main.py sees nothing done and would redo everything. It refuses to
   run while a distillation job is alive. After migrating, `distill_cache` in paths.local.json must be the
   parent `.../distill-cache/`, not the teacher directory.
 - **`cache.py` refuses a changed teacher ONNX.** A retrained model re-shipped under the same name has new

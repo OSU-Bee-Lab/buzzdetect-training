@@ -6,9 +6,9 @@ the variant-qualification decision.
     ladder_record.py decide          # prints the qualifying rung-D variant arch key, or 'none'
     ladder_record.py gate            # exit 0 if rung C beat B by more than the A spread, else 1
 
-Reads `.local/distill/runs/<name>/curve.json` (final val flips vs the teacher on
-the V pool), `.local/distill/eval/<name>/folds_sx.csv` (eval_folds.py) and, if
-present, `.local/distill/models/<name>/speed_{20,200}.json`. Train env.
+Reads `05_distill/data/runs/<name>/curve.json` (final val flips vs the teacher on
+the V pool), `05_distill/data/eval/<name>/folds_sx.csv` (eval_folds.py) and, if
+present, `05_distill/data/models/<name>/speed_{20,200}.json`. Train env.
 """
 import argparse
 import json
@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dpaths as D  # noqa: E402
 
 MAIN = D.MAIN
-LOCAL = D.LOCAL                # .local/distill/<teacher>
+LOCAL = D.LOCAL                # 05_distill/data/<teacher>
 LADDER = D.LADDER
 COL = 'sensitivity_exclquiet'
 TIERS = ['faint', 'quiet', 'background', 'untagged', 'normal', 'loud']

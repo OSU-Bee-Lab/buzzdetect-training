@@ -16,10 +16,12 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import dpaths as D  # noqa: E402
 import frontends as fes  # noqa: E402
 
-LIVE_OTHER = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13]
-BUZZ = 8
+SP = D.spec()
+BUZZ = SP.buzz
+LIVE_OTHER = [i for i in SP.live if i != BUZZ]
 
 
 def main():
@@ -27,8 +29,7 @@ def main():
     ap.add_argument('--shards', default='V')
     ap.add_argument('--n', type=int, default=80000)
     a = ap.parse_args()
-    main_root = HERE.split(os.sep + '.claude' + os.sep)[0] if os.sep + '.claude' + os.sep in HERE else os.path.dirname(HERE)
-    d = os.path.join(main_root, '.local', 'distill', 'shards', a.shards)
+    d = os.path.join(D.SHARDS, a.shards)
     import json
     n_all = json.load(open(os.path.join(d, 'meta.json')))['frames']
     mel = np.load(os.path.join(d, 'mel.npy'), mmap_mode='r')

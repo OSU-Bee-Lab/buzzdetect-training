@@ -11,7 +11,7 @@ Data: `<cache>/_manifest/plan.csv` says which slices belong to a rung (first_run
 <= rung in A<B<C<D; `V` is the held-out validation deployments). Per slice, the targets npz
 (code f16 (n,D), logits f32 (n,C)) and the front end's mel (shared `_mel/<frontend>`, or the
 `mel` a pre-split cache embeds) are packed once into contiguous local shards
-`.local/distill/<teacher>/shards/<rung>[__<frontend>]/{mel,code,logits}.npy`
+`05_distill/data/<teacher>/shards/<rung>[__<frontend>]/{mel,code,logits}.npy`
 (float16 memmaps, written in plan order so the HDD is read sequentially; reused while
 meta.json's fingerprint of teacher, plan, front end and slices present still matches) and
 training reads those. Batches are frame-level random draws from a full
@@ -26,7 +26,7 @@ standardised teacher code). Adam, cosine decay, fixed --steps, batch 512, fp32.
 Every --eval-every steps (and at the end) the model is scored on the validation
 pool vs the teacher's cached logits: detections (logit > 0) gained/lost on
 ins_buzz, the other 12 live classes, mean |logit error|. Outputs in
-`.local/distill/runs/<name>/`: student_mel.keras, aux.npz, curve.json.
+`05_distill/data/runs/<name>/`: student_mel.keras, aux.npz, curve.json.
 """
 import argparse
 import json

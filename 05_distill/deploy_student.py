@@ -3,8 +3,8 @@
     conda run -n buzzdetect-train python 05_distill/deploy_student.py fe_B_fast32_a0.50_s1
     ... deploy_student.py <name> [--as lite-fast32] [--dest DIR] [--force] [--dry-run]
 
-Reads `.local/distill/models/<name>/` (export_student.py's model.onnx + config_model.json), the run's
-eval (`.local/distill/eval/<name>/folds_sx.csv`) and record (`ladder.jsonl` row, `runs/<name>/curve.json`),
+Reads `05_distill/data/models/<name>/` (export_student.py's model.onnx + config_model.json), the run's
+eval (`05_distill/data/eval/<name>/folds_sx.csv`) and record (`ladder.jsonl` row, `runs/<name>/curve.json`),
 and writes `<dest>/<as or name>/`:
 
     model.onnx, config_model.json    the deployable pair
@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dpaths as D  # noqa: E402
 import ladder_record as LR  # noqa: E402
 
-LOCAL = D.LOCAL                # .local/distill/<teacher>
+LOCAL = D.LOCAL                # 05_distill/data/<teacher>
 COPIED = ['model.onnx', 'config_model.json']
 
 
@@ -92,7 +92,7 @@ def readme(name, as_name, cfg, curve, row):
               '- The headline is the student\'s own ONNX through 05_distill/eval_folds.py, not the full pipeline; one seed, so read gaps below ~0.03 as ties.',
               '- Students inherit fold knowledge through the teacher: a high headline is not "better than the teacher".',
               '- Speed is timed on one GPU (GTX 1650) through the engine session; CPU timings on the i7-2600 (no AVX2) are not representative.', '',
-              'Provenance: `.local/distill/runs/%s/curve.json`, `ladder.jsonl` in the training project; folds_sx.csv beside this file.' % name]
+              'Provenance: `05_distill/data/runs/%s/curve.json`, `ladder.jsonl` in the training project; folds_sx.csv beside this file.' % name]
     return '\n'.join(lines) + '\n'
 
 

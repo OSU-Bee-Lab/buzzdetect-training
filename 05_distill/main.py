@@ -26,7 +26,7 @@ teacher classes (the head has only those outputs; must include ins_buzz), `lam=0
   export    export_student.py export ONNX with the teacher's centers folded in, parity-checked
   eval      eval_folds.py run        headline sensitivity_exclquiet @ fpr 0.005 on the rotating folds
   speed     export_student.py time   x YAMNet on the GPU, 20 s and 200 s chunks
-  record    ladder_record.py record  one row in .local/distill/<teacher>/ladder.jsonl
+  record    ladder_record.py record  one row in 05_distill/data/<teacher>/ladder.jsonl
   deploy    deploy_student.py        only with --deploy: copy into buzzdetect (--force to overwrite)
 
 Every stage is skipped when its artifact exists, so re-running the same command after a crash or a

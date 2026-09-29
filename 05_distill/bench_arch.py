@@ -169,7 +169,7 @@ if __name__ == '__main__':
     ap.add_argument('--repeats', type=int, default=15)
     ap.add_argument('--warmup', type=int, default=2)
     ap.add_argument('--candidates', nargs='*', default=list(CANDIDATES))
-    ap.add_argument('--out', help='output dir (default .local/distill/arch)')
+    ap.add_argument('--out', help='output dir (default 05_distill/data/arch)')
     a = ap.parse_args()
     if a.out:
         OUT = a.out

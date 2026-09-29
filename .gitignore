@@ -58,6 +58,8 @@ embeddings/
 # local execution scratch dirs
 .local*/
 02_set/sets/.archive
+# 05_distill: runs, models, packed shards, logs (per-machine, big; the caches are under paths.local.json distill_cache)
+05_distill/data/
 
 # claude code local settings
 .claude/

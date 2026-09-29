@@ -6,7 +6,7 @@
     # speed, same harness as bench_arch.py time, engine venv (CUDA ORT)
     /home/luke/projects/buzzdetect/engine/.venv/bin/python3 05_distill/export_student.py time --name distill-a05-A
 
-`--run` is a distill_train run (`.local/distill/runs/<run>/student_mel.keras`);
+`--run` is a distill_train run (`05_distill/data/runs/<run>/student_mel.keras`);
 `--init-only` instead exports the untrained YAMNet channel-selected init (for
 plumbing and speed checks with real weights). The mel training graph's weights
 are copied by layer name into the waveform graph (YAMNet front end inside), the
@@ -16,7 +16,7 @@ center get 0), and the graph goes through the deploy passes (BN fold, Conv+Relu
 fuse) and the same io rename as 04_deploy / bench_arch. Parity: ONNX vs the
 Keras waveform student on the fixture, max |diff| must be < 1e-4.
 
-Writes `.local/distill/models/<name>/{model.onnx,config_model.json}`, a
+Writes `05_distill/data/models/<name>/{model.onnx,config_model.json}`, a
 buzzdetect-format model dir (never into buzzdetect's engine/models).
 """
 import argparse
@@ -35,7 +35,7 @@ import student as st  # noqa: E402
 import dpaths as D  # noqa: E402
 
 MAIN = D.MAIN
-LOCAL = D.LOCAL                    # .local/distill/<teacher>
+LOCAL = D.LOCAL                    # 05_distill/data/<teacher>
 TEACHER_CFG = os.path.join(D.TEACHER_MODEL_DIR, 'config_model.json')
 ENGINE_CFG = os.path.join(D.TEACHER_ENGINE_DIR, 'config_model.json')     # template for the student's engine config
 FIXTURE = D.FIXTURE

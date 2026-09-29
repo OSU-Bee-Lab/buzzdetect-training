@@ -584,7 +584,7 @@ outputs on a large pool of *unlabelled* deployment audio (never the teacher's ow
 trains each student on them, exports it, scores it, times it, records it and, with `--deploy`, copies it into
 buzzdetect. Re-running the same command after a crash or a quit resumes: every stage skips when its artifact
 exists, and training resumes from its last checkpoint. The caches and outputs live under `distill_cache` and
-`.local/distill/<teacher>/` (per-machine, gitignored). Full operator's guide: `05_distill/README.md`.
+`05_distill/data/<teacher>/` (per-machine, gitignored). Full operator's guide: `05_distill/README.md`.
 
 ---
 

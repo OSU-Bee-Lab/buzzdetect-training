@@ -14,7 +14,7 @@ Layout (all under paths that live outside the repo):
           _manifest/                     plan.csv, teacher.json, teacher_ext.onnx, blacklist.txt
           <relpath>/h<hour>.npz          targets: code, logits, start_s (older caches also embed mel)
           _shards/                       streaming shards (rungs C-D)
-  <repo main checkout>/.local/distill/
+  <repo main checkout>/05_distill/data/     (gitignored, like 02_set's data; main checkout even from a worktree)
       _shared/arch/                      speed timings of random-weight candidates, frontend_only.onnx
       <teacher>/                         runs/, models/, eval/, shards/ (packed rungs), ladder.jsonl
 
@@ -70,7 +70,7 @@ TEACHER_EXT = os.path.join(MANIFEST, 'teacher_ext.onnx') if CACHE else None
 DURATIONS = os.path.join(SHARED_CACHE, 'durations.csv') if CACHE_ROOT else None
 
 # ---- local (repo-side, gitignored) data
-LOCAL_ROOT = os.environ.get('DISTILL_LOCAL_ROOT') or os.path.join(MAIN, '.local', 'distill')
+LOCAL_ROOT = os.environ.get('DISTILL_LOCAL_ROOT') or os.path.join(MAIN, '05_distill', 'data')
 SHARED = os.path.join(LOCAL_ROOT, '_shared')
 LOCAL = os.path.join(LOCAL_ROOT, TEACHER)
 RUNS, MODELS, EVAL, SHARDS = (os.path.join(LOCAL, d) for d in ('runs', 'models', 'eval', 'shards'))
