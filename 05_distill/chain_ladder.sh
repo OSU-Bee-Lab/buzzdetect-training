@@ -8,7 +8,8 @@
 #
 # STEPS is the one budget for every rung (05_distill/LADDER.md).
 set -euo pipefail
-STEPS=${STEPS:-12000}
+# measured 2.4 step/s on the 1650: 7000 steps ~ 49 min, the largest budget within ~50 min
+STEPS=${STEPS:-7000}
 WT=/home/luke/projects/buzzdetect-training/.claude/worktrees/distill-lite
 MAIN=/home/luke/projects/buzzdetect-training
 L=$MAIN/.local/distill
