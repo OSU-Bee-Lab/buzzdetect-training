@@ -88,7 +88,7 @@ tools/launch_job.sh /home/luke/projects/buzzdetect-training/05_distill/data/main
   fast32h16:a0.25:classes=ins_buzz+ambient_rain+human fast32h16:a0.25:classes=ins_buzz+ambient_rain+human:lam=0 \
   twofast32:a0.50 fast32h16:a0.375 fast32h32:a0.25 two32:a0.50 lo32:a0.50 twofast32:a0.375 fast32lo:a0.50 fast32h16lo:a0.50"
 ```
-(launch_job pid 2028505, started 2026-09-29 ~13:52; log `05_distill/data/main_stage5.log`; stage lines `[chain] <label>: start/done/FAILED`.)
+(launch_job pid 2028505, started 2026-09-29 13:50; log `05_distill/data/main_stage5.log`; stage lines `[chain] <label>: start/done/FAILED`.)
 Order: the class-subset experiment first (below), then the rest of the frontier list. 12 runs; the small a0.25 runs take ~15-20 min
 end to end (the first, `fe_B_fast32h16_a0.25_s1`, took 18 min), the a0.50 ones 40-60 min, plus ~25 min of shard packing for each
 front end not packed yet (two32, lo32, fast32lo, fast32h16lo): **ETA about 6-9 h, i.e. ~20:00-23:00 on 2026-09-29**. One GPU job at a
