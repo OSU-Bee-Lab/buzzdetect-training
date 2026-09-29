@@ -39,6 +39,20 @@ CANDIDATES = {
 }
 
 
+def parse(name):
+    """(kind, alpha, depth, frontend). 'a0.50@two32' = trunk a0.50 on front end two32;
+    'fe@two32' = that front end alone; plain names are the YAMNet front end."""
+    base, _, fe = name.partition('@')
+    if base == 'fe':
+        return 'frontend', 0.5, 14, fe
+    if base in CANDIDATES:
+        kind, alpha, depth = CANDIDATES[base]
+    else:                                   # a<alpha>[_d<depth>]
+        a, _, d = base[1:].partition('_d')
+        kind, alpha, depth = 'net', float(a), int(d or 14)
+    return kind, alpha, depth, fe or 'yamnet'
+
+
 def do_export(names):
     import tensorflow  # noqa: F401  (must precede pandas-importing modules)
     import onnx
@@ -62,10 +76,10 @@ def do_export(names):
         return model
 
     for name in names:
-        kind, alpha, depth = CANDIDATES[name]
+        kind, alpha, depth, fe = parse(name)
         filters = st.widths_for(alpha, depth)
-        model = st.build_student(filters, stop_at_features=(kind == 'frontend'),
-                                 name=name.replace('.', '_'))
+        model = st.build_student(filters, stop_at_features=(kind == 'frontend'), frontend=fe,
+                                 name=name.replace('.', '_').replace('@', '_'))
         model(tensorflow.zeros([16000], tensorflow.float32))
         d = os.path.join(OUT, name)
         os.makedirs(d, exist_ok=True)
@@ -78,7 +92,11 @@ def do_export(names):
         onnx.save(m, os.path.join(d, 'model.onnx'))
         os.remove(tmp)
         stats = {'filters': filters, 'params': int(model.count_params()),
-                 'macs': None if kind == 'frontend' else st.macs_per_frame(filters),
+                 'macs': None if kind == 'frontend' else st.macs_per_frame(
+                     filters, h=(96 if fe == 'yamnet' else st.fes.get(fe).frames),
+                     w=(64 if fe == 'yamnet' else st.fes.get(fe).bands),
+                     in_channels=(1 if fe == 'yamnet' else st.fes.get(fe).n_channels)),
+                 'frontend': fe,
                  'folded': n_folded, 'fused': n_fused}
         json.dump(stats, open(os.path.join(d, 'stats.json'), 'w'), indent=1)
         print(name, stats, flush=True)
@@ -148,7 +166,10 @@ if __name__ == '__main__':
     ap.add_argument('--repeats', type=int, default=15)
     ap.add_argument('--warmup', type=int, default=2)
     ap.add_argument('--candidates', nargs='*', default=list(CANDIDATES))
+    ap.add_argument('--out', help='output dir (default .local/distill/arch)')
     a = ap.parse_args()
+    if a.out:
+        OUT = a.out
     if a.phase == 'export':
         do_export(a.candidates)
     else:

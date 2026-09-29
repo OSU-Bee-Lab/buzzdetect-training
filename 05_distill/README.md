@@ -48,3 +48,7 @@ MMACs (14x) buys only 2.0x.
 - `distill_train.py --rung A --steps N --name X`: packs the cache rung into `.local/distill/shards/<rung>`, trains on `mel`, prints val flips vs the teacher.
 - `export_student.py export --run X --name M` (train env) then `time --name M` (engine venv): ONNX with teacher centers folded into the head bias, fixture parity, speed vs yamnet_large_general.
 - `eval_folds.py run --onnx M/model.onnx --out D --check-labels`: the ladder's number (`sensitivity_exclquiet` at fpr 0.005, mean over the 5 rotating folds via 03_train/sx.py). Frames are scored packed (frame, silent frame, ...), which equals one call per frame to 1e-5. Teacher through it: 0.692; the pipeline's own Keras probe on stored embeddings: 0.690 (both trained on these folds, so inflated; the 0.574 in the teacher's folds_sx.csv is the honest rotation number, not reproducible without retraining).
+
+## Front-end frontier (2026-09-29)
+
+The data-size ladder closed at rung B (see LADDER.md). The live work is which spectrogram the student sees and how fast it can go: **FRONTENDS.md** (specs, findings, running chains, how to read results, caveats).

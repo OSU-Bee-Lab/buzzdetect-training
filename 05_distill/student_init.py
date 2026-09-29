@@ -91,8 +91,11 @@ def init_from_yamnet(student, yamnet=None, filters=None):
 
     for i, sel in enumerate(sels):
         if i == 0:
-            kernel = yamnet.get_layer('layer1_conv').get_weights()[0]
-            student.get_layer('layer1_conv').set_weights([kernel[..., sel]])
+            kernel = yamnet.get_layer('layer1_conv').get_weights()[0][..., sel]
+            cin = student.get_layer('layer1_conv').get_weights()[0].shape[2]
+            if cin != 1:            # multi-channel front end: YAMNet's kernel, split across channels
+                kernel = np.repeat(kernel, cin, axis=2) / cin
+            student.get_layer('layer1_conv').set_weights([kernel])
             bn_set('layer1_conv_bn', sel)
             continue
         prev = sels[i - 1]

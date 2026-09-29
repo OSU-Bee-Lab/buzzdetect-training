@@ -28,9 +28,13 @@ from tensorflow.keras import Model, layers
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
+HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
 
 from embedders.yamnet.params import Params  # noqa: E402
 from embedders.yamnet.yamnet import _YAMNET_LAYER_DEFS, WaveformFeatures  # noqa: E402
+import frontends as fes  # noqa: E402
 
 BASE_FILTERS = [d[3] for d in _YAMNET_LAYER_DEFS]
 KERNELS = [d[1] for d in _YAMNET_LAYER_DEFS]
@@ -64,7 +68,7 @@ def _stack(net, filters, params):
 
 
 def build_student(filters, n_out=15, stop_at_features=False, name='student',
-                  input_type='waveform', expose_code=False):
+                  input_type='waveform', expose_code=False, frontend='yamnet'):
     """The student, waveform-in (deploy graph) or mel-in (training graph).
 
     filters: list of per-layer filter counts, len 1..14 (layer i uses
@@ -78,20 +82,29 @@ def build_student(filters, n_out=15, stop_at_features=False, name='student',
         output: outputs [logits, code].
     stop_at_features: waveform only; return the log-mel patches instead --
         the front end alone, for timing its floor.
+    frontend: name in frontends.FRONTENDS. 'yamnet' (default) is YAMNet's own layer,
+        exactly as before; any other spec has its own STFT/mel channels, and the
+        mel input becomes (96, bands, channels).
     """
     assert 1 <= len(filters) <= len(_YAMNET_LAYER_DEFS)
     params = student_params(n_out)
+    fe = None if frontend == 'yamnet' else fes.get(frontend)
     if input_type == 'mel':
         assert not stop_at_features
-        inp = layers.Input(shape=(params.patch_frames, params.patch_bands), name='mel')
+        shape = (params.patch_frames, params.patch_bands) if fe is None else \
+            (fe.frames, fe.bands, fe.n_channels)
+        inp = layers.Input(shape=shape, name='mel')
         feats = inp
     else:
         assert input_type == 'waveform'
         inp = layers.Input(shape=(), dtype=tf.float32, name='waveform')
-        _, feats = WaveformFeatures(params)(inp)
+        if fe is None:
+            _, feats = WaveformFeatures(params)(inp)
+        else:
+            feats = fes.make_features_layer(fe)(inp)
         if stop_at_features:
             return Model(name=name + '_frontend', inputs=inp, outputs=feats)
-    net = layers.Reshape((params.patch_frames, params.patch_bands, 1))(feats)
+    net = layers.Reshape((params.patch_frames, params.patch_bands, 1))(feats) if fe is None else feats
     net = _stack(net, filters, params)
     emb = layers.GlobalAveragePooling2D(name='gap')(net)
     logits = layers.Dense(units=n_out, use_bias=True, name='logits')(emb)
@@ -112,9 +125,9 @@ def copy_weights(src, dst):
     return n
 
 
-def macs_per_frame(filters, n_out=15, h=96, w=64):
+def macs_per_frame(filters, n_out=15, h=96, w=64, in_channels=1):
     """Multiply-adds of the conv stack + head for one 0.96 s patch (front end excluded)."""
-    total, c_in = 0, 1
+    total, c_in = 0, in_channels
     for i, f in enumerate(filters):
         k = KERNELS[i][0] * KERNELS[i][1]
         s = STRIDES[i]

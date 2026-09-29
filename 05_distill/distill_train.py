@@ -39,6 +39,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.dirname(HERE))
 import student as st  # noqa: E402
 import student_init as si  # noqa: E402
+import frontends as fes  # noqa: E402
 
 MAIN = st.main_checkout()
 LOCAL = os.path.join(MAIN, '.local', 'distill')
@@ -49,7 +50,7 @@ BUZZ = CLASSES.index('ins_buzz')
 DEAD = (0, 14)                      # no center: above 0 everywhere, zero weight
 LIVE = [i for i in range(15) if i not in DEAD]
 RUNG_ORDER = 'ABCDE'
-ARCHS = {'a0.50': (0.5, 14), 'a0.50_d12': (0.5, 12), 'a0.375': (0.375, 14)}   # name -> (alpha, depth)
+ARCHS = {'a0.50': (0.5, 14), 'a0.50_d12': (0.5, 12), 'a0.375': (0.375, 14), 'a0.25': (0.25, 14)}   # name -> (alpha, depth)
 
 
 def cache_root(arg=None):
@@ -67,9 +68,16 @@ def slice_path(cache, relpath, hour):
     return os.path.join(cache, os.path.splitext(relpath)[0], f'h{int(hour):06d}.npz')
 
 
-def pack(cache, rung, out_dir=None):
-    """npz -> contiguous shards. Returns the shard dir. Skips if meta.json exists."""
-    out = out_dir or os.path.join(LOCAL, 'shards', rung)
+def fe_path(cache, frontend, relpath, hour):
+    return slice_path(os.path.join(cache, '_fe', frontend), relpath, hour)
+
+
+def pack(cache, rung, out_dir=None, frontend='yamnet'):
+    """npz -> contiguous shards. Returns the shard dir. Skips if meta.json exists.
+    frontend != 'yamnet': `mel` comes from the `_fe/<frontend>` cache (cache_fe.py), targets from the
+    main cache; slices missing from either are dropped together."""
+    fe = None if frontend == 'yamnet' else fes.get(frontend)
+    out = out_dir or os.path.join(LOCAL, 'shards', rung if fe is None else f'{rung}__{frontend}')
     if os.path.exists(os.path.join(out, 'meta.json')):
         return out
     plan = pd.read_csv(os.path.join(cache, '_manifest', 'plan.csv'))
@@ -81,19 +89,26 @@ def pack(cache, rung, out_dir=None):
     plan = plan.sort_values(['relpath', 'hour'])
     cap = int(plan['n_frames'].sum())
     os.makedirs(out, exist_ok=True)
+    mel_shape = (96, 64) if fe is None else (fe.frames, fe.bands, fe.n_channels)
     fm = {k: np.lib.format.open_memmap(os.path.join(out, k + '.npy'), mode='w+', dtype=dt, shape=(cap,) + sh)
-          for k, dt, sh in (('mel', np.float16, (96, 64)), ('code', np.float16, (2048,)),
+          for k, dt, sh in (('mel', np.float16, mel_shape), ('code', np.float16, (2048,)),
                             ('logits', np.float32, (15,)))}
     n, missing, sl = 0, 0, []
     t0 = time.time()
     for i, r in enumerate(plan.itertuples()):
         p = slice_path(cache, r.relpath, r.hour)
-        if not os.path.exists(p):
+        pf = p if fe is None else fe_path(cache, frontend, r.relpath, r.hour)
+        if not (os.path.exists(p) and os.path.exists(pf)):
             missing += 1
             continue
         with np.load(p) as z:
             m = len(z['logits'])
-            fm['mel'][n:n + m] = z['mel']
+            if fe is None:
+                fm['mel'][n:n + m] = z['mel']
+            else:
+                with np.load(pf) as zf:
+                    assert len(zf['mel']) == m, (pf, len(zf['mel']), m)
+                    fm['mel'][n:n + m] = zf['mel']
             fm['code'][n:n + m] = z['code']
             fm['logits'][n:n + m] = z['logits']
         sl.append((r.deployment, n, m))
@@ -193,12 +208,18 @@ def ridge(x, y, lam):
 
 def build_and_init(a, tr, mu, sd):
     filters = st.widths_for(a.alpha, a.depth)
-    model = st.build_student(filters, input_type='mel', expose_code=True, name='student_mel')
+    model = st.build_student(filters, input_type='mel', expose_code=True, name='student_mel',
+                             frontend=a.frontend)
     for l in model.layers:                      # moving stats must track fast: the init's BN is
         if isinstance(l, tf.keras.layers.BatchNormalization):   # identity+bias (refit), not YAMNet's
             l.momentum = a.bn_momentum
     aux = tf.keras.layers.Dense(2048, name='aux')
     aux.build((None, filters[-1]))
+    if a.frontend != 'yamnet' and a.init == 'yamnet':
+        # the layer-wise refit pairs student and YAMNet activations position by position; a different
+        # front end puts different frequencies at those positions, so only selection + BN moments apply
+        print('[init] front end != yamnet: init yamnet -> select (channel selection + BN recalibration)', flush=True)
+        a.init = 'select'
     sels = si.init_from_yamnet(model) if a.init in ('yamnet', 'select') else None
     rng = np.random.default_rng(1)
     idx = np.sort(rng.choice(tr.n, min(a.init_frames, tr.n), replace=False))
@@ -226,6 +247,8 @@ def main():
     ap.add_argument('--cache')
     ap.add_argument('--alpha', type=float, default=0.5)
     ap.add_argument('--depth', type=int, default=14)
+    ap.add_argument('--frontend', default='yamnet', choices=list(fes.FRONTENDS),
+                    help='spectrogram the student sees (frontends.py); needs cache_fe.py output for the rung and V')
     ap.add_argument('--arch', choices=list(ARCHS), help='named variant: sets alpha and depth')
     ap.add_argument('--loader', choices=['mem', 'stream'], default='mem',
                     help='mem: pack the rung locally (memmap); stream: shard-level shuffle buffer from <cache>/_shards')
@@ -252,17 +275,20 @@ def main():
     if a.arch:
         a.alpha, a.depth = ARCHS[a.arch]
     cache = None if a.shards else cache_root(a.cache)
+    if a.frontend != 'yamnet':
+        assert a.loader == 'mem', 'front-end experiments train from the in-memory pack (rung B)'
     if a.loader == 'stream':
         import shards as sh
         tr = sh.StreamPool(cache, a.rung, a.buffer_gb, a.seed)
     else:
-        tr = Shards(a.shards or pack(cache, a.rung))
-    val = Shards(a.val_shards or pack(cache, 'V'))
+        tr = Shards(a.shards or pack(cache, a.rung, frontend=a.frontend))
+    val = Shards(a.val_shards or pack(cache, 'V', frontend=a.frontend))
     total = getattr(tr, 'total', tr.n)
     print(f'[data] train rung {a.rung} ({a.loader}): {total} frames ({tr.meta["slices"]} slices, '
           f'{tr.meta["deployments"]} deployments); val {val.n} frames '
           f'({val.meta["deployments"]} deployments); steps {a.steps} x {a.batch} '
-          f'= {a.steps * a.batch / total:.2f} passes; arch alpha {a.alpha} depth {a.depth}', flush=True)
+          f'= {a.steps * a.batch / total:.2f} passes; arch alpha {a.alpha} depth {a.depth} '
+          f'frontend {a.frontend}', flush=True)
     mu, sd = tr.code_stats()
     model, aux = build_and_init(a, tr, mu, sd)
     out = os.path.join(LOCAL, 'runs', a.name)

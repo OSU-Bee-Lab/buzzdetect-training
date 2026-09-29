@@ -56,7 +56,8 @@ def is_ladder(r):
     """The alpha-0.5 ladder: in-memory rungs A-C, streamed rung D."""
     arch = r.get('arch', 'a0.50')
     loader = r.get('loader', 'mem')
-    return arch == 'a0.50' and (loader == 'mem' or r['rung'] == 'D')
+    return arch == 'a0.50' and (loader == 'mem' or r['rung'] == 'D') and r.get('frontend', 'yamnet') == 'yamnet' \
+        and not r.get('init')
 
 
 def levels():
@@ -79,6 +80,7 @@ def record(a):
     v = [x for x in cur['val'] if x.get('final')][-1]
     head, per, tiers, incl = sx(os.path.join(LOCAL, 'eval', a.name, 'folds_sx.csv'))
     row = {'rung': a.rung, 'seed': a.seed, 'steps': a.steps, 'name': a.name, 'arch': a.arch, 'loader': a.loader,
+           'frontend': a.frontend, 'init': a.init,
            'val_frames': v['frames'], 'buzz_teacher_pos': v['buzz_teacher'], 'buzz_student_pos': v['buzz_student'],
            'buzz_gained': v['buzz_gained'], 'buzz_lost': v['buzz_lost'],
            'lost_pct': round(100 * v['buzz_lost'] / max(1, v['buzz_teacher']), 2),
@@ -96,7 +98,8 @@ def table(a):
     rs = rows()
     print('\nrun                    steps  V buzz lost%  gained%  | other g/l   | mae   | headline (excl-quiet @0.005)  per fold                 | GPU x YAMNet 20s/200s | wall')
     for r in rs:
-        tag = f'{r["rung"]}/{r.get("arch", "a0.50")}/s{r["seed"]}' + ('/stream' if r.get('loader') == 'stream' else '')
+        tag = f'{r["rung"]}/{r.get("arch", "a0.50")}/s{r["seed"]}' + ('/stream' if r.get('loader') == 'stream' else '') \
+            + (f'/{r["frontend"]}' if r.get('frontend', 'yamnet') != 'yamnet' else '') + ('/' + r['init'] if r.get('init') else '')
         sp = f'{r.get("x_yamnet20", float("nan")):.2f}/{r.get("x_yamnet200", float("nan")):.2f}'
         print(f'{tag:22s} {r["steps"]:>5}  {r["lost_pct"]:>11.1f}  {r["gained_pct"]:>6.1f}  | '
               f'{r["other_gained"]:>5}/{r["other_lost"]:<5} | {r["mae_live"]:.3f} | {r["headline"]:.3f}   {r["per_fold"]}  | {sp:>10} | {r["wall_s"] / 60:.0f} min')
@@ -145,6 +148,21 @@ def streamcheck(a):
     sys.exit(0 if ok else 1)
 
 
+def frontier(a):
+    """Speed / sensitivity of every rung-B run, any front end, sorted by 200 s speed.
+    Speed is x YAMNet (GPU, same harness); sensitivity is the ladder headline and % of the baseline's."""
+    base = sx(REFS[0][1])[0]
+    rs = [r for r in rows() if r['rung'] == 'B' and r.get('loader', 'mem') == 'mem']
+    rs.sort(key=lambda r: -(r.get('x_yamnet200') or 0))
+    print(f'\nrung B, seed-1 runs by 200 s speed (baseline headline {base:.3f}; 50% of it = {base / 2:.3f})')
+    print(f'{"run":34s} {"frontend":9s} {"arch":10s} {"init":7s} {"x YAM 20s":>9s} {"x YAM 200s":>10s} '
+          f'{"headline":>8s} {"% base":>6s} {"incl-quiet":>10s} {"lost%":>6s}')
+    for r in rs:
+        print(f'{r["name"]:34s} {r.get("frontend", "yamnet"):9s} {r.get("arch", "a0.50"):10s} {r.get("init", "") or "-":7s} '
+              f'{r.get("x_yamnet20", float("nan")):9.2f} {r.get("x_yamnet200", float("nan")):10.2f} '
+              f'{r["headline"]:8.3f} {100 * r["headline"] / base:5.0f}% {r["headline_inclusive"]:10.3f} {r["lost_pct"]:6.1f}')
+
+
 def decide(a):
     """Which rung-D variant (if any) qualifies: within the A spread of a0.50 on lost% (rung B, seed 1)
     AND headline within HEADLINE_TOL of it; the faster (GPU, 200 s) if several."""
@@ -164,10 +182,12 @@ def decide(a):
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
-    ap.add_argument('phase', choices=['record', 'table', 'decide', 'gate', 'streamcheck'])
+    ap.add_argument('phase', choices=['record', 'table', 'decide', 'gate', 'streamcheck', 'frontier'])
     ap.add_argument('--rung'), ap.add_argument('--seed', type=int), ap.add_argument('--steps', type=int)
     ap.add_argument('--name'), ap.add_argument('--wall', type=float, default=0)
     ap.add_argument('--arch', default='a0.50'), ap.add_argument('--loader', default='mem')
+    ap.add_argument('--frontend', default='yamnet'), ap.add_argument('--init', default='',
+                                                                     help='non-default init tag, e.g. select (a control)')
     a = ap.parse_args()
     {'record': record, 'table': table, 'decide': decide, 'gate': gate,
-     'streamcheck': streamcheck}[a.phase](a)
+     'streamcheck': streamcheck, 'frontier': frontier}[a.phase](a)

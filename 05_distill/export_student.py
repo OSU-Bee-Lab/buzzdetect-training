@@ -72,6 +72,13 @@ def filters_of(mel_model):
         i += 1
 
 
+def run_frontend(a):
+    """Front end the run trained on (curve.json args), 'yamnet' for --init-only."""
+    if a.init_only or not a.run:
+        return 'yamnet'
+    return json.load(open(os.path.join(LOCAL, 'runs', a.run, 'curve.json')))['args'].get('frontend', 'yamnet')
+
+
 def load_mel(a):
     if a.init_only:
         import student_init as si
@@ -87,7 +94,8 @@ def do_export(a):
     from onnx_passes import optimize
     mel = load_mel(a)
     filters = filters_of(mel)
-    wav = st.build_student(filters, name=a.name.replace('-', '_').replace('.', '_'))
+    fe_name = run_frontend(a)
+    wav = st.build_student(filters, name=a.name.replace('-', '_').replace('.', '_'), frontend=fe_name)
     n = st.copy_weights(mel, wav)
     centers, tcfg = centers_vector()
     head = wav.get_layer('logits')
@@ -109,11 +117,12 @@ def do_export(a):
     print(f'passes: folded {n_folded}, fused {n_fused}', flush=True)
 
     cfg = json.load(open(ENGINE_CFG))
-    cfg['samples_min'] = 15600
+    # one patch needs 15360 samples plus the STFT window's tail (25 ms window: 15600)
+    cfg['samples_min'] = 15600 if fe_name == 'yamnet' else 15360 - st.fes.get(fe_name).hop + st.fes.get(fe_name).max_window
     cfg['metadata'] = {'embeddername': 'distilled_student', 'set': 'moderate',
                        'trained_date': __import__('datetime').date.today().isoformat(),
                        'teacher': 'v4-ft-ps-e60-moderate', 'filters': filters,
-                       'source_run': None if a.init_only else a.run,
+                       'source_run': None if a.init_only else a.run, 'frontend': fe_name,
                        'note': 'distilled single-pass student; activation_centers folded into the head bias'}
     json.dump(cfg, open(os.path.join(d, 'config_model.json'), 'w'), indent=2)
     print(f'wrote {d}', flush=True)
