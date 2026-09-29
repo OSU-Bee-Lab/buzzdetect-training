@@ -103,6 +103,20 @@ python scripts are re-read at every stage). After the chains finish: merge, `pyt
   (it scored higher; one seed, a 0.07 gap is well above the ~0.02 noise, so the refit is not helping at 7000 steps).
   Compare new front ends against **0.694**, not 0.625.
 
+## Class-subset experiment (2026-09-29, queued in the relaunched main.py job)
+
+Question: does distilling only `ins_buzz`, `ambient_rain`, `human` (and/or dropping the code-regression loss)
+buy buzz sensitivity at a small width, where the frontier's sensitivity is lost (a0.375 = 0.519 vs a0.50 = 0.625 on
+the YAMNet front end)? Not a speed lever by itself (the 15-way head is ~8 kFLOPs). Runs on the cheapest front end
+and width, `fast32h16:a0.25` (init `select`, rung B, seed 1, 7000 steps), so they compare directly with that run's
+full-class result (`fe_B_fast32h16_a0.25_s1`, in the standard list): `lam=0` (`..._lam0`), classes only
+(`..._c-buzz-rain-human`), and both (`..._c-buzz-rain-human_lam0`). Read gaps below ~0.03 as ties (seed noise ~0.02,
+one seed each). Caveat the other way: the other classes are supervision too (jets and machinery teach the trunk
+what confounders look like, and jet false positives at 1_95 are a known problem), so a buzz-only student might gain
+sensitivity and lose false-positive behaviour; the headline holds fpr fixed, so it would show up as a lower
+headline, not a separate number. If the subset wins, the next step is the same subset at `fast32h16:a0.375`/`a0.50`
+and a check of what buzzdetect does with a 3-column model.
+
 ## How to read the result / what to decide
 
 Run `conda run -n buzzdetect-train python 05_distill/ladder_record.py frontier`. Questions, in order:

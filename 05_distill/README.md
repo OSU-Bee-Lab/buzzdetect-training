@@ -25,6 +25,17 @@ skipped when its artifact exists, and training resumes from its last checkpoint.
 whole run (`[chain] <label>: FAILED exit N`); fix it and rerun. Stage lines are `[chain] ...`, and the
 eval prints the `[<name>] sens@fpr...` headline, so `tools/watch_job.sh` follows it like any other job.
 Options: `--rung A-D` (D trains from streamed shards), `--steps`, `--seed`, `--prefix`, `--until <stage>`.
+Per-run options ride on the run spec: `<frontend>:<arch>[:<init>][:classes=a+b+c][:lam=<x>]`.
+
+**Class-subset students.** `classes=ins_buzz+ambient_rain+human` distils only those teacher classes: the
+student's head has just those outputs (in that order), the loss and the flip readouts see only them, and the
+exported `config_model.json` lists only them (so buzzdetect writes only those columns). `ins_buzz` must be
+included, since the headline is buzz sensitivity; dead classes are refused. `lam=0` drops the 2048-d code-regression
+loss (which encodes every class). The head is ~8 kFLOPs against a ~17.8 MMAC trunk, so fewer classes is not a speedup
+by itself; the question is whether focusing the trunk on fewer classes buys buzz sensitivity at a narrower width.
+Names carry the choice (`..._c-buzz-rain-human`, `..._lam0`), the ladder rows record `classes` and `lam`, and
+`ladder_record.py frontier` lists them beside the full-class runs. Not a drop-in for the standard tier: check the
+consumer copes with a class list other than the teacher's before deploying one.
 Stage list and the stage-to-script map are in `main.py`'s docstring.
 
 ## A new teacher

@@ -20,6 +20,9 @@
   (bump `store.MEL_VERSION` if `mel_patches`' math changes).
 - **`import tensorflow` first** in entry points that import pandas (CLAUDE.md, root). `dpaths.py`, `store.py`
   and `main.py` import neither, so the engine venv and the onnx venv can use them.
+- **Never assume 15 outputs or buzz at column 8 in code that reads a student.** A `--classes` student has
+  its own class list (`curve.json` `keep_classes`, the exported `config_model.json` `classes`); take the buzz
+  column from that list (`eval_folds.infer`, `export_student.parity`, `distill_train.ACT_*` do).
 - `frame_length`/`slice` geometry (62 frames, 15360 samples, 953600 with lookahead) is fixed in `dpaths.py`;
   `teacher_onnx.py` refuses a teacher framed differently.
 
