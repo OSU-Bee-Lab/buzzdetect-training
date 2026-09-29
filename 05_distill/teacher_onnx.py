@@ -68,6 +68,8 @@ def session(path_or_bytes, samples, gpu=True):
     import onnxruntime as ort
     so = ort.SessionOptions()
     so.add_free_dimension_override_by_name('samples', samples)
+    if gpu:
+        so.intra_op_num_threads = 2     # CPU-side ops only; more threads spin against the ffmpeg decoders
     prov = ['CUDAExecutionProvider', 'CPUExecutionProvider'] if gpu else ['CPUExecutionProvider']
     s = ort.InferenceSession(path_or_bytes, so, providers=prov)
     if gpu and 'CUDAExecutionProvider' not in s.get_providers():

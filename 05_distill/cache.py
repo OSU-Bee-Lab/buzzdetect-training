@@ -1,6 +1,6 @@
 """Build the teacher-target cache for a rung (see DESIGN.md).
 
-    python 05_distill/cache.py --rung A [--workers 16] [--limit N]
+    python 05_distill/cache.py --rung A [--workers 20] [--limit N]
 
 Needs onnxruntime-gpu + onnx + numpy: use
 /home/luke/projects/buzzdetect-training/.local/venv-onnx/bin/python.
@@ -21,7 +21,8 @@ Rungs are cumulative: --rung B caches A and B (A's already-written slices skip).
 Rung V is the validation pool (separate deployments), not part of A-D.
 """
 import argparse, collections, csv, io, os, subprocess, sys, threading, time
-from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 import numpy as np
 
@@ -36,14 +37,103 @@ DECODE_S = 59.6
 LOOKAHEAD = 240
 
 
-def decode(path, start_s):
-    """float32 mono 16 kHz samples of [start_s, start_s + 59.6 s), or None on failure."""
-    cmd = ['ffmpeg', '-v', 'error', '-nostdin', '-ss', repr(float(start_s)), '-t', repr(DECODE_S),
+def ffmpeg_decode(path, start_s):
+    """Generic path: ffmpeg -ss before -i. On long mp3 without an index this costs
+    ~3 s per 100 000 s of offset (it scans frame headers from the start)."""
+    cmd = ['ffmpeg', '-v', 'error', '-nostdin', '-threads', '1', '-ss', repr(float(start_s)), '-t', repr(DECODE_S),
            '-i', path, '-ac', '1', '-ar', '16000', '-f', 'f32le', 'pipe:1']
     r = subprocess.run(cmd, capture_output=True)
     if r.returncode != 0 or len(r.stdout) < 4 * 16000:
         return None
     return np.frombuffer(r.stdout, np.float32)[:T.SLICE_SAMPLES]
+
+
+_MP3_BR = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320]   # MPEG1 layer 3, kbps
+_MP3_SR = [44100, 48000, 32000]
+
+
+def _mp3_hdr(b, i):
+    """(bitrate_idx, sr_idx) of an MPEG1-layer-3 frame header at b[i], else None."""
+    if i + 4 > len(b) or b[i] != 0xFF or (b[i + 1] & 0xFE) != 0xFA:
+        return None
+    br, sr = b[i + 2] >> 4, (b[i + 2] >> 2) & 3
+    if br in (0, 15) or sr == 3:
+        return None
+    return br, sr
+
+
+def mp3_probe(path, size, dur):
+    """(data_start, bytes_per_s, frame_bytes, sr, hdr) if this is a CBR MPEG1-L3 file whose
+    size agrees with bitrate*duration to 1%; else None."""
+    with open(path, 'rb') as f:
+        h = f.read(4096)
+    d = 0
+    if h[:3] == b'ID3':
+        d = 10 + ((h[6] << 21) | (h[7] << 14) | (h[8] << 7) | h[9])
+        with open(path, 'rb') as f:
+            f.seek(d); h = f.read(4096)
+    for i in range(len(h) - 8):
+        hd = _mp3_hdr(h, i)
+        if hd:
+            br, sr = _MP3_BR[hd[0]] * 1000, _MP3_SR[hd[1]]
+            fb = 144 * br / sr
+            if _mp3_hdr(h, i + int(fb)) or _mp3_hdr(h, i + int(fb) + 1):
+                Bps = br / 8
+                if abs(Bps * dur - (size - d - i)) > 0.01 * Bps * dur:
+                    return None
+                return d + i, Bps, fb, sr, hd
+    return None
+
+
+def mp3_decode(path, start_s, info):
+    """Byte-offset seek by the CBR bitrate, then ffmpeg on just that byte range (stdin)."""
+    d0, Bps, fb, sr, hd = info
+    lead = 8000                                   # bytes of resync/bit-reservoir lead-in
+    want = int((DECODE_S + 2.0) * Bps) + lead
+    pos = d0 + int(start_s * Bps) - lead
+    pos = max(d0, pos)
+    with open(path, 'rb') as f:
+        f.seek(pos); buf = f.read(want + 1024)
+    i0 = None
+    for i in range(0, min(len(buf) - 4, 2048)):     # first frame header with matching params, confirmed by the next
+        if _mp3_hdr(buf, i) == hd and any(_mp3_hdr(buf, i + int(fb) + k) == hd for k in (0, 1)):
+            i0 = i; break
+    if i0 is None:
+        return None
+    n0 = round((pos + i0 - d0) / fb)              # frames before the first decoded frame
+    t_dec = n0 * 1152 / sr
+    r = subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-threads', '1', '-f', 'mp3', '-i', 'pipe:0', '-ac', '1', '-ar', '16000',
+                        '-f', 'f32le', 'pipe:1'], input=buf[i0:], capture_output=True)
+    x = np.frombuffer(r.stdout, np.float32)
+    skip = int(round((start_s - t_dec) * 16000))
+    if r.returncode != 0 or skip < 0 or len(x) < skip + 4 * 16000:
+        return None
+    return x[skip:skip + T.SLICE_SAMPLES]
+
+
+def decode(path, start_s, mp3info=None):
+    """float32 mono 16 kHz samples of [start_s, start_s + 59.6 s), or None on failure."""
+    if mp3info is not None:
+        x = mp3_decode(path, start_s, mp3info)
+        if x is not None:
+            return x
+    return ffmpeg_decode(path, start_s)
+
+
+_MP3 = {}
+
+
+def load_slice(root, rel, start_s, size_dur):
+    """Decode worker (runs in a spawned process: forking a threaded decoder pool out of the
+    CUDA-holding parent was the throughput killer)."""
+    if rel not in _MP3:
+        _MP3[rel] = None
+        if rel.lower().endswith('.mp3') and size_dur:
+            try:
+                _MP3[rel] = mp3_probe(os.path.join(root, rel), *size_dur)
+            except Exception:
+                pass
+    return decode(os.path.join(root, rel), start_s, _MP3[rel])
 
 
 def out_path(cache, rel, hour):
@@ -95,7 +185,7 @@ Paths come from paths.local.json keys audio_root and distill_cache.
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--rung', required=True, choices=ORDER + ['V'])
-    ap.add_argument('--workers', type=int, default=16)
+    ap.add_argument('--workers', type=int, default=20)
     ap.add_argument('--limit', type=int, default=None, help='only the first N pending slices (testing)')
     ap.add_argument('--cpu', action='store_true')
     ap.add_argument('--cache', default=config.DISTILL_CACHE)
@@ -113,13 +203,11 @@ def main():
     print(f'rung {a.rung}: {len(plan)} slices planned, {len(plan) - len(todo)} present, {len(todo)} to do ({tot_h:.1f} h)', flush=True)
     if not todo:
         return
+    dur = {r['relpath']: (int(r['size']), float(r['dur'])) for r in csv.DictReader(open(os.path.join(cache, '_manifest', 'durations.csv'))) if r['dur']}
+    dec = ProcessPoolExecutor(a.workers, mp_context=multiprocessing.get_context('spawn'))
+    list(dec.map(int, ['0'] * a.workers))          # start the decode processes before CUDA exists
     teacher = T.Teacher(cache, gpu=not a.cpu)
     print('sessions:', teacher.ext.get_providers()[0], teacher.mel.get_providers()[0], flush=True)
-
-    def load(r):
-        return decode(os.path.join(root, r['relpath']), float(r['start_s']))
-
-    dec = ThreadPoolExecutor(a.workers)
     wr = ThreadPoolExecutor(4)
     ahead = collections.deque()
     wfut = collections.deque()
@@ -129,19 +217,22 @@ def main():
     t0 = tl = time.time()
     dl = 0
     counts = collections.Counter()
+    tim = collections.Counter()
 
     def refill():
         while len(ahead) < a.workers * 3:
             r = next(it, None)
             if r is None:
                 return
-            ahead.append((r, dec.submit(load, r)))
+            ahead.append((r, dec.submit(load_slice, root, r['relpath'], float(r['start_s']), dur.get(r['relpath']))))
 
     refill()
     while ahead:
         r, fut = ahead.popleft()
         refill()
+        tw = time.time()
         x = fut.result()
+        tim['wait_decode'] += time.time() - tw
         if x is None:
             failed += 1
             print(f'FAILED decode {r["relpath"]} h{r["hour"]}', flush=True)
@@ -154,7 +245,9 @@ def main():
             else:
                 if nfr < int(r['n_frames']):
                     short += 1
+                tg = time.time()
                 mel, lg, cd = teacher(x)
+                tim['gpu'] += time.time() - tg
                 nfr = min(nfr, len(lg))
                 wfut.append(wr.submit(write_npz, out_path(cache, r['relpath'], r['hour']),
                                       mel[:nfr], cd[:nfr], lg[:nfr], float(r['start_s'])))
@@ -175,7 +268,8 @@ def main():
     el = time.time() - t0
     print(f'SUMMARY rung {a.rung}: wrote {done} slices ({frames} frames, {frames * T.FRAME_S / 3600:.1f} h) in {el / 60:.1f} min = '
           f'{done / el:.2f} slices/s, {frames * T.FRAME_S / 3600 / (el / 60):.2f} h audio/min; failed {failed}, short {short}, '
-          f'ins_buzz>0 fraction {counts["ins_buzz>0"] / max(1, frames):.4f}', flush=True)
+          f'ins_buzz>0 fraction {counts["ins_buzz>0"] / max(1, frames):.4f}; '
+          f'consumer waited on decode {tim["wait_decode"]:.0f}s, in teacher {tim["gpu"]:.0f}s', flush=True)
 
 
 if __name__ == '__main__':
