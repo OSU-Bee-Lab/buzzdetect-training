@@ -54,7 +54,7 @@ ENGINE_MODELS = config.local('buzzdetect_dest')                 # <buzzdetect>/e
 ENGINE = os.path.dirname(ENGINE_MODELS) if ENGINE_MODELS else None
 ENGINE_PY = os.path.join(ENGINE, '.venv', 'bin', 'python3') if ENGINE else None   # CUDA onnxruntime
 ONNX_PY = config.local('distill_onnx_python') or os.path.join(MAIN, '.local', 'venv-onnx', 'bin', 'python')
-AUDIO_ROOT = config.AUDIO_ROOT
+AUDIO_ROOT = os.environ.get('DISTILL_AUDIO_ROOT') or config.AUDIO_ROOT      # the env override is for tests
 
 # ---- teacher-independent cache level
 CACHE_ROOT = os.environ.get('DISTILL_CACHE_ROOT') or config.DISTILL_CACHE     # the env override is for tests

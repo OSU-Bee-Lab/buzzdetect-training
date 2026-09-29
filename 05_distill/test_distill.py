@@ -147,6 +147,39 @@ def test_main_stages():
           and '[pending  ] fe_B_yamnet_a0.50_s1_select export' in out)
 
 
+def test_cache_fe():
+    """cache_fe.py end to end on a synthetic wav in the onnx venv: writes the shared mel, skips on rerun,
+    stops when the stored fingerprint no longer matches the spec."""
+    import shutil
+    import wave
+    if not (os.path.exists(D.ONNX_PY) and shutil.which('ffmpeg')):
+        print('skip cache_fe (no onnx venv or ffmpeg)')
+        return
+    audio = f'{TMP}/audio'
+    rel = 'proj/dep/rec/a.wav'
+    os.makedirs(f'{audio}/proj/dep/rec')
+    x = (np.random.default_rng(0).normal(0, 0.05, 16000 * 61) * 32767).astype(np.int16)
+    with wave.open(f'{audio}/{rel}', 'wb') as w:
+        w.setnchannels(1), w.setsampwidth(2), w.setframerate(16000), w.writeframes(x.tobytes())
+    open(D.PLAN, 'w').write('relpath,hour,start_s,deployment,rank,first_rung,n_frames\n'
+                            f'{rel},0,0.0,proj/dep,0.1,A,62\n')
+    store.write_targets(D.CACHE, rel, 0, np.zeros((62, 4)), np.zeros((62, 15)), 0.0)
+    env = {**ENV, 'DISTILL_AUDIO_ROOT': audio}
+    cmd = [D.ONNX_PY, f'{HERE}/cache_fe.py', '--rung', 'A', '--frontends', 'fast32', '--workers', '1']
+    r = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, **env})
+    out = D.slice_path(D.mel_dir('fast32'), rel, 0)
+    check('cache_fe writes the shared mel', r.returncode == 0 and os.path.exists(out)
+          and store.load_mel(out).shape == (62, 96, 32, 1))
+    check('cache_fe stamps the spec dir', store.read_stamp(D.mel_dir('fast32')) is not None)
+    r2 = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, **env})
+    check('a rerun has nothing to do', r2.returncode == 0 and '0 to do' in r2.stdout)
+    store.write_stamp(D.mel_dir('fast32'), 'stale', what='an older definition')
+    r3 = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, **env})
+    check('a stale stamp stops cache_fe', r3.returncode != 0 and 'built from something else' in r3.stdout + r3.stderr)
+    if r.returncode:
+        print(r.stdout[-1200:], r.stderr[-1200:])
+
+
 def test_resume():
     """Kill training after its first checkpoint, rerun: it continues, finishes, and a third run is a no-op."""
     import tensorflow as tf  # noqa: F401
@@ -189,6 +222,7 @@ if __name__ == '__main__':
     test_durations_seed()
     test_migrate()
     test_main_stages()
+    test_cache_fe()
     if '--train' in sys.argv:
         test_resume()
     print(f'\n{len(FAILED)} failure(s)' if FAILED else '\nall passed', f'(scratch: {TMP})')
