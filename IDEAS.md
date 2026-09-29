@@ -306,6 +306,20 @@ PyTorch/ONNX route, so scope it before building.
 *Falsifier:* if PTQ gives under ~1.5x end-to-end on NVMe, close it. If it moves
 any fold's sensitivity beyond that fold's eval-sampling SD, don't ship it.
 
+**First pass, 2026-09-28** (`diagnostics/2026-09-28_int8-ptq/`, target
+`v4-ft-ps-e60-moderate`, the true best): plain per-channel static int8 flips too
+many detections. Scored as detections gained/lost at logit > 0 on the exported
+graph (Luke's parity metric), `ins_buzz` versus fp32 on 1,124 reference positives:
+entropy calibration all convs +36/-75, min/max +27/-276, weights-only int8
++4/-32, fp16 sibling 0/0. So ~3% is the weight-rounding floor and activations add
+the rest; depthwise convs are not the main source. Speed unmeasured: this box has
+no AVX2/VNNI (int8 ran 0.45-0.54x here). Convs are 71% of CPU time and the STFT
+front end 19%, so ~1.9x end-to-end is the ceiling. Open, in order: fix the
+skip-layer sensitivity sweep (mislabeled in the first pass), AdaRound / bias
+correction, re-derive `activation_centers` on the quantized outputs, then
+sensitivity-at-fixed-FPR per fold, then time it on modern hardware (Luke offered).
+Not closed: the falsifier's speed clause has not been tested.
+
 ## 27. Distil the fine-tuned model into a smaller MobileNet student
 
 *Evidence: untagged proposal. YAMNet's embedding is ~89% zeros per frame
@@ -313,6 +327,18 @@ any fold's sensitivity beyond that fold's eval-sampling SD, don't ship it.
 activation sparsity, not dead channels, so structured pruning of frozen
 YAMNet frees under ~10% of the multiply-adds (last layer only). Distillation
 is the route that actually shrinks the network.*
+
+**Update 2026-09-28 (Luke).** The teacher is `v4-ft-ps-e60-moderate` (pitch-shift, moderate
+set, 60 epochs; the true best, not logged as a CV entry). Its cost is the point: two YAMNet
+passes, so ps-fast's ~1.34x only recovers what pitch-shift added, and a
+single-pass student is the way past it. Raw audio: `/media/server storage/experiments`
+(4.2 TB, ~200k files, all passive but from very different environments; same tree
+as `audio/`). Sampling notes: spread across as many *deployments* as possible
+rather than deep from a few (folds are deployments, the student must generalise to
+unseen sites); oversample teacher-active/uncertain frames plus hard negatives; keep
+the 5 rotating eval deployments out of the student's audio or CV gets a
+transductive leak. Judge the student by the same detection-flip metric at logit > 0
+versus the teacher (see the int8 diagnostic), then by CV.
 
 **Data.** Labels are not the limit. ~72k annotated frames are far too few to
 train from scratch, but the teacher labels raw audio, and **~200,000 h of raw
