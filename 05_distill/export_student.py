@@ -55,10 +55,11 @@ def rename_io(model):
     return model
 
 
-def centers_vector():
+def centers_vector(classes=None):
+    """Teacher activation centers for `classes` (default: all the teacher's), 0 for classes without one."""
     cfg = json.load(open(TEACHER_CFG))
     c = cfg['activation_centers']
-    classes = cfg['classes']
+    classes = classes or cfg['classes']
     return np.array([c.get(k, 0.0) for k in classes], np.float32), cfg
 
 
@@ -80,6 +81,14 @@ def run_frontend(a):
     return json.load(open(os.path.join(LOCAL, 'runs', a.run, 'curve.json')))['args'].get('frontend', 'yamnet')
 
 
+def run_classes(a):
+    """Classes the run's student outputs (curve.json `keep_classes`), None = all of the teacher's."""
+    if a.init_only or not a.run:
+        return None
+    args = json.load(open(os.path.join(LOCAL, 'runs', a.run, 'curve.json')))['args']
+    return args.get('keep_classes') if args.get('classes') else None
+
+
 def load_mel(a):
     if a.init_only:
         import student_init as si
@@ -96,10 +105,11 @@ def do_export(a):
     mel = load_mel(a)
     filters = filters_of(mel)
     fe_name = run_frontend(a)
-    wav = st.build_student(filters, n_out=D.spec().n_classes, name=a.name.replace('-', '_').replace('.', '_'),
-                           frontend=fe_name)
+    classes = run_classes(a)
+    wav = st.build_student(filters, n_out=len(classes) if classes else D.spec().n_classes,
+                           name=a.name.replace('-', '_').replace('.', '_'), frontend=fe_name)
     n = st.copy_weights(mel, wav)
-    centers, tcfg = centers_vector()
+    centers, tcfg = centers_vector(classes)
     head = wav.get_layer('logits')
     w, b = head.get_weights()
     head.set_weights([w, b - centers])          # deployed scale: detect at logit > 0
@@ -119,21 +129,25 @@ def do_export(a):
     print(f'passes: folded {n_folded}, fused {n_fused}', flush=True)
 
     cfg = json.load(open(ENGINE_CFG))
+    if classes:                                  # a class-subset student: the engine config lists only its outputs
+        cfg['classes'] = list(classes)
+        cfg['center_stats'] = {k: v for k, v in cfg.get('center_stats', {}).items() if k in classes}
     # one patch needs 15360 samples plus the STFT window's tail (25 ms window: 15600)
     cfg['samples_min'] = 15600 if fe_name == 'yamnet' else 15360 - st.fes.get(fe_name).hop + st.fes.get(fe_name).max_window
     cfg['metadata'] = {'embeddername': 'distilled_student', 'set': D.spec().set,
                        'trained_date': __import__('datetime').date.today().isoformat(),
                        'teacher': D.TEACHER, 'filters': filters,
-                       'source_run': None if a.init_only else a.run, 'frontend': fe_name,
+                       'source_run': None if a.init_only else a.run, 'frontend': fe_name, 'classes': classes or 'all',
                        'note': 'distilled single-pass student; activation_centers folded into the head bias'}
     json.dump(cfg, open(os.path.join(d, 'config_model.json'), 'w'), indent=2)
     print(f'wrote {d}', flush=True)
 
     if not a.no_parity:
-        parity(wav, os.path.join(d, 'model.onnx'), a.parity_seconds)
+        parity(wav, os.path.join(d, 'model.onnx'), a.parity_seconds,
+               classes.index('ins_buzz') if classes else D.spec().buzz)
 
 
-def parity(wav, onnx_path, seconds):
+def parity(wav, onnx_path, seconds, buzz):
     import librosa
     import onnxruntime as ort
     x, _ = librosa.load(FIXTURE, sr=16000, mono=True)
@@ -143,8 +157,8 @@ def parity(wav, onnx_path, seconds):
     out = sess.run(None, {'waveform': x})[0]
     diff = np.abs(ref - out).max()
     print(f'parity on fixture ({len(x) / 16000:.0f} s, {len(ref)} frames): max |onnx - keras| = {diff:.2e} '
-          f'({"PASS" if diff < TOL else "FAIL"} < {TOL:g}); buzz detections keras {(ref[:, 8] > 0).sum()} '
-          f'onnx {(out[:, 8] > 0).sum()}', flush=True)
+          f'({"PASS" if diff < TOL else "FAIL"} < {TOL:g}); buzz detections keras {(ref[:, buzz] > 0).sum()} '
+          f'onnx {(out[:, buzz] > 0).sum()}', flush=True)
     if diff >= TOL:
         sys.exit(1)
 

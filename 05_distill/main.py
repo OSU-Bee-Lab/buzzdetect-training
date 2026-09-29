@@ -19,7 +19,9 @@ Teacher stages (once per teacher, shared by every student)
   cache_fe  cache_fe.py V, <rung>    student-input spectrograms for the non-YAMNet front ends, all at once
   pack      shards.py pack --rung D  only for rung D (streamed from shards)
 
-Per student (`--runs`: <frontend>:<arch>[:<init>] ...; name fe_<rung>_<frontend>_<arch>_s<seed>[_<init>])
+Per student (`--runs`: <frontend>:<arch>[:<init>][:classes=a+b+c][:lam=<x>] ...;
+name fe_<rung>_<frontend>_<arch>_s<seed>[_<init>][_c-<classes>][_lam<x>]; `classes=` distils only those
+teacher classes (the head has only those outputs; must include ins_buzz), `lam=0` drops the code-regression loss)
   train     distill_train.py         resumes from its last checkpoint; TRAIN_DONE marks the end
   export    export_student.py export ONNX with the teacher's centers folded in, parity-checked
   eval      eval_folds.py run        headline sensitivity_exclquiet @ fpr 0.005 on the rotating folds
@@ -75,15 +77,28 @@ def say(msg):
     print(f'[chain] {msg} {time.strftime("%T")}', flush=True)
 
 
-def run_name(fe, arch, init):
-    return f'{A.prefix}_{A.rung}_{fe}_{arch}_s{A.seed}' + (f'_{init}' if init else '')
+def short_classes(classes):
+    """ins_buzz+ambient_rain+human -> buzz-rain-human (the part after the first underscore)."""
+    return '-'.join(c.split('_', 1)[-1] for c in classes.split(','))
+
+
+def run_name(spec):
+    fe, arch, init, classes, lam = spec
+    return (f'{A.prefix}_{A.rung}_{fe}_{arch}_s{A.seed}' + (f'_{init}' if init else '')
+            + (f'_c-{short_classes(classes)}' if classes else '') + (f'_lam{lam}' if lam else ''))
 
 
 def parse_runs():
+    """'<frontend>:<arch>[:<init>][:classes=a+b+c][:lam=0]' -> (frontend, arch, init, 'a,b,c' or '', lam or '')."""
     out = []
     for r in A.runs.split():
-        fe, arch, *init = r.split(':')
-        out.append((fe, arch, init[0] if init else ''))
+        fe, arch, *rest = r.split(':')
+        init = next((t for t in rest if '=' not in t), '')
+        kv = dict(t.split('=', 1) for t in rest if '=' in t)
+        unknown = set(kv) - {'classes', 'lam'}
+        if unknown:
+            sys.exit(f'run {r!r}: unknown option(s) {sorted(unknown)} (classes=a+b+c, lam=<float>)')
+        out.append((fe, arch, init, kv.get('classes', '').replace('+', ','), kv.get('lam', '')))
     return out
 
 
@@ -98,7 +113,7 @@ class Stage:
 
 
 def stages_for_teacher(runs):
-    fes = sorted({fe for fe, _, _ in runs if fe != 'yamnet'})
+    fes = sorted({r[0] for r in runs if r[0] != 'yamnet'})
     st = [
         Stage('frontend', 'frontend_only.onnx', [TRAIN_PY, 'bench_arch.py', 'export', '--candidates', 'frontend_only'],
               D.FRONTEND_ONNX),
@@ -137,19 +152,22 @@ def in_ladder(name):
         return False
 
 
-def stages_for_run(fe, arch, init):
-    name = run_name(fe, arch, init)
+def stages_for_run(spec):
+    fe, arch, init, classes, lam = spec
+    name = run_name(spec)
     d = os.path.join(D.RUNS, name)
     m = os.path.join(D.MODELS, name)
     ev = os.path.join(D.EVAL, name)
     loader = 'stream' if A.rung == 'D' else 'mem'
     train = [TRAIN_PY, '-u', 'distill_train.py', '--rung', A.rung, '--steps', str(A.steps), '--batch', str(A.batch),
              '--seed', str(A.seed), '--name', name, '--arch', arch, '--frontend', fe, '--loader', loader,
-             '--eval-every', str(A.eval_every)] + (['--init', init] if init else [])
+             '--eval-every', str(A.eval_every)] + (['--init', init] if init else []) \
+        + (['--classes', classes] if classes else []) + (['--lam', lam] if lam else [])
     env = None
     wall = os.path.join(d, 'wall.txt')
     rec = [TRAIN_PY, 'ladder_record.py', 'record', '--rung', A.rung, '--seed', str(A.seed), '--steps', str(A.steps),
-           '--name', name, '--wall', 'WALL', '--arch', arch, '--frontend', fe, '--init', init, '--loader', loader]
+           '--name', name, '--wall', 'WALL', '--arch', arch, '--frontend', fe, '--init', init, '--loader', loader,
+           '--classes', classes, '--lam', lam or '0.1']
     st = [
         Stage('train', f'{name} train', train, os.path.join(d, 'TRAIN_DONE'), env, wall),
         Stage('export', f'{name} export', [TRAIN_PY, '-u', 'export_student.py', 'export', '--run', name, '--name', name],
@@ -211,7 +229,7 @@ def preflight(all_stages):
 def main():
     runs = parse_runs()
     tstages = stages_for_teacher(runs)
-    plans = [stages_for_run(*r) for r in runs]
+    plans = [stages_for_run(r) for r in runs]
     all_stages = tstages + [s for _, _, ss in plans for s in ss]
     if A.dry_run:
         print(f'teacher {D.TEACHER}; cache {D.CACHE}; local {D.LOCAL}')

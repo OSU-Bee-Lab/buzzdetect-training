@@ -19,7 +19,7 @@ CLASSES = ['aambient_scraping', 'ambient_background', 'ambient_music', 'ambient_
            'ambient_thunder', 'animal', 'human', 'ins_buzz', 'ins_trill', 'mech_auto', 'mech_hum',
            'mech_machinery', 'mech_plane', 'mech_quadcopter']
 ENV = {'DISTILL_TEACHER': 'test_teacher', 'DISTILL_CACHE_ROOT': f'{TMP}/cache', 'DISTILL_LOCAL_ROOT': f'{TMP}/local',
-       'DISTILL_MODELS_DIR': f'{TMP}/models', 'CUDA_VISIBLE_DEVICES': ''}
+       'DISTILL_MODELS_DIR': f'{TMP}/models', 'DISTILL_ENGINE_MODELS': f'{TMP}/engine', 'CUDA_VISIBLE_DEVICES': ''}
 os.environ.update(ENV)
 sys.path.insert(0, HERE)
 
@@ -213,6 +213,26 @@ def test_resume():
     check('same name, other settings stops', r4.returncode != 0 and 'other settings' in (r4.stdout + r4.stderr))
     if r2.returncode:
         print(r2.stdout[-1500:], r2.stderr[-1500:])
+
+    # class subset: a 3-output head, trained, exported with the config listing only those classes
+    import shutil
+    real_cfg = os.path.join(D.config.local('buzzdetect_dest'), D.DEFAULT_TEACHER, 'config_model.json')
+    os.makedirs(D.TEACHER_ENGINE_DIR, exist_ok=True)
+    shutil.copy(real_cfg, os.path.join(D.TEACHER_ENGINE_DIR, 'config_model.json'))
+    keep = ['ins_buzz', 'ambient_rain', 'human']
+    cls = [c if c != 'resume_test' else 'cls_test' for c in base]
+    r5 = run(cls + ['--classes', ','.join(keep), '--lam', '0'])
+    curve = json.load(open(f'{D.RUNS}/cls_test/curve.json'))
+    m = tf.keras.models.load_model(f'{D.RUNS}/cls_test/student_mel.keras', compile=False)
+    check('class-subset training builds a 3-output head', r5.returncode == 0 and m.get_layer('logits').units == 3
+          and curve['args']['keep_classes'] == keep and 'classes [' in r5.stdout)
+    r6 = run([sys.executable, f'{HERE}/export_student.py', 'export', '--run', 'cls_test', '--name', 'cls_test'])
+    cfg_path = f'{D.MODELS}/cls_test/config_model.json'
+    cfg = json.load(open(cfg_path)) if os.path.exists(cfg_path) else {}
+    check('export writes a config with only those classes', r6.returncode == 0 and cfg.get('classes') == keep
+          and 'parity' in r6.stdout and 'PASS' in r6.stdout)
+    if r5.returncode or r6.returncode:
+        print(r5.stdout[-800:], r5.stderr[-800:], r6.stdout[-800:], r6.stderr[-1200:])
 
 
 if __name__ == '__main__':

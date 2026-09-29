@@ -50,7 +50,7 @@ TEACHER = _setting('DISTILL_TEACHER', 'distill_teacher', DEFAULT_TEACHER)
 BASELINE = _setting('DISTILL_BASELINE', 'distill_baseline', DEFAULT_BASELINE)
 
 # ---- other repos / interpreters
-ENGINE_MODELS = config.local('buzzdetect_dest')                 # <buzzdetect>/engine/models
+ENGINE_MODELS = os.environ.get('DISTILL_ENGINE_MODELS') or config.local('buzzdetect_dest')   # <buzzdetect>/engine/models
 ENGINE = os.path.dirname(ENGINE_MODELS) if ENGINE_MODELS else None
 ENGINE_PY = os.path.join(ENGINE, '.venv', 'bin', 'python3') if ENGINE else None   # CUDA onnxruntime
 ONNX_PY = config.local('distill_onnx_python') or os.path.join(MAIN, '.local', 'venv-onnx', 'bin', 'python')

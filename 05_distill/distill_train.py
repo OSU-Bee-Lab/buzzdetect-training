@@ -56,6 +56,28 @@ BUZZ = SP.buzz
 DEAD = tuple(SP.dead)               # no center: above 0 everywhere, zero weight
 LIVE = SP.live
 N_CLASSES = SP.n_classes
+
+
+def set_active(names=None):
+    """Which teacher classes the student is trained on and judged against. Default: all of them (dead ones
+    carry zero loss, as always). `--classes a,b,c`: a student whose head has only those outputs, in that
+    order; the rest of the teacher's logits are neither fitted nor read. Positions below index the student's
+    own output, `KEEP` maps them back to the teacher's columns."""
+    global KEEP, ACT_CLASSES, ACT_DEAD, ACT_LIVE, ACT_BUZZ
+    if names:
+        bad = [n for n in names if n not in CLASSES or CLASSES.index(n) in DEAD]
+        if bad:
+            sys.exit(f'--classes: {bad} not live classes of teacher {D.TEACHER} ({[CLASSES[i] for i in LIVE]})')
+        if 'ins_buzz' not in names:
+            sys.exit('--classes must include ins_buzz (the headline is buzz sensitivity)')
+    KEEP = [CLASSES.index(n) for n in names] if names else list(range(N_CLASSES))
+    ACT_CLASSES = [CLASSES[i] for i in KEEP]
+    ACT_DEAD = [j for j, i in enumerate(KEEP) if i in DEAD]
+    ACT_LIVE = [j for j in range(len(KEEP)) if j not in ACT_DEAD]
+    ACT_BUZZ = ACT_CLASSES.index('ins_buzz')
+
+
+set_active()
 RUNG_ORDER = 'ABCDE'
 ARCHS = {'a0.50': (0.5, 14), 'a0.50_d12': (0.5, 12), 'a0.375': (0.375, 14), 'a0.25': (0.25, 14)}   # name -> (alpha, depth)
 
@@ -191,17 +213,18 @@ def val_flips(model, val, limit=None, batch=512):
     for i in range(0, n, batch):
         mel, _, lg = val.take(idx[i:i + batch])
         S.append(model(mel, training=False)[0].numpy())
-        T.append(lg)
+        T.append(lg[:, KEEP])
     S, T = np.concatenate(S), np.concatenate(T)
     sp, tp = S > 0, T > 0
     gained = (sp & ~tp).sum(0)
     lost = (~sp & tp).sum(0)
-    out = {'frames': int(n), 'buzz_teacher': int(tp[:, BUZZ].sum()), 'buzz_student': int(sp[:, BUZZ].sum()),
-           'buzz_gained': int(gained[BUZZ]), 'buzz_lost': int(lost[BUZZ]),
-           'other_gained': int(gained[[c for c in LIVE if c != BUZZ]].sum()),
-           'other_lost': int(lost[[c for c in LIVE if c != BUZZ]].sum()),
-           'mae_live': float(np.abs(S - T)[:, LIVE].mean()), 'mae_buzz': float(np.abs(S - T)[:, BUZZ].mean()),
-           'per_class_flips': {CLASSES[c]: [int(gained[c]), int(lost[c])] for c in LIVE}}
+    B = ACT_BUZZ
+    others = [c for c in ACT_LIVE if c != B]
+    out = {'frames': int(n), 'buzz_teacher': int(tp[:, B].sum()), 'buzz_student': int(sp[:, B].sum()),
+           'buzz_gained': int(gained[B]), 'buzz_lost': int(lost[B]),
+           'other_gained': int(gained[others].sum()), 'other_lost': int(lost[others].sum()),
+           'mae_live': float(np.abs(S - T)[:, ACT_LIVE].mean()), 'mae_buzz': float(np.abs(S - T)[:, B].mean()),
+           'per_class_flips': {ACT_CLASSES[c]: [int(gained[c]), int(lost[c])] for c in ACT_LIVE}}
     return out
 
 
@@ -221,7 +244,7 @@ def ridge(x, y, lam):
 
 
 RESUME_KEYS = ('rung', 'steps', 'name', 'alpha', 'depth', 'frontend', 'arch', 'loader', 'batch', 'lr', 'lam',
-               'huber', 'init', 'init_frames', 'ridge', 'bn_momentum', 'seed')
+               'huber', 'init', 'init_frames', 'ridge', 'bn_momentum', 'seed', 'classes')
 
 
 def ckpt_path(out):
@@ -272,7 +295,7 @@ def restore(z, model, aux, opt):
 
 def build_and_init(a, tr, mu, sd, skip_fit=False):
     filters = st.widths_for(a.alpha, a.depth)
-    model = st.build_student(filters, n_out=N_CLASSES, input_type='mel', expose_code=True, name='student_mel',
+    model = st.build_student(filters, n_out=len(KEEP), input_type='mel', expose_code=True, name='student_mel',
                              frontend=a.frontend)
     for l in model.layers:                      # moving stats must track fast: the init's BN is
         if isinstance(l, tf.keras.layers.BatchNormalization):   # identity+bias (refit), not YAMNet's
@@ -290,6 +313,7 @@ def build_and_init(a, tr, mu, sd, skip_fit=False):
     rng = np.random.default_rng(1)
     idx = np.sort(rng.choice(tr.n, min(a.init_frames, tr.n), replace=False))
     mel, code, lg = tr.take(idx)
+    lg = lg[:, KEEP]
     if a.init == 'select':
         si.recalibrate_bn(model, mel)
     elif a.init == 'yamnet':
@@ -333,7 +357,12 @@ def main():
     ap.add_argument('--shards', help='override shard dir for the train rung (selftest)')
     ap.add_argument('--val-shards', help='override shard dir for validation (selftest)')
     ap.add_argument('--halt-at', type=int, default=0, help=argparse.SUPPRESS)   # test hook, see test_distill.py
+    ap.add_argument('--classes', default='',
+                    help='comma-separated teacher classes to distil (must include ins_buzz); the student\'s head has '
+                         'only these outputs. Default: all (dead classes at zero loss)')
     a = ap.parse_args()
+    set_active(a.classes.split(',') if a.classes else None)
+    a.keep_classes = ACT_CLASSES                         # recorded in curve.json for export_student
 
     for g in tf.config.list_physical_devices('GPU'):
         tf.config.experimental.set_memory_growth(g, True)
@@ -361,7 +390,7 @@ def main():
           f'{tr.meta["deployments"]} deployments); val {val.n} frames '
           f'({val.meta["deployments"]} deployments); steps {a.steps} x {a.batch} '
           f'= {a.steps * a.batch / total:.2f} passes; arch alpha {a.alpha} depth {a.depth} '
-          f'frontend {a.frontend}', flush=True)
+          f'frontend {a.frontend}; classes {ACT_CLASSES if a.classes else "all"}; lam {a.lam}', flush=True)
     mu, sd = tr.code_stats()
     model, aux = build_and_init(a, tr, mu, sd, skip_fit=resume is not None)
     sched = tf.keras.optimizers.schedules.CosineDecay(a.lr, a.steps, alpha=0.01)
@@ -377,7 +406,7 @@ def main():
     else:
         start, curve = restore(resume, model, aux, opt)
         print(f'[resume] {out}: continuing from step {start} of {a.steps}', flush=True)
-    live = tf.constant([0. if i in DEAD else 1. for i in range(N_CLASSES)])
+    live = tf.constant([0. if j in ACT_DEAD else 1. for j in range(len(KEEP))])
     mu_t, sd_t = tf.constant(mu), tf.constant(sd)
 
     @tf.function
@@ -401,7 +430,7 @@ def main():
     gen = tr.batches(a.batch, left, seed) if hasattr(tr, 'batches') else batches(tr, a.batch, left, seed)
     t0, acc = time.time(), []
     for i, (mel, code, lg) in enumerate(gen, start + 1):
-        loss, hub, cmse = step(tf.constant(mel), tf.constant(code), tf.constant(lg))
+        loss, hub, cmse = step(tf.constant(mel), tf.constant(code), tf.constant(lg[:, KEEP]))
         acc.append([float(loss), float(hub), float(cmse)])
         if i % 100 == 0 or i == a.steps:
             m = np.mean(acc, 0)

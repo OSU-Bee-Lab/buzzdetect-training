@@ -123,9 +123,12 @@ def make_session(onnx_path, cpu):
 def infer(a):
     folds = a.folds or rotate_folds()
     cfg_path = os.path.join(os.path.dirname(os.path.abspath(a.onnx)), 'config_model.json')
-    min_samples = 0
+    min_samples, buzz = 0, BUZZ
     if os.path.exists(cfg_path):
-        min_samples = int(json.load(open(cfg_path)).get('samples_min', 0))
+        cfg = json.load(open(cfg_path))
+        min_samples = int(cfg.get('samples_min', 0))
+        if 'ins_buzz' in cfg.get('classes', []):      # a class-subset student's buzz output is not column 8
+            buzz = cfg['classes'].index('ins_buzz')
     sess = make_session(a.onnx, a.cpu)
     key = sess.get_inputs()[0].name
     print(f'[infer] {a.onnx} on {sess.get_providers()[0]}, {len(folds)} folds', flush=True)
@@ -179,7 +182,7 @@ def infer(a):
                     flush()
         flush()
         df = pd.DataFrame(rows, columns=['sample', 'correct', 'loudness'])
-        df['activation_ins_buzz'] = [l[BUZZ] for l in all_logits[n0:]]
+        df['activation_ins_buzz'] = [l[buzz] for l in all_logits[n0:]]
         d = os.path.join(a.out, 'folds', fold)
         os.makedirs(d, exist_ok=True)
         df[['activation_ins_buzz', 'correct', 'loudness', 'sample']].to_csv(
