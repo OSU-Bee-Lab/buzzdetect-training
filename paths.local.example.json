@@ -9,6 +9,6 @@
   },
   "audio_root": "/path/to/experiments",
   "_audio_root_comment": "05_distill: root of all deployment audio (read-only).",
-  "distill_cache": "/path/to/distill-cache__teacher-v4-ft-ps-e60-moderate",
-  "_distill_cache_comment": "05_distill: teacher-target cache (mel, code, logits per slice); big, on the audio drive."
+  "distill_cache": "/path/to/distill-cache/v4-ft-ps-e60-moderate",
+  "_distill_cache_comment": "05_distill: teacher-target cache (mel, code, logits per slice); big, on the audio drive. Layout: <distill-cache>/<teacher model name>/."
 }

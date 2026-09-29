@@ -171,24 +171,24 @@ def make_features_layer(fe):
     tf = _tf()
     from tensorflow.keras import layers
 
-    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    if ROOT not in sys.path:
-        sys.path.insert(0, ROOT)
-    from embedders.yamnet import features as features_lib
-    from embedders.yamnet.params import Params
-
     class FrontendFeatures(layers.Layer):
         def __init__(self, **kw):
             super().__init__(**kw)
-            p = Params()
-            p.stft_window_seconds = fe.max_window / SR
-            p.stft_hop_seconds = fe.hop / SR
-            p.patch_hop_seconds = p.patch_window_seconds          # hop welded to window
-            self.pad_params = p
+            self.min_samples = PATCH_SAMPLES - fe.hop + fe.max_window
+
+        def _pad(self, waveform):
+            # features_lib.pad_waveform's arithmetic in integers: its float32 seconds
+            # (0.96 + 0.016 - 0.016) can land on 15359 in the exported graph, which adds
+            # a whole patch when the input is an exact number of patches (hop 256, 120 s: 125 vs 126)
+            n = tf.shape(waveform)[0]
+            after = tf.maximum(n, self.min_samples) - self.min_samples
+            hops = (after + PATCH_SAMPLES - 1) // PATCH_SAMPLES
+            pad = tf.maximum(0, self.min_samples - n) + PATCH_SAMPLES * hops - after
+            return tf.pad(waveform, [[0, pad]], mode='CONSTANT', constant_values=0.0)
 
         def call(self, waveform):
             with tf.name_scope('frontend'):
-                padded = features_lib.pad_waveform(waveform, self.pad_params)
+                padded = self._pad(waveform)
                 per = []
                 for c in fe.channels:
                     stft = tf.abs(tf.signal.stft(padded, frame_length=c.window, frame_step=fe.hop,

@@ -51,8 +51,8 @@ rank, first_rung) and prints rung sizes in hours and deployments. Hold out 10% o
 
 ## Cache (mirrors the input tree)
 
-Root: `/media/server storage/distill-cache__teacher-v4-ft-ps-e60-moderate/` (sibling of
-`experiments/`; name states what it corresponds to). Add `distill_cache` and `audio_root` keys to
+Root: `/media/server storage/distill-cache/v4-ft-ps-e60-moderate/` (one subdirectory per teacher model under `distill-cache/`; sibling of
+`experiments/`; the subdirectory name is the teacher it holds targets for). Add `distill_cache` and `audio_root` keys to
 paths.local.json (gitignored; a worktree lacks the file, so copy the main checkout's) and to
 paths.local.example.json; read them through config.py, never as literals.
 
