@@ -49,6 +49,7 @@ BUZZ = CLASSES.index('ins_buzz')
 DEAD = (0, 14)                      # no center: above 0 everywhere, zero weight
 LIVE = [i for i in range(15) if i not in DEAD]
 RUNG_ORDER = 'ABCDE'
+ARCHS = {'a0.50': (0.5, 14), 'a0.50_d12': (0.5, 12), 'a0.375': (0.375, 14)}   # name -> (alpha, depth)
 
 
 def cache_root(arg=None):
@@ -191,7 +192,7 @@ def ridge(x, y, lam):
 
 
 def build_and_init(a, tr, mu, sd):
-    filters = st.widths_for(a.alpha)
+    filters = st.widths_for(a.alpha, a.depth)
     model = st.build_student(filters, input_type='mel', expose_code=True, name='student_mel')
     for l in model.layers:                      # moving stats must track fast: the init's BN is
         if isinstance(l, tf.keras.layers.BatchNormalization):   # identity+bias (refit), not YAMNet's
@@ -224,6 +225,11 @@ def main():
     ap.add_argument('--name', required=True)
     ap.add_argument('--cache')
     ap.add_argument('--alpha', type=float, default=0.5)
+    ap.add_argument('--depth', type=int, default=14)
+    ap.add_argument('--arch', choices=list(ARCHS), help='named variant: sets alpha and depth')
+    ap.add_argument('--loader', choices=['mem', 'stream'], default='mem',
+                    help='mem: pack the rung locally (memmap); stream: shard-level shuffle buffer from <cache>/_shards')
+    ap.add_argument('--buffer-gb', type=float, default=0, help='stream: shuffle buffer size (0 = auto from free RAM, max 8)')
     ap.add_argument('--batch', type=int, default=512)
     ap.add_argument('--lr', type=float, default=1e-3)
     ap.add_argument('--lam', type=float, default=0.1)
@@ -243,13 +249,20 @@ def main():
     for g in tf.config.list_physical_devices('GPU'):
         tf.config.experimental.set_memory_growth(g, True)
     tf.keras.utils.set_random_seed(a.seed)
+    if a.arch:
+        a.alpha, a.depth = ARCHS[a.arch]
     cache = None if a.shards else cache_root(a.cache)
-    tr = Shards(a.shards or pack(cache, a.rung))
+    if a.loader == 'stream':
+        import shards as sh
+        tr = sh.StreamPool(cache, a.rung, a.buffer_gb, a.seed)
+    else:
+        tr = Shards(a.shards or pack(cache, a.rung))
     val = Shards(a.val_shards or pack(cache, 'V'))
-    print(f'[data] train rung {a.rung}: {tr.n} frames ({tr.meta["slices"]} slices, '
+    total = getattr(tr, 'total', tr.n)
+    print(f'[data] train rung {a.rung} ({a.loader}): {total} frames ({tr.meta["slices"]} slices, '
           f'{tr.meta["deployments"]} deployments); val {val.n} frames '
           f'({val.meta["deployments"]} deployments); steps {a.steps} x {a.batch} '
-          f'= {a.steps * a.batch / tr.n:.1f} epochs', flush=True)
+          f'= {a.steps * a.batch / total:.2f} passes; arch alpha {a.alpha} depth {a.depth}', flush=True)
     mu, sd = tr.code_stats()
     model, aux = build_and_init(a, tr, mu, sd)
     out = os.path.join(LOCAL, 'runs', a.name)
@@ -282,7 +295,8 @@ def main():
         json.dump(curve, open(os.path.join(out, 'curve.json'), 'w'))
 
     t0, acc = time.time(), []
-    for i, (mel, code, lg) in enumerate(batches(tr, a.batch, a.steps, a.seed), 1):
+    for i, (mel, code, lg) in enumerate((tr.batches(a.batch, a.steps, a.seed) if hasattr(tr, 'batches')
+                                    else batches(tr, a.batch, a.steps, a.seed)), 1):
         loss, hub, cmse = step(tf.constant(mel), tf.constant(code), tf.constant(lg))
         acc.append([float(loss), float(hub), float(cmse)])
         if i % 100 == 0 or i == a.steps:

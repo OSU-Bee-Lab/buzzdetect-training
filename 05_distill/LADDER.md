@@ -24,3 +24,10 @@ teacher ONNX through the harness (inflated).
   sensitivity) are reported, not enforced.
 - One seed per rung above A: a rung's improvement must clear the A spread, which
   is itself two runs, so read a marginal pass as marginal.
+
+## Later rungs and the final choice (chain 2)
+
+- Same advance rule at every step: advance k -> k+1 only if the level of `lost_pct` improves by more than the A repeat spread (`ladder_record.py table` prints each verdict; `gate` enforces C vs B before the expensive rung-D cache, `FORCE_D=1` overrides).
+- Rungs A-C train from a local in-memory pack; rung D streams from `<cache>/_shards/` (shard-level shuffle buffer, `shards.py`), which the packed rung (~160 GB) cannot avoid. Before D depends on it, rung B is trained once through the streaming loader and must match the in-memory B within the A spread (`streamcheck`); the ladder rows use in-memory A-C and streamed D.
+- Architecture variants (a0.50_d12: layers 13-14 removed; a0.375) are trained at rung B, seed 1, and timed at 20 s and 200 s. A variant is also trained at rung D only if its B `lost_pct` is within the A spread of a0.50's (not worse by more than it) AND its B headline is within 0.03 of a0.50's B headline; if both qualify, the faster at 200 s GPU.
+- **After D the final choice is made by the floors, not the ladder:** GPU speed >= 1.5x YAMNet at 200 s (Luke's real chunk length), headline (`sensitivity_exclquiet` @0.005, 5 rotating folds) >= 0.207 (50% of the moderate baseline's 0.414); among candidates clearing both, the highest headline.

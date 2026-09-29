@@ -144,6 +144,12 @@ def do_time(a):
     bench_arch.OUT = os.path.join(LOCAL, 'models')
     for secs in (20, 200):
         bench_arch.do_time(secs, a.repeats, 2, [a.name])
+        r = json.load(open(os.path.join(bench_arch.OUT, 'results.json')))
+        row = {'seconds': secs, 'repeats': a.repeats, 'gpu': r[a.name]['GPU']['rate'],
+               'yamnet_gpu': r['yamnet_large_general']['GPU']['rate'],
+               'teacher_gpu': r['v4-ft-ps-e60-moderate']['GPU']['rate']}
+        row['x_yamnet'] = row['gpu'] / row['yamnet_gpu']
+        json.dump(row, open(os.path.join(bench_arch.OUT, a.name, f'speed_{secs}.json'), 'w'))
 
 
 if __name__ == '__main__':
