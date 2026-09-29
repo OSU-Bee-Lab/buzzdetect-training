@@ -27,10 +27,11 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-import config  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import dpaths as D  # noqa: E402
+import ladder_record as LR  # noqa: E402
 
-MAIN = ROOT.split('/.claude/worktrees/')[0]
-LOCAL = os.path.join(MAIN, '.local', 'distill')
+LOCAL = D.LOCAL                # .local/distill/<teacher>
 COPIED = ['model.onnx', 'config_model.json']
 
 
@@ -43,9 +44,7 @@ def sha(path):
 
 
 def ladder_row(name):
-    path = os.path.join(LOCAL, 'ladder.jsonl')
-    rows = [json.loads(line) for line in open(path)] if os.path.exists(path) else []
-    rows = [r for r in rows if r.get('name') == name]
+    rows = [r for r in LR.rows() if r.get('name') == name]
     return rows[-1] if rows else None
 
 
@@ -81,8 +80,8 @@ def readme(name, as_name, cfg, curve, row):
         lines += ['## Metrics', '',
                   f'Headline `sensitivity_exclquiet` at fpr 0.005, mean over the 5 rotating folds: **{row["headline"]:.3f}** '
                   f'(including quiet buzzes {row["headline_inclusive"]:.3f}). Per fold {row["per_fold"]}.',
-                  'Reference points on the same folds: baseline `cv-baseline-v4-moderate` 0.414; teacher honest rotation 0.574; '
-                  'teacher ONNX through the same harness 0.692 (trained on those folds, inflated).', '',
+                  'Reference points on the same folds: ' + '; '.join(
+                      f'{n} {LR.sx(p)[0]:.3f}' for n, p in LR.REFS if os.path.exists(p)) + '.', '',
                   'Per loudness tier: ' + ', '.join(f'{k} {fmt(v)}' for k, v in row['tiers'].items()) + '.',
                   f'Buzz detections vs the teacher on the held-out V pool: lost {row["lost_pct"]:.1f}%, gained {row["gained_pct"]:.1f}%.', '']
         if row.get('x_yamnet200'):
@@ -101,7 +100,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('name')
     ap.add_argument('--as', dest='as_name', help='directory name in buzzdetect (default: the run name)')
-    ap.add_argument('--dest', default=config.local('buzzdetect_dest'))
+    ap.add_argument('--dest', default=D.ENGINE_MODELS)
     ap.add_argument('--force', action='store_true', help='overwrite an existing model dir\'s files')
     ap.add_argument('--dry-run', action='store_true')
     a = ap.parse_args()

@@ -57,7 +57,7 @@ ONNX_PY = config.local('distill_onnx_python') or os.path.join(MAIN, '.local', 'v
 AUDIO_ROOT = config.AUDIO_ROOT
 
 # ---- teacher-independent cache level
-CACHE_ROOT = config.DISTILL_CACHE
+CACHE_ROOT = os.environ.get('DISTILL_CACHE_ROOT') or config.DISTILL_CACHE     # the env override is for tests
 SHARED_CACHE = os.path.join(CACHE_ROOT, '_shared') if CACHE_ROOT else None
 MEL_ROOT = os.path.join(CACHE_ROOT, '_mel') if CACHE_ROOT else None
 
@@ -70,7 +70,7 @@ TEACHER_EXT = os.path.join(MANIFEST, 'teacher_ext.onnx') if CACHE else None
 DURATIONS = os.path.join(SHARED_CACHE, 'durations.csv') if CACHE_ROOT else None
 
 # ---- local (repo-side, gitignored) data
-LOCAL_ROOT = os.path.join(MAIN, '.local', 'distill')
+LOCAL_ROOT = os.environ.get('DISTILL_LOCAL_ROOT') or os.path.join(MAIN, '.local', 'distill')
 SHARED = os.path.join(LOCAL_ROOT, '_shared')
 LOCAL = os.path.join(LOCAL_ROOT, TEACHER)
 RUNS, MODELS, EVAL, SHARDS = (os.path.join(LOCAL, d) for d in ('runs', 'models', 'eval', 'shards'))
@@ -79,7 +79,8 @@ ARCH = os.path.join(SHARED, 'arch')
 FRONTEND_ONNX = os.path.join(ARCH, 'frontend_only', 'model.onnx')
 
 # ---- teacher files
-TEACHER_MODEL_DIR = os.path.join(MAIN, 'models', TEACHER)        # this project's training output
+TEACHER_MODEL_DIR = os.path.join(os.environ.get('DISTILL_MODELS_DIR') or os.path.join(MAIN, 'models'), TEACHER)
+# ^ this project's training output (the env override is for tests)
 TEACHER_ENGINE_DIR = os.path.join(ENGINE_MODELS, TEACHER) if ENGINE_MODELS else None
 TEACHER_ONNX = os.path.join(TEACHER_ENGINE_DIR, 'model.onnx') if TEACHER_ENGINE_DIR else None
 FIXTURE = os.path.join(ROOT, '04_deploy', 'fixtures', '230808_1208_s89520.flac')
