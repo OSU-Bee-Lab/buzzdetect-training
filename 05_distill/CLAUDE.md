@@ -28,9 +28,12 @@
 
 ## Gotchas
 
+- **A running job is launched from the `distill-lite` worktree, not the main checkout** (FRONTENDS.md, "Running job"), so
+  edits to `05_distill/*.py` in the main checkout cannot change it mid-flight; refresh the worktree (`merge --ff-only main`) between
+  jobs. The data root is `05_distill/data/` in the *main* checkout whichever worktree runs (`dpaths.MAIN`).
 - **Never edit scripts here while a chain runs from this worktree.** A chain re-reads its python stage scripts
   at every stage and bash reads a running script incrementally. Work on another branch/worktree, merge after.
-  (2026-09-29: the generalization was written on `distill-generic` for exactly this reason.)
+  (2026-09-29: the generalization was written on a separate branch for exactly this reason.)
 - **`migrate_layout.py` before the first `main.py` on data made under the old layout** (done for the v4 teacher on
   2026-09-29; a checkout that predates that still needs it): until then
   `05_distill/data/<teacher>/` is empty, so main.py sees nothing done and would redo everything. It refuses to

@@ -14,7 +14,7 @@ sensitivity is fine *if speed improves*. Floors from LADDER.md still print, but 
 
 ## State of the data-size ladder (closed, do not resume)
 
-`.local/distill/ladder.jsonl`, rung B seed 1 (headline = `sensitivity_exclquiet` @ fpr 0.005, 5 rotating folds):
+`05_distill/data/ladder.jsonl`, rung B seed 1 (headline = `sensitivity_exclquiet` @ fpr 0.005, 5 rotating folds):
 
 | run | headline | x YAMNet 20 s / 200 s |
 |---|---|---|
@@ -24,7 +24,7 @@ sensitivity is fine *if speed improves*. Floors from LADDER.md still print, but 
 
 A->B advanced (0.51 -> 0.625), B->C did not (0.608), so by the LADDER rule rung D never runs. `chain_ladder2.sh`
 was **killed by hand at its streaming-loader sanity check** (that check exists only to validate the loader
-rung D needs). `lad_B_s1_stream` in `.local/distill/runs/` is an unfinished leftover. Comparison points: baseline
+rung D needs). `lad_B_s1_stream` in `05_distill/data/runs/` is an unfinished leftover. Comparison points: baseline
 0.414, teacher honest rotation 0.574, teacher ONNX via harness 0.692 (inflated: trained on those folds).
 Students never see labels or eval deployments, but inherit fold knowledge through the teacher: 0.62 is not
 "better than the teacher".
@@ -32,7 +32,7 @@ Students never see labels or eval deployments, but inherit fold knowledge throug
 ## Finding 1: speed is set by the front end, and by FFT length
 
 `chain_frontier_speed.sh` (random weights, engine venv, GPU, x YAMNet; results
-`.local/distill/arch_fe/` and `arch_fe2/` (`_shared/arch_fe*` after `migrate_layout.py`), `time_20.txt` / `time_200.txt`). YAMNet's own front end alone is 1.65x at 200 s, so no
+`05_distill/data/arch_fe/` and `arch_fe2/` (`_shared/arch_fe*` after `migrate_layout.py`), `time_20.txt` / `time_200.txt`). YAMNet's own front end alone is 1.65x at 200 s, so no
 YAMNet-front-end student can beat that. Front-end cost tracks **FFT length** (bands barely matter):
 fft 256 ~2.7-3.1x, fft 512 (YAMNet) 1.65-2.0x, fft 1024 ~0.95x, fft 2048 ~0.45x. Any front end with a window
 long enough to resolve a ~200 Hz fundamental (fft >= 1024) is *slower than YAMNet*. Lowering the frame rate
@@ -62,7 +62,7 @@ it does not rule out band-limited front ends, but gives no reason to expect a bi
   a fingerprint of the spec, so editing a spec without renaming it now stops the next run. Teacher `code`/`logits` are reused (they do not
   depend on the student front end). `check_cache_align.py`: numpy 'yamnet' spec vs stored mel agrees to ~2e-3
   except a few first-window elements of some mp3 slices (decode start effect, negligible).
-- `distill_train.py --frontend X`: packs shards to `.local/distill/shards/<rung>__<X>` (mel from `_mel`, targets
+- `distill_train.py --frontend X`: packs shards to `05_distill/data/shards/<rung>__<X>` (mel from `_mel`, targets
   from the main cache). In-memory loader only. `--arch` gained `a0.25`.
   **Init:** a non-YAMNet front end cannot use the layer-wise refit (it pairs activations position by position,
   and the frequencies at those positions differ), so `--init yamnet` silently becomes `select` (channel
@@ -74,37 +74,42 @@ it does not rule out band-limited front ends, but gives no reason to expect a bi
   init-control rows. `ladder_record.py frontier` prints every rung-B run by 200 s speed with headline and % of baseline.
 - `bench_arch.py` names: `a0.50@two32` (trunk on front end), `fe@two32` (front end alone), `a0.25` etc; `--out DIR`.
 
-## Running job (as of 2026-09-29 13:30; the handoff: enough to resume or take over)
+## Running job (as of 2026-09-29 ~13:55; the handoff: enough to resume or take over)
 
-One job runs everything, `main.py`, launched from the `distill-lite` worktree (branch `worktree-distill-lite`, which now
-holds all of `main` plus this work; **do not edit `.py`/`.sh` under `05_distill/` there while it runs**, docs are safe):
+One job runs everything, `main.py`. It runs from the **`distill-lite` worktree** (`.claude/worktrees/distill-lite`, checked out at
+the same commit as `main`), on purpose: the job re-reads its python scripts at every stage, so editing `05_distill/*.py` in the
+main checkout during a run would change it mid-flight; the worktree is a frozen copy for as long as the job lives (docs are
+safe anywhere). Data and logs are shared: they live in the main checkout's `05_distill/data/` whichever worktree runs.
 
 ```bash
-tools/launch_job.sh .local/distill/main_stage5.log -- /home/luke/anaconda3/envs/buzzdetect-train/bin/python \
-  05_distill/main.py --rung B --runs "fast32h16:a0.25 fast32h16:a0.25:lam=0 \
+cd /home/luke/projects/buzzdetect-training/.claude/worktrees/distill-lite
+tools/launch_job.sh /home/luke/projects/buzzdetect-training/05_distill/data/main_stage5.log -- \
+  /home/luke/anaconda3/envs/buzzdetect-train/bin/python 05_distill/main.py --rung B --runs "fast32h16:a0.25 fast32h16:a0.25:lam=0 \
   fast32h16:a0.25:classes=ins_buzz+ambient_rain+human fast32h16:a0.25:classes=ins_buzz+ambient_rain+human:lam=0 \
   twofast32:a0.50 fast32h16:a0.375 fast32h32:a0.25 two32:a0.50 lo32:a0.50 twofast32:a0.375 fast32lo:a0.50 fast32h16lo:a0.50"
 ```
-(launch_job pid 2020483 at 13:28; log `.local/distill/main_stage5.log`, stage lines `[chain] <label>: start/done/FAILED`.)
-Order: the class-subset experiment first (below), then the rest of the frontier list. 12 runs, ~40-60 min each plus ~25 min
-of shard packing for each front end not packed yet (two32, lo32, fast32lo, fast32h16lo; fast32h32 a0.25 reuses
-fast32h32's): **ETA about 10-12 h, i.e. ~00:00-02:00 on 2026-09-30**. One GPU job at a time (4 GB card): do not start another.
+(launch_job pid 2028505, started 2026-09-29 ~13:52; log `05_distill/data/main_stage5.log`; stage lines `[chain] <label>: start/done/FAILED`.)
+Order: the class-subset experiment first (below), then the rest of the frontier list. 12 runs; the small a0.25 runs take ~15-20 min
+end to end (the first, `fe_B_fast32h16_a0.25_s1`, took 18 min), the a0.50 ones 40-60 min, plus ~25 min of shard packing for each
+front end not packed yet (two32, lo32, fast32lo, fast32h16lo): **ETA about 6-9 h, i.e. ~20:00-23:00 on 2026-09-29**. One GPU job at a
+time (4 GB card): do not start another. When it finishes, `git -C .claude/worktrees/distill-lite merge --ff-only main` refreshes the runner.
 
 - **Resume / restart:** rerun the same command (or a shorter `--runs`): finished stages skip, an interrupted training resumes from
   its last checkpoint (every 2000 steps). A failed stage stops the job with `[chain] <label>: FAILED exit N` and a nonzero
   `[launch_job] exit`; read the log above it. `main.py --dry-run` with the same `--runs` shows done/pending per stage.
 - **Cancel:** `kill` the launch_job pid and its `main.py` / `distill_train.py` children by PID (never `pkill -f`, see CLAUDE.md).
-- The chains that ran before (`chain_frontends*.sh`, pre-generalization) were killed at 13:27 by hand, with `twofast32`
-  packed and just starting to train; their runs' data were migrated to `.local/distill/<teacher>/` and are all recognised
-  by `main.py`. They are kept as the record; do not relaunch them (they hard-code the old layout).
-- Data layout was migrated on 2026-09-29 13:28 (`migrate_layout.py`): `.local/distill/v4-ft-ps-e60-moderate/{runs,models,eval,shards,ladder.jsonl}`,
-  `.local/distill/_shared/arch*`, and `<distill_cache>/_mel/<spec>` (was `<teacher>/_fe/<spec>`). paths.local.json's
-  `distill_cache` is the parent `/media/server storage/distill-cache`.
-- Branch state: `main` is an ancestor of `worktree-distill-lite`, so a fast-forward merge of that branch in the main
-  checkout (`git merge --ff-only worktree-distill-lite`) finishes the merge. It was not done automatically because the
-  main checkout has uncommitted changes (`diagnostics/2026-09-28_int8-ptq/README.md`, `tools/human/log_viewer.html`,
-  `tools/log_entry.py`; none overlap the merge). The `distill-generic` worktree and branch were fully merged and removed (2026-09-29), so `distill-lite` is the only
-place the code lives; the models and data are all under `.local/distill/` in the main checkout, never in a worktree.
+- The chains that ran before (`chain_frontends*.sh`, pre-generalization) were killed by hand at 13:27 (`twofast32` packed, just starting
+  to train); their runs' data are all recognised by `main.py`. They are kept as the record; do not relaunch them (they hard-code
+  the old `05_distill/data` layout). `main.py` itself was killed once at ~13:49 (a run had just started) to move the data root.
+- **Where things live now:** data root `05_distill/data/` (gitignored, like `02_set`'s data; formerly `05_distill/data/`), per teacher
+  `05_distill/data/v4-ft-ps-e60-moderate/{runs,models,eval,shards,ladder.jsonl}`, timings `05_distill/data/_shared/arch*`; teacher
+  targets and spectrograms under paths.local.json's `distill_cache` (`/media/server storage/distill-cache`, with `_mel/<spec>` shared
+  and `v4-ft-ps-e60-moderate/` per teacher). `migrate_layout.py` moves any older layout to this one.
+- **Branch state:** everything is merged into `main` (the generalization, the class options, the data-root move, and the
+  earlier uncommitted int8-ptq/log-viewer work, committed as `342ac6c`). `distill-generic` no longer exists. Nothing is pushed.
+  The main checkout's `paths.local.json` gained `audio_root` and `distill_cache` (the worktree copies already had them).
+- Disk: `05_distill/data` was 106 GB (46 GB of it the closed rung-C pack, `shards/C`, rebuildable and safe to delete; per-front-end
+  B/V packs are 1-8 GB each) on the 937 GB SSD with ~330 GB free; the remaining runs add ~35-40 GB.
 
 ## Results so far (append as runs land; `ladder_record.py frontier` is the source of truth)
 
@@ -152,11 +157,11 @@ memory noise-floor-cv). One seed per run, so read gaps below ~0.03 as ties.
   informational (i7-2600, no AVX2).
 - Not done / not planned: pruning always-zero output channels, non-uniform widths, a learned (conv) front end,
   int8, dropping more layers beyond d12, seeds beyond 1, rung C+ data for a front end. `IDEAS.md` has none of these yet.
-- Nothing here is shipped to buzzdetect. Export writes only under `.local/distill/models/`. Shipping is Luke's call.
+- Nothing here is shipped to buzzdetect. Export writes only under `05_distill/data/models/`. Shipping is Luke's call.
 
 ## Where things live
 
-Checkpoints and curves `.local/distill/runs/<name>/`; ONNX `.local/distill/models/<name>/`; eval
-`.local/distill/eval/<name>/folds_sx.csv`; table `.local/distill/ladder.jsonl`; caches under the `distill_cache` path
-(`_mel/<spec>/`, formerly `_fe/<spec>/`); shards `.local/distill/shards/`. Per-teacher locations are `.local/distill/<teacher>/...` once migrated (README.md). All of `.local/` is gitignored and lives in the main checkout.
+Checkpoints and curves `05_distill/data/runs/<name>/`; ONNX `05_distill/data/models/<name>/`; eval
+`05_distill/data/eval/<name>/folds_sx.csv`; table `05_distill/data/ladder.jsonl`; caches under the `distill_cache` path
+(`_mel/<spec>/`, formerly `_fe/<spec>/`); shards `05_distill/data/shards/`. Per-teacher locations are `05_distill/data/<teacher>/...` once migrated (README.md). All of `.local/` is gitignored and lives in the main checkout.
 Code is in the `worktree-distill-lite` worktree, uncommitted as of this writing.
