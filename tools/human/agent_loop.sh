@@ -26,9 +26,15 @@
 #   issue     batch hit a blocker  -> the next batch opens with a fixer
 #                                     (tools/loop_fix_prompt.md); a fixer's halts the loop
 #   friction  reported mid-batch   -> the next batch opens with a fixer
+#   park      a job will outlast the wait -> the loop stops the session but leaves the
+#                                     jobs running, sleeps until the requested time or until
+#                                     they all exit (whichever is first), then relaunches an
+#                                     agent for the same batch to resume its HANDOFF.md
 #   halt      only Luke can resolve -> the loop stops the session and exits: no
 #                                     fixer, jobs left running, the reason moved to
 #                                     issues/batchNNN-halt.md; a rerun opens a new batch
+# A parked batch keeps its number and does not count as finished; Ctrl+C while
+# parked exits the loop with the jobs still running, and a rerun resumes the park.
 # A batch is an optional fixer, then an experiment agent, both under one number.
 # What a fixer gets is collected into issues/batchNNN.md and passed in.
 #
@@ -188,7 +194,33 @@ kill_jobs() {  # since (epoch s) -> kill every launch_job.sh job registered sinc
   for pid in "${groups[@]}"; do kill -KILL -- "-$pid" 2>/dev/null && log "job $pid ignored SIGTERM → sent SIGKILL"; done
 }
 
-id=""; sname=""; wrapping_up=0; session_started=$started; note_batch=""   # sname: "Batch N - Experiment" / "Batch N - Fixes"
+jobs_alive() {  # since (epoch s) -> success if a launch_job.sh job registered since then still runs
+  local since=$1 f pid
+  for f in "$JOBS"/*; do
+    [ -e "$f" ] || continue
+    pid=${f##*/}
+    [ "$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f")" -ge "$since" ] || continue
+    [ "$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')" = "$pid" ] && return 0
+  done
+  return 1
+}
+
+# A parked batch: sleep until the wake time or until its jobs are all gone.
+# $STATE/park is: wake epoch, the batch's start epoch (the loop adds it), a reason.
+park_wait() {
+  local wake since reason now
+  wake=$(sed -n 1p "$STATE/park"); since=$(sed -n 2p "$STATE/park"); reason=$(sed -n 3p "$STATE/park")
+  batch_started=$since
+  log "batch $batch: parked until $(fmt_epoch "$wake" +%H:%M) or until its jobs end${reason:+ ($reason)}; jobs left running"
+  while now=$(date +%s); [ "$now" -lt "$wake" ]; do
+    jobs_alive "$since" || { log "batch $batch: the parked jobs have all exited → waking early"; break; }
+    nap "$POLL"
+  done
+  [ "$(date +%s)" -lt "$wake" ] || log "batch $batch: park time is up"
+  rm -f "$STATE/park"; resuming=1
+}
+
+id=""; sname=""; wrapping_up=0; session_started=$started; batch_started=$started; resuming=0; note_batch=""   # sname: "Batch N - Experiment" / "Batch N - Fixes"
 on_interrupt() {
   if [ -z "$id" ]; then
     log "Ctrl+C with no agent running → exiting loop"
@@ -202,7 +234,7 @@ on_interrupt() {
   trap '' INT TERM
   log "Ctrl+C again → stopping session $id and killing the jobs it started"
   claude stop "$id" >/dev/null 2>&1
-  kill_jobs "$session_started"
+  kill_jobs "$batch_started"
   log "session $id stopped → exiting loop"
   finish 130
 }
@@ -260,15 +292,20 @@ if [ -z "$reattach" ] && [ -f "$STATE/halt" ]; then
   archive_halt "${prev_batch:-0}"
   log "batch ${prev_batch:-0}: a halt was signalled after the last loop exited → moved to $halt_file, continuing"
 fi
+# A park the previous loop never finished (it was closed while parked): carry on parking
+if [ -z "$reattach" ] && [ -f "$STATE/park" ]; then
+  batch=$(cat "$STATE/batch" 2>/dev/null || echo 0); id=""
+  park_wait
+fi
 while true; do
   id=""
   # After a fixer comes the experiment phase of the same batch; a stop waits for it.
-  if [ -z "$reattach" ] && [ "$last_was_fix" = 0 ] && [ -f "$STATE/stop" ]; then
+  if [ -z "$reattach" ] && [ "$resuming" = 0 ] && [ "$last_was_fix" = 0 ] && [ -f "$STATE/stop" ]; then
     rm -f "$STATE/stop"
     log "stop signalled → exiting loop"
     finish 0
   fi
-  if [ -z "$reattach" ] && [ "$last_was_fix" = 0 ] && [ -n "$BATCHES" ] && [ "$batches_done" -ge "$BATCHES" ]; then
+  if [ -z "$reattach" ] && [ "$resuming" = 0 ] && [ "$last_was_fix" = 0 ] && [ -n "$BATCHES" ] && [ "$batches_done" -ge "$BATCHES" ]; then
     log "$batches_done of $BATCHES batch(es) finished → exiting loop"
     finish 0
   fi
@@ -276,7 +313,7 @@ while true; do
   if [ -n "$reattach" ]; then
     id=$reattach; batch=$prev_batch; sname=$reattach_name; reattach=""
     st=$(session_field "$id" .startedAt)   # ms
-    session_started=${st:+$(( st / 1000 ))}; session_started=${session_started:-$started}
+    session_started=${st:+$(( st / 1000 ))}; session_started=${session_started:-$started}; batch_started=$session_started
     log "batch $batch: session $id ($sname) is still running → reattaching to it"
     note_batch=$batch
     [ -z "$NOTE" ] || log "batch $batch: a running session can't be sent the command line's note → tell it yourself in $sname"
@@ -284,7 +321,7 @@ while true; do
     [ -f "$STATE/issue" ] && [ "$last_was_fix" = 1 ] \
       && halt "batch $(cat "$STATE/batch"): the fix agent reported an issue too (read $STATE/issue, resolve it, rerun)"
     batch=$(cat "$STATE/batch" 2>/dev/null || echo 0)
-    [ "$last_was_fix" = 1 ] || batch=$(( batch + 1 ))
+    [ "$last_was_fix" = 1 ] || [ "$resuming" = 1 ] || batch=$(( batch + 1 ))
     echo "$batch" > "$STATE/batch"
     note_batch=${note_batch:-$batch}
 
@@ -292,7 +329,7 @@ while true; do
     # reported since the last fixer; its experiment agent follows. Friction a
     # fixer reports itself waits for the next batch, so fixers can't chain.
     friction=0; [ -s "$STATE/friction.md" ] && friction=$(grep -c '^- ' "$STATE/friction.md")
-    if [ -f "$STATE/issue" ] || { [ "$friction" -gt 0 ] && [ "$last_was_fix" = 0 ]; }; then
+    if [ "$resuming" = 0 ] && { [ -f "$STATE/issue" ] || { [ "$friction" -gt 0 ] && [ "$last_was_fix" = 0 ]; }; }; then
       issue="$STATE/issues/batch$(printf %03d "$batch").md"
       : > "$issue"; causes=()
       if [ -f "$STATE/issue" ]; then
@@ -320,6 +357,10 @@ while true; do
         prompt+=$'\n\n'"Before starting anything new, resume each unfinished experiment below by following its HANDOFF.md; each counts toward the $N:"$'\n'"$handoffs"
         cause="$cause; unfinished handoff in $(xargs -n 1 dirname <<<"$handoffs" | xargs -n 1 basename | paste -sd, -)"
       fi
+      if [ "$resuming" = 1 ]; then
+        prompt+=$'\n\n'"This session RESUMES batch $batch: the previous agent parked it (loop_signal.sh park) with jobs still running. Its HANDOFF.md says what to do and how many of your $N experiments are already logged; do the rest of the $N after the handoff. Follow the handoff's \"if it's still running\" branch: if the job is still going, report progress and park again rather than waiting."
+        cause="resuming the parked batch"; action="relaunching its agent"
+      fi
     fi
     if [ -n "$NOTE" ] && [ "$batch" = "$note_batch" ]; then
       prompt+=$'\n\n'"A note from Luke for this batch: $NOTE"
@@ -334,6 +375,8 @@ while true; do
     # for confirmation in auto mode, and Remote Control didn't show that dialog
     # (2026-09-14).
     session_started=$(date +%s)
+    [ "$resuming" = 1 ] || batch_started=$session_started
+    resuming=0
     out=$(cd "$ROOT" && claude --bg --remote-control "$sname" -n "$sname" \
           --disallowedTools "EnterWorktree,ExitWorktree" \
           --permission-mode auto --model "$model" --effort "$effort" \
@@ -349,7 +392,7 @@ while true; do
   # counts as gone once it has been seen running.
   seen=0; launched=$(date +%s); was_waiting=""; blocked_since=""
   limit_at=""; limit_phase=""   # the latest usage limit: its reset, and waiting|resumed
-  while [ ! -f "$STATE/done" ] && [ ! -f "$STATE/issue" ] && [ ! -f "$STATE/halt" ]; do
+  while [ ! -f "$STATE/done" ] && [ ! -f "$STATE/issue" ] && [ ! -f "$STATE/halt" ] && [ ! -f "$STATE/park" ]; do
     quiet claude agents --json --all
     entry=$(jq -c --arg id "$id" '.[] | select(.id == $id)' "$OUT" 2>/dev/null)
     if [ -n "$(jq -r '.pid // empty' <<<"$entry")" ]; then
@@ -415,6 +458,8 @@ while true; do
     log "batch $batch: agent signalled halt → stopping session $id, leaving its jobs running"
   elif [ -f "$STATE/done" ] && [ "$last_was_fix" = 1 ]; then
     log "batch $batch: fix agent finished → stopping session $id, starting the batch's experiment agent"
+  elif [ -f "$STATE/park" ] && [ ! -f "$STATE/done" ]; then
+    log "batch $batch: agent parked the batch → stopping session $id, leaving its jobs running"
   elif [ -f "$STATE/done" ]; then
     log "batch $batch: agent marked its batch finished → stopping session $id, starting the next batch"
   else
@@ -433,7 +478,20 @@ while true; do
     reason=$(head -n 1 "$STATE/halt" | head -c 200); archive_halt "$batch"
     halt "batch $batch: the agent needs you: $reason (all of it in $halt_file; rerun once resolved)"
   fi
-  kill_jobs "$session_started"
+  if [ -f "$STATE/park" ] && [ ! -f "$STATE/done" ]; then
+    if [ "$wrapping_up" = 1 ]; then
+      log "batch $batch: parked during the Ctrl+C wind-down → exiting loop; jobs left running, a rerun resumes the park"
+      finish 0
+    fi
+    # the jobs' clock is the batch's, not this session's, so a second park keeps the first's start
+    printf '%s\n' "$batch_started" > "$STATE/park.since"
+    { sed -n 1p "$STATE/park"; cat "$STATE/park.since"; sed -n '2,$p' "$STATE/park"; } > "$STATE/park.tmp"
+    mv "$STATE/park.tmp" "$STATE/park"; rm -f "$STATE/park.since"
+    last_was_fix=0; echo 0 > "$STATE/last_was_fix"
+    id=""; park_wait
+    continue
+  fi
+  kill_jobs "$batch_started"
   [ "$last_was_fix" = 1 ] || batches_done=$(( batches_done + 1 ))   # a fixer's batch ends with its experiment agent
   if [ "$wrapping_up" = 1 ]; then
     log "batch ended after Ctrl+C → exiting loop"
