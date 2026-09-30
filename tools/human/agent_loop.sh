@@ -338,7 +338,8 @@ while true; do
           --disallowedTools "EnterWorktree,ExitWorktree" \
           --permission-mode auto --model "$model" --effort "$effort" \
           --settings "$SESSION_SETTINGS" "$prompt" 2>&1)
-    id=$(grep -oE 'backgrounded · [0-9a-f]+' <<<"$out" | grep -oE '[0-9a-f]+$')
+    # claude colours the id (ESC[36m...ESC[39m); strip escapes before matching
+    id=$(sed -E 's/\x1b\[[0-9;]*m//g' <<<"$out" | grep -oE 'backgrounded · [0-9a-f]+' | grep -oE '[0-9a-f]+$')
     [ -n "$id" ] || halt "batch $batch: claude --bg failed to start a session ($out)"
     log "batch $batch: $cause → $action on $model/$effort (session $id, named $sname)"
     echo "$last_was_fix" > "$STATE/last_was_fix"
