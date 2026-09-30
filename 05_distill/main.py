@@ -133,15 +133,11 @@ def stages_for_teacher(runs):
 
 
 def teacher_current():
-    """teacher.json exists, matches the teacher ONNX on disk and records code_dim."""
+    """teacher.json exists, matches the teacher ONNX on disk (or an identical re-export) and records code_dim."""
     try:
+        import store
         meta = json.load(open(D.TEACHER_JSON))
-        import hashlib
-        h = hashlib.sha256()
-        with open(D.TEACHER_ONNX, 'rb') as f:
-            for b in iter(lambda: f.read(1 << 20), b''):
-                h.update(b)
-        return meta.get('onnx_sha256') == h.hexdigest() and 'code_dim' in meta and os.path.exists(D.TEACHER_EXT)
+        return meta.get('onnx_sha256') == store.teacher_sha() and 'code_dim' in meta and os.path.exists(D.TEACHER_EXT)
     except (OSError, ValueError, KeyError):
         return False
 

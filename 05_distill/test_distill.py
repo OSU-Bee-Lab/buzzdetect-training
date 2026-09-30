@@ -75,6 +75,11 @@ def test_fingerprints():
     store.require_current_teacher()
     open(onnx, 'wb').write(b'teacher v2 retrained')
     check('a re-shipped teacher ONNX is caught', raises_exit(store.require_current_teacher))
+    meta = json.load(open(D.TEACHER_JSON))
+    json.dump(dict(meta, onnx_sha256_equivalent=[store.file_sha(onnx)]), open(D.TEACHER_JSON, 'w'))
+    check('an adopted re-export keeps the original identity', store.teacher_sha() == meta['onnx_sha256'])
+    store.require_current_teacher()
+    json.dump(meta, open(D.TEACHER_JSON, 'w'))
     open(onnx, 'wb').write(b'teacher v1')
 
 

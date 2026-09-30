@@ -6,6 +6,10 @@ the YAMNet mel front end, as fixed-length ORT sessions.
 Run with a python that has onnx, onnxruntime-gpu, soundfile, numpy
 (.local/venv-onnx/bin/python). Idempotent: does nothing when `teacher.json` already
 records this teacher ONNX's sha256 and `teacher_ext.onnx` exists (`--force` rebuilds).
+A model.onnx that changed under a built cache is checked against `teacher_ext.onnx`:
+a re-export of the same weights (same tensors, same fixture logits; tf2onnx renames
+tensors and is not byte-deterministic) is adopted as `onnx_sha256_equivalent`, and
+anything else is refused, since the cached targets came from the old teacher.
 
 The teacher graph ends `... -> Reshape (n,D) -> MatMul -> Add -> Sub(centers)
 -> predictions`; the tensor feeding that MatMul is the head input, the `code`
@@ -85,6 +89,46 @@ class Teacher:
         return mel[:len(logits)], logits, code   # mel graph may emit one extra trailing patch
 
 
+def fixture_wav():
+    r = subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-i', FIXTURE, '-ac', '1', '-ar', '16000',
+                        '-f', 'f32le', 'pipe:1'], capture_output=True, check=True)
+    return np.frombuffer(r.stdout, np.float32).copy()
+
+
+def same_teacher(path):
+    """(is `path` the teacher teacher_ext.onnx was built from?, why): the same multiset of weight
+    tensors and the same logits on the fixture."""
+    import hashlib
+    import onnx
+    from onnx import numpy_helper
+
+    def blobs(p):
+        return sorted(hashlib.sha256(numpy_helper.to_array(i).tobytes()).hexdigest()
+                      for i in onnx.load(p).graph.initializer)
+    if blobs(path) != blobs(D.TEACHER_EXT):
+        return False, 'weight tensors differ'
+    x = fixture_wav()
+    p0 = session(path, len(x), gpu=False).run(None, {'waveform': x})[0]
+    p1 = session(D.TEACHER_EXT, len(x), gpu=False).run(None, {'waveform': x})[0]
+    err = float(np.abs(p0 - p1).max())
+    return err < 1e-5, f'same weight tensors, fixture max|logit diff| {err:.2e}'
+
+
+def adopt_or_refuse():
+    """model.onnx changed under a built cache: record an identical re-export, refuse anything else."""
+    meta = json.load(open(D.TEACHER_JSON))
+    sha = sha256(TEACHER_ONNX)
+    same, why = same_teacher(TEACHER_ONNX)
+    if not same:
+        sys.exit(f'teacher {D.TEACHER}: model.onnx ({sha[:12]}) is not the teacher this cache was built from '
+                 f'({meta["onnx_sha256"][:12]}): {why}. The cached targets are stale: move {D.CACHE} aside and '
+                 f'rebuild, or name the new teacher differently.')
+    meta.setdefault('onnx_sha256_equivalent', []).append(sha)
+    json.dump(meta, open(D.TEACHER_JSON, 'w'), indent=2)
+    print(f'teacher {D.TEACHER}: model.onnx {sha[:12]} is a re-export of {meta["onnx_sha256"][:12]} ({why}); '
+          f'adopted in teacher.json')
+
+
 def up_to_date():
     if not (os.path.isfile(D.TEACHER_JSON) and os.path.isfile(D.TEACHER_EXT)):
         return False
@@ -114,13 +158,14 @@ def main():
     if up_to_date() and not a.force:
         print(f'teacher {D.TEACHER}: teacher.json current ({store.teacher_sha()[:12]}), nothing to do')
         return
+    if os.path.isfile(D.TEACHER_EXT) and os.path.isfile(D.TEACHER_JSON) and 'code_dim' in json.load(open(D.TEACHER_JSON)) and not a.force:
+        adopt_or_refuse()
+        return
     check_framing()
     os.makedirs(D.MANIFEST, exist_ok=True)
     m, code = build_ext(TEACHER_ONNX, D.TEACHER_EXT)
     print('code tensor:', code)
-    r = subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-i', FIXTURE, '-ac', '1', '-ar', '16000',
-                        '-f', 'f32le', 'pipe:1'], capture_output=True, check=True)
-    x = np.frombuffer(r.stdout, np.float32).copy()
+    x = fixture_wav()
     sr = 16000
     n = len(x)
     print(f'fixture {n / sr:.1f} s')
@@ -163,7 +208,7 @@ def main():
     except Exception:
         commit = None
     meta = dict(
-        teacher=D.TEACHER, onnx=TEACHER_ONNX, onnx_sha256=store.teacher_sha(),
+        teacher=D.TEACHER, onnx=TEACHER_ONNX, onnx_sha256=sha256(TEACHER_ONNX),
         ext_onnx='teacher_ext.onnx', ext_sha256=sha256(D.TEACHER_EXT),
         code_tensor=code, code_dim=code_dim, classes=D.spec().classes,
         opset=[(o.domain, o.version) for o in m.opset_import],

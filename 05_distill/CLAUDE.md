@@ -41,7 +41,12 @@
   parent `.../distill-cache/`, not the teacher directory.
 - **`cache.py` refuses a changed teacher ONNX.** A retrained model re-shipped under the same name has new
   targets; move `<distill_cache>/<teacher>` aside (do not delete a rung-D cache lightly: days of decode) or
-  give the new model a new name.
+  give the new model a new name. A **re-export** of the same model is not a change: the teacher's
+  `model.onnx` lives in buzzdetect's gitignored `engine/models/`, which gets pruned by hand, so if it is
+  missing, redeploy it with stage 4 and let main.py's teacher stage run. `teacher_onnx.py` checks it against
+  `_manifest/teacher_ext.onnx` (same weight tensors, same fixture logits) and records its sha in
+  `onnx_sha256_equivalent`; the cache keeps its identity. tf2onnx is not byte-deterministic, so never
+  compare teachers by sha alone. Anything that differs is refused. (Batch 17 stalled on this, 2026-09-30.)
 - **A resumed training run is not bit-identical** to an uninterrupted one: weights and optimizer state are
   restored exactly, the batch order is reseeded (`seed + step`).
 - `student_init.frames_from_folds` (used by `test_synth.py` and `student_init.py --check`) reads the

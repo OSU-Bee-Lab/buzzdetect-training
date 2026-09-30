@@ -152,7 +152,16 @@ def load_durations():
 # ---------------------------------------------------------------- teacher identity
 
 def teacher_sha():
-    return file_sha(D.TEACHER_ONNX)
+    """The teacher's identity: the sha256 of the model.onnx this cache was built from. A re-export that
+    teacher_onnx.py proved identical (same weights, same logits) is listed in teacher.json's
+    `onnx_sha256_equivalent` and answers with the original sha, so targets, packs and run stamps keyed
+    on it stay valid (tf2onnx is not byte-deterministic)."""
+    sha = file_sha(D.TEACHER_ONNX)
+    try:
+        meta = json.load(open(D.TEACHER_JSON))
+    except (OSError, ValueError, TypeError):
+        return sha
+    return meta['onnx_sha256'] if sha in meta.get('onnx_sha256_equivalent', []) else sha
 
 
 def require_current_teacher():
@@ -163,5 +172,6 @@ def require_current_teacher():
     built = json.load(open(D.TEACHER_JSON))['onnx_sha256']
     if built != teacher_sha():
         sys.exit(f'teacher {D.TEACHER}: model.onnx changed since this cache was built ({built[:12]} -> '
-                 f'{teacher_sha()[:12]}). The cached targets are stale: move {D.CACHE} aside and rebuild, '
+                 f'{teacher_sha()[:12]}). A re-export of the same weights is adopted by teacher_onnx.py (main.py\'s '
+                 f'teacher stage); otherwise the cached targets are stale: move {D.CACHE} aside and rebuild, '
                  f'or name the new teacher differently.')
