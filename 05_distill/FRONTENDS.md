@@ -165,3 +165,17 @@ Checkpoints and curves `05_distill/data/runs/<name>/`; ONNX `05_distill/data/mod
 `05_distill/data/eval/<name>/folds_sx.csv`; table `05_distill/data/ladder.jsonl`; caches under the `distill_cache` path
 (`_mel/<spec>/`, formerly `_fe/<spec>/`); shards `05_distill/data/shards/`. Per-teacher locations are `05_distill/data/<teacher>/...` once migrated (README.md). All of `.local/` is gitignored and lives in the main checkout.
 Code is in the `worktree-distill-lite` worktree, uncommitted as of this writing.
+
+## Update 2026-09-29 (evening): eval bug fixed, class-subset result
+
+- **Bug:** `eval_folds.infer` had a loop variable `buzz` shadowing the buzz column index (introduced with `--classes`, 13:23), so
+  predictions stored empty activations and every eval after that had NaN sensitivity. Fixed on branch `worktree-fix-eval-buzz-shadow`
+  (not merged to main). The 12 affected evals were repaired from their saved `logits.npy` and re-scored; ladder rows patched.
+- **Class-subset (ins_buzz + ambient_rain + human), fast32h16, rung B, seed 1, headline / 200 s speed:**
+  a0.25 0.533 vs 0.483 full-class (2.75x); a0.375 0.576 vs 0.521 (2.62x); a0.50 0.610 vs 0.562 (2.52x).
+  Consistent +0.05 at every width, above seed noise (~0.02), so the subset helps. `lam=0` hurts (0.466 full / 0.502 subset at a0.25).
+  Speed is unchanged. Unmeasured: false-positive behaviour beyond the fixed-FPR headline (jets at 1_95).
+- **Front-end twins:** `lo` band placement ties its twin (fast32lo 0.597 vs 0.606; fast32h16lo 0.564 vs 0.562). `twofast32`
+  (0.624 at a0.50) is slower (1.76x); `two32`/`lo32` are slower than YAMNet (0.80x/0.89x) for no gain.
+- **buzzdetect and 3-column models (read from `engine/src`, not run):** classes come from `config_model.json`; precision mode needs the
+  model's own tests/metrics threshold table. Loading a subset student in the engine is untested.
