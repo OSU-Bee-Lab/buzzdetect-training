@@ -25,6 +25,7 @@ from train_utils import (build_weights, build_classes, can_write,
                          weighted_bce_loss, Sample, buzz_tier,
                          TIERS_EXCLUDED_FROM_HEADLINE)
 from embedders.embedding import load_embedder
+from utils import git_branch
 from plot_history import plot_history, plot_sens_history
 from write_model_py import write_model_py
 
@@ -635,6 +636,8 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         'epochs': epochs,
         'dropout': dropout,
         'trained_date': date.today().isoformat(),
+        'modelname_internal': modelname,
+        'branch': git_branch(),
         'overlap_event_prop': overlap_event_prop,
     }
     # 'w' for the same reason as write_model_py's — can_write() is the gate

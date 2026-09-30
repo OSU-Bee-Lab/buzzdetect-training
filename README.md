@@ -558,6 +558,13 @@ against the Keras model it came from, and carries it into buzzdetect's
 `04_deploy/model_card.py <name>...` or `04_deploy/export_onnx.py <name>
 --dest ...` — see each script's header for its own flags.
 
+`--as <alias>` deploys under a different directory name. Provenance lives in
+the exported `config_model.json`'s `metadata` block (ignored by the engine):
+`modelname_internal` (the name it was trained under, unchanged by an alias),
+`branch` (the training branch; the deploying branch for models trained before
+it was stamped), and, for stage-5 students, `teacher`. Stage 5's
+`deploy_student.py --as` does the same and its export writes the same keys.
+
 The embedder half of the graph comes from the embedder's recipe
 (`embedders/recipe.py`), the same description its `embed()` runs, so any
 embedder assembled from existing steps exports with no extra code. An

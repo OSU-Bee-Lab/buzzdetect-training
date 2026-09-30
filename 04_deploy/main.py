@@ -59,7 +59,8 @@ class _Tee:
 
 
 def main(modelname, dir_dest, force=False, path_audio=None, dir_src=None,
-         embeddername=None, skip_card=False, assume_yes=False, fp16_only=False):
+         embeddername=None, skip_card=False, assume_yes=False, fp16_only=False,
+         alias=None):
     import tensorflow  # noqa: F401  -- load-order side effect; see header comment
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -77,7 +78,7 @@ def main(modelname, dir_dest, force=False, path_audio=None, dir_src=None,
     if fp16_only:
         print('=== rebuild fp16 sibling (ONNX) ===')
         export_onnx = load_module(os.path.join(here, 'export_onnx.py'), 'deploy_export_onnx')
-        export_onnx.export_fp16(modelname, dir_dest)
+        export_onnx.export_fp16(modelname, dir_dest, alias)
         return
 
     if not skip_card:
@@ -92,7 +93,7 @@ def main(modelname, dir_dest, force=False, path_audio=None, dir_src=None,
     print('\n=== export to buzzdetect (ONNX) ===')
     export_onnx = load_module(os.path.join(here, 'export_onnx.py'), 'deploy_export_onnx')
     export_onnx.export(modelname, dir_dest, force, path_audio, dir_src, embeddername,
-                       assume_yes=assume_yes)
+                       assume_yes=assume_yes, alias=alias)
 
 
 if __name__ == '__main__':
@@ -102,6 +103,9 @@ if __name__ == '__main__':
     parser.add_argument('--dest', default=None,
                         help='engine model directory (default: buzzdetect_dest '
                              'in paths.local.json)')
+    parser.add_argument('--as', dest='alias', default=None, metavar='NAME',
+                        help='directory name in buzzdetect (default: the model name); '
+                             'metadata.modelname_internal keeps the source name')
     parser.add_argument('--force', action='store_true',
                         help='overwrite an existing export')
     parser.add_argument('--from', dest='dir_src', default=None, metavar='DIR',
@@ -156,4 +160,5 @@ if __name__ == '__main__':
         skip_card=args.skip_card,
         assume_yes=args.assume_yes,
         fp16_only=args.fp16_only,
+        alias=args.alias,
     )

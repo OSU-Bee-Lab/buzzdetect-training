@@ -1,6 +1,19 @@
 import os
 import pickle
 import re
+import subprocess
+
+
+def git_branch():
+    """The branch this checkout is on, for model provenance; None if it can't be told.
+    A detached HEAD comes back as 'HEAD'."""
+    try:
+        out = subprocess.run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                             cwd=os.path.dirname(os.path.abspath(__file__)),
+                             capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return (out.stdout.strip() or None) if out.returncode == 0 else None
 
 
 def search_dir(dir_in, extensions=None):

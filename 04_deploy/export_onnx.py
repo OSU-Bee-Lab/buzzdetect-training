@@ -51,6 +51,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config as cfg  # noqa: E402
+from utils import git_branch  # noqa: E402
 from onnx_passes import count_fusable, optimize, promote_scalars  # noqa: E402
 
 # Per-machine -- buzzdetect's checkout lives wherever this box put it. Set
@@ -121,7 +122,9 @@ AGREE_FP16 = 0.98
 # it under the model picker), `center_stats` (written by
 # 03_train/thresholds.py; its keys are the classes shifted below), and
 # `metadata` (bundled below from the training config's `embeddername`, `set`,
-# `trained_date` and `overlap_event_prop` -- provenance for a person looking at the model,
+# `trained_date`, `overlap_event_prop`, `modelname_internal` (the name it was
+# trained under, which survives deploying under an alias) and `branch` --
+# provenance for a person looking at the model,
 # not anything the engine or buzzdetect reads). A hand-written description, or
 # a metadata field the training config lacks, survives a re-export from the
 # destination's existing config.
@@ -138,7 +141,8 @@ AGREE_FP16 = 0.98
 # keys pass through from the source as they always did.
 CONFIG_PASSTHROUGH = ('description',)
 LEGACY_THRESHOLD_KEYS = ('thresholds', 'threshold_stats')
-METADATA_KEYS = ('embeddername', 'set', 'trained_date', 'overlap_event_prop')
+METADATA_KEYS = ('embeddername', 'set', 'trained_date', 'overlap_event_prop',
+                 'modelname_internal', 'branch')
 FNAME_README = 'README.md'
 
 
@@ -899,11 +903,12 @@ def drop_stale_fp16(dir_stage, dir_out):
         print(f'removed stale {stale}')
 
 
-def export_fp16(modelname, dir_dest):
+def export_fp16(modelname, dir_dest, alias=None):
     """Rebuild only the fp16 sibling, from the model.onnx already in the
     destination. Needs no trained weights, embedder or audio: the fp32 graph
     is the whole input, and it is left untouched. For a shipped model whose
     sibling was written by an older (or buggier) write_fp16."""
+    modelname = alias or modelname
     dir_out = os.path.join(dir_dest, modelname)
     path_onnx = os.path.join(dir_out, 'model.onnx')
     path_config = os.path.join(dir_out, 'config_model.json')
@@ -946,7 +951,7 @@ def stage_readme(dir_src, dir_out, dir_stage):
 
 
 def export(modelname, dir_dest, force=False, path_audio=None,
-           dir_src=None, embeddername=None, assume_yes=False):
+           dir_src=None, embeddername=None, assume_yes=False, alias=None):
     """Build the export in a staging dir, check it, and only then move it into place.
 
     Staging is what makes a failed check harmless: nothing lands in the
@@ -967,6 +972,11 @@ def export(modelname, dir_dest, force=False, path_audio=None,
     with open(os.path.join(dir_src, 'config_model.json')) as f:
         config = json.load(f)
     embeddername = embeddername or config['embeddername']
+    # Provenance for models trained before train.py stamped it: the source
+    # directory's name, and the branch deploying from.
+    config.setdefault('modelname_internal', os.path.basename(os.path.normpath(dir_src)))
+    config.setdefault('branch', git_branch())
+    modelname = alias or modelname      # the deployed directory; modelname_internal keeps the source
 
     dir_out = os.path.join(dir_dest, modelname)
     if os.path.exists(dir_out) and not force:
@@ -1069,6 +1079,9 @@ def main():
                              f'in paths.local.json, currently {DEST_DEFAULT})')
     parser.add_argument('--force', action='store_true',
                         help='overwrite an existing export')
+    parser.add_argument('--as', dest='alias', default=None, metavar='NAME',
+                        help='directory name in buzzdetect (default: the model name); '
+                             'metadata.modelname_internal keeps the source name')
     parser.add_argument('--from', dest='dir_src', default=None, metavar='DIR',
                         help='read the trained weights and config_model.json '
                              'from DIR instead of models/<modelname>. For a '
@@ -1095,14 +1108,14 @@ def main():
     if not os.path.isdir(args.dest):
         raise SystemExit(f'destination does not exist: {args.dest}')
     if args.fp16_only:
-        export_fp16(args.modelname, args.dest)
+        export_fp16(args.modelname, args.dest, args.alias)
         return
     # Checked up front: the export is a slow way to discover a typo.
     if args.verify_audio is not None and not os.path.isfile(args.verify_audio):
         raise SystemExit(f'no such audio: {args.verify_audio}')
 
     export(args.modelname, args.dest, args.force, args.verify_audio,
-           args.dir_src, args.embedder)
+           args.dir_src, args.embedder, alias=args.alias)
 
 
 if __name__ == '__main__':

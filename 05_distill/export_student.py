@@ -33,6 +33,8 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(ROOT, '04_deploy'))
 import student as st  # noqa: E402
 import dpaths as D  # noqa: E402
+sys.path.insert(0, ROOT)
+from utils import git_branch  # noqa: E402
 
 MAIN = D.MAIN
 LOCAL = D.LOCAL                    # 05_distill/data/<teacher>
@@ -136,6 +138,7 @@ def do_export(a):
     cfg['samples_min'] = 15600 if fe_name == 'yamnet' else 15360 - st.fes.get(fe_name).hop + st.fes.get(fe_name).max_window
     cfg['metadata'] = {'embeddername': 'distilled_student', 'set': D.spec().set,
                        'trained_date': __import__('datetime').date.today().isoformat(),
+                       'modelname_internal': a.name, 'branch': git_branch(),
                        'teacher': D.TEACHER, 'filters': filters,
                        'source_run': None if a.init_only else a.run, 'frontend': fe_name, 'classes': classes or 'all',
                        'note': 'distilled single-pass student; activation_centers folded into the head bias'}
