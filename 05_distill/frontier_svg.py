@@ -1,6 +1,10 @@
 """Frontier scatter as a standalone SVG: rung-B seed-1 runs, x = speed (x YAMNet, GPU, 200 s), y = headline
 (sensitivity_exclquiet @ fpr 0.005). Colour = trunk architecture, marker = front end, ring = class-subset student.
 
+Below it, a bar chart of the jet fold: for each non-dominated student, 1_95's false-positive rate when the pooled
+rotating-fold threshold (fpr 0.005 over every rotating fold's negatives) is applied to it, on all its negatives and on its
+jet frames alone, against the rotating folds' own worst FPR at that threshold (eval_folds.py probe -> probe.json).
+
     python 05_distill/frontier_svg.py [out.svg]      (plain python; reads the per-teacher ladder.jsonl)
 """
 import json
@@ -15,6 +19,7 @@ ARCH_COLOUR = {'a0.25': '#d95f02', 'a0.375': '#7570b3', 'a0.50': '#1b9e77', 'a0.
 FE_MARK = {'yamnet': 'circle', 'fast32': 'square', 'fast32h16': 'diamond', 'fast32h32': 'tri',
            'twofast32': 'cross', 'two32': 'hex', 'lo32': 'hex', 'fast32lo': 'square', 'fast32h16lo': 'diamond'}
 W, H, L, R, T, B = 900, 560, 70, 200, 40, 60
+H2 = 340        # bar chart panel under the scatter
 
 
 def load():
@@ -40,6 +45,59 @@ def pareto(rows):
             front.append(r)
             best = r['headline']
     return front
+
+
+def probe_of(name):
+    try:
+        return json.load(open(os.path.join(D.EVAL, name, 'probe', 'probe.json')))[0].get('cross')
+    except (OSError, KeyError, IndexError):
+        return None
+
+
+def bars(o, fr):
+    """Second panel: 1_95 FPR at the pooled rotating-fold threshold, one group per frontier student (fast to slow)."""
+    items = [(r, probe_of(r['name'])) for r in sorted(fr, key=lambda r: -r['x_yamnet200'])]
+    items = [(r, c['pooled']) for r, c in items if c]
+    top, bot = H + 50, H + H2 - 70
+    ymax = 0.03
+    py = lambda v: bot - v / ymax * (bot - top)
+    o.append(f'<text x="{L}" y="{H + 12}" font-size="15" font-weight="bold">Jet fold 1_95: false-positive rate at the '
+             f"rotating folds' threshold</text>")
+    o.append(f'<text x="{L}" y="{H + 30}" fill="#555">pooled fpr-0.005 threshold from the five rotating folds, applied to '
+             f'1_95 (a training fold); jets = frames labelled mech_plane</text>')
+    for v in [0, 0.005, 0.01, 0.02, 0.03]:
+        o.append(f'<line x1="{L}" x2="{W - R}" y1="{py(v)}" y2="{py(v)}" stroke="#e5e5e5"/>'
+                 f'<text x="{L - 8}" y="{py(v) + 4}" text-anchor="end">{v:.1%}</text>')
+    o.append(f'<line x1="{L}" x2="{W - R}" y1="{py(0.005)}" y2="{py(0.005)}" stroke="#555" stroke-dasharray="4 3"/>'
+             f'<text x="{W - R - 4}" y="{py(0.005) - 5}" text-anchor="end" fill="#555">target 0.5%</text>')
+    o.append(f'<text transform="translate(18 {(top + bot) / 2}) rotate(-90)" text-anchor="middle">1_95 false-positive rate</text>')
+    if not items:
+        o.append(f'<text x="{L + 20}" y="{(top + bot) / 2}">no probe.json yet: run eval_folds.py probe</text>')
+        return
+    gw = (W - L - R) / len(items)
+    bw = min(26, gw / 3.2)
+    for i, (r, c) in enumerate(items):
+        cx = L + gw * (i + 0.5)
+        col = ARCH_COLOUR.get(r['arch'], '#888')
+        for dx, key, fill in ((-bw - 1, 'fpr', col), (1, 'fpr_jet', '#111')):
+            v = min(c[key], ymax)
+            o.append(f'<rect x="{cx + dx:.1f}" y="{py(v):.1f}" width="{bw:.1f}" height="{bot - py(v):.1f}" fill="{fill}" '
+                     f'fill-opacity="0.85"><title>{r["name"]} {key} {c[key]:.2%}</title></rect>'
+                     f'<text x="{cx + dx + bw / 2:.1f}" y="{py(v) - 4:.1f}" font-size="9" text-anchor="middle">'
+                     f'{c[key] * 100:.1f}</text>')
+        o.append(f'<line x1="{cx - bw - 4:.1f}" x2="{cx + bw + 4:.1f}" y1="{py(c["rotating_fpr_max"]):.1f}" '
+                 f'y2="{py(c["rotating_fpr_max"]):.1f}" stroke="#999" stroke-width="3"/>')
+        lab = r['frontend'] + (' +sub' if r.get('classes') else '')
+        o.append(f'<text x="{cx:.1f}" y="{bot + 14}" font-size="10" text-anchor="middle">{lab}</text>'
+                 f'<text x="{cx:.1f}" y="{bot + 27}" font-size="10" text-anchor="middle" fill="#555">{r["arch"]}, '
+                 f'{r["x_yamnet200"]:.1f}x</text>')
+    o.append(f'<rect x="{L}" y="{top}" width="{W - L - R}" height="{bot - top}" fill="none" stroke="#999"/>')
+    lx, ly = W - R + 20, top + 10
+    for k, (fill, lab) in enumerate([('#888', '1_95, all negatives'), ('#111', '1_95, jet frames only')]):
+        o.append(f'<rect x="{lx}" y="{ly + k * 18}" width="12" height="12" fill="{fill}"/>'
+                 f'<text x="{lx + 18}" y="{ly + 10 + k * 18}" font-size="11">{lab}</text>')
+    o.append(f'<line x1="{lx}" x2="{lx + 12}" y1="{ly + 42}" y2="{ly + 42}" stroke="#999" stroke-width="3"/>'
+             f'<text x="{lx + 18}" y="{ly + 46}" font-size="11">worst rotating fold</text>')
 
 
 def marker(kind, x, y, c, ring):
@@ -70,8 +128,8 @@ def main():
     y0, y1 = 0.35, 0.75
     px = lambda v: L + (v - x0) / (x1 - x0) * (W - L - R)
     py = lambda v: H - B - (v - y0) / (y1 - y0) * (H - B - T)
-    o = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" font-family="sans-serif" font-size="12">',
-         f'<rect width="{W}" height="{H}" fill="#fff"/>',
+    o = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H + H2}" font-family="sans-serif" font-size="12">',
+         f'<rect width="{W}" height="{H + H2}" fill="#fff"/>',
          f'<text x="{L}" y="24" font-size="15" font-weight="bold">Speed / sensitivity frontier (rung B, seed 1)</text>']
     for v in [0.4, 0.5, 0.6, 0.7]:
         o.append(f'<line x1="{L}" x2="{W - R}" y1="{py(v)}" y2="{py(v)}" stroke="#e5e5e5"/>'
@@ -112,6 +170,7 @@ def main():
     o.append(marker('circle', lx + 6, ly, '#fff', True) + f'<text x="{lx + 22}" y="{ly + 4}">class-subset</text>')
     o.append(f'<line x1="{lx}" x2="{lx + 12}" y1="{ly + 22}" y2="{ly + 22}" stroke="#111" stroke-dasharray="2 3"/>'
              f'<text x="{lx + 22}" y="{ly + 26}">non-dominated</text>')
+    bars(o, fr)
     o.append('</svg>')
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontier.svg')
     open(out, 'w').write('\n'.join(o))

@@ -30,7 +30,9 @@ Two phases, since ORT-GPU lives in buzzdetect's engine venv and sx needs TF:
 `run --probe` (or `probe` alone, for runs already evaluated) also scores PROBE_FOLDS into <out>/probe/, outside the headline: 1_95, a training fold whose fpr-0.005
 threshold one jet flyover sets (memory jet-false-positives-1-95). Reports the fold's own sens/threshold and, for frames
 labelled mech_plane (the jets; the cache is per label combination, so the flyover's snips can't be picked out),
-the share above that threshold and the share of the fold's threshold-setting negatives they make up.
+the share above that threshold and the share of the fold's threshold-setting negatives they make up. Also the
+rotating folds' threshold applied to 1_95 (cross_report): its FPR (jets vs other) and sensitivity under a threshold
+drawn elsewhere.
 Also writes D/logits.npy (all 15 logits per frame) and D/frames.csv (fold,
 sample, frame idx) for flip/parity readouts.
 """
@@ -217,6 +219,39 @@ def plane_report(out, fold, threshold):
             'other_neg_mean_logit': float(df.loc[neg & ~plane, 'activation_ins_buzz'].mean())}
 
 
+def cross_report(out, fold):
+    """The rotating folds' thresholds applied to `fold` (a probe fold): what its FPR and sensitivity would be under
+    one threshold drawn elsewhere, the shipped-model situation. Two thresholds: pooled over every rotating fold's
+    negatives at fpr 0.005 (sx's pooled read), and the mean of the five per-fold thresholds. `out` is <eval>/probe;
+    the rotating predictions and folds_sx.csv sit one level up."""
+    from metrics import metrics_by_group, metrics_at_fpr
+    from sx import read_fold_predictions, FPR_TARGETS
+    from train_utils import TIERS_EXCLUDED_FROM_HEADLINE
+    parent = os.path.dirname(os.path.normpath(out))
+    rot = read_fold_predictions(os.path.join(parent, 'folds'))
+    tab = pd.read_csv(os.path.join(parent, 'folds_sx.csv'))
+    per = tab[tab['fold'] != 'total']['threshold']
+    pooled = float(metrics_at_fpr(metrics_by_group(rot[['activation_ins_buzz', 'correct']]),
+                                  FPR_TARGETS)['threshold'].iloc[0])
+    df = pd.read_csv(os.path.join(out, 'folds', fold, 'predictions.csv'))
+    raw = {i: r for i, (_, r, _, _, _) in enumerate(fold_samples(fold))}
+    plane = df['sample'].map(lambda i: any(l.startswith('mech_plane') for l in raw[i]))
+    pos = df['correct'].astype(bool)
+    excl = pos & ~df['loudness'].isin(TIERS_EXCLUDED_FROM_HEADLINE)
+    res = {'fold': fold, 'neg_frames': int((~pos).sum()), 'jet_frames': int((~pos & plane).sum())}
+    for label, thr in (('pooled', pooled), ('mean_fold', float(per.mean()))):
+        act = df['activation_ins_buzz']
+        rfpr = {f: float(((g['activation_ins_buzz'] > thr) & ~g['correct'].astype(bool)).sum()
+                         / max(1, (~g['correct'].astype(bool)).sum())) for f, g in rot.groupby('fold')}
+        res[label] = {'threshold': thr,
+                      'fpr': float(((act > thr) & ~pos).sum() / (~pos).sum()),
+                      'fpr_jet': float(((act > thr) & ~pos & plane).sum() / max(1, (~pos & plane).sum())),
+                      'fpr_other': float(((act > thr) & ~pos & ~plane).sum() / max(1, (~pos & ~plane).sum())),
+                      'sens_exclquiet': float((act[excl] > thr).mean()) if excl.any() else None,
+                      'rotating_fpr_min': min(rfpr.values()), 'rotating_fpr_max': max(rfpr.values())}
+    return res
+
+
 def score(a, out=None, plane=False):
     out = out or a.out
     sys.path.insert(0, ROOT)
@@ -244,11 +279,18 @@ def score(a, out=None, plane=False):
           f'-> {os.path.join(out, "folds_sx.csv")}')
     if plane:
         reps = [plane_report(out, r['fold'], r['threshold']) for _, r in table[table['fold'] != 'total'].iterrows()]
+        for r in reps:
+            r['cross'] = cross_report(out, r['fold'])
         json.dump(reps, open(os.path.join(out, 'probe.json'), 'w'), indent=1)
         for r in reps:
             print(f'PROBE {r["fold"]}: thr {r["threshold"]:.3f}, jet frames {r["jet_frames"]}, over thr {r["jet_over_thr"]} '
                   f'= {r["jet_share_of_fps"]:.0%} of {r["neg_over_thr"]} FPs, jet mean logit {r["jet_mean_logit"]:.2f} '
                   f'vs other negatives {r["other_neg_mean_logit"]:.2f}')
+            c = r['cross']
+            for k in ('pooled', 'mean_fold'):
+                print(f'PROBE-XFOLD {k} thr {c[k]["threshold"]:.3f}: FPR {c[k]["fpr"]:.2%} '
+                      f'(jets {c[k]["fpr_jet"]:.2%}, other {c[k]["fpr_other"]:.2%}), sens_exclquiet {c[k]["sens_exclquiet"]:.3f}; '
+                      f'rotating folds FPR {c[k]["rotating_fpr_min"]:.2%}-{c[k]["rotating_fpr_max"]:.2%}')
 
 
 def compare(a):
