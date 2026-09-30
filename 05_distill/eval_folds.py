@@ -27,6 +27,10 @@ Two phases, since ORT-GPU lives in buzzdetect's engine venv and sx needs TF:
   run     train env, does both (infer through a subprocess of the engine venv)
 
 `--folds` overrides the rotating folds (dev: one fold, or `--max-frames`).
+`run --probe` (or `probe` alone, for runs already evaluated) also scores PROBE_FOLDS into <out>/probe/, outside the headline: 1_95, a training fold whose fpr-0.005
+threshold one jet flyover sets (memory jet-false-positives-1-95). Reports the fold's own sens/threshold and, for frames
+labelled mech_plane (the jets; the cache is per label combination, so the flyover's snips can't be picked out),
+the share above that threshold and the share of the fold's threshold-setting negatives they make up.
 Also writes D/logits.npy (all 15 logits per frame) and D/frames.csv (fold,
 sample, frame idx) for flip/parity readouts.
 """
@@ -75,6 +79,9 @@ def label_tier(label):
 def buzz_tier(raw, translated):
     tiers = [label_tier(r) for r, t in zip(raw, translated) if t == 'ins_buzz']
     return max(tiers, key=RANK.__getitem__) if tiers else ''
+
+
+PROBE_FOLDS = ['Luke - Diel Drivers/2026-05-06/1_95']
 
 
 def rotate_folds():
@@ -195,7 +202,23 @@ def infer(a):
                'translation': TRANSLATION}, open(os.path.join(a.out, 'eval.json'), 'w'))
 
 
-def score(a):
+def plane_report(out, fold, threshold):
+    """Jet frames (raw label mech_plane, no buzz label) against the fold's own threshold."""
+    df = pd.read_csv(os.path.join(out, 'folds', fold, 'predictions.csv'))
+    raw = {i: r for i, (_, r, _, _, _) in enumerate(fold_samples(fold))}
+    plane = df['sample'].map(lambda i: any(l.startswith('mech_plane') for l in raw[i]))
+    neg = ~df['correct'].astype(bool)
+    hit = neg & (df['activation_ins_buzz'] > threshold)
+    jet = neg & plane
+    return {'fold': fold, 'threshold': float(threshold), 'jet_frames': int(jet.sum()),
+            'jet_over_thr': int((hit & plane).sum()), 'neg_over_thr': int(hit.sum()),
+            'jet_share_of_fps': float((hit & plane).sum() / max(1, hit.sum())),
+            'jet_mean_logit': float(df.loc[jet, 'activation_ins_buzz'].mean()) if jet.any() else None,
+            'other_neg_mean_logit': float(df.loc[neg & ~plane, 'activation_ins_buzz'].mean())}
+
+
+def score(a, out=None, plane=False):
+    out = out or a.out
     sys.path.insert(0, ROOT)
     sys.path.insert(0, os.path.join(ROOT, '03_train'))
     import tensorflow  # noqa: F401  (train_utils imports it; must precede pandas users)
@@ -204,8 +227,8 @@ def score(a):
         print(f'[labels] no {BASELINE}: skipping --check-labels')
     from sx import summarize_folds, format_sx_report, read_fold_predictions, SENS_EXCL
 
-    dfp = read_fold_predictions(os.path.join(a.out, 'folds'))
-    if a.check_labels:
+    dfp = read_fold_predictions(os.path.join(out, 'folds'))
+    if a.check_labels and not plane:
         for fold, df in dfp.groupby('fold'):
             ref = pd.read_csv(os.path.join(BASELINE, 'folds', fold, 'predictions.csv'))
             ok = (len(ref) == len(df)
@@ -214,11 +237,18 @@ def score(a):
             print(f'[labels] {fold}: {len(df)} frames vs pipeline {len(ref)}: '
                   f'{"IDENTICAL correct+loudness" if ok else "MISMATCH"}')
     table = summarize_folds(dfp)
-    table.to_csv(os.path.join(a.out, 'folds_sx.csv'), index=False)
-    print(format_sx_report(os.path.basename(os.path.normpath(a.out)), table))
+    table.to_csv(os.path.join(out, 'folds_sx.csv'), index=False)
+    print(format_sx_report(os.path.basename(os.path.normpath(out)), table))
     tot = table[table['fold'] == 'total'].iloc[0]
     print(f'HEADLINE {SENS_EXCL} {tot[SENS_EXCL]:.3f}  (inclusive {tot["sensitivity"]:.3f}) '
-          f'-> {os.path.join(a.out, "folds_sx.csv")}')
+          f'-> {os.path.join(out, "folds_sx.csv")}')
+    if plane:
+        reps = [plane_report(out, r['fold'], r['threshold']) for _, r in table[table['fold'] != 'total'].iterrows()]
+        json.dump(reps, open(os.path.join(out, 'probe.json'), 'w'), indent=1)
+        for r in reps:
+            print(f'PROBE {r["fold"]}: thr {r["threshold"]:.3f}, jet frames {r["jet_frames"]}, over thr {r["jet_over_thr"]} '
+                  f'= {r["jet_share_of_fps"]:.0%} of {r["neg_over_thr"]} FPs, jet mean logit {r["jet_mean_logit"]:.2f} '
+                  f'vs other negatives {r["other_neg_mean_logit"]:.2f}')
 
 
 def compare(a):
@@ -244,12 +274,23 @@ def run(a):
     cmd += ['--pack', str(a.pack)] + (['--isolated'] if a.isolated else [])
     subprocess.run(cmd, check=True)
     score(a)
+    if a.probe:
+        probe(a)
+
+
+def probe(a):
+    pout = os.path.join(a.out, 'probe')
+    os.makedirs(pout, exist_ok=True)
+    pcmd = [ENGINE_PY, os.path.abspath(__file__), 'infer', '--onnx', a.onnx, '--out', pout, '--folds', *PROBE_FOLDS,
+            '--pack', str(a.pack)] + (['--cpu'] if a.cpu else []) + (['--isolated'] if a.isolated else [])
+    subprocess.run(pcmd, check=True)
+    score(a, pout, plane=True)
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('phase', choices=['infer', 'score', 'run', 'compare'])
+    ap.add_argument('phase', choices=['infer', 'score', 'run', 'probe', 'compare'])
     ap.add_argument('--onnx')
     ap.add_argument('--out', required=True)
     ap.add_argument('--folds', nargs='*')
@@ -259,8 +300,9 @@ if __name__ == '__main__':
     ap.add_argument('--max-frames', type=int, default=0, help='per fold, dev only')
     ap.add_argument('--check-labels', action='store_true',
                     help='score: compare correct/loudness with cv-baseline-v4-moderate predictions')
+    ap.add_argument('--probe', action='store_true', help='run: also score PROBE_FOLDS into <out>/probe (not the headline)')
     ap.add_argument('--ref', help='compare: reference folds_sx.csv')
     a = ap.parse_args()
     if a.phase in ('infer', 'run') and not a.onnx:
         ap.error('--onnx required')
-    {'infer': infer, 'score': score, 'run': run, 'compare': compare}[a.phase](a)
+    {'infer': infer, 'score': score, 'run': run, 'probe': probe, 'compare': compare}[a.phase](a)

@@ -179,3 +179,15 @@ Code is in the `worktree-distill-lite` worktree, uncommitted as of this writing.
   (0.624 at a0.50) is slower (1.76x); `two32`/`lo32` are slower than YAMNet (0.80x/0.89x) for no gain.
 - **buzzdetect and 3-column models (read from `engine/src`, not run):** classes come from `config_model.json`; precision mode needs the
   model's own tests/metrics threshold table. Loading a subset student in the engine is untested.
+
+## Update 2026-09-30: 1_95 jet probe
+
+`eval_folds.py probe` (and a `probe` stage in `main.py`, after `eval`) scores `1_95` apart from the headline. It is a
+training fold, so this is an overfitting-tolerant check on the jet false positives, not a held-out number. Output:
+`eval/<name>/probe/{folds_sx.csv,probe.json}`. The jet frames are the ones labelled `mech_plane` (the cache is per label
+combination, so the flyover's snips can't be isolated). Backfilled for all 29 finished students.
+
+- 1_95 sens@fpr0.005 runs 0.03-0.32 across the ladder. It tracks headline and speed (slowest, yamnet-trunk/twofast32 students best,
+  0.29-0.32; fast32h16 a0.25 worst, 0.03-0.11). Class subsets help here too (a0.50 fast32h16 0.134 -> 0.200).
+- Jet frames are 36-76% (typically ~55%) of the ~178 threshold-setting false positives in every student. No student rejects them.
+- Not measured: the teacher on the same probe (baseline for "did distillation make it worse").

@@ -25,6 +25,7 @@ teacher classes (the head has only those outputs; must include ins_buzz), `lam=0
   train     distill_train.py         resumes from its last checkpoint; TRAIN_DONE marks the end
   export    export_student.py export ONNX with the teacher's centers folded in, parity-checked
   eval      eval_folds.py run        headline sensitivity_exclquiet @ fpr 0.005 on the rotating folds
+  probe     eval_folds.py probe      1_95 (jet fold, a training fold) scored apart from the headline: threshold, sens, jet share of FPs
   speed     export_student.py time   x YAMNet on the GPU, 20 s and 200 s chunks
   record    ladder_record.py record  one row in 05_distill/data/<teacher>/ladder.jsonl
   deploy    deploy_student.py        only with --deploy: copy into buzzdetect (--force to overwrite)
@@ -55,7 +56,7 @@ def parse():
     ap.add_argument('--eval-every', type=int, default=2000)
     ap.add_argument('--prefix', default='fe', help='run-name prefix')
     ap.add_argument('--until', choices=['frontend', 'plan', 'teacher', 'cache', 'cache_fe', 'pack', 'train',
-                                        'export', 'eval', 'speed', 'record', 'deploy'],
+                                        'export', 'eval', 'probe', 'speed', 'record', 'deploy'],
                     help='stop after this stage (for the last run)')
     ap.add_argument('--deploy', action='store_true', help='copy each finished student into buzzdetect')
     ap.add_argument('--force-deploy', action='store_true', help='overwrite an existing deployed model dir')
@@ -70,7 +71,7 @@ sys.path.insert(0, HERE)
 import dpaths as D  # noqa: E402  (after DISTILL_TEACHER is set)
 
 TRAIN_PY = sys.executable
-ORDER = ['frontend', 'plan', 'teacher', 'cache', 'cache_fe', 'pack', 'train', 'export', 'eval', 'speed', 'record', 'deploy']
+ORDER = ['frontend', 'plan', 'teacher', 'cache', 'cache_fe', 'pack', 'train', 'export', 'eval', 'probe', 'speed', 'record', 'deploy']
 
 
 def say(msg):
@@ -175,6 +176,9 @@ def stages_for_run(spec):
         Stage('eval', f'{name} eval', [TRAIN_PY, '-u', 'eval_folds.py', 'run', '--check-labels',
                                         '--onnx', os.path.join(m, 'model.onnx'), '--out', ev],
               os.path.join(ev, 'folds_sx.csv'), None, wall),
+        Stage('probe', f'{name} probe', [TRAIN_PY, '-u', 'eval_folds.py', 'probe',
+                                          '--onnx', os.path.join(m, 'model.onnx'), '--out', ev],
+              os.path.join(ev, 'probe', 'probe.json'), None, wall),
         Stage('speed', f'{name} speed', [D.ENGINE_PY, 'export_student.py', 'time', '--name', name, '--repeats', '15'],
               os.path.join(m, 'speed_200.json'), None, wall),
         Stage('record', f'{name} record', rec, lambda: in_ladder(name), None, wall),
