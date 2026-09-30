@@ -170,12 +170,12 @@ def infer(a):
                 all_logits.extend(run_group(group).astype(np.float32))
                 group.clear()
 
-        for sid, (path, raw, trn, buzz, tier) in enumerate(samples):
+        for sid, (path, raw, trn, is_buzz, tier) in enumerate(samples):
             for fi, fr in enumerate(read_frames(path)):
                 if a.max_frames and n >= a.max_frames:
                     break
                 group.append(fr)
-                rows.append((sid, buzz, tier))
+                rows.append((sid, is_buzz, tier))
                 index.append((fold, sid, fi))
                 n += 1
                 if len(group) == a.pack:
