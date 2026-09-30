@@ -15,12 +15,16 @@ Tell the loop where you stand with `{ROOT}/tools/loop_signal.sh` (works from any
   1. Record it in the experiment's `notes.md`: what broke, what you tried, what Luke needs to decide. Commit and push `exp/<slug>`.
   2. If the experiment is unfinished, commit a `HANDOFF.md`.
   3. Send `loop_signal.sh halt` with a summary, and a PushNotification with its first line: this is the one event Luke gets pushed. The loop stops your session and quits, without running a fixer and without killing your jobs. If a process is hanging, kill it first.
+- **Park: a job will outlast a sensible wait (over ~2 hours).** Don't sit on a Monitor for it; every 30-min re-arm is a full turn.
+  1. Commit a `HANDOFF.md` (below) that also says how many of your {N} experiments are already logged and which remain.
+  2. Send `loop_signal.sh park <minutes> "<why>"`, with <minutes> about 120 (less if the job is nearly done), as the last thing before ending your turn. The loop stops your session but **leaves your jobs running**, sleeps until that time or until the jobs all exit (whichever is first), then relaunches an agent on this same batch to resume the handoff. That agent may park again if the job is still going.
+  Use it once a `launch_job.sh` run's ETA (from the first fold or ident) is over 2 hours, including when several queued experiments add up to that. A job under 2 hours: just Monitor it as below.
 - **Luke asks you to stop the loop:** `loop_signal.sh stop`, and the loop exits after this batch.
 
-Cleanup is the loop's job. Once you signal `done` or `issue`, it stops this session and kills every job you started with `launch_job.sh`. After `halt` it stops the session and leaves the jobs running. Don't stop jobs yourself.
+Cleanup is the loop's job. Once you signal `done` or `issue`, it stops this session and kills every job you started with `launch_job.sh`. After `halt` or `park` it stops the session and leaves the jobs running. Don't stop jobs yourself.
 
-**`HANDOFF.md` is only for a session that ends before its experiment does:** an
-`issue` or a `halt`. Watch your jobs with one Monitor on `tools/watch_job.sh` (no
+**`HANDOFF.md` is only for a session that ends before its experiment does:** a
+`park`, an `issue` or a `halt`. Watch your jobs with one Monitor on `tools/watch_job.sh` (no
 arguments: it follows every job you launch, later ones too, so never arm a
 second), re-armed at every 30-min expiry (CLAUDE.md "Running long jobs"); that keeps a
 waiting session alive, so a slow run is never a reason to write one. Between its events, don't look at the job: no `tail` of the log, no ReadNotifications-then-check loop. Each look is a full turn (CLAUDE.md "Running long jobs"). The next experiment agent resumes every handoff whose experiment isn't in
