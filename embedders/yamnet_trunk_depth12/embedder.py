@@ -58,26 +58,39 @@ class EmbedderYamnetTrunkDepth12(_trunk.EmbedderYamnetTrunk):
         import tensorflow as tf
 
         full = self._load_full()
+        gap = full.get_layer(_GAP_LAYER)
+        tail_out = gap.output
+        if os.environ.get('TRUNK_GMP'):
+            # ps-gmp: max-pool the last feature map over time-frequency as well as
+            # averaging it, so a short transient survives the pooling
+            tail_out = keras.layers.Concatenate()(
+                [gap.output, keras.layers.GlobalMaxPooling2D()(gap.input)])
         tail = keras.Model(
             inputs=full.get_layer(_TRUNK_LAYER).output,
-            outputs=full.get_layer(_GAP_LAYER).output,
+            outputs=tail_out,
             name=_TAIL_NAME,
         )
 
         train_backbone = lr_backbone > 0
         for layer in tail.layers:
             if isinstance(layer, keras.layers.BatchNormalization):
-                layer.trainable = False          # keep AudioSet moving stats, all three blocks
+                # keep AudioSet moving stats, all three blocks (ps-bntrain: adapt them)
+                layer.trainable = bool(os.environ.get('TRUNK_BN_TRAIN')) and train_backbone
             else:
                 layer.trainable = train_backbone
 
         inp = keras.layers.Input(shape=(self.n_embeddings,), dtype=tf.float32, name='input')
         n_ctx = getattr(self, 'n_ctx', 1)
+        p_sp = float(os.environ.get('TRUNK_SPDROP', 0))   # ps-featdrop: drop whole channels
         if n_ctx == 1:
             x = keras.layers.Reshape(_TRUNK_SHAPE)(inp)
+            if p_sp:
+                x = keras.layers.Dropout(p_sp, noise_shape=(None, 1, 1, _TRUNK_SHAPE[-1]))(x)
             x = tail(x)
         else:
             x = keras.layers.Reshape((n_ctx,) + _TRUNK_SHAPE)(inp)
+            if p_sp:
+                x = keras.layers.Dropout(p_sp, noise_shape=(None, n_ctx, 1, 1, _TRUNK_SHAPE[-1]))(x)
             x = keras.layers.TimeDistributed(tail)(x)
             x = keras.layers.Flatten()(x)
         x = keras.layers.Dropout(dropout)(x)
