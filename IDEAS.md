@@ -148,17 +148,6 @@ using only rows whose `label` does not contain `ins_buzz`.
 
 Ranked best-first by expected value on the headline and the hard folds, cost second.
 
-## 7. Nearest-neighbour search into genuinely unannotated audio
-
-*Evidence: **untagged proposal**; the annotated-frame half is done
-(`diagnostics/2026-09-13_annotation-triage/annotation_triage.py`).*
-
-`02_set` only embeds annotated audio, so no cached embedding exists for a
-single unheard frame. The open piece: one extraction pass over full-day
-recordings, then vector search from confirmed hard cases (`1_95` jet frames,
-`1_114` trill frames, `1_150` quiet buzz) into that audio, producing a reading
-list for Luke. Scope it when full-day raw audio access is worth an extraction.
-
 ---
 
 # Low priority — deploy speed, not accuracy
@@ -207,68 +196,9 @@ correction, re-derive `activation_centers` on the quantized outputs, then
 sensitivity-at-fixed-FPR per fold, then time it on modern hardware (Luke offered).
 Not closed: the falsifier's speed clause has not been tested.
 
-## 27. Distil the fine-tuned model into a smaller MobileNet student
-
-*Evidence: untagged proposal. YAMNet's embedding is ~89% zeros per frame
-(`archive/2026-09-08_cv-medium-v2/notes/recorder-center.md`). That is
-activation sparsity, not dead channels, so structured pruning of frozen
-YAMNet frees under ~10% of the multiply-adds (last layer only). Distillation
-is the route that actually shrinks the network.*
-
-**Update 2026-09-28 (Luke).** The teacher is `v4-ft-ps-e60-moderate` (pitch-shift, moderate
-set, 60 epochs; the true best, not logged as a CV entry). Its cost is the point: two YAMNet
-passes, so ps-fast's ~1.34x only recovers what pitch-shift added, and a
-single-pass student is the way past it. Raw audio: `/media/server storage/experiments`
-(4.2 TB, ~200k files, all passive but from very different environments; same tree
-as `audio/`). Sampling notes: spread across as many *deployments* as possible
-rather than deep from a few (folds are deployments, the student must generalise to
-unseen sites); oversample teacher-active/uncertain frames plus hard negatives; keep
-the 5 rotating eval deployments out of the student's audio or CV gets a
-transductive leak. Judge the student by the same detection-flip metric at logit > 0
-versus the teacher (see the int8 diagnostic), then by CV.
-
-**Data.** Labels are not the limit. ~72k annotated frames are far too few to
-train from scratch, but the teacher labels raw audio, and **~200,000 h of raw
-deployment audio exists** (Luke, 2026-09-25). The risk is rarity: buzz and jet
-frames are a tiny share of raw audio. Oversample frames where the teacher fires
-or is uncertain, and add the annotated frames with true labels as a second loss
-term.
-
-**Design.**
-- Teacher: the current shipped/lead model.
-- Student: a MobileNetV1 at width 0.5 (~4x fewer multiply-adds), or YAMNet
-  with slimmed late layers. Initialise it from YAMNet's weights, not random.
-- Loss: match the teacher's layer-11 map (6×4×512) plus its 15 logits.
-  Feature distillation gives much more signal per frame than logits alone.
-- Pipeline: cache the teacher's outputs once, like stage 2 embeddings. A
-  student this small trains on the 1650.
-- Evaluation: the student goes through the normal CV against the teacher.
-  Small students lose rare cases first, so read `1_95`/`1_150`/willard before
-  the headline. Pairs naturally with item 26 (quantize the student).
-
-*Falsifier:* if the student loses more than MDE (~0.027) on the headline, or
-any hard fold drops beyond its SD, at <3x end-to-end speedup on NVMe, the trade
-isn't worth it.
-
 ---
 
 # Needs Luke
-
-## 8. night-negatives — blocked on a data decision
-
-*Evidence: **E3** disk survey, 2026-09-10.*
-
-Every nighttime detection is false by construction, so in-domain hard negatives
-generate at any volume from the deployments' own recorders. Night FPs sit in
-the same ten minutes of `1_95` for two models two eras apart. **An experiment
-may not add or edit an annotation effort unilaterally.** On disk:
-`01_annotate/2025-06-07 night detections/` has 278 hand-labelled rows but no
-`folds.csv`; `2026-05-26 Automatic Annotations/` has a complete `combine.R`
-but unsynced inputs, and labels all 1500 as `ambient_background` — which the
-2025 hand labels say is right 0.7% of the time (46% tree frog, 22%
-`ins_trill`). **Open question:** is
-`data/raw/Luke - Various Opportunistic Recordings/` syncable? Volume should be
-a dose ladder (0x / 1x / 4x a fold's negatives), not one level.
 
 ## 25. `1_37`'s threshold is set by `ambient_background` — a 22-frame listen list
 
