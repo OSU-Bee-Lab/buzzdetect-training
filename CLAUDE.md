@@ -78,7 +78,7 @@ launched after it was armed, so starting a second job (extraction, then
 training) needs no new Monitor, and N jobs still mean one expiry per 30 min.
 Arming a second Monitor, or one per job, multiplies your turns: expiries at
 different offsets land every ~30/N min. Check with TaskList before arming. A
-job another session launched (a HANDOFF.md resume) joins with
+job another session launched joins with
 `tools/watch_job.sh --adopt <pid>`; `tools/watch_job.sh <pid> <log>` still
 watches one job alone.
 
