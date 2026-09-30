@@ -1,0 +1,122 @@
+"""Frontier scatter as a standalone SVG: rung-B seed-1 runs, x = speed (x YAMNet, GPU, 200 s), y = headline
+(sensitivity_exclquiet @ fpr 0.005). Colour = trunk architecture, marker = front end, ring = class-subset student.
+
+    python 05_distill/frontier_svg.py [out.svg]      (plain python; reads the per-teacher ladder.jsonl)
+"""
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import dpaths as D  # noqa: E402
+
+BASELINE = 0.414
+ARCH_COLOUR = {'a0.25': '#d95f02', 'a0.375': '#7570b3', 'a0.50': '#1b9e77', 'a0.50_d12': '#e7298a'}
+FE_MARK = {'yamnet': 'circle', 'fast32': 'square', 'fast32h16': 'diamond', 'fast32h32': 'tri',
+           'twofast32': 'cross', 'two32': 'hex', 'lo32': 'hex', 'fast32lo': 'square', 'fast32h16lo': 'diamond'}
+W, H, L, R, T, B = 900, 560, 70, 200, 40, 60
+
+
+def load():
+    out = []
+    for line in open(os.path.join(D.LOCAL, 'ladder.jsonl')):
+        r = json.loads(line)
+        if r.get('rung') != 'B' or r.get('seed') != 1 or not r.get('x_yamnet200'):
+            continue
+        if r['headline'] != r['headline']:
+            continue
+        if r.get('init') == '' and r['name'].endswith('_stream'):
+            continue
+        r.setdefault('frontend', 'yamnet')
+        out.append(r)
+    return out
+
+
+def pareto(rows):
+    pts = sorted(rows, key=lambda r: -r['x_yamnet200'])
+    best, front = -1, []
+    for r in pts:
+        if r['headline'] > best:
+            front.append(r)
+            best = r['headline']
+    return front
+
+
+def marker(kind, x, y, c, ring):
+    s = 7
+    if kind == 'square':
+        m = f'<rect x="{x - s}" y="{y - s}" width="{2 * s}" height="{2 * s}"'
+    elif kind == 'diamond':
+        m = f'<polygon points="{x},{y - s - 2} {x + s + 2},{y} {x},{y + s + 2} {x - s - 2},{y}"'
+    elif kind == 'tri':
+        m = f'<polygon points="{x},{y - s - 1} {x + s + 1},{y + s} {x - s - 1},{y + s}"'
+    elif kind == 'hex':
+        m = f'<polygon points="{x - s},{y} {x - s / 2},{y - s} {x + s / 2},{y - s} {x + s},{y} {x + s / 2},{y + s} {x - s / 2},{y + s}"'
+    elif kind == 'cross':
+        m = (f'<polygon points="{x - 2.5},{y - s} {x + 2.5},{y - s} {x + 2.5},{y - 2.5} {x + s},{y - 2.5} {x + s},{y + 2.5} '
+             f'{x + 2.5},{y + 2.5} {x + 2.5},{y + s} {x - 2.5},{y + s} {x - 2.5},{y + 2.5} {x - s},{y + 2.5} {x - s},{y - 2.5} '
+             f'{x - 2.5},{y - 2.5}"')
+    else:
+        m = f'<circle cx="{x}" cy="{y}" r="{s}"'
+    stroke = '#111' if ring else 'none'
+    sw = 2.5 if ring else 0
+    return f'{m} fill="{c}" fill-opacity="0.85" stroke="{stroke}" stroke-width="{sw}"/>'
+
+
+def main():
+    rows = load()
+    xs = [r['x_yamnet200'] for r in rows]
+    x0, x1 = 0.6, max(xs) + 0.3
+    y0, y1 = 0.35, 0.75
+    px = lambda v: L + (v - x0) / (x1 - x0) * (W - L - R)
+    py = lambda v: H - B - (v - y0) / (y1 - y0) * (H - B - T)
+    o = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" font-family="sans-serif" font-size="12">',
+         f'<rect width="{W}" height="{H}" fill="#fff"/>',
+         f'<text x="{L}" y="24" font-size="15" font-weight="bold">Speed / sensitivity frontier (rung B, seed 1)</text>']
+    for v in [0.4, 0.5, 0.6, 0.7]:
+        o.append(f'<line x1="{L}" x2="{W - R}" y1="{py(v)}" y2="{py(v)}" stroke="#e5e5e5"/>'
+                 f'<text x="{L - 8}" y="{py(v) + 4}" text-anchor="end">{v:.1f}</text>')
+    for v in [1, 1.5, 2, 2.5, 3]:
+        o.append(f'<line y1="{T}" y2="{H - B}" x1="{px(v)}" x2="{px(v)}" stroke="#e5e5e5"/>'
+                 f'<text x="{px(v)}" y="{H - B + 18}" text-anchor="middle">{v:g}x</text>')
+    o.append(f'<line x1="{px(1)}" x2="{px(1)}" y1="{T}" y2="{H - B}" stroke="#555" stroke-dasharray="4 3"/>'
+             f'<text x="{px(1) + 4}" y="{T + 12}" fill="#555">YAMNet speed</text>')
+    o.append(f'<line x1="{L}" x2="{W - R}" y1="{py(BASELINE)}" y2="{py(BASELINE)}" stroke="#555" stroke-dasharray="4 3"/>'
+             f'<text x="{W - R - 4}" y="{py(BASELINE) - 5}" text-anchor="end" fill="#555">era baseline 0.414</text>')
+    o.append(f'<rect x="{L}" y="{T}" width="{W - L - R}" height="{H - B - T}" fill="none" stroke="#999"/>')
+    o.append(f'<text x="{(L + W - R) / 2}" y="{H - 14}" text-anchor="middle">speed, x YAMNet (GPU, 200 s audio; higher is faster)</text>')
+    o.append(f'<text transform="translate(18 {(T + H - B) / 2}) rotate(-90)" text-anchor="middle">'
+             f'sensitivity (excl. quiet) @ 0.5% FPR</text>')
+    fr = pareto(rows)
+    o.append('<polyline fill="none" stroke="#111" stroke-width="1.5" stroke-dasharray="2 3" points="'
+             + ' '.join(f'{px(r["x_yamnet200"]):.1f},{py(r["headline"]):.1f}' for r in fr) + '"/>')
+    for r in rows:
+        x, y = px(r['x_yamnet200']), py(r['headline'])
+        c = ARCH_COLOUR.get(r['arch'], '#888')
+        o.append(marker(FE_MARK.get(r['frontend'], 'circle'), round(x, 1), round(y, 1), c, bool(r.get('classes'))))
+        if r in fr:
+            lab = r['frontend'] + (' +sub' if r.get('classes') else '')
+            o.append(f'<text x="{x + 10:.1f}" y="{y - 9:.1f}" font-size="10">{lab}</text>')
+    lx, ly = W - R + 20, T + 10
+    o.append(f'<text x="{lx}" y="{ly}" font-weight="bold">Trunk</text>')
+    for i, (a, c) in enumerate(ARCH_COLOUR.items()):
+        o.append(f'<rect x="{lx}" y="{ly + 8 + i * 18}" width="12" height="12" fill="{c}"/>'
+                 f'<text x="{lx + 18}" y="{ly + 18 + i * 18}">{a}</text>')
+    ly += 100
+    o.append(f'<text x="{lx}" y="{ly}" font-weight="bold">Front end</text>')
+    for i, (k, lab) in enumerate([('circle', 'YAMNet'), ('square', 'fast32 / lo'), ('diamond', 'fast32h16'),
+                                  ('tri', 'fast32h32'), ('cross', 'twofast32'), ('hex', 'two32 / lo32')]):
+        o.append(marker(k, lx + 6, ly + 16 + i * 18, '#888', False)
+                 + f'<text x="{lx + 22}" y="{ly + 20 + i * 18}">{lab}</text>')
+    ly += 130
+    o.append(marker('circle', lx + 6, ly, '#fff', True) + f'<text x="{lx + 22}" y="{ly + 4}">class-subset</text>')
+    o.append(f'<line x1="{lx}" x2="{lx + 12}" y1="{ly + 22}" y2="{ly + 22}" stroke="#111" stroke-dasharray="2 3"/>'
+             f'<text x="{lx + 22}" y="{ly + 26}">non-dominated</text>')
+    o.append('</svg>')
+    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontier.svg')
+    open(out, 'w').write('\n'.join(o))
+    print(out, len(rows), 'runs,', len(fr), 'on the frontier')
+
+
+if __name__ == '__main__':
+    main()
