@@ -15,7 +15,8 @@
 #   tools/loop_signal.sh park <minutes> ["why"]   a job will outlast your wait (see below)
 #   tools/loop_signal.sh stop     the loop exits after this batch
 #
-# `park` is for a job that will run longer than ~2 h: commit a HANDOFF.md
+# `park` is for a job with more than ~1.5 h left (ETA from measured progress, checked
+# at each 30-min Monitor expiry): commit a HANDOFF.md
 # (worktree root) saying how to resume, then park. The loop stops your session
 # but leaves your jobs running, waits <minutes> (or until they all exit, if
 # sooner) and relaunches an agent on the same batch to resume the handoff. The
