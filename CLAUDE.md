@@ -92,10 +92,7 @@ watch fits any command (a one-off diagnostic too): the state line and exit line
 are generic, only the headline and shipped events are pipeline-specific. No
 per-fold or per-error events: a crash ends the job and arrives as its exit
 line, and an error that leaves a job hanging shows in the next re-arm's error
-count. **A job with over ~1.5 hours left is parked, not watched** (compute the ETA from measured progress at each Monitor expiry; under 1.5 h, re-arm and continue): in a `tools/human/agent_loop.sh`
-session, commit a HANDOFF.md and send `tools/loop_signal.sh park <minutes>`
-(LOOP.md prompt has the detail); the loop leaves the job running and relaunches
-an agent to resume. Outside that loop, Monitor as below.
+count.
 **Re-arm the Monitor at every expiry, every time, until the jobs are
 done.** Expiries are expected and cheap; re-arming keeps the session alive and
 its cache warm. A lapsed Monitor means nobody is watching.
