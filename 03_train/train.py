@@ -500,7 +500,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     # ins_buzz's weight at all. See train_utils.weighted_bce_loss.
     weights_ordered = [data.weight_dict[i] for i in range(len(data.classes))]
     model.compile(
-        loss=weighted_bce_loss(weights_ordered, label_smoothing=0.2),
+        loss=weighted_bce_loss(weights_ordered, label_smoothing=float(os.environ.get('TRAIN_LS', 0.2))),
         optimizer=optimizer,
         metrics=['accuracy'],
     )
