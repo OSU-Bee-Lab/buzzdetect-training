@@ -133,7 +133,15 @@ def do_time(seconds, repeats, warmup, names):
     samples_session = mn + hop * frames
     audio = np.random.default_rng(0).uniform(-0.1, 0.1, n).astype(np.float32)
 
-    items = [(r, os.path.join(ENGINE, 'models', r, 'model.onnx')) for r in REFERENCES]
+    def ref_path(r):
+        # buzzdetect moved retired models to engine/models/.archive (2026-09-30)
+        for d in ('', '.archive'):
+            p = os.path.join(ENGINE, 'models', d, r, 'model.onnx')
+            if os.path.exists(p):
+                return p
+        return os.path.join(ENGINE, 'models', r, 'model.onnx')
+
+    items = [(r, ref_path(r)) for r in REFERENCES]
     items += [(c, os.path.join(OUT, c, 'model.onnx')) for c in names]
     results = {}
     for name, path in items:
