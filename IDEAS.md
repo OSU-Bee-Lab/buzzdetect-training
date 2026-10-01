@@ -148,45 +148,6 @@ using only rows whose `label` does not contain `ins_buzz`.
 
 Ranked best-first by expected value on the headline and the hard folds, cost second.
 
-## 27. Distill frontier: fill the front end × trunk × class-subset grid (stage 5)
-
-*Special request from Luke, 2026-09-30. Run it as **one batch**: a single
-`05_distill/main.py` invocation, not split across loop iterations, and ahead of
-everything else in the queue. Not an autoresearch CV experiment: it touches
-only `05_distill/`, never stage 3.*
-
-The grid is front end (`yamnet`, `twofast32`, `fast32`, `fast32lo`, `fast32h16`)
-× trunk (`a0.25`, `a0.375`, `a0.50`) × class subset (`ins_buzz+ambient_rain+human`,
-`ins_buzz` alone): 30 cells, rung B, seed 1, teacher `v4-ft-ps-e60-moderate`.
-Seven are already run, so 23 remain (9 rain+human, 14 buzz alone). The YAMNet
-front end uses `select` init, as in the existing rows. Why: the frontier is
-partly an artefact of which cells were tried (see `05_distill/FRONTENDS.md`).
-
-```bash
-tools/launch_job.sh 05_distill/data/main_stage5_grid.log -- \
-  <python> 05_distill/main.py --teacher v4-ft-ps-e60-moderate --rung B --runs "\
-fast32:a0.25:classes=ins_buzz+ambient_rain+human fast32lo:a0.25:classes=ins_buzz+ambient_rain+human \
-twofast32:a0.25:classes=ins_buzz+ambient_rain+human yamnet:a0.25:select:classes=ins_buzz+ambient_rain+human \
-fast32:a0.375:classes=ins_buzz+ambient_rain+human fast32lo:a0.375:classes=ins_buzz+ambient_rain+human \
-twofast32:a0.375:classes=ins_buzz+ambient_rain+human yamnet:a0.375:select:classes=ins_buzz+ambient_rain+human \
-fast32lo:a0.50:classes=ins_buzz+ambient_rain+human \
-fast32h16:a0.25:classes=ins_buzz fast32:a0.25:classes=ins_buzz fast32lo:a0.25:classes=ins_buzz \
-twofast32:a0.25:classes=ins_buzz yamnet:a0.25:select:classes=ins_buzz \
-fast32:a0.375:classes=ins_buzz fast32lo:a0.375:classes=ins_buzz twofast32:a0.375:classes=ins_buzz \
-yamnet:a0.375:select:classes=ins_buzz \
-fast32h16:a0.50:classes=ins_buzz fast32:a0.50:classes=ins_buzz fast32lo:a0.50:classes=ins_buzz \
-twofast32:a0.50:classes=ins_buzz yamnet:a0.50:select:classes=ins_buzz"
-```
-
-**ETA ~10.5 h (range 9-13 h)** from `wall.txt` of the finished runs: a0.25 ~17 min,
-a0.375 ~23 min, a0.50 ~28-60 min. The YAMNet-front-end runs are doubled (its one
-subset run took 56 min at a0.50). `c-buzz` has one timing sample (22.6 min at
-a0.375). One GPU job at a time: start it only when no other GPU job is running.
-Check `main.py --dry-run` with the same `--runs` first: it should list 23
-pending and skip none of the seven done. Resumable: rerun the same command.
-When done, `ladder_record.py frontier` and `frontier_svg.py` show the filled
-grid; report it to Luke, with per-cell times, before proposing anything further.
-
 ---
 
 # Low priority — deploy speed, not accuracy
