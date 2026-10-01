@@ -95,7 +95,7 @@ Long ones go through `tools/launch_job.sh`; everything reads the teacher from `D
 | `shards.py pack --rung D` | train | streaming shards for rung D |
 | `distill_train.py` | train | trains one student; `--rung --steps --name --arch --frontend --init --loader`; resumable |
 | `student.py`, `student_init.py`, `frontends.py` | train | builder, YAMNet channel-selection init (+ layer-wise refit), front-end registry |
-| `export_student.py export` / `time` | train / engine venv | ONNX with the teacher's centers folded in, parity vs Keras 1e-4; speed vs YAMNet |
+| `export_student.py export` / `time` | train / engine venv | ONNX (plus `model.fp16.onnx`; `--no-fp16` skips) with the teacher's centers folded in, parity vs Keras 1e-4; speed vs YAMNet |
 | `eval_folds.py run` | train (+ engine venv) | headline `sensitivity_exclquiet` at fpr 0.005, mean over the 5 rotating folds (`03_train/sx.py`) |
 | `ladder_record.py record/table/frontier` | train | one jsonl row per run; tables |
 | `deploy_student.py <run>` | train | copy into buzzdetect: model.onnx, config_model.json, folds_sx.csv, README card |

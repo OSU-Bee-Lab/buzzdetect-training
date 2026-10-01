@@ -8,6 +8,7 @@ eval (`05_distill/data/eval/<name>/folds_sx.csv`) and record (`ladder.jsonl` row
 and writes `<dest>/<as or name>/`:
 
     model.onnx, config_model.json    the deployable pair
+    model.fp16.onnx                  the reduced-precision sibling, when the export made one
     folds_sx.csv                     the per-fold sensitivity table the headline came from
     README.md                        provenance card: teacher, architecture, front end, init, metrics, speed, caveats
 
@@ -33,6 +34,7 @@ import ladder_record as LR  # noqa: E402
 
 LOCAL = D.LOCAL                # 05_distill/data/<teacher>
 COPIED = ['model.onnx', 'config_model.json']
+FP16 = 'model.fp16.onnx'      # optional: export_student.py writes it unless --no-fp16
 
 
 def sha(path):
@@ -136,9 +138,12 @@ def main():
         return
 
     os.makedirs(out, exist_ok=True)
+    fp16_src, fp16_dst = os.path.join(src, FP16), os.path.join(out, FP16)
+    if os.path.exists(fp16_dst) and not os.path.exists(fp16_src):
+        os.remove(fp16_dst)                      # belongs to a model that is no longer there
     for f, s in [('model.onnx', os.path.join(src, 'model.onnx')),
                  ('config_model.json', os.path.join(src, 'config_model.json')),
-                 ('folds_sx.csv', folds)]:
+                 ('folds_sx.csv', folds)] + ([(FP16, fp16_src)] if os.path.exists(fp16_src) else []):
         shutil.copy2(s, os.path.join(out, f))
         assert sha(s) == sha(os.path.join(out, f)), f'checksum mismatch on {f}'
     with open(os.path.join(out, 'README.md'), 'w') as f:
