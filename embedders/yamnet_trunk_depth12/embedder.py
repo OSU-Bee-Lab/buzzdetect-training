@@ -88,9 +88,14 @@ class EmbedderYamnetTrunkDepth12(_trunk.EmbedderYamnetTrunk):
         model = keras.Model(inp, out, name=name)
 
         backbone_mult = 1.0 if lr_backbone <= 0 else lr_backbone / lr_head
+        opt = self._optimizer(lr_head, backbone_mult, tail.trainable_variables)
+        if os.environ.get('TRUNK_EMA'):
+            # weight EMA: fit() swaps the averaged weights in when it ends
+            opt.use_ema = True
+            opt.ema_momentum = float(os.environ['TRUNK_EMA'])
         model.compile(
             loss=keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.2),
-            optimizer=self._optimizer(lr_head, backbone_mult, tail.trainable_variables),
+            optimizer=opt,
             metrics=['accuracy'],
         )
         return model
