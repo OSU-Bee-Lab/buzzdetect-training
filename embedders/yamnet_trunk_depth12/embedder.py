@@ -36,6 +36,21 @@ _GAP_LAYER = 'global_average_pooling2d'
 _TAIL_NAME = 'yamnet_tail_l12_13_14'
 
 
+def _noise(x, sigma):
+    """ps-noise: training-only additive Gaussian noise on the layer-11 map,
+    sigma times the batch's std of the map."""
+    import keras
+    from keras import ops
+
+    class FeatureNoise(keras.layers.Layer):
+        def call(self, inp, training=False):
+            if not training:
+                return inp
+            sd = ops.std(inp)
+            return inp + sigma * sd * keras.random.normal(ops.shape(inp), dtype=inp.dtype)
+    return FeatureNoise()(x)
+
+
 class EmbedderYamnetTrunkDepth12(_trunk.EmbedderYamnetTrunk):
     embeddername = "yamnet_trunk_depth12"
     n_embeddings = int(np.prod(_TRUNK_SHAPE))  # 12288, same width as yamnet_trunk
@@ -73,11 +88,16 @@ class EmbedderYamnetTrunkDepth12(_trunk.EmbedderYamnetTrunk):
 
         inp = keras.layers.Input(shape=(self.n_embeddings,), dtype=tf.float32, name='input')
         n_ctx = getattr(self, 'n_ctx', 1)
+        sig = float(os.environ.get('TRUNK_NOISE', 0))   # ps-noise
         if n_ctx == 1:
             x = keras.layers.Reshape(_TRUNK_SHAPE)(inp)
+            if sig:
+                x = _noise(x, sig)
             x = tail(x)
         else:
             x = keras.layers.Reshape((n_ctx,) + _TRUNK_SHAPE)(inp)
+            if sig:
+                x = _noise(x, sig)
             x = keras.layers.TimeDistributed(tail)(x)
             x = keras.layers.Flatten()(x)
         x = keras.layers.Dropout(dropout)(x)
