@@ -1,0 +1,7 @@
+# HANDOFF (batch 19; 2 of 4 experiments logged: ps-bntrain-repeat, ps-bntrain-e60; ps-bntrain-featdrop in flight = 3rd; 1 more to choose)
+- Job: pid 3902623, log .local/worktrees/ps-bntrain-featdrop/train.log (30-epoch CV, ~25 min/fold, 8 folds; started 06:39 10-01, ETA ~10:00).
+- Resume: `tools/watch_job.sh --adopt 3902623`, then one `tools/watch_job.sh` Monitor. If still running, report progress and park again.
+- When finished: `source tools/python_path.sh; "$PY" tools/results.py v4-ft-ps .local/worktrees/ps-bntrain-featdrop/models/ps-bntrain-featdrop` (also compare ps-bntrain 0.479, ps-bntrain-repeat 0.469), paste into notes.md Results + Conclusion, remove this HANDOFF, then finish_experiment.sh ps-bntrain-featdrop (--model .local/worktrees/ps-bntrain-featdrop/models/ps-bntrain-featdrop --baseline-model v4-ft-ps).
+- If it died: rerun (resumes finished folds), use $PY from tools/python_path.sh (bare python lacks tensorflow):
+  `tools/launch_job.sh .local/worktrees/ps-bntrain-featdrop/train.log -- bash -c "cd .local/worktrees/ps-bntrain-featdrop && BUZZDETECT_CHUNK_FRAMES=48 TRUNK_FP16=1 TRUNK_LR_HEAD=2e-4 TRUNK_LR_BACKBONE=1e-5 TRUNK_BATCH=1024 TRUNK_BN_TRAIN=1 TRUNK_SPDROP=0.2 exec $PY 03_train/main.py --name ps-bntrain-featdrop --set medium --embedder yamnet_trunk_pitchshift_depth12 --translation general --epochs 30 -y --verbose"`
+- 4th experiment idea: ps-bntrain-gmp (TRUNK_BN_TRAIN=1 TRUNK_GMP=1; the knob is already in this worktree's embedder.py; copy the worktree for a new slug). Queue otherwise empty.
