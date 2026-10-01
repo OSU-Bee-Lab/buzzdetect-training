@@ -1,7 +1,0 @@
-# HANDOFF (batch 19; 1 of 4 experiments logged: ps-bntrain-repeat; 3 remain: ps-bntrain-e60 (in flight) + 2 more to choose)
-- Job: pid 3661138, log .local/worktrees/ps-bntrain-e60/train.log (60-epoch CV, ~25 min/fold, 8 folds; started 04:29 10-01).
-- Resume: `tools/watch_job.sh --adopt 3661138`, then one `tools/watch_job.sh` Monitor. If still running, report progress and stop (park again).
-- When finished: `source tools/python_path.sh; "$PY" tools/results.py v4-ft-ps-e60 .local/worktrees/ps-bntrain-e60/models/ps-bntrain-e60` (control v4-ft-ps-e60 = 0.468; also compare ps-bntrain-repeat/ps-bntrain at 30 ep), paste into notes.md Results + Conclusion, then finish_experiment.sh (--model .local/worktrees/ps-bntrain-e60/models/ps-bntrain-e60 --baseline-model v4-ft-ps-e60). Remove this HANDOFF first.
-- If it died: rerun in worktree (resumes finished folds):
-  `BUZZDETECT_CHUNK_FRAMES=48 TRUNK_FP16=1 TRUNK_LR_HEAD=2e-4 TRUNK_LR_BACKBONE=1e-5 TRUNK_BATCH=1024 TRUNK_BN_TRAIN=1 tools/launch_job.sh train.log -- 03_train/main.py --name ps-bntrain-e60 --set medium --embedder yamnet_trunk_pitchshift_depth12 --translation general --epochs 60 -y --verbose`
-- Notes: IDEAS queue is empty; I picked experiments from ps-bntrain's follow-ups. Worktree BN knob = TRUNK_BN_TRAIN in a copied embedders/yamnet_trunk_depth12 (not in main). Ideas for the last two: ps-bntrain + ps-gmp/other lever combos, or 1_114 (trill) investigation of why BN hurts it.
