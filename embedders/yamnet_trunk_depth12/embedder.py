@@ -67,7 +67,8 @@ class EmbedderYamnetTrunkDepth12(_trunk.EmbedderYamnetTrunk):
         train_backbone = lr_backbone > 0
         for layer in tail.layers:
             if isinstance(layer, keras.layers.BatchNormalization):
-                layer.trainable = False          # keep AudioSet moving stats, all three blocks
+                # keep AudioSet moving stats, all three blocks (ps-bntrain: adapt them)
+                layer.trainable = bool(os.environ.get('TRUNK_BN_TRAIN')) and train_backbone
             else:
                 layer.trainable = train_backbone
 
