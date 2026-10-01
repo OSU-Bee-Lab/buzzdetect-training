@@ -16,7 +16,11 @@ center get 0), and the graph goes through the deploy passes (BN fold, Conv+Relu
 fuse) and the same io rename as 04_deploy / bench_arch. Parity: ONNX vs the
 Keras waveform student on the fixture, max |diff| must be < 1e-4.
 
-Writes `05_distill/data/models/<name>/{model.onnx,config_model.json}`, a
+Also writes `model.fp16.onnx` beside it by default (04_deploy's `write_fp16`: front end in fp32, trunk and
+head in fp16, checked against the fp32 graph; buzzdetect loads it under BUZZDETECT_GPU_FP16=1 on CoreML).
+`--no-fp16` skips it and removes a stale one.
+
+Writes `05_distill/data/models/<name>/{model.onnx,model.fp16.onnx,config_model.json}`, a
 buzzdetect-format model dir (never into buzzdetect's engine/models).
 """
 import argparse
@@ -129,6 +133,7 @@ def do_export(a):
     onnx.save(m, os.path.join(d, 'model.onnx'))
     os.remove(raw)
     print(f'passes: folded {n_folded}, fused {n_fused}', flush=True)
+    write_fp16_sibling(d, a.no_fp16)
 
     cfg = json.load(open(ENGINE_CFG))
     if classes:                                  # a class-subset student: the engine config lists only its outputs
@@ -191,6 +196,18 @@ def check_framing(onnx_path, cfg):
     print(f'framing OK: graph rows == engine frame count at {len(lengths)} lengths (samples_min {mn})', flush=True)
 
 
+def write_fp16_sibling(d, skip):
+    """model.fp16.onnx from the model.onnx just written; a stale sibling (older export) never survives."""
+    path = os.path.join(d, 'model.fp16.onnx')
+    if os.path.exists(path):
+        os.remove(path)
+    if skip:
+        return
+    import export_onnx
+    ok = export_onnx.write_fp16(os.path.join(d, 'model.onnx'), path, export_onnx.FIXED_SECONDS * 16000)
+    print(f'fp16 sibling: {"wrote " + path if ok else "none (no candidate passed; model.onnx only)"}', flush=True)
+
+
 def parity(wav, onnx_path, seconds, buzz):
     import librosa
     import onnxruntime as ort
@@ -231,6 +248,7 @@ if __name__ == '__main__':
     ap.add_argument('--init-only', action='store_true')
     ap.add_argument('--alpha', type=float, default=0.5)
     ap.add_argument('--no-parity', action='store_true')
+    ap.add_argument('--no-fp16', action='store_true', help='skip model.fp16.onnx')
     ap.add_argument('--parity-seconds', type=float, default=120)
     ap.add_argument('--repeats', type=int, default=15)
     a = ap.parse_args()
