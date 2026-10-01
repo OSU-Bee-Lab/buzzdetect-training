@@ -1,6 +1,0 @@
-# HANDOFF (batch 19; 3 of 4 experiments logged: ps-bntrain-repeat, ps-bntrain-e60, ps-bntrain-featdrop; ps-bntrain-gmp in flight = 4th, last)
-- Job: pid 4009317, log .local/worktrees/ps-bntrain-gmp/train.log (30-epoch CV, ~25 min/fold, 8 folds; started 07:50 10-01, ETA ~11:15).
-- Resume: `tools/watch_job.sh --adopt 4009317`, then one `tools/watch_job.sh` Monitor. If still running, report progress and park again.
-- When finished: `source tools/python_path.sh; "$PY" tools/results.py v4-ft-ps .local/worktrees/ps-bntrain-gmp/models/ps-bntrain-gmp` (also compare ps-bntrain 0.479, ps-bntrain-repeat 0.469, ps-gmp 0.453), append Results + Conclusion to notes.md, rm HANDOFF.md, then finish_experiment.sh ps-bntrain-gmp --summary ... --model ... --baseline-model v4-ft-ps --hypothesis ... --trust clean --conclusion ... (all flags required). Then loop_signal.sh done "ps-bntrain-repeat ps-bntrain-e60 ps-bntrain-featdrop ps-bntrain-gmp".
-- If it died: rerun (resumes folds):
-  tools/launch_job.sh .local/worktrees/ps-bntrain-gmp/train.log -- bash -c "cd .local/worktrees/ps-bntrain-gmp && BUZZDETECT_CHUNK_FRAMES=48 TRUNK_FP16=1 TRUNK_LR_HEAD=2e-4 TRUNK_LR_BACKBONE=1e-5 TRUNK_BATCH=1024 TRUNK_BN_TRAIN=1 TRUNK_GMP=1 exec $PY 03_train/main.py --name ps-bntrain-gmp --set medium --embedder yamnet_trunk_pitchshift_depth12 --translation general --epochs 30 -y --verbose"
