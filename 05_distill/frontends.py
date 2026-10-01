@@ -28,6 +28,12 @@ SR = 16000
 HOP = 160                     # 10 ms: YAMNet's hop, the default
 PATCH_SAMPLES = 15360         # one 0.96 s frame of the deployed graph
 LOG_OFFSET = 0.001
+# Fewest samples the deployed graph treats as one frame (YAMNet's: a patch plus its 25 ms window's overhang).
+# A front end whose own need is smaller is padded up to this anyway. The engine counts frames as
+# 1 + ceil((n - samples_min) * float32(1/hop)), so with 15360 a whole-frame chunk (n = F * 15360) sits
+# on an exact multiple of the hop, where that float32 rounding adds a frame of pure padding (a +1.25
+# logit at every chunk boundary on fast_v1, 2026-10-01). Above the window overhang no chunk is ever there.
+ENGINE_MIN_SAMPLES = 15600
 
 
 @dataclass(frozen=True)
@@ -69,6 +75,10 @@ class Frontend:
     @property
     def max_window(self):
         return max(c.window for c in self.channels)
+
+    @property
+    def min_samples(self):
+        return max(PATCH_SAMPLES - self.hop + self.max_window, ENGINE_MIN_SAMPLES)
 
 
 def _ch(ms, bands, fmin, fmax, fft=0):
@@ -174,7 +184,7 @@ def make_features_layer(fe):
     class FrontendFeatures(layers.Layer):
         def __init__(self, **kw):
             super().__init__(**kw)
-            self.min_samples = PATCH_SAMPLES - fe.hop + fe.max_window
+            self.min_samples = fe.min_samples
 
         def _pad(self, waveform):
             # features_lib.pad_waveform's arithmetic in integers: its float32 seconds

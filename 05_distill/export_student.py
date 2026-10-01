@@ -134,8 +134,9 @@ def do_export(a):
     if classes:                                  # a class-subset student: the engine config lists only its outputs
         cfg['classes'] = list(classes)
         cfg['center_stats'] = {k: v for k, v in cfg.get('center_stats', {}).items() if k in classes}
-    # one patch needs 15360 samples plus the STFT window's tail (25 ms window: 15600)
-    cfg['samples_min'] = 15600 if fe_name == 'yamnet' else 15360 - st.fes.get(fe_name).hop + st.fes.get(fe_name).max_window
+    # one patch needs 15360 samples plus the STFT window's tail (25 ms window: 15600); never below
+    # frontends.ENGINE_MIN_SAMPLES, or whole-frame chunks land on the engine's float32 overshoot
+    cfg['samples_min'] = 15600 if fe_name == 'yamnet' else st.fes.get(fe_name).min_samples
     cfg['metadata'] = {'embeddername': 'distilled_student', 'set': D.spec().set,
                        'trained_date': __import__('datetime').date.today().isoformat(),
                        'modelname_internal': a.name, 'branch': git_branch(),
@@ -144,10 +145,50 @@ def do_export(a):
                        'note': 'distilled single-pass student; activation_centers folded into the head bias'}
     json.dump(cfg, open(os.path.join(d, 'config_model.json'), 'w'), indent=2)
     print(f'wrote {d}', flush=True)
+    check_framing(os.path.join(d, 'model.onnx'), cfg)
 
     if not a.no_parity:
         parity(wav, os.path.join(d, 'model.onnx'), a.parity_seconds,
                classes.index('ins_buzz') if classes else D.spec().buzz)
+
+
+def engine_frames(n, hop, samples_min):
+    """buzzdetect's OnnxModel.n_frames, verbatim: float32 multiply by the hop's reciprocal."""
+    if n <= 0:
+        return 0
+    return 1 + int(np.ceil(np.float32(max(0, n - samples_min)) * (np.float32(1.0) / np.float32(hop))))
+
+
+def check_framing(onnx_path, cfg):
+    """Fail unless the graph returns as many frames as the engine will keep, at every length a chunk can have.
+
+    The engine zero-pads each chunk to a fixed session and keeps engine_frames(n) rows. If it expects one more
+    than the graph returns for n real samples, the extra row is computed from padding alone: a silence frame
+    (a buzz-positive logit) stamped one frame late, which was fast_v1's false positive on every chunk boundary.
+    Whole-frame chunks (what the analyzer cuts) and ragged lengths just either side of the first frame and of
+    the hop multiples are checked; lengths where float32(k*hop)/hop rounds up past k are skipped because only
+    a graph that reproduces that overshoot could match, and they are not whole-frame chunks.
+    """
+    import onnxruntime as ort
+    hop, mn = cfg['samples_hop'], cfg['samples_min']
+    sess = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
+    name = sess.get_inputs()[0].name
+    recip = np.float32(1.0) / np.float32(hop)
+    lengths = {F * hop for F in (1, 2, 3, 4, 5, 6, 8, 21, 104, 208)}
+    lengths |= {mn - 1, mn, mn + 1, mn + 137}
+    for k in range(1, 13):
+        if int(np.ceil(np.float32(k * hop) * recip)) == k:      # exact there; the overshoot k are skipped
+            lengths |= {mn + k * hop - 1, mn + k * hop, mn + k * hop + 1}
+    bad = []
+    for n in sorted(lengths):
+        got = sess.run(None, {name: np.zeros(n, np.float32)})[0].shape[0]
+        want = engine_frames(n, hop, mn)
+        if got != want:
+            bad.append((n, got, want))
+    if bad:
+        raise SystemExit('framing mismatch (n, graph rows, engine expects): '
+                         + '; '.join(map(str, bad[:6])) + (f' (+{len(bad) - 6} more)' if len(bad) > 6 else ''))
+    print(f'framing OK: graph rows == engine frame count at {len(lengths)} lengths (samples_min {mn})', flush=True)
 
 
 def parity(wav, onnx_path, seconds, buzz):
@@ -183,18 +224,24 @@ def do_time(a):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('phase', choices=['export', 'time'])
+    ap.add_argument('phase', choices=['export', 'time', 'check'])
+    ap.add_argument('--dir', help='check: a model dir (model.onnx + config_model.json), e.g. a deployed one')
     ap.add_argument('--run')
-    ap.add_argument('--name', required=True)
+    ap.add_argument('--name')
     ap.add_argument('--init-only', action='store_true')
     ap.add_argument('--alpha', type=float, default=0.5)
     ap.add_argument('--no-parity', action='store_true')
     ap.add_argument('--parity-seconds', type=float, default=120)
     ap.add_argument('--repeats', type=int, default=15)
     a = ap.parse_args()
+    if a.phase in ('export', 'time') and not a.name:
+        ap.error('--name')
     if a.phase == 'export':
         if not a.run and not a.init_only:
             ap.error('--run or --init-only')
         do_export(a)
+    elif a.phase == 'check':
+        check_framing(os.path.join(a.dir, 'model.onnx'),
+                      json.load(open(os.path.join(a.dir, 'config_model.json'))))
     else:
         do_time(a)
