@@ -76,6 +76,18 @@ class EmbedderYamnetTrunkDepth12(_trunk.EmbedderYamnetTrunk):
         if n_ctx == 1:
             x = keras.layers.Reshape(_TRUNK_SHAPE)(inp)
             x = tail(x)
+        elif os.environ.get('TRUNK_UNTIED'):
+            # one independently-initialised-from-AudioSet tail per view
+            x = keras.layers.Reshape((n_ctx,) + _TRUNK_SHAPE)(inp)
+            tails = [tail]
+            for i in range(1, n_ctx):
+                t = keras.Model(inputs=(f := self._load_full()).get_layer(_TRUNK_LAYER).output,
+                                outputs=f.get_layer(_GAP_LAYER).output, name=f'{_TAIL_NAME}_v{i}')
+                for layer in t.layers:
+                    layer.trainable = (not isinstance(layer, keras.layers.BatchNormalization)) and train_backbone
+                tails.append(t)
+            views = [tails[i](x[:, i]) for i in range(n_ctx)]
+            x = keras.layers.Concatenate()(views)
         else:
             x = keras.layers.Reshape((n_ctx,) + _TRUNK_SHAPE)(inp)
             x = keras.layers.TimeDistributed(tail)(x)
@@ -90,7 +102,7 @@ class EmbedderYamnetTrunkDepth12(_trunk.EmbedderYamnetTrunk):
         backbone_mult = 1.0 if lr_backbone <= 0 else lr_backbone / lr_head
         model.compile(
             loss=keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.2),
-            optimizer=self._optimizer(lr_head, backbone_mult, tail.trainable_variables),
+            optimizer=self._optimizer(lr_head, backbone_mult, [v for m in (tails if (n_ctx > 1 and os.environ.get('TRUNK_UNTIED')) else [tail]) for v in m.trainable_variables]),
             metrics=['accuracy'],
         )
         return model
