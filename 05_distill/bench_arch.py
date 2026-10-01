@@ -133,7 +133,7 @@ def do_time(seconds, repeats, warmup, names):
     samples_session = mn + hop * frames
     audio = np.random.default_rng(0).uniform(-0.1, 0.1, n).astype(np.float32)
 
-    items = [(r, os.path.join(ENGINE, 'models', r, 'model.onnx')) for r in REFERENCES]
+    items = [(r, os.path.join(D.engine_model_dir(r), 'model.onnx')) for r in REFERENCES]
     items += [(c, os.path.join(OUT, c, 'model.onnx')) for c in names]
     results = {}
     for name, path in items:

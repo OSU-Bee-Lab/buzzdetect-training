@@ -81,7 +81,17 @@ FRONTEND_ONNX = os.path.join(ARCH, 'frontend_only', 'model.onnx')
 # ---- teacher files
 TEACHER_MODEL_DIR = os.path.join(os.environ.get('DISTILL_MODELS_DIR') or os.path.join(MAIN, 'models'), TEACHER)
 # ^ this project's training output (the env override is for tests)
-TEACHER_ENGINE_DIR = os.path.join(ENGINE_MODELS, TEACHER) if ENGINE_MODELS else None
+
+
+def engine_model_dir(name):
+    """`<engine>/models/<name>`, or `<engine>/models/.archive/<name>` once buzzdetect has retired it
+    (it moved yamnet_large_general, v4-ft and others there on 2026-09-30)."""
+    live = os.path.join(ENGINE_MODELS, name)
+    archived = os.path.join(ENGINE_MODELS, '.archive', name)
+    return archived if not os.path.exists(live) and os.path.exists(archived) else live
+
+
+TEACHER_ENGINE_DIR = engine_model_dir(TEACHER) if ENGINE_MODELS else None
 TEACHER_ONNX = os.path.join(TEACHER_ENGINE_DIR, 'model.onnx') if TEACHER_ENGINE_DIR else None
 FIXTURE = os.path.join(ROOT, '04_deploy', 'fixtures', '230808_1208_s89520.flac')
 
