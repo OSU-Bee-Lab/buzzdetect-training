@@ -30,7 +30,10 @@ while [ $# -gt 0 ]; do
   case $1 in
     --summary) summary=$2 ;;
     --commit-also) also+=("$2") ;;
-    --model|--baseline-model|--baseline-name|--hypothesis|--trust|--conclusion) entry+=("$1" "$2") ;;
+    # A model path given relative to the caller's cwd (e.g. a worktree's
+    # models/<name>) must survive the cd to main below; bare names resolve there.
+    --model|--baseline-model) [ -e "$2" ] && entry+=("$1" "$(cd "$2" && pwd)") || entry+=("$1" "$2") ;;
+    --baseline-name|--hypothesis|--trust|--conclusion) entry+=("$1" "$2") ;;
     *) echo "finish_experiment.sh: unknown argument $1" >&2; exit 2 ;;
   esac
   shift 2

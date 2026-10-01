@@ -11,7 +11,9 @@ No TensorFlow: reads folds_sx.csv only, nothing here loads a model.
 """
 
 import argparse
+import glob
 import os
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -43,15 +45,29 @@ def sens_col(df, name):
     return None
 
 
+def _main_checkout():
+    """The main checkout's root, from a worktree or from main itself."""
+    common = subprocess.run(['git', 'rev-parse', '--git-common-dir'], cwd=cfg.ROOT,
+                            capture_output=True, text=True).stdout.strip()
+    return os.path.dirname(os.path.abspath(os.path.join(cfg.ROOT, common))) if common else cfg.ROOT
+
+
 def resolve_dir_model(name):
-    """A model is usually a bare name under this repo's models/, but an
-    experiment's model lives under a worktree's own models/ dir (not
-    symlinked from main — see setup_worktree.sh), so also accept a direct
-    path to a model dir for cross-worktree comparisons."""
-    direct = os.path.join(name, FNAME_SX_SUMMARY)
-    if os.path.exists(direct):
+    """A model is a direct path to a model dir, or a bare name. An
+    experiment's model lives under its worktree's own models/ (not symlinked
+    from main — see setup_worktree.sh), while matched controls live in main's,
+    so a bare name is looked up in this checkout's models/, then main's, then
+    any one worktree's. That makes both names work from main and a worktree."""
+    if os.path.exists(os.path.join(name, FNAME_SX_SUMMARY)):
         return name
-    return os.path.join(cfg.DIR_MODELS, name)
+    local = os.path.join(cfg.DIR_MODELS, name)
+    if os.path.exists(local):
+        return local
+    main = _main_checkout()
+    candidates = [os.path.join(main, 'models', name)]
+    if not os.path.exists(candidates[0]):
+        candidates = glob.glob(os.path.join(main, '.local', 'worktrees', '*', 'models', name))
+    return candidates[0] if len(candidates) == 1 else local
 
 
 def _read_sx(name, fpr):

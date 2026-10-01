@@ -173,6 +173,9 @@ Leave the shipped model untrained. `folds_sx.csv` comes entirely from the rotati
 python tools/results.py <matched control model> <experiment model>
 ```
 
+Bare model names work from main or the worktree: a name is looked up in this
+checkout's `models/`, then main's, then the worktrees'. A path works too.
+
 It prints `notes.md`'s Results section: the per-fold table with each delta's
 eval-sampling SD, the headline ± SD, the inclusive figure, and the tier deltas.
 `tools/compare_folds.py` and `tools/eval_sampling_sd.py` are its parts, if you
