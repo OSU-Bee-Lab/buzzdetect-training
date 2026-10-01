@@ -36,6 +36,34 @@ _GAP_LAYER = 'global_average_pooling2d'
 _TAIL_NAME = 'yamnet_tail_l12_13_14'
 
 
+def _cutout(x, p, n_ctx):
+    """ps-cutout: with prob p per sample and view, zero one random time row
+    (axis -3, 6 rows) or one random frequency column (axis -2, 4 cols) of the
+    layer-11 map. Training only."""
+    import keras
+    from keras import ops
+
+    class FeatureCutout(keras.layers.Layer):
+        def call(self, inp, training=False):
+            if not training:
+                return inp
+            shp = ops.shape(inp)
+            lead = (shp[0],) + ((n_ctx,) if n_ctx > 1 else ())
+            on = ops.cast(keras.random.uniform(lead) < p, inp.dtype)
+            axis_t = ops.cast(keras.random.uniform(lead) < 0.5, inp.dtype)
+            row = keras.random.randint(lead, 0, _TRUNK_SHAPE[0])
+            col = keras.random.randint(lead, 0, _TRUNK_SHAPE[1])
+            ri = ops.arange(_TRUNK_SHAPE[0])
+            ci = ops.arange(_TRUNK_SHAPE[1])
+            hit_r = ops.cast(ops.equal(ri, ops.expand_dims(row, -1)), inp.dtype)   # lead+(6,)
+            hit_c = ops.cast(ops.equal(ci, ops.expand_dims(col, -1)), inp.dtype)   # lead+(4,)
+            at = ops.expand_dims(axis_t, -1)
+            m = at[..., None] * hit_r[..., :, None] + (1 - at)[..., None] * hit_c[..., None, :]
+            m = ops.expand_dims(on, -1)[..., None] * m                               # lead+(6,4)
+            return inp * (1 - ops.expand_dims(m, -1))
+    return FeatureCutout()(x)
+
+
 class EmbedderYamnetTrunkDepth12(_trunk.EmbedderYamnetTrunk):
     embeddername = "yamnet_trunk_depth12"
     n_embeddings = int(np.prod(_TRUNK_SHAPE))  # 12288, same width as yamnet_trunk
@@ -73,11 +101,16 @@ class EmbedderYamnetTrunkDepth12(_trunk.EmbedderYamnetTrunk):
 
         inp = keras.layers.Input(shape=(self.n_embeddings,), dtype=tf.float32, name='input')
         n_ctx = getattr(self, 'n_ctx', 1)
+        p_cut = float(os.environ.get('TRUNK_CUTOUT', 0))   # ps-cutout
         if n_ctx == 1:
             x = keras.layers.Reshape(_TRUNK_SHAPE)(inp)
+            if p_cut:
+                x = _cutout(x, p_cut, 1)
             x = tail(x)
         else:
             x = keras.layers.Reshape((n_ctx,) + _TRUNK_SHAPE)(inp)
+            if p_cut:
+                x = _cutout(x, p_cut, n_ctx)
             x = keras.layers.TimeDistributed(tail)(x)
             x = keras.layers.Flatten()(x)
         x = keras.layers.Dropout(dropout)(x)
