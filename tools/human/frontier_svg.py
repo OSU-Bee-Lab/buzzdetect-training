@@ -30,6 +30,8 @@ def load():
         r = json.loads(line)
         if r.get('rung') != 'B' or r.get('seed') != 1 or not r.get('x_yamnet200'):
             continue
+        if r.get('schedule', 'cosine') != 'cosine':     # WSD branches belong to `ladder_record.py wsd`
+            continue
         if r['headline'] != r['headline']:
             continue
         if r.get('init') == '' and r['name'].endswith('_stream'):

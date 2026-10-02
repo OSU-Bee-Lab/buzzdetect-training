@@ -5,6 +5,7 @@ the variant-qualification decision.
     ladder_record.py table
     ladder_record.py decide          # prints the qualifying rung-D variant arch key, or 'none'
     ladder_record.py gate            # exit 0 if rung C beat B by more than the A spread, else 1
+    ladder_record.py wsd --name <trunk>   # step-budget curve: a WSD trunk's decayed branches (+ cosine reference)
 
 Reads `05_distill/data/runs/<name>/curve.json` (final val flips vs the teacher on
 the V pool), `05_distill/data/eval/<name>/folds_sx.csv` (eval_folds.py) and, if
@@ -55,8 +56,16 @@ def rows():
     return [json.loads(l) for l in open(LADDER)] if os.path.exists(LADDER) else []
 
 
+def is_cosine(r):
+    """Rows from before the schedule field are cosine. WSD branches stay out of every ladder/frontier
+    comparison: they are points on a step-budget curve (`wsd`), not alternatives to a 7k cosine run."""
+    return r.get('schedule', 'cosine') == 'cosine'
+
+
 def is_ladder(r):
     """The alpha-0.5 ladder: in-memory rungs A-C, streamed rung D."""
+    if not is_cosine(r):
+        return False
     arch = r.get('arch', 'a0.50')
     loader = r.get('loader', 'mem')
     return arch == 'a0.50' and (loader == 'mem' or r['rung'] == 'D') and r.get('frontend', 'yamnet') == 'yamnet' \
@@ -82,8 +91,12 @@ def record(a):
     cur = json.load(open(os.path.join(LOCAL, 'runs', a.name, 'curve.json')))
     v = [x for x in cur['val'] if x.get('final')][-1]
     head, per, tiers, incl = sx(os.path.join(LOCAL, 'eval', a.name, 'folds_sx.csv'))
+    args = cur.get('args', {})
     row = {'rung': a.rung, 'seed': a.seed, 'steps': a.steps, 'name': a.name, 'arch': a.arch, 'loader': a.loader,
            'frontend': a.frontend, 'init': a.init, 'classes': a.classes, 'lam': a.lam,
+           'schedule': args.get('schedule', 'cosine'), 'lr': args.get('lr'), 'warmup': args.get('warmup', 0),
+           'decay_from': args.get('decay_from', ''),
+           'passes': round(cur['passes'], 3) if 'passes' in cur else None,
            'val_frames': v['frames'], 'buzz_teacher_pos': v['buzz_teacher'], 'buzz_student_pos': v['buzz_student'],
            'buzz_gained': v['buzz_gained'], 'buzz_lost': v['buzz_lost'],
            'lost_pct': round(100 * v['buzz_lost'] / max(1, v['buzz_teacher']), 2),
@@ -103,7 +116,8 @@ def table(a):
     for r in rs:
         tag = f'{r["rung"]}/{r.get("arch", "a0.50")}/s{r["seed"]}' + ('/stream' if r.get('loader') == 'stream' else '') \
             + (f'/{r["frontend"]}' if r.get('frontend', 'yamnet') != 'yamnet' else '') + ('/' + r['init'] if r.get('init') else '') \
-            + (f'/c{len(r["classes"].split(","))}' if r.get('classes') else '') + (f'/lam{r["lam"]:g}' if r.get('lam') not in (None, 0.1) else '')
+            + (f'/c{len(r["classes"].split(","))}' if r.get('classes') else '') + (f'/lam{r["lam"]:g}' if r.get('lam') not in (None, 0.1) else '') \
+            + ('' if is_cosine(r) else '/' + r['schedule'])
         sp = f'{r.get("x_yamnet20", float("nan")):.2f}/{r.get("x_yamnet200", float("nan")):.2f}'
         print(f'{tag:22s} {r["steps"]:>5}  {r["lost_pct"]:>11.1f}  {r["gained_pct"]:>6.1f}  | '
               f'{r["other_gained"]:>5}/{r["other_lost"]:<5} | {r["mae_live"]:.3f} | {r["headline"]:.3f}   {r["per_fold"]}  | {sp:>10} | {r["wall_s"] / 60:.0f} min')
@@ -143,7 +157,7 @@ def streamcheck(a):
     """Rung B through the streaming loader must reproduce the in-memory rung B within the A spread."""
     sp = a_spread()
     mem = [r for r in rows() if r['rung'] == 'B' and r.get('arch', 'a0.50') == 'a0.50'
-           and r.get('loader', 'mem') == 'mem' and r['seed'] == 1][0]
+           and r.get('loader', 'mem') == 'mem' and r['seed'] == 1 and is_cosine(r)][0]
     st_ = [r for r in rows() if r['rung'] == 'B' and r.get('arch', 'a0.50') == 'a0.50' and r.get('loader') == 'stream'][-1]
     d = abs(mem['lost_pct'] - st_['lost_pct'])
     ok = d <= sp
@@ -156,7 +170,7 @@ def frontier(a):
     """Speed / sensitivity of every rung-B run, any front end, sorted by 200 s speed.
     Speed is x YAMNet (GPU, same harness); sensitivity is the ladder headline and % of the baseline's."""
     base = sx(REFS[0][1])[0]
-    rs = [r for r in rows() if r['rung'] == 'B' and r.get('loader', 'mem') == 'mem']
+    rs = [r for r in rows() if r['rung'] == 'B' and r.get('loader', 'mem') == 'mem' and is_cosine(r)]
     rs.sort(key=lambda r: -(r.get('x_yamnet200') or 0))
     print(f'\nrung B, seed-1 runs by 200 s speed (baseline headline {base:.3f}; 50% of it = {base / 2:.3f})')
     print(f'{"run":44s} {"frontend":9s} {"arch":10s} {"init":7s} {"x YAM 20s":>9s} {"x YAM 200s":>10s} '
@@ -167,6 +181,45 @@ def frontier(a):
               f'{r["headline"]:8.3f} {100 * r["headline"] / base:5.0f}% {r["headline_inclusive"]:10.3f} {r["lost_pct"]:6.1f}')
 
 
+def wsd(a):
+    """A WSD trunk's step-budget curve: one line per decayed branch `<trunk><B>` (held-out V readouts from
+    curve.json, headline where it was evaluated), with the cosine run of the same student (`<trunk>` minus
+    `_wsd`, plus --ref names) as reference. dlost = lost% change from the previous branch."""
+    import glob
+    runs = os.path.join(LOCAL, 'runs')
+    base = a.name[:-len('_wsd')] if a.name.endswith('_wsd') else a.name
+    branches = sorted((p for p in glob.glob(os.path.join(runs, a.name + '*'))
+                       if os.path.basename(p)[len(a.name):].isdigit()), key=lambda p: int(p.rsplit('_wsd', 1)[1]))
+    print(f'\nstep-budget curve of {a.name} (V pool vs teacher; headline = {COL} @0.005 where evaluated)')
+    print(f'{"run":58s} {"steps":>6s} {"passes":>6s} {"loss":>6s} {"mae":>6s} {"lost%":>6s} {"dlost":>6s} '
+          f'{"gain%":>6s} {"headline":>8s}')
+    prev = None
+    refs = [base] + [r for r in (a.ref or '').split(',') if r]
+    for i, p in enumerate([os.path.join(runs, r) for r in refs] + branches):
+        n = os.path.basename(p)
+        if not os.path.exists(os.path.join(p, 'TRAIN_DONE')):
+            if i >= len(refs):
+                print(f'{n:58s} (not finished)')
+            continue
+        cur = json.load(open(os.path.join(p, 'curve.json')))
+        v = [x for x in cur['val'] if x.get('final')][-1]
+        lost = 100 * v['buzz_lost'] / max(1, v['buzz_teacher'])
+        loss = sum(t['loss'] for t in cur['train'][-5:]) / max(1, len(cur['train'][-5:]))
+        ev = os.path.join(LOCAL, 'eval', n, 'folds_sx.csv')
+        head = f'{sx(ev)[0]:8.3f}' if os.path.exists(ev) else f'{"-":>8s}'
+        ref = i < len(refs)
+        d = '' if ref or prev is None else f'{lost - prev:+6.2f}'
+        sched = cur['args'].get('schedule', 'cosine')
+        print(f'{(n + (" (" + sched + " ref)" if ref else "")):58s} {cur["args"]["steps"]:>6d} '
+              f'{cur.get("passes", float("nan")):6.2f} {loss:6.3f} {v["mae_live"]:6.3f} {lost:6.2f} {d:>6s} '
+              f'{100 * v["buzz_gained"] / max(1, v["buzz_teacher"]):6.2f} {head}')
+        if not ref:
+            prev = lost
+    sp = a_spread()
+    if sp is not None:
+        print(f'noise: rung-A repeat spread of lost% = {sp:.2f}; headline seed noise ~0.01-0.02')
+
+
 def decide(a):
     """Which rung-D variant (if any) qualifies: within the A spread of a0.50 on lost% (rung B, seed 1)
     AND headline within HEADLINE_TOL of it; the faster (GPU, 200 s) if several."""
@@ -174,7 +227,7 @@ def decide(a):
     b = [r for r in rows() if is_ladder(r) and r['rung'] == 'B' and r['seed'] == 1][0]
     ok = []
     for r in rows():
-        if r['rung'] == 'B' and r.get('arch', 'a0.50') != 'a0.50' and r.get('loader', 'mem') == 'mem':
+        if r['rung'] == 'B' and r.get('arch', 'a0.50') != 'a0.50' and r.get('loader', 'mem') == 'mem' and is_cosine(r):
             good = (r['lost_pct'] - b['lost_pct'] <= sp) and (r['headline'] >= b['headline'] - HEADLINE_TOL)
             print(f'[decide] {r["arch"]}: lost% {r["lost_pct"]} vs {b["lost_pct"]} (spread {sp:.2f}), headline '
                   f'{r["headline"]} vs {b["headline"]} (tol {HEADLINE_TOL}), gpu200 {r.get("gpu200")}: '
@@ -186,7 +239,8 @@ def decide(a):
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
-    ap.add_argument('phase', choices=['record', 'table', 'decide', 'gate', 'streamcheck', 'frontier'])
+    ap.add_argument('phase', choices=['record', 'table', 'decide', 'gate', 'streamcheck', 'frontier', 'wsd'])
+    ap.add_argument('--ref', help='wsd: extra comma-separated run names to show as references (e.g. a 28k cosine run)')
     ap.add_argument('--rung'), ap.add_argument('--seed', type=int), ap.add_argument('--steps', type=int)
     ap.add_argument('--name'), ap.add_argument('--wall', type=float, default=0)
     ap.add_argument('--arch', default='a0.50'), ap.add_argument('--loader', default='mem')
@@ -196,4 +250,4 @@ if __name__ == '__main__':
     ap.add_argument('--lam', type=float, default=0.1, help='code-regression loss weight the run used')
     a = ap.parse_args()
     {'record': record, 'table': table, 'decide': decide, 'gate': gate,
-     'streamcheck': streamcheck, 'frontier': frontier}[a.phase](a)
+     'streamcheck': streamcheck, 'frontier': frontier, 'wsd': wsd}[a.phase](a)

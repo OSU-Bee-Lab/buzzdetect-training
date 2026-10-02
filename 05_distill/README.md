@@ -38,6 +38,40 @@ Names carry the choice (`..._c-buzz-rain-human`, `..._lam0`), the ladder rows re
 consumer copes with a class list other than the teacher's before deploying one.
 Stage list and the stage-to-script map are in `main.py`'s docstring.
 
+**Step budget (warmup-stable-decay).** Every run so far is 7,000 steps of cosine decay, and cosine ties the
+schedule to the budget, so one run says nothing about a different budget. `--wsd` gives the whole
+steps-versus-quality curve for about the cost of the longest budget:
+
+```bash
+main.py --rung B --runs "yamnet:a0.25:select:classes=ins_buzz+ambient_rain+human" --wsd 7000,14000,28000,70000
+main.py ... --wsd 1p,2p,4p,10p          # budgets in passes over the rung (plan frame count / --batch)
+ladder_record.py wsd --name fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd [--ref <cosine run>,...]
+```
+
+- One **trunk** `<name>_wsd` trains at a constant `--lr` after a linear `--warmup` (300 steps). For each
+  budget B it keeps its checkpoint at `s = B (1 - --wsd-decay)` in `runs/<trunk>/branches/s<s>.npz`.
+- One **branch** `<name>_wsd<B>` per budget starts from that checkpoint (weights, BN statistics, Adam slots,
+  the curve so far) and decays the rate to 0 over the last `--wsd-decay` share (0.15) of B, shaped
+  1 - sqrt. **B is the total step count**, so `wsd7000` is a 7,000-step model, comparable to a 7k cosine run.
+- Branches are ordinary runs: export, eval, probe, speed and record work unchanged. `--wsd-eval 28000,70000`
+  limits those costly stages to some budgets; every branch still has the cheap V readouts (`mae_live`,
+  buzz lost/gained) in its `curve.json`.
+- Stages interleave (trunk to the first branch point, that branch, trunk on), so early points arrive early.
+  `--wsd-stop <lost%>` ends the trunk once a branch improves V buzz lost% on the one before by less than that
+  (1.3 = the rung-A repeat spread); off by default, since the first job is to see the whole curve.
+- A finished trunk rerun with a larger last budget **extends** from its last checkpoint (its `--steps` is a
+  horizon, not part of the schedule). Everything resumes like any run.
+- Ladder rows carry `schedule`, `lr`, `warmup`, `decay_from` and `passes`. WSD rows are left out of
+  `table`'s ladder levels, `frontier`, `decide`, `gate` and `tools/human/frontier_*`: they are points on a
+  curve, not alternatives. A branch's `wall_s` is its decay only; its real cost includes the trunk up to `s`.
+- `--passes X` sets a cosine run's budget in passes. Passes come from the plan's nominal frame count;
+  training prints, and `curve.json` records, the real `passes` over the packed rung.
+
+Choices, open to revision on evidence: the stable rate is the old cosine peak (1e-3) unless `lr=` is on the
+run spec (`..._lr2e-3`); decay 15% of the budget; Adam state carried into the branch, not reset.
+Before trusting a curve, check that a `wsd<N>` branch lands near the N-step cosine run of the same student
+on `mae_live` and lost%; if clearly worse, the stable rate is wrong.
+
 ## A new teacher
 
 1. Train and deploy the teacher the usual way (`03_train`, `04_deploy`): it needs `models/<name>/`
@@ -93,11 +127,11 @@ Long ones go through `tools/launch_job.sh`; everything reads the teacher from `D
 | `main.py` | train | the chain above |
 | `plan.py`, `teacher_onnx.py`, `cache.py`, `cache_fe.py` | onnx venv | slices and rungs; teacher graph; teacher targets (+ YAMNet mel); other front ends' mel |
 | `shards.py pack --rung D` | train | streaming shards for rung D |
-| `distill_train.py` | train | trains one student; `--rung --steps --name --arch --frontend --init --loader`; resumable |
+| `distill_train.py` | train | trains one student; `--rung --steps --name --arch --frontend --init --loader`, `--schedule wsd` (trunk / `--decay-from` branch); resumable |
 | `student.py`, `student_init.py`, `frontends.py` | train | builder, YAMNet channel-selection init (+ layer-wise refit), front-end registry |
 | `export_student.py export` / `time` | train / engine venv | ONNX (plus `model.fp16.onnx`; `--no-fp16` skips) with the teacher's centers folded in, parity vs Keras 1e-4; speed vs YAMNet |
 | `eval_folds.py run` | train (+ engine venv) | headline `sensitivity_exclquiet` at fpr 0.005, mean over the 5 rotating folds (`03_train/sx.py`) |
-| `ladder_record.py record/table/frontier` | train | one jsonl row per run; tables |
+| `ladder_record.py record/table/frontier/wsd` | train | one jsonl row per run; tables; a WSD step-budget curve |
 | `deploy_student.py <run>` | train | copy into buzzdetect: model.onnx, config_model.json, folds_sx.csv, README card |
 | `migrate_layout.py` | any | one-time move from the single-teacher layout (dry run by default) |
 | `bench_arch.py`, `band_profile.py`, `check_cache_align.py` | | speed benchmark, band statistics, mel alignment check |
@@ -141,7 +175,7 @@ That is why the live work is the front end: **FRONTENDS.md**.
 
 ```bash
 conda run -n buzzdetect-train python 05_distill/test_distill.py            # layout, fingerprints, shared lookups, migration, main.py stages
-conda run -n buzzdetect-train python 05_distill/test_distill.py --train    # + checkpoint/resume on CPU (~2 min)
+conda run -n buzzdetect-train python 05_distill/test_distill.py --train    # + checkpoint/resume and WSD trunk/branch on CPU (minutes)
 ```
 
 They run against a scratch tree through `DISTILL_CACHE_ROOT`, `DISTILL_LOCAL_ROOT`, `DISTILL_MODELS_DIR`

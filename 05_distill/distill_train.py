@@ -23,6 +23,15 @@ training mel, head and aux map ridge-fit to the targets so step 0 already tracks
 the teacher. Loss = Huber(logits; classes 0 and 14 weight 0) + lam * MSE(aux(code),
 standardised teacher code). Adam, cosine decay, fixed --steps, batch 512, fp32.
 
+Warmup-stable-decay (`--schedule wsd`), for step-budget curves (README.md, "Step budget"):
+  trunk   --schedule wsd --steps S --branch-at s1,s2,...[--stop-at s_k]
+          linear warmup over --warmup steps, then constant --lr. At every --branch-at step the
+          checkpoint is also kept as runs/<name>/branches/s<step>.npz; --stop-at exits 0 there (main.py
+          runs the trunk in segments). Rerunning a finished trunk with a larger --steps extends it.
+  branch  --schedule wsd --decay-from <trunk>:<s> --steps B
+          starts from that branch checkpoint (weights, BN statistics, Adam slots, curve) and decays the
+          learning rate from --lr to 0 over B - s steps (1 - sqrt shape), so B is the run's total budget.
+
 Every --eval-every steps (and at the end) the model is scored on the validation
 pool vs the teacher's cached logits: detections (logit > 0) gained/lost on
 ins_buzz, the other 12 live classes, mean |logit error|. Outputs in
@@ -244,43 +253,99 @@ def ridge(x, y, lam):
 
 
 RESUME_KEYS = ('rung', 'steps', 'name', 'alpha', 'depth', 'frontend', 'arch', 'loader', 'batch', 'lr', 'lam',
-               'huber', 'init', 'init_frames', 'ridge', 'bn_momentum', 'seed', 'classes')
+               'huber', 'init', 'init_frames', 'ridge', 'bn_momentum', 'seed', 'classes', 'schedule', 'warmup',
+               'decay_from')
+BRANCH_FREE = ('name', 'steps', 'decay_from')   # what a decay branch may differ from its trunk in
 
 
 def ckpt_path(out):
     return os.path.join(out, 'ckpt.npz')
 
 
-def save_ckpt(out, step, model, aux, opt, curve):
+def branch_path(out, step):
+    return os.path.join(out, 'branches', f's{step}.npz')
+
+
+def save_ckpt(out, step, model, aux, opt, curve, path=None):
     """Everything a resume needs: model + aux weights (BN moving stats included), the optimizer's slots and
-    iteration count (the cosine schedule is a function of it), and the curve so far. Atomic."""
+    iteration count (the learning-rate schedule is a function of it), and the curve so far. Atomic."""
     arrays = {'step': np.int64(step), 'curve': np.frombuffer(json.dumps(curve, default=float).encode(), np.uint8)}
     for tag, ws in (('m', model.get_weights()), ('a', aux.get_weights()),
                     ('o', [np.array(v.numpy() if hasattr(v, 'numpy') else v) for v in opt.variables])):
         arrays.update({f'{tag}{i}': w for i, w in enumerate(ws)})
-    tmp = ckpt_path(out) + '.tmp'
+    path = path or ckpt_path(out)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + '.tmp'
     with open(tmp, 'wb') as f:
         np.savez(f, **arrays)
-    os.replace(tmp, ckpt_path(out))
+    os.replace(tmp, path)
+
+
+def ckpt_cli(z):
+    return json.loads(bytes(z['curve']).decode()).get('cli', {})
 
 
 def load_resume_state(out, cli):
     """'done' if this run already finished, the checkpoint's arrays if it was interrupted, else None.
-    A run dir left by other settings under the same name stops the run (a mix-up, not a resume)."""
+    A run dir left by other settings under the same name stops the run (a mix-up, not a resume).
+    A WSD trunk's --steps is only a horizon (its learning rate does not depend on it), so a finished
+    trunk rerun with a larger --steps continues from its last branch checkpoint."""
+    trunk = cli.get('schedule') == 'wsd' and not cli.get('decay_from')
+
     def same(prev):
-        diff = {k: (prev[k], cli[k]) for k in cli if k in prev and prev[k] != cli[k]}
+        diff = {k: (prev[k], cli[k]) for k in cli if k in prev and prev[k] != cli[k] and not (trunk and k == 'steps')}
         if diff:
             sys.exit(f'{out} was trained with other settings {diff}: pick another --name or delete it')
     if os.path.exists(os.path.join(out, 'TRAIN_DONE')):
         cv = os.path.join(out, 'curve.json')
-        if os.path.exists(cv):
-            same(json.load(open(cv)).get('cli', {}))
+        prev = json.load(open(cv)).get('cli', {}) if os.path.exists(cv) else {}
+        same(prev)
+        if trunk and prev.get('steps', cli['steps']) < cli['steps']:
+            last = branch_path(out, prev['steps'])
+            print(f'[extend] {out}: trunk finished at {prev["steps"]}, extending to {cli["steps"]}', flush=True)
+            z = dict(np.load(last))
+            os.remove(os.path.join(out, 'TRAIN_DONE'))
+            return z
         return 'done'
     if os.path.exists(ckpt_path(out)):
         z = dict(np.load(ckpt_path(out)))
-        same(json.loads(bytes(z['curve']).decode()).get('cli', {}))
+        same(ckpt_cli(z))
         return z
     return None
+
+
+def load_branch_start(a, cli):
+    """A decay branch's starting point: the trunk's kept checkpoint at the branch step, which must come from
+    the same settings (all but BRANCH_FREE)."""
+    trunk, s = a.decay_from.rsplit(':', 1)
+    p = branch_path(os.path.join(D.RUNS, trunk), int(s))
+    if not os.path.exists(p):
+        sys.exit(f'--decay-from {a.decay_from}: no trunk checkpoint {p} (train the trunk to step {s} first)')
+    z = dict(np.load(p))
+    prev = ckpt_cli(z)
+    diff = {k: (prev[k], cli[k]) for k in cli if k in prev and k not in BRANCH_FREE and prev[k] != cli[k]}
+    if diff:
+        sys.exit(f'--decay-from {a.decay_from}: the trunk was trained with other settings {diff}')
+    return z
+
+
+class WSD(tf.keras.optimizers.schedules.LearningRateSchedule):
+    """Warmup-stable-decay: linear warmup to `lr` over `warmup` steps, constant after; with `decay`
+    = (start, n), 1 - sqrt((step - start) / n) from `lr` at `start` to 0 at `start + n`."""
+
+    def __init__(self, lr, warmup, decay=None):
+        self.lr, self.warmup, self.decay = lr, warmup, decay
+
+    def __call__(self, step):
+        step = tf.cast(step, tf.float32)
+        lr = self.lr * tf.minimum(1., (step + 1.) / max(1, self.warmup))
+        if self.decay:
+            start, n = self.decay
+            lr *= 1. - tf.sqrt(tf.clip_by_value((step - start) / n, 0., 1.))
+        return lr
+
+    def get_config(self):
+        return {'lr': self.lr, 'warmup': self.warmup, 'decay': self.decay}
 
 
 def restore(z, model, aux, opt):
@@ -360,7 +425,20 @@ def main():
     ap.add_argument('--classes', default='',
                     help='comma-separated teacher classes to distil (must include ins_buzz); the student\'s head has '
                          'only these outputs. Default: all (dead classes at zero loss)')
+    ap.add_argument('--schedule', choices=['cosine', 'wsd'], default='cosine',
+                    help='cosine: decay over --steps; wsd: warmup-stable-decay trunk or (--decay-from) branch')
+    ap.add_argument('--warmup', type=int, default=0, help='wsd: linear warmup steps (main.py passes 300)')
+    ap.add_argument('--branch-at', default='', help='wsd trunk: comma-separated steps whose checkpoints are kept')
+    ap.add_argument('--stop-at', type=int, default=0, help='wsd trunk: exit 0 after the checkpoint at this branch step')
+    ap.add_argument('--decay-from', default='', help='wsd branch: <trunk run name>:<step>; decays to 0 at --steps')
     a = ap.parse_args()
+    if a.schedule == 'cosine' and (a.branch_at or a.stop_at or a.decay_from or a.warmup):
+        sys.exit('--warmup/--branch-at/--stop-at/--decay-from need --schedule wsd')
+    branch_at = sorted({int(s) for s in a.branch_at.split(',') if s} | ({a.steps} if a.schedule == 'wsd' else set()))
+    if a.decay_from and (a.branch_at or a.stop_at):
+        sys.exit('a decay branch (--decay-from) keeps no branches of its own')
+    if a.stop_at and a.stop_at not in branch_at:
+        sys.exit(f'--stop-at {a.stop_at} is not a --branch-at step {branch_at}')
     set_active(a.classes.split(',') if a.classes else None)
     a.keep_classes = ACT_CLASSES                         # recorded in curve.json for export_student
 
@@ -377,6 +455,11 @@ def main():
     if resume == 'done':
         print(f'[done] {out} already trained (TRAIN_DONE); delete it to retrain', flush=True)
         return
+    branching = resume is None and a.decay_from
+    if branching:
+        resume = load_branch_start(a, cli)
+    if a.schedule == 'wsd' and not a.decay_from and resume is not None and int(resume['step']) >= a.steps:
+        sys.exit(f'{out} is already at step {int(resume["step"])} >= --steps {a.steps}: a trunk only extends')
     if a.frontend != 'yamnet':
         assert a.loader == 'mem', 'front-end experiments train from the in-memory pack (rung B)'
     if a.loader == 'stream':
@@ -393,7 +476,15 @@ def main():
           f'frontend {a.frontend}; classes {ACT_CLASSES if a.classes else "all"}; lam {a.lam}', flush=True)
     mu, sd = tr.code_stats()
     model, aux = build_and_init(a, tr, mu, sd, skip_fit=resume is not None)
-    sched = tf.keras.optimizers.schedules.CosineDecay(a.lr, a.steps, alpha=0.01)
+    if a.schedule == 'cosine':
+        sched = tf.keras.optimizers.schedules.CosineDecay(a.lr, a.steps, alpha=0.01)
+    elif a.decay_from:
+        s = int(a.decay_from.rsplit(':', 1)[1])
+        if a.steps <= s:
+            sys.exit(f'--steps {a.steps} must exceed the branch step {s} (it is the total budget, decay included)')
+        sched = WSD(a.lr, a.warmup, (s, a.steps - s))
+    else:
+        sched = WSD(a.lr, a.warmup)
     opt = tf.keras.optimizers.Adam(sched)
     tvars = model.trainable_variables + aux.trainable_variables
     opt.build(tvars)
@@ -405,7 +496,13 @@ def main():
         start = 0
     else:
         start, curve = restore(resume, model, aux, opt)
-        print(f'[resume] {out}: continuing from step {start} of {a.steps}', flush=True)
+        if branching:                                    # the trunk's history up to here, then this branch
+            curve.update(args=vars(a), cli=cli, branched_at=start)
+            print(f'[branch] {out}: from {a.decay_from}, decaying over steps {start}-{a.steps}', flush=True)
+        else:
+            curve.update(args=vars(a), cli=cli)          # an extended trunk records its new horizon
+            print(f'[resume] {out}: continuing from step {start} of {a.steps}', flush=True)
+    curve['passes'] = a.steps * a.batch / total
     live = tf.constant([0. if j in ACT_DEAD else 1. for j in range(len(KEEP))])
     mu_t, sd_t = tf.constant(mu), tf.constant(sd)
 
@@ -435,23 +532,32 @@ def main():
         if i % 100 == 0 or i == a.steps:
             m = np.mean(acc, 0)
             acc = []
-            curve['train'].append({'step': i, 'loss': m[0], 'huber': m[1], 'code_mse': m[2]})
+            lr = float(sched(i - 1))                      # the rate the step just taken used
+            curve['train'].append({'step': i, 'loss': m[0], 'huber': m[1], 'code_mse': m[2], 'lr': lr})
             if i % 500 == 0 or i == a.steps:
-                print(f'[train {i}/{a.steps}] loss {m[0]:.4f} huber {m[1]:.4f} code_mse {m[2]:.4f} '
+                print(f'[train {i}/{a.steps}] loss {m[0]:.4f} huber {m[1]:.4f} code_mse {m[2]:.4f} lr {lr:.2e} '
                       f'{(i - start) / (time.time() - t0):.1f} step/s', flush=True)
-        if i % a.eval_every == 0 and i != a.steps:
+        if i != a.steps and (i % a.eval_every == 0 or i in branch_at):
             v = val_flips(model, val, a.val_limit)
             print(fmt_val(i, v), flush=True)
             curve['val'].append({'step': i, **v})
             save()
             save_ckpt(out, i, model, aux, opt, curve)
+            if i in branch_at:
+                save_ckpt(out, i, model, aux, opt, curve, branch_path(out, i))
+                print(f'[branch-ckpt] {branch_path(out, i)}', flush=True)
             if a.halt_at == i:                            # test hook: simulate a crash right after a checkpoint
                 print(f'[halt] --halt-at {i}', flush=True)
                 sys.exit(3)
+            if a.stop_at == i:
+                print(f'[stop] --stop-at {i}: trunk paused at a branch point', flush=True)
+                return
     v = val_flips(model, val)
     print(fmt_val(a.steps, v) + ' FINAL', flush=True)
     curve['val'].append({'step': a.steps, 'final': True, **v})
     save()
+    if a.steps in branch_at:                              # a WSD trunk's last point is a branch point too
+        save_ckpt(out, a.steps, model, aux, opt, curve, branch_path(out, a.steps))
     open(os.path.join(out, 'TRAIN_DONE'), 'w').close()
     if os.path.exists(ckpt_path(out)):
         os.remove(ckpt_path(out))

@@ -152,6 +152,39 @@ def test_main_stages():
           and '[pending  ] fe_B_yamnet_a0.50_s1_select export' in out)
 
 
+def test_main_wsd():
+    """WSD stage list: trunk segments interleaved with decayed branches, budgets in steps or passes,
+    --wsd-eval limiting the judged branches, and --wsd-stop leaving out what follows a plateau."""
+    plan = open(D.PLAN).read()
+    open(D.PLAN, 'w').write('relpath,hour,first_rung,n_frames\na,0,A,5120\nb,0,B,5120\nc,0,C,99\nv,0,V,7\n')
+    t = 'fe_B_yamnet_a0.25_s1'
+    base = [sys.executable, f'{HERE}/main.py', '--runs', 'yamnet:a0.25', '--dry-run']
+    out = run(base + ['--wsd', '100,200,400', '--wsd-eval', '400']).stdout
+    order = [f'{t}_wsd trunk to 85', f'{t}_wsd100 train (decay 85-100)', f'{t}_wsd trunk to 170',
+             f'{t}_wsd200 train (decay 170-200)', f'{t}_wsd trunk to 340', f'{t}_wsd400 train (decay 340-400)',
+             f'{t}_wsd400 export', f'{t}_wsd curve']
+    pos = [out.find(s) for s in order]
+    check('wsd stages interleave trunk and branches', -1 not in pos and pos == sorted(pos))
+    check('--wsd-eval judges only the listed budgets', f'{t}_wsd100 export' not in out and f'{t}_wsd400 record' in out)
+    out = run(base + ['--wsd', '1p,2p']).stdout
+    check('budgets in passes resolve on the plan (rung B = 10240 frames, batch 512)',
+          f'{t}_wsd20 train (decay 17-20)' in out and f'{t}_wsd40 train (decay 34-40)' in out)
+    r = run(base + ['--passes', '1'])
+    check('--passes sets the cosine steps', '= 20 steps' in r.stdout)
+    for b, lost in ((100, 100), (200, 99)):                    # lost% 10.0 then 9.9: below a 1.3 tolerance
+        d = f'{D.RUNS}/{t}_wsd{b}'
+        os.makedirs(d, exist_ok=True)
+        json.dump({'val': [{'final': True, 'buzz_lost': lost, 'buzz_teacher': 1000}]}, open(f'{d}/curve.json', 'w'))
+        open(f'{d}/TRAIN_DONE', 'w').close()
+    out = run(base + ['--wsd', '100,200,400', '--wsd-stop', '1.3']).stdout
+    check('--wsd-stop: after a plateau the trunk goes no further',
+          f'[plateau  ] {t}_wsd trunk to 340' in out and f'[plateau  ] {t}_wsd400 train' in out
+          and f'[pending  ] {t}_wsd trunk to 170' in out)
+    out = run(base + ['--wsd', '100,200,400', '--wsd-stop', '0.05']).stdout
+    check('--wsd-stop: an improvement above the tolerance keeps going', f'[pending  ] {t}_wsd trunk to 340' in out)
+    open(D.PLAN, 'w').write(plan)
+
+
 def test_cache_fe():
     """cache_fe.py end to end on a synthetic wav in the onnx venv: writes the shared mel, skips on rerun,
     stops when the stored fingerprint no longer matches the spec."""
@@ -219,6 +252,40 @@ def test_resume():
     if r2.returncode:
         print(r2.stdout[-1500:], r2.stderr[-1500:])
 
+    # warmup-stable-decay: trunk in segments (killed mid-stable once), a decayed branch, then extension
+    wsd = [c if c != 'resume_test' else 'wsd_test' for c in base]
+    wsd = wsd[:wsd.index('--steps') + 1] + ['40'] + wsd[wsd.index('--steps') + 2:] + \
+        ['--schedule', 'wsd', '--warmup', '5', '--eval-every', '10', '--branch-at', '20']
+    tdir = f'{D.RUNS}/wsd_test'
+    r = run(wsd + ['--stop-at', '20', '--halt-at', '10'])
+    check('wsd trunk killed mid-stable leaves a checkpoint', r.returncode == 3 and os.path.exists(f'{tdir}/ckpt.npz'))
+    r = run(wsd + ['--stop-at', '20'])
+    check('wsd trunk resumes and pauses at its branch point', r.returncode == 0 and 'continuing from step 10' in r.stdout
+          and os.path.exists(f'{tdir}/branches/s20.npz') and not os.path.exists(f'{tdir}/TRAIN_DONE'))
+    br = [c if c != 'wsd_test' else 'wsd_test24' for c in wsd]
+    del br[br.index('--branch-at'):br.index('--branch-at') + 2]
+    br[br.index('--steps') + 1] = '24'
+    r = run(br + ['--decay-from', 'wsd_test:20'])
+    cb = json.load(open(f'{D.RUNS}/wsd_test24/curve.json')) if r.returncode == 0 else {}
+    lr_end = cb.get('train', [{}])[-1].get('lr', -1)        # step 24 used lr at k = 3/4: 1e-3 (1 - sqrt(.75))
+    check('decay branch starts from the trunk and anneals to its budget',
+          r.returncode == 0 and '[branch]' in r.stdout and cb['branched_at'] == 20
+          and [v['step'] for v in cb['val']] == [0, 10, 20, 24] and abs(lr_end - 1e-3 * (1 - 0.75 ** 0.5)) < 1e-7)
+    if r.returncode:
+        print(r.stdout[-1500:], r.stderr[-1500:])
+    r = run([c if c != '1e-3' else '2e-3' for c in br] + ['--decay-from', 'wsd_test:20', '--lr', '2e-3'])
+    check('a branch with other settings than its trunk stops', r.returncode != 0 and 'other settings' in r.stdout + r.stderr)
+    r = run(wsd)
+    ct = json.load(open(f'{tdir}/curve.json'))
+    check('wsd trunk finishes at a constant rate and keeps its last point', r.returncode == 0
+          and os.path.exists(f'{tdir}/TRAIN_DONE') and os.path.exists(f'{tdir}/branches/s40.npz')
+          and abs(ct['train'][-1]['lr'] - 1e-3) < 1e-9)
+    ext = list(wsd)
+    ext[ext.index('--steps') + 1] = '50'
+    r = run(ext)
+    check('a finished trunk extends to a larger --steps', r.returncode == 0 and '[extend]' in r.stdout
+          and os.path.exists(f'{tdir}/branches/s50.npz'))
+
     # class subset: a 3-output head, trained, exported with the config listing only those classes
     import shutil
     real_cfg = os.path.join(D.config.local('buzzdetect_dest'), D.DEFAULT_TEACHER, 'config_model.json')
@@ -247,6 +314,7 @@ if __name__ == '__main__':
     test_durations_seed()
     test_migrate()
     test_main_stages()
+    test_main_wsd()
     test_cache_fe()
     if '--train' in sys.argv:
         test_resume()
