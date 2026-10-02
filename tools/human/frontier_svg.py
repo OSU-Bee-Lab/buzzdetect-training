@@ -6,13 +6,14 @@ Below it, a bar chart of the jet fold: for each non-dominated student, 1_95's fa
 rotating-fold threshold (fpr 0.005 over every rotating fold's negatives) is applied to it, on all its negatives and on its
 jet frames alone, against the rotating folds' own worst FPR at that threshold (eval_folds.py probe -> probe.json).
 
-    python 05_distill/frontier_svg.py [out.svg]      (plain python; reads the per-teacher ladder.jsonl)
+    python tools/human/frontier_svg.py [out.svg]      (plain python; reads the per-teacher ladder.jsonl)
 """
 import json
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, '..', '..', '05_distill'))
 import dpaths as D  # noqa: E402
 
 BASELINE = 0.414

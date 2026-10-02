@@ -4,13 +4,14 @@ Hover a point for its exact model name and numbers; click to pin it and see per-
 jet-fold probe. Filters: trunk, front end, class subset, speed/sensitivity range, name search; the dashed frontier can be
 computed over the visible points or over every run.
 
-    python 05_distill/frontier_html.py [out.html]      (plain python; reads the per-teacher ladder.jsonl)
+    python tools/human/frontier_html.py [out.html]      (plain python; reads the per-teacher ladder.jsonl)
 """
 import json
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, '..', '..', '05_distill'))
 import dpaths as D  # noqa: E402
 import frontier_svg as F  # noqa: E402
 
