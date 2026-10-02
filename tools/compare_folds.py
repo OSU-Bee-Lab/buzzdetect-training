@@ -57,17 +57,27 @@ def resolve_dir_model(name):
     experiment's model lives under its worktree's own models/ (not symlinked
     from main — see setup_worktree.sh), while matched controls live in main's,
     so a bare name is looked up in this checkout's models/, then main's, then
-    any one worktree's. That makes both names work from main and a worktree."""
+    any one worktree's. That makes both names work from main and a worktree.
+    Worktrees can hold a stub of a control (folds_sx.csv and fold summaries,
+    no predictions.csv), so a copy with predictions beats one without."""
     if os.path.exists(os.path.join(name, FNAME_SX_SUMMARY)):
         return name
     local = os.path.join(cfg.DIR_MODELS, name)
-    if os.path.exists(local):
-        return local
     main = _main_checkout()
-    candidates = [os.path.join(main, 'models', name)]
-    if not os.path.exists(candidates[0]):
-        candidates = glob.glob(os.path.join(main, '.local', 'worktrees', '*', 'models', name))
-    return candidates[0] if len(candidates) == 1 else local
+    in_main = os.path.join(main, 'models', name)
+    for tier in (_has_predictions, os.path.exists):
+        for path in (local, in_main):
+            if tier(path):
+                return path
+        candidates = [p for p in glob.glob(os.path.join(main, '.local', 'worktrees', '*', 'models', name))
+                      if tier(p)]
+        if len(candidates) == 1:
+            return candidates[0]
+    return local
+
+
+def _has_predictions(dir_model):
+    return bool(glob.glob(os.path.join(dir_model, 'folds', '**', 'predictions.csv'), recursive=True))
 
 
 def _read_sx(name, fpr):
