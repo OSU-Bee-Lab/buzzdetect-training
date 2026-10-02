@@ -173,7 +173,7 @@ def test_main_wsd():
           f'{t}_wsd20 train (decay 17-20)' in out and f'{t}_wsd40 train (decay 34-40)' in out)
     r = run(base + ['--passes', '1'])
     check('--passes sets the cosine steps', '= 20 steps' in r.stdout)
-    for b, lost in ((100, 100), (200, 99)):                    # lost% 10.0 then 9.9: below a 1.3 tolerance
+    for b, lost in ((100, 100), (200, 99)):                    # teacher-hit % 90.0 then 90.1: below a 1.3 tolerance
         d = f'{D.RUNS}/{t}_wsd{b}'
         os.makedirs(d, exist_ok=True)
         json.dump({'val': [{'final': True, 'buzz_lost': lost, 'buzz_teacher': 1000}]}, open(f'{d}/curve.json', 'w'))
@@ -183,7 +183,7 @@ def test_main_wsd():
           f'[plateau  ] {t}_wsd trunk to 340' in out and f'[plateau  ] {t}_wsd400 train' in out
           and f'[pending  ] {t}_wsd trunk to 170' in out)
     out = run(base + ['--wsd', '100,200,400', '--wsd-stop', '0.05']).stdout
-    check('--wsd-stop: an improvement above the tolerance keeps going', f'[pending  ] {t}_wsd trunk to 340' in out)
+    check('--wsd-stop: a gain above the tolerance keeps going', f'[pending  ] {t}_wsd trunk to 340' in out)
     open(D.PLAN, 'w').write(plan)
 
 

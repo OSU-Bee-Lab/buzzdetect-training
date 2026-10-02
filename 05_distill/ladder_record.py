@@ -184,14 +184,16 @@ def frontier(a):
 def wsd(a):
     """A WSD trunk's step-budget curve: one line per decayed branch `<trunk><B>` (held-out V readouts from
     curve.json, headline where it was evaluated), with the cosine run of the same student (`<trunk>` minus
-    `_wsd`, plus --ref names) as reference. dlost = lost% change from the previous branch."""
+    `_wsd`, plus --ref names) as reference. hit% = teacher-hit %: of the teacher's buzz detections on V, the
+    share the student also makes (100 - lost%); dhit = its change from the previous branch (what --wsd-stop
+    reads). Not the headline, which is sensitivity against labels on the folds."""
     import glob
     runs = os.path.join(LOCAL, 'runs')
     base = a.name[:-len('_wsd')] if a.name.endswith('_wsd') else a.name
     branches = sorted((p for p in glob.glob(os.path.join(runs, a.name + '*'))
                        if os.path.basename(p)[len(a.name):].isdigit()), key=lambda p: int(p.rsplit('_wsd', 1)[1]))
     print(f'\nstep-budget curve of {a.name} (V pool vs teacher; headline = {COL} @0.005 where evaluated)')
-    print(f'{"run":58s} {"steps":>6s} {"passes":>6s} {"loss":>6s} {"mae":>6s} {"lost%":>6s} {"dlost":>6s} '
+    print(f'{"run":58s} {"steps":>6s} {"passes":>6s} {"loss":>6s} {"mae":>6s} {"hit%":>6s} {"dhit":>6s} '
           f'{"gain%":>6s} {"headline":>8s}')
     prev = None
     refs = [base] + [r for r in (a.ref or '').split(',') if r]
@@ -203,21 +205,21 @@ def wsd(a):
             continue
         cur = json.load(open(os.path.join(p, 'curve.json')))
         v = [x for x in cur['val'] if x.get('final')][-1]
-        lost = 100 * v['buzz_lost'] / max(1, v['buzz_teacher'])
+        hit = 100 - 100 * v['buzz_lost'] / max(1, v['buzz_teacher'])
         loss = sum(t['loss'] for t in cur['train'][-5:]) / max(1, len(cur['train'][-5:]))
         ev = os.path.join(LOCAL, 'eval', n, 'folds_sx.csv')
         head = f'{sx(ev)[0]:8.3f}' if os.path.exists(ev) else f'{"-":>8s}'
         ref = i < len(refs)
-        d = '' if ref or prev is None else f'{lost - prev:+6.2f}'
+        d = '' if ref or prev is None else f'{hit - prev:+6.2f}'
         sched = cur['args'].get('schedule', 'cosine')
         print(f'{(n + (" (" + sched + " ref)" if ref else "")):58s} {cur["args"]["steps"]:>6d} '
-              f'{cur.get("passes", float("nan")):6.2f} {loss:6.3f} {v["mae_live"]:6.3f} {lost:6.2f} {d:>6s} '
+              f'{cur.get("passes", float("nan")):6.2f} {loss:6.3f} {v["mae_live"]:6.3f} {hit:6.2f} {d:>6s} '
               f'{100 * v["buzz_gained"] / max(1, v["buzz_teacher"]):6.2f} {head}')
         if not ref:
-            prev = lost
+            prev = hit
     sp = a_spread()
     if sp is not None:
-        print(f'noise: rung-A repeat spread of lost% = {sp:.2f}; headline seed noise ~0.01-0.02')
+        print(f'noise: rung-A repeat spread of teacher-hit % = {sp:.2f}; headline seed noise ~0.01-0.02')
 
 
 def decide(a):

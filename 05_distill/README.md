@@ -45,7 +45,7 @@ steps-versus-quality curve for about the cost of the longest budget:
 ```bash
 main.py --rung B --runs "yamnet:a0.25:select:classes=ins_buzz+ambient_rain+human" --wsd 7000,14000,28000,70000
 main.py ... --wsd 1p,2p,4p,10p          # budgets in passes over the rung (plan frame count / --batch)
-main.py ... --wsd-max 56000 --wsd-stop 1.3   # ceiling + 3 halvings (7000-56000); stop once a doubling gains < 1.3 lost%
+main.py ... --wsd-max 56000 --wsd-stop 1.3   # ceiling + 3 halvings (7000-56000); stop once a doubling gains < 1.3 teacher-hit %
 ladder_record.py wsd --name fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd [--ref <cosine run>,...]
 ```
 
@@ -58,8 +58,11 @@ ladder_record.py wsd --name fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd [-
   limits those costly stages to some budgets; every branch still has the cheap V readouts (`mae_live`,
   buzz lost/gained) in its `curve.json`.
 - Stages interleave (trunk to the first branch point, that branch, trunk on), so early points arrive early.
-  `--wsd-stop <lost%>` ends the trunk once a branch improves V buzz lost% on the one before by less than that
-  (1.3 = the rung-A repeat spread); off by default, since the first job is to see the whole curve.
+  `--wsd-stop <points>` ends the trunk once a branch raises **teacher-hit %** on the one before by less than
+  that (1.3 = the rung-A repeat spread). Teacher-hit % is the share of the teacher's buzz detections on the
+  held-out V pool that the student also makes (100 - lost%): agreement with the teacher, not the headline's
+  sensitivity against labels, but it predicts the headline (r = 0.86 over 52 ladder runs, 0.96 for
+  buzz+rain+human students; 2026-10-02). Off unless given.
 - A finished trunk rerun with a larger last budget **extends** from its last checkpoint (its `--steps` is a
   horizon, not part of the schedule). Everything resumes like any run.
 - Ladder rows carry `schedule`, `lr`, `warmup`, `decay_from` and `passes`. WSD rows are left out of

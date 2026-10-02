@@ -11,9 +11,9 @@ Delete this file when the curve is reported.
 
 The 28k cosine job it replaced had not started training yet (it was caching; the cache keeps every finished
 slice). Trunks `fe_C_..._wsd`, branches `..._wsd7000/14000/28000/56000`, each judged. The trunk stops
-early once a doubling improves V buzz lost% by < 1.3 points (checked 2026-10-02: across the 52 ladder runs
-lost% predicts the fold headline, r = -0.86 overall, -0.96 for buzz+rain+human students; 1.3 points is about
-0.009 headline). Log `05_distill/data/main_rungC_wsd.log`. Same command resumes. If 56k still improves,
+early once a doubling raises teacher-hit % (V buzz detections shared with the teacher, 100 - lost%) by
+< 1.3 points (checked 2026-10-02: across the 52 ladder runs it predicts the fold headline, r = 0.86 overall,
+0.96 for buzz+rain+human students; 1.3 points is about 0.009 headline). Log `05_distill/data/main_rungC_wsd.log`. Same command resumes. If 56k still improves,
 rerun with `--wsd-max 112000 --wsd-halvings 4` (the trunk extends from its last checkpoint).
 
 ## Still to do
