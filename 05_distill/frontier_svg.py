@@ -1,5 +1,6 @@
 """Frontier scatter as a standalone SVG: rung-B seed-1 runs, x = speed (x YAMNet, GPU, 200 s), y = headline
-(sensitivity_exclquiet @ fpr 0.005). Colour = trunk architecture, marker = front end, ring = class-subset student.
+(sensitivity_exclquiet @ fpr 0.005). Colour = trunk architecture, marker = front end, ring = class-subset student (plain ring: ins_buzz+rain+human,
+ring with a centre dot: ins_buzz alone).
 
 Below it, a bar chart of the jet fold: for each non-dominated student, 1_95's false-positive rate when the pooled
 rotating-fold threshold (fpr 0.005 over every rotating fold's negatives) is applied to it, on all its negatives and on its
@@ -87,7 +88,7 @@ def bars(o, fr):
                      f'{c[key] * 100:.1f}</text>')
         o.append(f'<line x1="{cx - bw - 4:.1f}" x2="{cx + bw + 4:.1f}" y1="{py(c["rotating_fpr_max"]):.1f}" '
                  f'y2="{py(c["rotating_fpr_max"]):.1f}" stroke="#999" stroke-width="3"/>')
-        lab = r['frontend'] + (' +sub' if r.get('classes') else '')
+        lab = r['frontend'] + SUB_LABEL[subset(r)]
         o.append(f'<text x="{cx:.1f}" y="{bot + 14}" font-size="10" text-anchor="middle">{lab}</text>'
                  f'<text x="{cx:.1f}" y="{bot + 27}" font-size="10" text-anchor="middle" fill="#555">{r["arch"]}, '
                  f'{r["x_yamnet200"]:.1f}x</text>')
@@ -98,6 +99,17 @@ def bars(o, fr):
                  f'<text x="{lx + 18}" y="{ly + 10 + k * 18}" font-size="11">{lab}</text>')
     o.append(f'<line x1="{lx}" x2="{lx + 12}" y1="{ly + 42}" y2="{ly + 42}" stroke="#999" stroke-width="3"/>'
              f'<text x="{lx + 18}" y="{ly + 46}" font-size="11">worst rotating fold</text>')
+
+
+def subset(r):
+    """'' for a full 15-class student, 'buzz' for ins_buzz alone, else 'sub' (the three-class subset)."""
+    k = r.get('classes')
+    if not k:
+        return ''
+    return 'buzz' if k == 'ins_buzz' else 'sub'
+
+
+SUB_LABEL = {'': '', 'sub': ' +3cls', 'buzz': ' +buzz'}
 
 
 def marker(kind, x, y, c, ring):
@@ -118,7 +130,10 @@ def marker(kind, x, y, c, ring):
         m = f'<circle cx="{x}" cy="{y}" r="{s}"'
     stroke = '#111' if ring else 'none'
     sw = 2.5 if ring else 0
-    return f'{m} fill="{c}" fill-opacity="0.85" stroke="{stroke}" stroke-width="{sw}"/>'
+    out = f'{m} fill="{c}" fill-opacity="0.85" stroke="{stroke}" stroke-width="{sw}"/>'
+    if ring == 'buzz':
+        out += f'<circle cx="{x}" cy="{y}" r="2.2" fill="#111"/>'
+    return out
 
 
 def main():
@@ -151,9 +166,9 @@ def main():
     for r in rows:
         x, y = px(r['x_yamnet200']), py(r['headline'])
         c = ARCH_COLOUR.get(r['arch'], '#888')
-        o.append(marker(FE_MARK.get(r['frontend'], 'circle'), round(x, 1), round(y, 1), c, bool(r.get('classes'))))
+        o.append(marker(FE_MARK.get(r['frontend'], 'circle'), round(x, 1), round(y, 1), c, subset(r)))
         if r in fr:
-            lab = r['frontend'] + (' +sub' if r.get('classes') else '')
+            lab = r['frontend'] + SUB_LABEL[subset(r)]
             o.append(f'<text x="{x + 10:.1f}" y="{y - 9:.1f}" font-size="10">{lab}</text>')
     lx, ly = W - R + 20, T + 10
     o.append(f'<text x="{lx}" y="{ly}" font-weight="bold">Trunk</text>')
@@ -166,10 +181,13 @@ def main():
                                   ('tri', 'fast32h32'), ('cross', 'twofast32'), ('hex', 'two32 / lo32')]):
         o.append(marker(k, lx + 6, ly + 16 + i * 18, '#888', False)
                  + f'<text x="{lx + 22}" y="{ly + 20 + i * 18}">{lab}</text>')
-    ly += 130
-    o.append(marker('circle', lx + 6, ly, '#fff', True) + f'<text x="{lx + 22}" y="{ly + 4}">class-subset</text>')
-    o.append(f'<line x1="{lx}" x2="{lx + 12}" y1="{ly + 22}" y2="{ly + 22}" stroke="#111" stroke-dasharray="2 3"/>'
-             f'<text x="{lx + 22}" y="{ly + 26}">non-dominated</text>')
+    ly += 142
+    o.append(f'<text x="{lx}" y="{ly - 14}" font-weight="bold">Classes</text>')
+    o.append(marker('circle', lx + 6, ly + 2, '#fff', '') + f'<text x="{lx + 22}" y="{ly + 6}">all 15</text>')
+    o.append(marker('circle', lx + 6, ly + 20, '#fff', 'sub') + f'<text x="{lx + 22}" y="{ly + 24}">buzz + rain + human</text>')
+    o.append(marker('circle', lx + 6, ly + 38, '#fff', 'buzz') + f'<text x="{lx + 22}" y="{ly + 42}">buzz only</text>')
+    o.append(f'<line x1="{lx}" x2="{lx + 12}" y1="{ly + 60}" y2="{ly + 60}" stroke="#111" stroke-dasharray="2 3"/>'
+             f'<text x="{lx + 22}" y="{ly + 64}">non-dominated</text>')
     bars(o, fr)
     o.append('</svg>')
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontier.svg')
