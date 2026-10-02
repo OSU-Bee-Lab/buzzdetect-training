@@ -8,6 +8,10 @@ excludes everything below it). Stricter reading for `Reed - Illinois Soybean`:
 its folds blacklist the whole date dir (`Reed.../2026-07-17`), not just the
 recorder (`.../6_76`).
 
+The out-of-sample test set (`01_annotate/SeeNote - Model Testing/folds.csv`, column `ident`, role `test`) is blacklisted
+too, whatever the teacher trained on. Its idents are file stems (`<project>/<date>/<site>/<recorder>/<file>`), so the
+same dirname(dirname()) rule gives each one's deployment, with the strict date-dir reading for STRICT_PROJECTS.
+
 Library: `blacklist_dirs()`, `excluded(rel, black)`, `deployment(rel)`,
 `walk_audio(root)`. CLI (`python 05_distill/blacklist.py`) prints a survey and
 writes the list. Read-only on the audio tree. No GPU.
@@ -36,10 +40,21 @@ def deployment(rel):
     return d if d else rel.split('/')[0]
 
 
+SEENOTE_FOLDS = os.path.join(ROOT, '01_annotate', 'SeeNote - Model Testing', 'folds.csv')
+
+
+def seenote_test_idents():
+    """File-stem idents of the fully out-of-sample test set; none if the file is missing (older checkout)."""
+    if not os.path.exists(SEENOTE_FOLDS):
+        return []
+    return [r['ident'] for r in csv.DictReader(open(SEENOTE_FOLDS)) if r.get('role') == 'test']
+
+
 def blacklist_dirs(model_dir=None):
     model_dir = model_dir or teacher_model_dir()
     folds = set(json.load(open(os.path.join(model_dir, 'config_model.json')))['folds_train'])
     folds |= {r['fold'] for r in csv.DictReader(open(os.path.join(model_dir, 'folds.csv')))}
+    folds |= {os.path.dirname(i) for i in seenote_test_idents()}    # file stem -> recorder dir, like a fold
     out = set()
     for f in folds:
         d = os.path.dirname(f) or f
