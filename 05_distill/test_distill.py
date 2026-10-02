@@ -166,6 +166,8 @@ def test_main_wsd():
     pos = [out.find(s) for s in order]
     check('wsd stages interleave trunk and branches', -1 not in pos and pos == sorted(pos))
     check('--wsd-eval judges only the listed budgets', f'{t}_wsd100 export' not in out and f'{t}_wsd400 record' in out)
+    out = run(base + ['--wsd-max', '400', '--wsd-halvings', '2', '--wsd-eval', '400']).stdout
+    check('--wsd-max generates the ceiling and its halvings', [out.find(s) for s in order] == pos)
     out = run(base + ['--wsd', '1p,2p']).stdout
     check('budgets in passes resolve on the plan (rung B = 10240 frames, batch 512)',
           f'{t}_wsd20 train (decay 17-20)' in out and f'{t}_wsd40 train (decay 34-40)' in out)

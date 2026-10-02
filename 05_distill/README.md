@@ -45,6 +45,7 @@ steps-versus-quality curve for about the cost of the longest budget:
 ```bash
 main.py --rung B --runs "yamnet:a0.25:select:classes=ins_buzz+ambient_rain+human" --wsd 7000,14000,28000,70000
 main.py ... --wsd 1p,2p,4p,10p          # budgets in passes over the rung (plan frame count / --batch)
+main.py ... --wsd-max 56000 --wsd-stop 1.3   # ceiling + 3 halvings (7000-56000); stop once a doubling gains < 1.3 lost%
 ladder_record.py wsd --name fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd [--ref <cosine run>,...]
 ```
 

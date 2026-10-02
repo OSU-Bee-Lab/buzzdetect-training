@@ -30,7 +30,8 @@ teacher classes (the head has only those outputs; must include ins_buzz), `lam=0
   record    ladder_record.py record  one row in 05_distill/data/<teacher>/ladder.jsonl
   deploy    deploy_student.py        only with --deploy: copy into buzzdetect (--force to overwrite)
 
-Step-budget curve (`--wsd 7000,14000,28000,70000`, or in passes over the rung: `--wsd 0.5p,1p,2p`): each
+Step-budget curve (`--wsd-max 56000`: the ceiling and --wsd-halvings (3) halvings of it, 7000-56000; or a list,
+`--wsd 7000,14000,28000,70000`, budgets also in passes over the rung: `--wsd 0.5p,1p,2p`): each
 student becomes one warmup-stable-decay trunk `<name>_wsd` and one decayed branch per budget B,
 `<name>_wsd<B>`, an ordinary run of B total steps (stable to (1 - --wsd-decay) B, then decay). Stages
 interleave: trunk to the first branch point, that branch (train, export, eval, ...), trunk on to the next.
@@ -62,6 +63,9 @@ def parse():
     ap.add_argument('--steps', type=int, default=7000)
     ap.add_argument('--passes', type=float, help='cosine budget in passes over the rung instead of --steps')
     ap.add_argument('--wsd', default='', help='warmup-stable-decay budgets, comma-separated steps or passes (2p)')
+    ap.add_argument('--wsd-max', default='', help='WSD ceiling (steps or passes, 2p); budgets are it and its halvings')
+    ap.add_argument('--wsd-halvings', type=int, default=3, help='--wsd-max: how many halvings below the ceiling '
+                                                                '(3: 56000 -> 7000,14000,28000,56000)')
     ap.add_argument('--wsd-decay', type=float, default=0.15, help='decay share of each WSD budget')
     ap.add_argument('--warmup', type=int, default=300, help='WSD linear warmup steps')
     ap.add_argument('--wsd-eval', default='', help='budgets (as given to --wsd) that get export/eval/probe/speed/record; '
@@ -139,12 +143,20 @@ def to_steps(tok):
     return int(tok)
 
 
+def budgets():
+    """WSD budgets in steps: --wsd's list, or --wsd-max and --wsd-halvings halvings of it."""
+    if A.wsd_max:
+        top = to_steps(A.wsd_max)
+        return [round(top / 2 ** i) for i in range(A.wsd_halvings + 1)]
+    return [to_steps(t) for t in A.wsd.split(',')]
+
+
 def wsd_points():
     """[(budget B, branch step s)], ascending: the trunk is kept at s, the branch decays from s to B."""
-    pts = sorted({(b, round(b * (1 - A.wsd_decay))) for b in map(to_steps, A.wsd.split(','))})
+    pts = sorted({(b, round(b * (1 - A.wsd_decay))) for b in budgets()})
     ss = [s for _, s in pts]
     if not 0 < A.wsd_decay < 1 or ss[0] <= 0 or len(set(ss)) != len(ss) or any(s >= b for b, s in pts):
-        sys.exit(f'--wsd {A.wsd} / --wsd-decay {A.wsd_decay}: branch points {pts} must be distinct and inside each budget')
+        sys.exit(f'--wsd {A.wsd or A.wsd_max} / --wsd-decay {A.wsd_decay}: branch points {pts} must be distinct and inside each budget')
     return pts
 
 
@@ -281,7 +293,7 @@ def wsd_stages(spec, name):
 
 def stages_for_run(spec):
     name = run_name(spec)
-    if A.wsd:
+    if A.wsd or A.wsd_max:
         return wsd_stages(spec, name)
     d = os.path.join(D.RUNS, name)
     st = [Stage('train', f'{name} train', train_cmd(spec, name, A.steps), os.path.join(d, 'TRAIN_DONE'), None,
@@ -330,8 +342,10 @@ def preflight(all_stages):
 
 
 def main():
+    if A.wsd and A.wsd_max:
+        sys.exit('--wsd lists the budgets, --wsd-max generates them: give one')
     if A.passes is not None:
-        if A.wsd:
+        if A.wsd or A.wsd_max:
             sys.exit('--passes sets the cosine budget; give WSD budgets in passes as --wsd 1p,2p,...')
         A.steps = to_steps(f'{A.passes}p')
         say(f'--passes {A.passes} = {A.steps} steps at batch {A.batch} (plan frame count, rung {A.rung})')

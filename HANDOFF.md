@@ -6,14 +6,15 @@ Delete this file when the curve is reported.
 
 ## Running (launched 2026-10-02 from the main checkout, replacing the cosine rung-C job)
 
-    main.py --teacher v4-ft-ps-e60-moderate --rung C --wsd 7000,14000,28000 \
+    main.py --teacher v4-ft-ps-e60-moderate --rung C --wsd-max 56000 --wsd-stop 1.3 \
       --runs "yamnet:a0.50:select:classes=ins_buzz+ambient_rain+human fast32h16:a0.50:classes=ins_buzz+ambient_rain+human"
 
 The 28k cosine job it replaced had not started training yet (it was caching; the cache keeps every finished
-slice). Trunks `fe_C_..._wsd`, branches `..._wsd7000/14000/28000`, each judged. Log
-`05_distill/data/main_rungC_wsd.log`. Same command resumes. If 28k is still improving on the one before
-it by more than the noise, extend: rerun with `--wsd 7000,14000,28000,56000` (the trunk continues
-from its 28k-budget checkpoint).
+slice). Trunks `fe_C_..._wsd`, branches `..._wsd7000/14000/28000/56000`, each judged. The trunk stops
+early once a doubling improves V buzz lost% by < 1.3 points (checked 2026-10-02: across the 52 ladder runs
+lost% predicts the fold headline, r = -0.86 overall, -0.96 for buzz+rain+human students; 1.3 points is about
+0.009 headline). Log `05_distill/data/main_rungC_wsd.log`. Same command resumes. If 56k still improves,
+rerun with `--wsd-max 112000 --wsd-halvings 4` (the trunk extends from its last checkpoint).
 
 ## Still to do
 
