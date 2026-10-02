@@ -305,6 +305,13 @@ def test_resume():
     cfg = json.load(open(cfg_path)) if os.path.exists(cfg_path) else {}
     check('export writes a config with only those classes', r6.returncode == 0 and cfg.get('classes') == keep
           and 'parity' in r6.stdout and 'PASS' in r6.stdout)
+    import onnx
+    from onnx import numpy_helper
+    kb = m.get_layer('logits').get_weights()[1]
+    inits = [numpy_helper.to_array(i) for i in onnx.load(f'{D.MODELS}/cls_test/model.onnx').graph.initializer] \
+        if r6.returncode == 0 else []
+    check('export keeps the trained head bias (targets are already on the deployed scale, no center shift)',
+          any(i.shape == kb.shape and np.allclose(i, kb, atol=1e-5) for i in inits))
     if r5.returncode or r6.returncode:
         print(r5.stdout[-800:], r5.stderr[-800:], r6.stdout[-800:], r6.stderr[-1200:])
 

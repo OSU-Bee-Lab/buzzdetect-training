@@ -9,10 +9,7 @@
 `--run` is a distill_train run (`05_distill/data/runs/<run>/student_mel.keras`);
 `--init-only` instead exports the untrained YAMNet channel-selected init (for
 plumbing and speed checks with real weights). The mel training graph's weights
-are copied by layer name into the waveform graph (YAMNet front end inside), the
-teacher's `activation_centers` are subtracted in the head's bias (so the output
-is on the deployed logit scale: detection is logit > 0, classes without a
-center get 0), and the graph goes through the deploy passes (BN fold, Conv+Relu
+are copied by layer name into the waveform graph (YAMNet front end inside), and the graph goes through the deploy passes (BN fold, Conv+Relu
 fuse) and the same io rename as 04_deploy / bench_arch. Parity: ONNX vs the
 Keras waveform student on the fixture, max |diff| must be < 1e-4.
 
@@ -42,7 +39,6 @@ from utils import git_branch  # noqa: E402
 
 MAIN = D.MAIN
 LOCAL = D.LOCAL                    # 05_distill/data/<teacher>
-TEACHER_CFG = os.path.join(D.TEACHER_MODEL_DIR, 'config_model.json')
 ENGINE_CFG = os.path.join(D.TEACHER_ENGINE_DIR, 'config_model.json')     # template for the student's engine config
 FIXTURE = D.FIXTURE
 TOL = 1e-4
@@ -59,14 +55,6 @@ def rename_io(model):
     if d.HasField('dim_param'):
         d.dim_param = 'samples'
     return model
-
-
-def centers_vector(classes=None):
-    """Teacher activation centers for `classes` (default: all the teacher's), 0 for classes without one."""
-    cfg = json.load(open(TEACHER_CFG))
-    c = cfg['activation_centers']
-    classes = classes or cfg['classes']
-    return np.array([c.get(k, 0.0) for k in classes], np.float32), cfg
 
 
 def filters_of(mel_model):
@@ -115,10 +103,10 @@ def do_export(a):
     wav = st.build_student(filters, n_out=len(classes) if classes else D.spec().n_classes,
                            name=a.name.replace('-', '_').replace('.', '_'), frontend=fe_name)
     n = st.copy_weights(mel, wav)
-    centers, tcfg = centers_vector(classes)
-    head = wav.get_layer('logits')
-    w, b = head.get_weights()
-    head.set_weights([w, b - centers])          # deployed scale: detect at logit > 0
+    # No center shift here: the student learned the cached teacher logits, which come from the deployed teacher
+    # ONNX with its activation_centers already subtracted, so its output is on the deployed scale (detect at
+    # logit > 0) as is. Subtracting the centers again (the export until 2026-10-02) put every student off by
+    # -center per class: ~+1.08 on ins_buzz for v4, -1.44 on ambient_rain.
     print(f'copied {n} layers, filters {filters}, params {wav.count_params()}', flush=True)
 
     d = os.path.join(LOCAL, 'models', a.name)
@@ -146,7 +134,8 @@ def do_export(a):
                        'modelname_internal': a.name, 'branch': git_branch(),
                        'teacher': D.TEACHER, 'filters': filters,
                        'source_run': None if a.init_only else a.run, 'frontend': fe_name, 'classes': classes or 'all',
-                       'note': 'distilled single-pass student; activation_centers folded into the head bias'}
+                       'note': 'distilled single-pass student; outputs on the teacher\'s deployed scale (its centers '
+                               'already subtracted), detect at logit > 0'}
     json.dump(cfg, open(os.path.join(d, 'config_model.json'), 'w'), indent=2)
     print(f'wrote {d}', flush=True)
 

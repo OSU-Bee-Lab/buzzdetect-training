@@ -77,7 +77,8 @@ def readme(name, as_name, cfg, curve, row):
              f'- Spectrogram front end: `{md["frontend"]}`'
              + (' (YAMNet\'s own)' if md['frontend'] == 'yamnet' else ' (custom, see 05_distill/frontends.py)') + '.',
              f'- Init `{a["init"]}`; data rung {a["rung"]}; seed {a["seed"]}; {a["steps"]} steps, batch {a["batch"]}, lr {a["lr"]}.',
-             f'- Head bias has the teacher\'s activation centers folded in: detect at logit > 0.', '']
+             f'- Outputs on the teacher\'s deployed scale (the teacher ONNX\'s centers, learned from its targets): '
+             f'detect at logit > 0.', '']
     if row:
         lines += ['## Metrics', '',
                   f'Headline `sensitivity_exclquiet` at fpr 0.005, mean over the 5 rotating folds: **{row["headline"]:.3f}** '
