@@ -5,7 +5,9 @@ dir_data <- 'data'
 dir_results <- 'data/raw/results'
 
 # don't have everything for model_general_v3
-models <- list.dirs(dir_results, full.names = F, recursive = F)
+models <- list.dirs(dir_results, full.names = F, recursive = F) %>% 
+  {.[!stringr::str_detect(. ,'^\\.')]}
+
 dir_audio <- 'data/raw/audio'
 dir_out <- 'data/01_results_compare'
 
@@ -23,11 +25,15 @@ for(i in idents){
       path_results <- file.path(dir_results, m, paste0(i, '_buzzdetect.csv'))
       if(!file.exists(path_results)){return(NULL)}
       data.table::fread(file=path_results) %>% 
-        select(start, activation_ins_buzz) %>% 
-        mutate(.before=0, model=m)
+        select(start, activation_ins_buzz)  %>% 
+        mutate(.before=0, model=m) 
     }
   ) %>% 
-    bind_rows() %>% 
+    bind_rows()
+
+  if(nrow(results)==0){next}
+
+  results <-  results %>% 
     tidyr::pivot_wider(
       id_cols = 'start',
       names_from = model,

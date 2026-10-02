@@ -32,6 +32,7 @@ condaenv.l8rr463d.requirements.txt
 # time. The build.R / step scripts and translations/ are the tracked record.
 01_annotate/**/annotations_combined.csv
 01_annotate/**/folds.csv
+!01_annotate/SeeNote - Model Testing/folds.csv
 01_annotate/**/summary*.csv
 02_set/sets/*/annotations.csv
 02_set/sets/*/folds.csv
