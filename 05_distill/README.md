@@ -47,6 +47,7 @@ main.py --rung B --runs "yamnet:a0.25:select:classes=ins_buzz+ambient_rain+human
 main.py ... --wsd 1p,2p,4p,10p          # budgets in passes over the rung (plan frame count / --batch)
 main.py ... --wsd-max 56000 --wsd-stop 1.3   # ceiling + 3 halvings (7000-56000); stop once a doubling gains < 1.3 points of hit@K
 ladder_record.py wsd --name fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd [--ref <cosine run>,...]
+python tools/human/wsd_svg.py [--tol 1.85]   # every WSD curve + the frontier it moves -> tools/human/wsd.svg
 ```
 
 - One **trunk** `<name>_wsd` trains at a constant `--lr` after a linear `--warmup` (300 steps). For each

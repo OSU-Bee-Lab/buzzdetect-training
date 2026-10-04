@@ -191,3 +191,59 @@ combination, so the flyover's snips can't be isolated). Backfilled for all 29 fi
   0.29-0.32; fast32h16 a0.25 worst, 0.03-0.11). Class subsets help here too (a0.50 fast32h16 0.134 -> 0.200).
 - Jet frames are 36-76% (typically ~55%) of the ~178 threshold-setting false positives in every student. No student rejects them.
 - Not measured: the teacher on the same probe (baseline for "did distillation make it worse").
+
+## Update 2026-10-04: step-budget curves (WSD, `chain_wsd.sh`)
+
+![step budget](../tools/human/wsd.svg)
+
+`tools/human/wsd_svg.py` draws it from `ladder.jsonl` and each run's `curve.json`. Seed 1, buzz+rain+human students.
+Stop rule: `--wsd-stop 1.85`, the rung-A hit@K repeat spread. The trunk ends at the first branch whose hit@K gain on
+the previous budget is under that. Headline seed noise is ~0.01-0.02 (two rung-A repeats only), so a single step
+of 0.01 here is not a finding.
+
+    trunk                         7k     14k    28k    56k    112k   (headline; * = the rule's last branch)
+    yamnet a0.50, rung C          0.723  0.722*
+    yamnet a0.25, rung B          0.694  0.692  0.688*
+    fast32h16 a0.50, rung C       0.605  0.621  0.639* 0.650  0.649   (run past the stop on purpose)
+    fast32h16 a0.25, rung C       0.546  0.569  0.603  0.612*
+
+- **YAMNet-trunk students are flat from 7k.** Both stop at the first chance (a0.50: +0.7 hit@K, a0.25: +2.3 then
+  +1.0) and the headline does not move (0.723 / 0.722; 0.694 / 0.692 / 0.688). 7k is enough for them.
+- **fast32h16 students keep learning to ~28-56k.** a0.50 gains 0.045 from 7k to 56k, then 112k adds nothing
+  (0.650 / 0.649; hit@K 64.8 / 65.1). The rule stops it at 28k (hit@K +1.1), 0.011 short of the 56k point:
+  inside seed noise, so the rule's stop is acceptable but not proven right. a0.25 is still rising slowly at
+  56k (+0.009 over 28k), where the rule stops it.
+- **Equivalence holds:** a 7k WSD branch matches the 7k cosine run at rung B, so the curves can be read
+  against every earlier ladder number. Headline 0.713 vs 0.705 (yamnet a0.50), 0.607 vs 0.610 (fast32h16 a0.50),
+  0.694 vs 0.685 (yamnet a0.25); mae_live 0.178 / 0.201 / 0.188 vs 0.181 / 0.203 / 0.191; hit@K within the
+  1.85 spread (+0.5, -1.7, -1.2). lost% at logit 0 is 2-6 points worse for the WSD branches: the calibration
+  offset again, not ranking. No lr retry needed.
+- **Frontier (right panel):** fast32h16 a0.50 at 28k (0.639, 2.5x) and fast32h16 a0.25 at 56k (0.612, 2.75x)
+  beat the best rung-B 7k student at their speed (0.613 at 2.49x, 0.542 at 2.74x): +0.03 and +0.07. The YAMNet-trunk end
+  does not move (14k/28k are no better than 7k). A proper rung-C frontier (each student at its own budget under
+  the rule) is the next step, as the old handoff planned.
+- **LADDER.md's "B to C did not advance" was a step-count confound, half confirmed.** At equal 7k steps, rung C
+  ≈ rung B (yamnet a0.50 0.723 vs 0.713; fast32h16 0.605 vs 0.607): C's 4x more data does nothing when each
+  frame is seen 1.2 times instead of 4.8. Given steps, C gets fast32h16 to 0.650. What is not measured is a
+  56k run at rung B, so how much of that gain needs C's data, rather than just more passes, is open.
+- **hit@K as the stop signal:** r with the headline 0.941 over 33 buzz+rain+human runs (hit% at logit 0: 0.957),
+  0.878 over all 68 (0.887). As good a proxy as hit% at 0, not better; it is kept because it is calibration-blind.
+  Ten rung-B runs are scored on the clean V pool and the rest on the old one (below), so these r are approximate.
+- Not yet done: the held-out test set on the 7k/28k/56k/112k fast32h16 a0.50 branches (Luke, when back).
+
+**Test-set contamination found while checking the backfill (open, Luke's call).** The 2026-10-02 re-plan
+(`c5551d1`) blacklisted the SeeNote out-of-sample test set: `Luke - Pollinator Habitat/2025-07-11/gru` and
+`Luke - Diel Drivers/2026-08-18`. `distill_train.pack()` trusts any pack without a fingerprint, so the older packs
+were never rebuilt:
+
+- Training packs A, B, B__fast32/h16/h32/twofast32 (and the B__*lo packs, fingerprinted before the re-plan) and
+  **C (yamnet)** hold `gru` slices. Every rung-B student, the rung-B WSD runs and the two yamnet rung-C WSD
+  branches trained on test-set audio. `C__fast32h16` was built after the re-plan: **the fast32h16 rung-C branches
+  trained clean**, so those are the ones to take to the held-out test.
+- V packs V, V__fast32/h16/h32/twofast32 hold 22 slices of 2026-08-18 (never trained on, but they fed the
+  hit@K stop decisions). The current plan swaps them for 22 other slices, and the packs rebuilt since have that pool.
+  So when `backfill_hitk.py` rebuilt the V packs for fast32lo, lo32, two32 and fast32h16lo, it scored 10
+  rung-B runs on a different pool (`RECOUNT DIFFERS`): at first 22 slices short (their mels were never cached),
+  then, after `cache_fe.py --rung V` filled them, the same frame count by coincidence (teacher buzz 7,415, not
+  7,685). Those 10 runs carry clean-pool hit@K. `backfill_hitk.py` now refuses to write when the frame
+  count or the teacher's buzz count differs.
