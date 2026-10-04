@@ -2,29 +2,41 @@
 
 The code is in: `main.py --wsd`, `distill_train.py --schedule wsd`, `ladder_record.py wsd`
 (05_distill/README.md, "Step budget", has the design and the choices made). What is left is the experiment.
-Delete this file when the curve is reported.
+Delete this file when the curves are reported.
 
-## Running (launched 2026-10-02 from the main checkout, replacing the cosine rung-C job)
+## Done: first rung-C curves (2026-10-02, old stop rule on hit% at logit 0, tolerance 1.3)
 
-    main.py --teacher v4-ft-ps-e60-moderate --rung C --wsd-max 56000 --wsd-stop 1.3 \
-      --runs "yamnet:a0.50:select:classes=ins_buzz+ambient_rain+human fast32h16:a0.50:classes=ins_buzz+ambient_rain+human"
+    run (rung C, buzz+rain+human)      steps  hit%@0  headline
+    yamnet a0.50 wsd7000                7000   61.2    0.723   (rung-B cosine 7k: 0.705)
+    yamnet a0.50 wsd14000              14000   59.8    0.722   -> stopped here (dhit -1.38, inside the 1.31 noise)
+    fast32h16 a0.50 wsd7000             7000   45.4    0.605   (rung-B cosine 7k: 0.610)
+    fast32h16 a0.50 wsd14000           14000   51.9    0.621
+    fast32h16 a0.50 wsd28000           28000   53.8    0.639
+    fast32h16 a0.50 wsd56000           56000   52.2    0.650   (hit% dipped, headline and mae_live improved)
 
-The 28k cosine job it replaced had not started training yet (it was caching; the cache keeps every finished
-slice). Trunks `fe_C_..._wsd`, branches `..._wsd7000/14000/28000/56000`, each judged. The trunk stops
-early once a doubling raises teacher-hit % (V buzz detections shared with the teacher, 100 - lost%) by
-< 1.3 points (checked 2026-10-02: across the 52 ladder runs it predicts the fold headline, r = 0.86 overall,
-0.96 for buzz+rain+human students; 1.3 points is about 0.009 headline). Log `05_distill/data/main_rungC_wsd.log`. Same command resumes. If 56k still improves,
-rerun with `--wsd-max 112000 --wsd-halvings 4` (the trunk extends from its last checkpoint).
+## Stop rule changed to hit@K (2026-10-03)
+
+hit% at logit 0 also measures the student's calibration offset: a small student trained by Huber regression
+under-calls a rare class (fast32h16 at 56k: 5,195 buzz calls on V vs the teacher's 7,685). hit@K (share of the
+teacher's K V buzz calls among the student's K top scores) reads ranking only, as the headline does. README,
+"Step budget", has it; `backfill_hitk.py` adds it to older runs; `ladder_record.py proxy` checks it against
+the headline. Calibration does not matter for deployment (buzzdetect users set the threshold); only the rule.
+
+## Running: `05_distill/chain_wsd.sh` (launched 2026-10-03 from the main checkout)
+
+    tools/launch_job.sh 05_distill/data/chain_wsd.log -- bash 05_distill/chain_wsd.sh
+
+Backfill + proxy check, then: rung-B equivalence (wsd7000 vs cosine 7k, yamnet + fast32h16 a0.50); yamnet
+a0.50 rung C to 56k under the new rule (the old rule cut it at 14k); fast32h16 a0.50 rung C to 112k with no
+stop (a check on the new rule); the rung-B a0.25 curve; fast32h16 a0.25 rung C to 56k. `--wsd-stop` is the
+rung-A hit@K spread (`ladder_record.py spread`). Same command resumes; a failed step is retried once, then skipped.
 
 ## Still to do
 
-1. **Equivalence check** (README's last paragraph on WSD): a `wsd7000` branch should land near the 7k cosine run of
-   the same student on `mae_live` and lost%. Cheapest: rung B, `--wsd 7000` on
-   `yamnet:a0.50:select:classes=ins_buzz+ambient_rain+human` vs the existing
-   `fe_B_yamnet_a0.50_s1_select_c-buzz-rain-human`. If clearly worse, the stable lr (1e-3) is wrong:
-   try `lr=2e-3` / `lr=5e-4` on the run spec.
-2. The rung-B curve on a frontier student: `yamnet:a0.25:select:classes=ins_buzz+ambient_rain+human`,
-   `--wsd 7000,14000,28000,70000` (17 min per 7k steps).
-3. Report each curve with `ladder_record.py wsd --name <trunk>` and the noise floor (lost% spread 1.3 points,
-   headline seed noise ~0.01-0.02); say plainly if it is flat past some budget or still rising at the last.
-   Then revisit LADDER.md's "B to C did not advance": the ladder was confounded by passes (A/B/C got ~19/5/1.2).
+1. Read the chain log: `ladder_record.py proxy` (does hit@K track the headline at least as well as hit% at 0,
+   r = 0.86 / 0.96?), each curve with `ladder_record.py wsd --name <trunk>`, and the equivalence (a `wsd7000`
+   branch near the cosine 7k run on `mae_live` and lost%; if clearly worse, try `lr=2e-3` / `lr=5e-4`).
+   The noise floor is two repeats only; say plainly where a curve is flat or still rising at its last point.
+2. Revisit LADDER.md's "B to C did not advance": the ladder was confounded by passes (A/B/C got ~19/5/1.2).
+3. Then a new sensitivity-speed frontier at rung C, like rung B's (`tools/human/frontier_*`): each student at
+   its own budget under the stop rule, not a fixed 7k (Luke, 2026-10-03: "eventually").

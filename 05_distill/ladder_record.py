@@ -6,6 +6,8 @@ the variant-qualification decision.
     ladder_record.py decide          # prints the qualifying rung-D variant arch key, or 'none'
     ladder_record.py gate            # exit 0 if rung C beat B by more than the A spread, else 1
     ladder_record.py wsd --name <trunk>   # step-budget curve: a WSD trunk's decayed branches (+ cosine reference)
+    ladder_record.py proxy           # how well each V readout (hit at 0, hit@K, mae) tracks the fold headline
+    ladder_record.py spread          # prints the rung-A hit@K spread (the --wsd-stop tolerance); exit 1 if unknown
 
 Reads `05_distill/data/runs/<name>/curve.json` (final val flips vs the teacher on
 the V pool), `05_distill/data/eval/<name>/folds_sx.csv` (eval_folds.py) and, if
@@ -87,6 +89,28 @@ def a_spread():
     return abs(a[0]['lost_pct'] - a[1]['lost_pct']) if len(a) >= 2 else None
 
 
+def final_val(name):
+    """curve.json's final V readout of a finished run, else None."""
+    d = os.path.join(LOCAL, 'runs', name)
+    if not os.path.exists(os.path.join(d, 'TRAIN_DONE')):
+        return None
+    return [x for x in json.load(open(os.path.join(d, 'curve.json')))['val'] if x.get('final')][-1]
+
+
+def hitk_pct(v):
+    """Teacher-hit at K: of the teacher's K buzz detections on V, the share among the student's K highest
+    buzz scores (distill_train.hit_at_k). Blind to the student's calibration, unlike hit% at logit 0. None
+    for a run that predates it (backfill_hitk.py)."""
+    return None if v is None or 'buzz_hitk' not in v else 100 * v['buzz_hitk'] / max(1, v['buzz_teacher'])
+
+
+def hitk_spread():
+    """|difference| of hit@K between the two rung-A repeats (the noise floor --wsd-stop is set against)."""
+    a = [hitk_pct(final_val(r['name'])) for r in rows() if is_ladder(r) and r['rung'] == 'A']
+    a = [x for x in a if x is not None]
+    return abs(a[0] - a[1]) if len(a) >= 2 else None
+
+
 def record(a):
     cur = json.load(open(os.path.join(LOCAL, 'runs', a.name, 'curve.json')))
     v = [x for x in cur['val'] if x.get('final')][-1]
@@ -100,6 +124,7 @@ def record(a):
            'val_frames': v['frames'], 'buzz_teacher_pos': v['buzz_teacher'], 'buzz_student_pos': v['buzz_student'],
            'buzz_gained': v['buzz_gained'], 'buzz_lost': v['buzz_lost'],
            'lost_pct': round(100 * v['buzz_lost'] / max(1, v['buzz_teacher']), 2),
+           'hitk_pct': None if hitk_pct(v) is None else round(hitk_pct(v), 2),
            'gained_pct': round(100 * v['buzz_gained'] / max(1, v['buzz_teacher']), 2),
            'other_gained': v['other_gained'], 'other_lost': v['other_lost'],
            'mae_live': round(v['mae_live'], 4), 'mae_buzz': round(v['mae_buzz'], 4),
@@ -185,8 +210,9 @@ def wsd(a):
     """A WSD trunk's step-budget curve: one line per decayed branch `<trunk><B>` (held-out V readouts from
     curve.json, headline where it was evaluated), with the cosine run of the same student (`<trunk>` minus
     `_wsd`, plus --ref names) as reference. hit% = teacher-hit %: of the teacher's buzz detections on V, the
-    share the student also makes (100 - lost%); dhit = its change from the previous branch (what --wsd-stop
-    reads). Not the headline, which is sensitivity against labels on the folds."""
+    share the student also makes at logit 0 (100 - lost%); hit@K = the same share among the student's K top
+    scores (K = the teacher's count; blind to calibration); dK = hit@K's change from the previous branch (what
+    --wsd-stop reads). Not the headline, which is sensitivity against labels on the folds."""
     import glob
     runs = os.path.join(LOCAL, 'runs')
     base = a.name[:-len('_wsd')] if a.name.endswith('_wsd') else a.name
@@ -194,8 +220,8 @@ def wsd(a):
                        if os.path.basename(p)[len(a.name):].isdigit()), key=lambda p: int(p.rsplit('_wsd', 1)[1]))
     print(f'\nstep-budget curve of {a.name} (V pool vs teacher; headline = {COL} @0.005 where evaluated)')
     print(f'{"run":58s} {"steps":>6s} {"passes":>6s} {"loss":>6s} {"mae":>6s} {"hit%":>6s} {"dhit":>6s} '
-          f'{"gain%":>6s} {"headline":>8s}')
-    prev = None
+          f'{"hit@K":>6s} {"dK":>6s} {"gain%":>6s} {"headline":>8s}')
+    prev = prevk = None
     refs = [base] + [r for r in (a.ref or '').split(',') if r]
     for i, p in enumerate([os.path.join(runs, r) for r in refs] + branches):
         n = os.path.basename(p)
@@ -211,15 +237,50 @@ def wsd(a):
         head = f'{sx(ev)[0]:8.3f}' if os.path.exists(ev) else f'{"-":>8s}'
         ref = i < len(refs)
         d = '' if ref or prev is None else f'{hit - prev:+6.2f}'
+        hk = hitk_pct(v)
+        dk = '' if ref or prevk is None or hk is None else f'{hk - prevk:+6.2f}'
+        hks = f'{hk:6.2f}' if hk is not None else f'{"-":>6s}'
         sched = cur['args'].get('schedule', 'cosine')
         print(f'{(n + (" (" + sched + " ref)" if ref else "")):58s} {cur["args"]["steps"]:>6d} '
               f'{cur.get("passes", float("nan")):6.2f} {loss:6.3f} {v["mae_live"]:6.3f} {hit:6.2f} {d:>6s} '
-              f'{100 * v["buzz_gained"] / max(1, v["buzz_teacher"]):6.2f} {head}')
+              f'{hks} {dk:>6s} {100 * v["buzz_gained"] / max(1, v["buzz_teacher"]):6.2f} {head}')
         if not ref:
-            prev = hit
-    sp = a_spread()
+            prev, prevk = hit, hk
+    sp, spk = a_spread(), hitk_spread()
     if sp is not None:
-        print(f'noise: rung-A repeat spread of teacher-hit % = {sp:.2f}; headline seed noise ~0.01-0.02')
+        print(f'noise: rung-A repeat spread of teacher-hit % = {sp:.2f}, of hit@K = '
+              f'{"-" if spk is None else f"{spk:.2f}"}; headline seed noise ~0.01-0.02')
+
+
+def spread(a):
+    sp = hitk_spread()
+    if sp is None:
+        sys.exit('no hit@K on both rung-A repeats yet (backfill_hitk.py)')
+    print(f'{sp:.2f}')
+
+
+def proxy(a):
+    """Pearson r of each V readout with the fold headline over every evaluated run (cosine and WSD), and for
+    the buzz+rain+human students alone: which readout a stop rule should trust."""
+    import numpy as np
+    pts = []
+    for r in rows():
+        v = final_val(r['name'])
+        if v is None or r.get('headline') is None:
+            continue
+        pts.append((r['name'], 'ambient_rain' in (r.get('classes') or ''), r['headline'], 100 - r['lost_pct'],
+                    hitk_pct(v), -v['mae_live']))
+    print(f'{"run":62s} {"headline":>8s} {"hit%":>6s} {"hit@K":>6s} {"mae":>6s}')
+    for n, _, h, h0, hk, m in pts:
+        print(f'{n:62s} {h:8.3f} {h0:6.2f} {"-" if hk is None else f"{hk:6.2f}":>6s} {-m:6.3f}')
+    for tag, sub in (('all', pts), ('buzz+rain+human', [p for p in pts if p[1]])):
+        full = [p for p in sub if p[4] is not None]
+        if len(full) < 3:
+            print(f'{tag}: {len(full)} runs with hit@K, too few for r')
+            continue
+        h = np.array([p[2] for p in full])
+        rs = {k: np.corrcoef(h, [p[i] for p in full])[0, 1] for k, i in (('hit%', 3), ('hit@K', 4), ('-mae', 5))}
+        print(f'{tag} ({len(full)} runs): r with headline  ' + '  '.join(f'{k} {x:+.3f}' for k, x in rs.items()))
 
 
 def decide(a):
@@ -241,7 +302,7 @@ def decide(a):
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
-    ap.add_argument('phase', choices=['record', 'table', 'decide', 'gate', 'streamcheck', 'frontier', 'wsd'])
+    ap.add_argument('phase', choices=['record', 'table', 'decide', 'gate', 'streamcheck', 'frontier', 'wsd', 'proxy', 'spread'])
     ap.add_argument('--ref', help='wsd: extra comma-separated run names to show as references (e.g. a 28k cosine run)')
     ap.add_argument('--rung'), ap.add_argument('--seed', type=int), ap.add_argument('--steps', type=int)
     ap.add_argument('--name'), ap.add_argument('--wall', type=float, default=0)
@@ -252,4 +313,4 @@ if __name__ == '__main__':
     ap.add_argument('--lam', type=float, default=0.1, help='code-regression loss weight the run used')
     a = ap.parse_args()
     {'record': record, 'table': table, 'decide': decide, 'gate': gate,
-     'streamcheck': streamcheck, 'frontier': frontier, 'wsd': wsd}[a.phase](a)
+     'streamcheck': streamcheck, 'frontier': frontier, 'wsd': wsd, 'proxy': proxy, 'spread': spread}[a.phase](a)

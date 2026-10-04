@@ -173,17 +173,24 @@ def test_main_wsd():
           f'{t}_wsd20 train (decay 17-20)' in out and f'{t}_wsd40 train (decay 34-40)' in out)
     r = run(base + ['--passes', '1'])
     check('--passes sets the cosine steps', '= 20 steps' in r.stdout)
-    for b, lost in ((100, 100), (200, 99)):                    # teacher-hit % 90.0 then 90.1: below a 1.3 tolerance
+    # hit@K 90.0 then 90.1 (below a 1.3 tolerance) while hit% at logit 0 jumps 70 -> 90: the rule reads hit@K
+    for b, lost, hitk in ((100, 300, 900), (200, 100, 901)):
         d = f'{D.RUNS}/{t}_wsd{b}'
         os.makedirs(d, exist_ok=True)
-        json.dump({'val': [{'final': True, 'buzz_lost': lost, 'buzz_teacher': 1000}]}, open(f'{d}/curve.json', 'w'))
+        json.dump({'val': [{'final': True, 'buzz_lost': lost, 'buzz_teacher': 1000, 'buzz_hitk': hitk}]},
+                  open(f'{d}/curve.json', 'w'))
         open(f'{d}/TRAIN_DONE', 'w').close()
     out = run(base + ['--wsd', '100,200,400', '--wsd-stop', '1.3']).stdout
-    check('--wsd-stop: after a plateau the trunk goes no further',
+    check('--wsd-stop: after a hit@K plateau the trunk goes no further',
           f'[plateau  ] {t}_wsd trunk to 340' in out and f'[plateau  ] {t}_wsd400 train' in out
           and f'[pending  ] {t}_wsd trunk to 170' in out)
     out = run(base + ['--wsd', '100,200,400', '--wsd-stop', '0.05']).stdout
     check('--wsd-stop: a gain above the tolerance keeps going', f'[pending  ] {t}_wsd trunk to 340' in out)
+    json.dump({'val': [{'final': True, 'buzz_lost': 100, 'buzz_teacher': 1000}]},
+              open(f'{D.RUNS}/{t}_wsd200/curve.json', 'w'))
+    r = run(base + ['--wsd', '100,200,400', '--wsd-stop', '1.3'])
+    check('--wsd-stop: a branch without hit@K is refused, not read as no plateau',
+          r.returncode != 0 and 'backfill_hitk.py' in r.stdout + r.stderr)
     open(D.PLAN, 'w').write(plan)
 
 

@@ -36,8 +36,8 @@ student becomes one warmup-stable-decay trunk `<name>_wsd` and one decayed branc
 `<name>_wsd<B>`, an ordinary run of B total steps (stable to (1 - --wsd-decay) B, then decay). Stages
 interleave: trunk to the first branch point, that branch (train, export, eval, ...), trunk on to the next.
 `--wsd-eval` limits the costly stages (export onwards) to some budgets; `--wsd-stop <points>` ends the trunk
-once a branch raises teacher-hit % (share of the teacher's V buzz detections the student also makes) on the
-previous branch by less than that. `ladder_record.py wsd` prints
+once a branch raises hit@K (share of the teacher's K V buzz detections among the student's K top scores,
+blind to calibration) on the previous branch by less than that. `ladder_record.py wsd` prints
 the curve. Budgets resolve to steps via the plan's frame count for the rung (`--passes` does the same for
 the cosine `--steps`).
 
@@ -71,9 +71,10 @@ def parse():
     ap.add_argument('--warmup', type=int, default=300, help='WSD linear warmup steps')
     ap.add_argument('--wsd-eval', default='', help='budgets (as given to --wsd) that get export/eval/probe/speed/record; '
                                                    'default all')
-    ap.add_argument('--wsd-stop', type=float, help='end the trunk once a branch raises teacher-hit %% (V buzz detections '
-                                                   'the student shares with the teacher) by less than this on the '
-                                                   'previous one (1.3 = the rung-A repeat spread)')
+    ap.add_argument('--wsd-stop', type=float, help='end the trunk once a branch raises hit@K (share of the teacher\'s '
+                                                   'K V buzz detections among the student\'s K top scores) by less '
+                                                   'than this on the previous one (set it from ladder_record.py '
+                                                   'wsd\'s rung-A hit@K spread)')
     ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('--batch', type=int, default=512)
     ap.add_argument('--eval-every', type=int, default=2000)
@@ -162,22 +163,26 @@ def wsd_points():
     return pts
 
 
-def branch_hit_pct(name):
-    """Teacher-hit % of a finished run: of the teacher's buzz detections on V, the share the student also
-    makes (100 - lost%; curve.json's final entry), else None."""
+def branch_hitk_pct(name):
+    """Teacher-hit at K of a finished run: of the teacher's K buzz detections on V, the share among the
+    student's K highest buzz scores (curve.json's final entry, distill_train.hit_at_k), else None. Not hit%
+    at logit 0: a small student under-calls (shrinkage on a rare class), and a shift in that offset moved
+    hit% at 0 down while the headline rose (fast32h16 rung C, 28k -> 56k, 2026-10-02)."""
     d = os.path.join(D.RUNS, name)
     if not os.path.exists(os.path.join(d, 'TRAIN_DONE')):
         return None
     v = [x for x in json.load(open(os.path.join(d, 'curve.json')))['val'] if x.get('final')][-1]
-    return 100 - 100 * v['buzz_lost'] / max(1, v['buzz_teacher'])
+    if 'buzz_hitk' not in v:
+        sys.exit(f'--wsd-stop: {name} predates hit@K; run 05_distill/backfill_hitk.py --names {name}')
+    return 100 * v['buzz_hitk'] / max(1, v['buzz_teacher'])
 
 
 def plateaued(earlier):
-    """--wsd-stop: some branch among `earlier` (ascending budgets) raised teacher-hit % on its predecessor by less
+    """--wsd-stop: some branch among `earlier` (ascending budgets) raised hit@K on its predecessor by less
     than the tolerance, so the trunk is not taken further."""
     if A.wsd_stop is None:
         return False
-    hp = [branch_hit_pct(n) for n in earlier]
+    hp = [branch_hitk_pct(n) for n in earlier]
     return any(p is not None and c is not None and c - p < A.wsd_stop for p, c in zip(hp, hp[1:]))
 
 

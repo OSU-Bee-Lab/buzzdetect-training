@@ -214,6 +214,16 @@ def batches(sh, batch, steps, seed=0, depth=6):
 
 # ---------------------------------------------------------------- eval
 
+def hit_at_k(s, t):
+    """Of the K frames the teacher calls (t), how many are among the student's K highest scores (s). Unlike
+    hits at the student's own logit 0, a shift in the student's calibration cannot move it: a student that
+    under-calls (squared-error shrinkage on a rare class) is judged on its ranking alone."""
+    k = int(t.sum())
+    if k == 0:
+        return 0
+    return int(t[np.argpartition(-s, k - 1)[:k]].sum())
+
+
 def val_flips(model, val, limit=None, batch=512):
     """Detections vs the teacher's cached logits on the validation pool."""
     n = val.n if not limit else min(limit, val.n)
@@ -229,8 +239,9 @@ def val_flips(model, val, limit=None, batch=512):
     lost = (~sp & tp).sum(0)
     B = ACT_BUZZ
     others = [c for c in ACT_LIVE if c != B]
-    out = {'frames': int(n), 'buzz_teacher': int(tp[:, B].sum()), 'buzz_student': int(sp[:, B].sum()),
-           'buzz_gained': int(gained[B]), 'buzz_lost': int(lost[B]),
+    k = int(tp[:, B].sum())
+    out = {'frames': int(n), 'buzz_teacher': k, 'buzz_student': int(sp[:, B].sum()),
+           'buzz_gained': int(gained[B]), 'buzz_lost': int(lost[B]), 'buzz_hitk': hit_at_k(S[:, B], tp[:, B]),
            'other_gained': int(gained[others].sum()), 'other_lost': int(lost[others].sum()),
            'mae_live': float(np.abs(S - T)[:, ACT_LIVE].mean()), 'mae_buzz': float(np.abs(S - T)[:, B].mean()),
            'per_class_flips': {ACT_CLASSES[c]: [int(gained[c]), int(lost[c])] for c in ACT_LIVE}}
@@ -239,7 +250,7 @@ def val_flips(model, val, limit=None, batch=512):
 
 def fmt_val(step, v):
     return (f'[val {step}] ins_buzz teacher {v["buzz_teacher"]} student {v["buzz_student"]} '
-            f'gained {v["buzz_gained"]} lost {v["buzz_lost"]} | other classes gained '
+            f'gained {v["buzz_gained"]} lost {v["buzz_lost"]} hit@K {v["buzz_hitk"]} | other classes gained '
             f'{v["other_gained"]} lost {v["other_lost"]} | mae live {v["mae_live"]:.3f} buzz '
             f'{v["mae_buzz"]:.3f} ({v["frames"]} frames)')
 

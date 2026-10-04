@@ -45,7 +45,7 @@ steps-versus-quality curve for about the cost of the longest budget:
 ```bash
 main.py --rung B --runs "yamnet:a0.25:select:classes=ins_buzz+ambient_rain+human" --wsd 7000,14000,28000,70000
 main.py ... --wsd 1p,2p,4p,10p          # budgets in passes over the rung (plan frame count / --batch)
-main.py ... --wsd-max 56000 --wsd-stop 1.3   # ceiling + 3 halvings (7000-56000); stop once a doubling gains < 1.3 teacher-hit %
+main.py ... --wsd-max 56000 --wsd-stop 1.3   # ceiling + 3 halvings (7000-56000); stop once a doubling gains < 1.3 points of hit@K
 ladder_record.py wsd --name fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd [--ref <cosine run>,...]
 ```
 
@@ -58,11 +58,16 @@ ladder_record.py wsd --name fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd [-
   limits those costly stages to some budgets; every branch still has the cheap V readouts (`mae_live`,
   buzz lost/gained) in its `curve.json`.
 - Stages interleave (trunk to the first branch point, that branch, trunk on), so early points arrive early.
-  `--wsd-stop <points>` ends the trunk once a branch raises **teacher-hit %** on the one before by less than
-  that (1.3 = the rung-A repeat spread). Teacher-hit % is the share of the teacher's buzz detections on the
-  held-out V pool that the student also makes (100 - lost%): agreement with the teacher, not the headline's
-  sensitivity against labels, but it predicts the headline (r = 0.86 over 52 ladder runs, 0.96 for
-  buzz+rain+human students; 2026-10-02). Off unless given.
+  `--wsd-stop <points>` ends the trunk once a branch raises **hit@K** on the one before by less than that
+  (set it from the rung-A hit@K spread that `ladder_record.py wsd` prints). hit@K: the teacher makes K buzz
+  detections on the held-out V pool; hit@K is the share of them among the student's K highest buzz scores.
+  It replaced teacher-hit % (the share the student also calls at its own logit 0, 100 - lost%) on 2026-10-03.
+  A small student trained by Huber regression under-calls a rare class (fast32h16 rung C: 5,195 buzz calls on
+  V against the teacher's 7,685), so hit% at 0 also measures that offset: from 28k to 56k steps it fell 1.6
+  points while mae_live and the headline improved. hit@K reads ranking only, as the headline does (its
+  threshold is set per fold). `ladder_record.py proxy` compares the readouts against the headline; hit% at 0
+  had r = 0.86 over 52 ladder runs (0.96 for buzz+rain+human students). Runs older than hit@K get it from
+  `backfill_hitk.py` (re-scores V; main.py refuses to judge a stop without it). Off unless given.
 - A finished trunk rerun with a larger last budget **extends** from its last checkpoint (its `--steps` is a
   horizon, not part of the schedule). Everything resumes like any run.
 - Ladder rows carry `schedule`, `lr`, `warmup`, `decay_from` and `passes`. WSD rows are left out of
