@@ -6,7 +6,7 @@ Below it, a bar chart of the jet fold: for each non-dominated student, 1_95's fa
 rotating-fold threshold (fpr 0.005 over every rotating fold's negatives) is applied to it, on all its negatives and on its
 jet frames alone, against the rotating folds' own worst FPR at that threshold (eval_folds.py probe -> probe.json).
 
-    python tools/human/frontier_svg.py [out.svg]      (plain python; reads the per-teacher ladder.jsonl)
+    python tools/human/frontier_svg.py [out.svg]      (train env; reads the comparable rows of 05_distill/ladder/<teacher>.jsonl)
 """
 import json
 import os
@@ -15,6 +15,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', '..', '05_distill'))
 import dpaths as D  # noqa: E402
+import ladder_record as LR  # noqa: E402
 
 BASELINE = 0.414
 ARCH_COLOUR = {'a0.25': '#d95f02', 'a0.375': '#7570b3', 'a0.50': '#1b9e77', 'a0.50_d12': '#e7298a'}
@@ -26,8 +27,7 @@ H2 = 340        # bar chart panel under the scatter
 
 def load():
     out = []
-    for line in open(os.path.join(D.LOCAL, 'ladder.jsonl')):
-        r = json.loads(line)
+    for r in LR.rows():            # comparable rows only (ladder_record.comparability)
         if r.get('rung') != 'B' or r.get('seed') != 1 or not r.get('x_yamnet200'):
             continue
         if r.get('schedule', 'cosine') != 'cosine':     # WSD branches belong to `ladder_record.py wsd`
@@ -141,6 +141,8 @@ def marker(kind, x, y, c, ring):
 
 def main():
     rows = load()
+    if not rows:
+        sys.exit('no comparable rung-B cosine rows in the ladder yet')
     xs = [r['x_yamnet200'] for r in rows]
     x0, x1 = 0.6, max(xs) + 0.3
     y0, y1 = 0.35, 0.75

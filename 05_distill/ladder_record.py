@@ -8,11 +8,26 @@ the variant-qualification decision.
     ladder_record.py wsd --name <trunk>   # step-budget curve: a WSD trunk's decayed branches (+ cosine reference)
     ladder_record.py proxy           # how well each V readout (hit at 0, hit@K, mae) tracks the fold headline
     ladder_record.py spread          # prints the rung-A hit@K spread (the --wsd-stop tolerance); exit 1 if unknown
+    ladder_record.py repeats         # runs the repeat rule asks for: one main.py command per line
 
-Reads `05_distill/data/runs/<name>/curve.json` (final val flips vs the teacher on
-the V pool), `05_distill/data/eval/<name>/folds_sx.csv` (eval_folds.py) and, if
-present, `05_distill/data/models/<name>/speed_{20,200}.json`. Train env.
+The ladder is the distillation experiment log, tracked at `05_distill/ladder/<teacher>.jsonl` (D.LADDER).
+Each row carries `key`, what makes its numbers comparable: the teacher build, the V pool (the plan's V slices)
+and the eval roster (the teacher set's rotating folds). Every comparison here reads only the rows whose key
+matches the current one; the others are counted on stderr, never mixed in (2026-10-04: a V pool changed
+under 64 runs and nothing said so). Closed eras: `archive/<era>/distill/` (tools/archive_era.py).
+
+Repeat rule (LOOP.md's "confirm a large gain with one repeat run"): a cosine run that beats every other
+student of its rung at its speed or faster by more than HEADLINE_NOISE, with no repeat at another seed yet, gets one
+repeat at the next seed before its point counts. `frontier` lists them; `repeats` prints the commands.
+
+Reads `05_distill/data/<teacher>/runs/<name>/curve.json` (final val flips vs the teacher on the V pool),
+`.../eval/<name>/folds_sx.csv` (eval_folds.py) and, if present, `.../models/<name>/speed_{20,200}.json`.
+Train env.
 """
+import functools
+import hashlib
+import subprocess
+import time
 import argparse
 import json
 import os
@@ -29,6 +44,7 @@ LADDER = D.LADDER
 COL = 'sensitivity_exclquiet'
 TIERS = ['faint', 'quiet', 'background', 'untagged', 'normal', 'loud']
 HEADLINE_TOL = 0.03
+HEADLINE_NOISE = 0.02          # headline seed noise, from the two rung-A repeats (FRONTENDS.md); the repeat rule's bar
 REFS = [(f'baseline {D.BASELINE}', os.path.join(MAIN, 'models', D.BASELINE, 'folds_sx.csv')),
         (f'teacher honest rotation ({D.TEACHER})', os.path.join(MAIN, 'models', D.TEACHER, 'folds_sx.csv')),
         ('teacher ONNX via harness (trained on folds, inflated)', os.path.join(LOCAL, 'eval', 'teacher', 'folds_sx.csv'))]
@@ -54,8 +70,65 @@ def speed(name):
     return out
 
 
-def rows():
-    return [json.loads(l) for l in open(LADDER)] if os.path.exists(LADDER) else []
+def _sha(lines):
+    return hashlib.sha256('\n'.join(lines).encode()).hexdigest()[:12]
+
+
+@functools.lru_cache(maxsize=None)
+def comparability():
+    """What makes two rows comparable: teacher build, V pool, eval roster (short hashes)."""
+    plan = pd.read_csv(D.PLAN, usecols=['relpath', 'hour', 'first_rung'])
+    v = plan[plan['first_rung'] == 'V']
+    folds = pd.read_csv(os.path.join(MAIN, '02_set', 'sets', D.spec().set, 'folds.csv'), dtype=str)
+    rot = folds[folds['role'] == 'rotate']
+    return {'teacher': json.load(open(D.TEACHER_JSON))['onnx_sha256'][:12],
+            'v_pool': _sha(sorted(f'{r}\t{h}' for r, h in zip(v['relpath'], v['hour']))),
+            'eval_folds': _sha(sorted(rot.astype(str).agg('\t'.join, axis=1)))}
+
+
+def rows(everything=False):
+    """The ladder rows comparable with the current teacher, V pool and eval roster (all of them with
+    `everything`). The rest are counted on stderr."""
+    rs = [json.loads(l) for l in open(LADDER)] if os.path.exists(LADDER) else []
+    if everything:
+        return rs
+    key = comparability()
+    keep = [r for r in rs if r.get('key') == key]
+    if len(keep) < len(rs):
+        print(f'[ladder] {len(rs) - len(keep)} of {len(rs)} rows left out: not comparable with the current '
+              f'teacher / V pool / eval roster {key}', file=sys.stderr)
+    return keep
+
+
+def twin(r):
+    """Everything that defines a run except its seed."""
+    return tuple(r.get(k) for k in ('rung', 'frontend', 'arch', 'init', 'classes', 'lam', 'lr', 'schedule', 'steps'))
+
+
+def needs_repeat(rs):
+    """[(row, gain)] for the cosine runs the repeat rule asks to repeat: gain over the best other student
+    of the same rung at the same speed or faster > HEADLINE_NOISE, and no run of the same student at another
+    seed. A student alone on its rung gains over nothing, so it is repeated too."""
+    cos = [r for r in rs if is_cosine(r) and r.get('x_yamnet200') and r.get('headline') is not None]
+    out = []
+    for r in cos:
+        others = [o['headline'] for o in cos if twin(o) != twin(r) and o['rung'] == r['rung']
+                  and o['x_yamnet200'] >= r['x_yamnet200']]
+        gain = r['headline'] - max(others, default=0.0)
+        if gain > HEADLINE_NOISE and not any(twin(o) == twin(r) and o['seed'] != r['seed'] for o in cos):
+            out.append((r, gain))
+    return out
+
+
+def repeat_cmd(r):
+    """The main.py command that repeats `r` at the next seed (None for a run main.py did not name)."""
+    if not r['name'].startswith('fe_'):
+        return None
+    spec = f'{r.get("frontend") or "yamnet"}:{r.get("arch") or "a0.50"}' + (f':{r["init"]}' if r.get('init') else '') \
+        + (f':classes={r["classes"].replace(",", "+")}' if r.get('classes') else '') \
+        + (f':lam={r["lam"]:g}' if r.get('lam') not in (None, 0.1) else '') \
+        + (f':lr={r["lr"]:g}' if r.get('lr') not in (None, 0.001) else '')
+    return f'main.py --rung {r["rung"]} --seed {r["seed"] + 1} --steps {r["steps"]} --runs "{spec}"'
 
 
 def is_cosine(r):
@@ -129,7 +202,10 @@ def record(a):
            'other_gained': v['other_gained'], 'other_lost': v['other_lost'],
            'mae_live': round(v['mae_live'], 4), 'mae_buzz': round(v['mae_buzz'], 4),
            'headline': head, 'headline_inclusive': incl, 'per_fold': per, 'tiers': tiers,
-           'wall_s': round(a.wall), **speed(a.name)}
+           'wall_s': round(a.wall), **speed(a.name),
+           'key': comparability(), 'date': time.strftime('%Y-%m-%d'),
+           'commit': subprocess.run(['git', '-C', MAIN, 'rev-parse', '--short', 'HEAD'], capture_output=True,
+                                    text=True).stdout.strip()}
     with open(LADDER, 'a') as f:
         f.write(json.dumps(row) + '\n')
     print('[ladder]', json.dumps(row))
@@ -204,6 +280,19 @@ def frontier(a):
         print(f'{r["name"]:44s} {r.get("frontend", "yamnet"):9s} {r.get("arch", "a0.50"):10s} {r.get("init", "") or "-":7s} '
               f'{r.get("x_yamnet20", float("nan")):9.2f} {r.get("x_yamnet200", float("nan")):10.2f} '
               f'{r["headline"]:8.3f} {100 * r["headline"] / base:5.0f}% {r["headline_inclusive"]:10.3f} {r["lost_pct"]:6.1f}')
+    rep = needs_repeat(rows())
+    print(f'\nrepeat rule (gain over every student of its rung at its speed or faster > {HEADLINE_NOISE}, no other seed yet): '
+          + ('none' if not rep else ''))
+    for r, g in rep:
+        print(f'  {r["name"]}: +{g:.3f} -> {repeat_cmd(r) or "(not a main.py run: repeat by hand)"}')
+
+
+def repeats(a):
+    """One main.py command per run the repeat rule asks for (a chain can run them as they are)."""
+    for r, _ in needs_repeat(rows()):
+        c = repeat_cmd(r)
+        if c:
+            print(c)
 
 
 def wsd(a):
@@ -302,7 +391,8 @@ def decide(a):
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
-    ap.add_argument('phase', choices=['record', 'table', 'decide', 'gate', 'streamcheck', 'frontier', 'wsd', 'proxy', 'spread'])
+    ap.add_argument('phase', choices=['record', 'table', 'decide', 'gate', 'streamcheck', 'frontier', 'wsd', 'proxy', 'spread',
+                                     'repeats'])
     ap.add_argument('--ref', help='wsd: extra comma-separated run names to show as references (e.g. a 28k cosine run)')
     ap.add_argument('--rung'), ap.add_argument('--seed', type=int), ap.add_argument('--steps', type=int)
     ap.add_argument('--name'), ap.add_argument('--wall', type=float, default=0)
@@ -313,4 +403,5 @@ if __name__ == '__main__':
     ap.add_argument('--lam', type=float, default=0.1, help='code-regression loss weight the run used')
     a = ap.parse_args()
     {'record': record, 'table': table, 'decide': decide, 'gate': gate,
-     'streamcheck': streamcheck, 'frontier': frontier, 'wsd': wsd, 'proxy': proxy, 'spread': spread}[a.phase](a)
+     'streamcheck': streamcheck, 'frontier': frontier, 'wsd': wsd, 'proxy': proxy, 'spread': spread,
+     'repeats': repeats}[a.phase](a)

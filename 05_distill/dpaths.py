@@ -16,7 +16,9 @@ Layout (all under paths that live outside the repo):
           _shards/                       streaming shards (rungs C-D)
   <repo main checkout>/05_distill/data/     (gitignored, like 02_set's data; main checkout even from a worktree)
       _shared/arch/                      speed timings of random-weight candidates, frontend_only.onnx
-      <teacher>/                         runs/, models/, eval/, shards/ (packed rungs), ladder.jsonl
+      <teacher>/                         runs/, models/, eval/, shards/ (packed rungs)
+  <repo main checkout>/05_distill/ladder/   (TRACKED: the distillation experiment log)
+      <teacher>.jsonl                    one row per judged run (ladder_record.py record); comparability key in each row
 
 `<teacher>` is the name of the model dir the teacher lives in: `models/<name>/` in this project
 (config_model.json: classes, activation_centers, set, folds_train) and `<buzzdetect_dest>/<name>/model.onnx`.
@@ -74,7 +76,10 @@ LOCAL_ROOT = os.environ.get('DISTILL_LOCAL_ROOT') or os.path.join(MAIN, '05_dist
 SHARED = os.path.join(LOCAL_ROOT, '_shared')
 LOCAL = os.path.join(LOCAL_ROOT, TEACHER)
 RUNS, MODELS, EVAL, SHARDS = (os.path.join(LOCAL, d) for d in ('runs', 'models', 'eval', 'shards'))
-LADDER = os.path.join(LOCAL, 'ladder.jsonl')
+# the distillation experiment log is tracked (it was a gitignored data file until 2026-10-04); tests, which point
+# DISTILL_LOCAL_ROOT at a temp dir, keep theirs there
+LADDER_DIR = os.path.join(MAIN, '05_distill', 'ladder') if not os.environ.get('DISTILL_LOCAL_ROOT') else LOCAL
+LADDER = os.path.join(LADDER_DIR, f'{TEACHER}.jsonl' if not os.environ.get('DISTILL_LOCAL_ROOT') else 'ladder.jsonl')
 ARCH = os.path.join(SHARED, 'arch')
 FRONTEND_ONNX = os.path.join(ARCH, 'frontend_only', 'model.onnx')
 

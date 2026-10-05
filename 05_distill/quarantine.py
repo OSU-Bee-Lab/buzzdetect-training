@@ -3,9 +3,9 @@
     python 05_distill/quarantine.py --tag contaminated_2026-10-02 --keep fe_C_fast32h16_ [--dry-run]
 
 Every run under runs/ is moved unless its name starts with a --keep prefix (repeatable) or `test_`:
-runs/<n>, models/<n> and eval/<n> go to <teacher data>/_<tag>/{runs,models,eval}/<n>, and its ladder.jsonl
-rows to _<tag>/ladder.jsonl. _<tag>/manifest.json lists each moved run with its curve.json args, which is
-what chain_clean.sh retrains from. Idempotent: a rerun moves what is still live and appends to the manifest.
+runs/<n>, models/<n> and eval/<n> go to <teacher data>/_<tag>/{runs,models,eval}/<n>, and its ladder rows
+to the tracked 05_distill/ladder/<teacher>.<tag>.jsonl beside the live log. _<tag>/manifest.json lists each
+moved run with its curve.json args, which is what chain_clean.sh retrains from. Idempotent: a rerun moves what is still live and appends to the manifest.
 
 Written for 2026-10-04: packs without a fingerprint predated the 2026-10-02 SeeNote blacklist, so every
 student except the fast32h16 rung-C ones (C__fast32h16 was packed after it) trained on test-set audio
@@ -44,7 +44,7 @@ def main():
     json.dump(man, open(man_path, 'w'), indent=1)          # manifest first: a crash below leaves it complete
     rows = [json.loads(line) for line in open(D.LADDER)]
     moved = [r for r in rows if r['name'] in names]
-    with open(os.path.join(q, 'ladder.jsonl'), 'a') as f:
+    with open(D.LADDER[:-len('.jsonl')] + f'.{a.tag}.jsonl', 'a') as f:
         f.writelines(json.dumps(r) + '\n' for r in moved)
     tmp = D.LADDER + '.tmp'
     with open(tmp, 'w') as f:

@@ -47,7 +47,9 @@ Check if you need further interpretation on folds.
 
 ## Experiment history
 
-`log.jsonl` holds the current era only. Closed eras live in
+`log.jsonl` holds the current era only. The distillation arm logs to
+`05_distill/ladder/<teacher>.jsonl` (tracked, script-written by
+`05_distill/ladder_record.py record`). Closed eras, both logs, live in
 `archive/<first-date>_<slug>/`; `archive/README.md` covers the layout, how to
 close an era, and how to reach deleted branches (`refs/archive/<slug>`).
 

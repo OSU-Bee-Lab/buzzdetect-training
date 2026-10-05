@@ -27,7 +27,7 @@ teacher classes (the head has only those outputs; must include ins_buzz), `lam=0
   eval      eval_folds.py run        headline sensitivity_exclquiet @ fpr 0.005 on the rotating folds
   probe     eval_folds.py probe      1_95 (jet fold, a training fold) scored apart from the headline: threshold, sens, jet share of FPs
   speed     export_student.py time   x YAMNet on the GPU, 20 s and 200 s chunks
-  record    ladder_record.py record  one row in 05_distill/data/<teacher>/ladder.jsonl
+  record    ladder_record.py record  one row in the experiment log, 05_distill/ladder/<teacher>.jsonl
   deploy    deploy_student.py        only with --deploy: copy into buzzdetect (--force to overwrite)
 
 Step-budget curve (`--wsd-max 56000`: the ceiling and --wsd-halvings (3) halvings of it, 7000-56000; or a list,

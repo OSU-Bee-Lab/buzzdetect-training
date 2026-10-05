@@ -22,6 +22,9 @@ eras ran. Each holds:
 - `README.md` — what made these numbers comparable, and what ended that
 - `notes/` — the per-experiment working notes
 - `set/` — a snapshot of the training set as of the cutover *(where it survives)*
+- `distill/` — the distillation logs (`05_distill/ladder/<teacher>.jsonl`, one row
+  per judged student) as they stood at cutover *(from the first era closed after
+  2026-10-04; earlier distillation results were in a gitignored file)*
 
 ## Why the set snapshot is here
 

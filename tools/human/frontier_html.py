@@ -4,7 +4,7 @@ Hover a point for its exact model name and numbers; click to pin it and see per-
 jet-fold probe. Filters: trunk, front end, class subset, speed/sensitivity range, name search; the dashed frontier can be
 computed over the visible points or over every run.
 
-    python tools/human/frontier_html.py [out.html]      (plain python; reads the per-teacher ladder.jsonl)
+    python tools/human/frontier_html.py [out.html]      (train env; frontier_svg.load's comparable ladder rows)
 """
 import json
 import os

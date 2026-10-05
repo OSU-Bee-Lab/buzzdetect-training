@@ -2,7 +2,11 @@
 
 An era ends when something makes its logged numbers stop meaning what they said:
 the metric, the eval design, the fold roster, or the training data. At that point
-`log.jsonl` gets archived and started fresh. Doing that by hand is how the
+`log.jsonl` gets archived and started fresh, and so do the distillation logs
+(`05_distill/ladder/<teacher>.jsonl`): their headline is the same metric on the
+teacher's folds, scored against the era baseline. They go to `<era>/distill/`;
+a tagged file beside them (`<teacher>.<tag>.jsonl`, e.g. a quarantine) is
+archived and removed. Doing that by hand is how the
 2026-08 archive ended up in a gitignored directory and evaporated.
 
     python tools/archive_era.py --slug cv-medium-v2            # preflight only
@@ -36,6 +40,31 @@ from collections import Counter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ARCHIVE = os.path.join(ROOT, 'archive')
+DISTILL_LADDERS = os.path.join(ROOT, '05_distill', 'ladder')
+DISTILL_DATA = os.path.join(ROOT, '05_distill', 'data')
+
+
+def distill_logs():
+    """[(path, rows, live)]: every distillation ladder; live = <teacher>.jsonl for a teacher with a data dir
+    (truncated at cutover), else a tagged file (archived and removed)."""
+    if not os.path.isdir(DISTILL_LADDERS):
+        return []
+    teachers = set(os.listdir(DISTILL_DATA)) if os.path.isdir(DISTILL_DATA) else set()
+    out = []
+    for f in sorted(os.listdir(DISTILL_LADDERS)):
+        if f.endswith('.jsonl'):
+            path = os.path.join(DISTILL_LADDERS, f)
+            with open(path) as fh:
+                n = sum(1 for line in fh if line.strip())
+            out.append((path, n, f[:-len('.jsonl')] in teachers))
+    return out
+
+
+def distill_job_live():
+    """A distillation job appends to its ladder; archiving under it would lose or split rows."""
+    r = subprocess.run(['pgrep', '-af', '[d]istill_train.py|[0]5_distill/main.py|[c]hain_[a-z_]*\\.sh'],
+                       capture_output=True, text=True)
+    return [l for l in r.stdout.splitlines() if l.strip()]
 
 # Set products worth snapshotting: all gitignored, all required to know what a
 # logged float measured.
@@ -209,6 +238,13 @@ def preflight(entries, setname):
                         ' Run build.R — the snapshot is what makes the log'
                         ' interpretable.')
     facts['setdir'] = setdir
+
+    # 5. Distillation logs: archived with the era; never while a distillation job is writing to them.
+    facts['distill'] = distill_logs()
+    live_jobs = distill_job_live()
+    if facts['distill'] and live_jobs:
+        blockers.append('A distillation job is running and appends to 05_distill/ladder/:\n      '
+                        + '\n      '.join(live_jobs[:5]) + '\n    Let it finish (or stop it) first.')
     return blockers, warnings, facts
 
 
@@ -305,6 +341,10 @@ Counts from `set/`, `ins_buzz` under the translation named above.
 
 {roster}
 
+## Distillation
+
+{distill}
+
 ## Notes and code
 
 `notes/` holds {nnotes}.
@@ -338,7 +378,18 @@ def build_readme(entries, facts, setname, slug, roster, nnotes, recovered):
         last=facts['last_date'], setname=setname, extract=extract,
         nfolds=roles.get('rotate', 0), ntrain=roles.get('train', 0),
         top=top, roster=roster or '<!-- roster unavailable -->',
-        nnotes=nnotes, recovered=rec)
+        nnotes=nnotes, recovered=rec, distill=distill_section(facts.get('distill', [])))
+
+
+def distill_section(logs):
+    if not logs:
+        return 'No distillation logs at cutover.'
+    lines = ['`distill/` holds the distillation logs (`05_distill/ladder/`) as they stood, one row per judged',
+             'student; `05_distill/ladder_record.py` reads them (`key` says what each row is comparable with).', '']
+    lines += [f'- `{os.path.basename(p)}`: {n} rows' + ('' if live else ' (tagged; removed from the live dir)')
+              for p, n, live in logs]
+    lines += ['', '<!-- TODO: the distillation verdicts worth carrying forward (frontier, step budgets). -->']
+    return '\n'.join(lines)
 
 
 # ---------------------------------------------------------------- write
@@ -399,6 +450,15 @@ def do_write(entries, facts, setname, slug, translation, tag):
                     f'{facts["first_date"]} → {facts["last_date"]} | '
                     f'TODO metric | TODO ended by |\n')
 
+    if facts.get('distill'):
+        os.makedirs(os.path.join(dest, 'distill'))
+        for path, _, live in facts['distill']:
+            shutil.copy(path, os.path.join(dest, 'distill', os.path.basename(path)))
+            if live:
+                open(path, 'w').close()
+            else:
+                os.remove(path)
+
     open(os.path.join(ROOT, 'log.jsonl'), 'w').close()
     if tag:
         git('tag', '-a', tag, '-m', f'Final state of the {era} log.')
@@ -446,6 +506,8 @@ def main():
     print(f'\nwrote {dest}')
     print(f'  orphaned notes rescued: {len(recovered)}')
     print('  log.jsonl truncated')
+    for path, n, live in facts.get('distill', []):
+        print(f'  {os.path.relpath(path, ROOT)}: {n} rows archived, ' + ('truncated' if live else 'removed'))
     print(f"""
 Not done for you — these need judgment:
 
@@ -453,6 +515,10 @@ Not done for you — these need judgment:
      new row in archive/README.md. The prose is the point of the archive.
   2. Rewrite LOOP.md's Baseline section — there is no baseline until one is
      rerun on the new data, and the old model is no longer a valid comparator.
+     The distillation ladders start empty too: set DISTILL_BASELINE /
+     `distill_baseline` to the new era baseline, and re-judge (eval) the
+     students worth keeping, starting with the rung-A repeats (--wsd-stop's
+     noise spread comes from them).
   3. Do NOT prune the worktrees. LOOP.md's step 6 is explicit about why:
      a worktree that only trained is ~50 MB, and removing them has
      repeatedly destroyed the only copy of something (an embedder a

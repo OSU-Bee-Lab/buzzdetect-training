@@ -108,7 +108,8 @@ depends on, and stamped so a stale product is caught instead of silently mixed:
 | plan (slices, rungs, blacklist) | `<distill_cache>/<teacher>/_manifest/` | the teacher's training deployments | that teacher's students |
 | teacher targets | `<distill_cache>/<teacher>/<relpath>/h<hour>.npz` (`code`, `logits`) | audio + teacher ONNX | that teacher's students |
 | packed rungs | `05_distill/data/<teacher>/shards/<rung>[__<frontend>]` | rung + front end + teacher + plan | all architectures of a (rung, front end) |
-| runs, models, eval, `ladder.jsonl` | `05_distill/data/<teacher>/` | one student | - |
+| runs, models, eval | `05_distill/data/<teacher>/` | one student | - |
+| **the experiment log** (tracked) | `05_distill/ladder/<teacher>.jsonl` | one row per judged student | - |
 | random-weight speed timings, `frontend_only.onnx` | `05_distill/data/_shared/arch/` | the architecture | all teachers |
 
 Pre-split caches embedded the YAMNet `mel` in every targets npz; readers still accept that
@@ -122,8 +123,8 @@ How interrupted work is picked up, as in `02_set` (see `store.py`):
 - `teacher_onnx.py` is a no-op when `teacher.json` records the ONNX's sha256; `cache.py` refuses to run if
   the ONNX changed since (a re-shipped teacher would mix old and new targets): move the cache aside.
 - Each `_mel/<spec>` and each packed shard set carries a fingerprint of its inputs (front-end definition,
-  teacher sha, plan, slices present). A stale pack is deleted and rebuilt; a stale `_mel/<spec>` stops the
-  run. Editing a spec in `frontends.py` means renaming it (or deleting its `_mel` dir) on purpose.
+  teacher sha, plan, slices present). A stale pack, or one without a fingerprint, is deleted and rebuilt; a V
+  pack missing slices stops the run; a stale `_mel/<spec>` stops the run. Editing a spec in `frontends.py` means renaming it (or deleting its `_mel` dir) on purpose.
 - Training checkpoints (weights, BN statistics, optimizer, curve) at every `--eval-every` steps into
   `runs/<name>/ckpt.npz`; a rerun resumes there with a fresh batch order (statistically the same, not
   bit-identical). Same name with other settings stops (`other settings`); a finished run is a no-op.
@@ -141,7 +142,9 @@ Long ones go through `tools/launch_job.sh`; everything reads the teacher from `D
 | `student.py`, `student_init.py`, `frontends.py` | train | builder, YAMNet channel-selection init (+ layer-wise refit), front-end registry |
 | `export_student.py export` / `time` | train / engine venv | ONNX (plus `model.fp16.onnx`; `--no-fp16` skips) on the teacher's deployed scale as trained (no center shift), parity vs Keras 1e-4; speed vs YAMNet |
 | `eval_folds.py run` | train (+ engine venv) | headline `sensitivity_exclquiet` at fpr 0.005, mean over the 5 rotating folds (`03_train/sx.py`) |
-| `ladder_record.py record/table/frontier/wsd` | train | one jsonl row per run; tables; a WSD step-budget curve |
+| `ladder_record.py record/table/frontier/wsd/proxy/repeats` | train | one log row per run; tables; a WSD step-budget curve; the repeat rule |
+| `backfill_hitk.py [--rescore]` | train | hit@K for runs that predate it; `--rescore` replaces every V readout after a V-pool change |
+| `quarantine.py --tag <t> --keep <prefix>` | any | move runs, models, eval and log rows aside (nothing deleted) |
 | `deploy_student.py <run>` | train | copy into buzzdetect: model.onnx, config_model.json, folds_sx.csv, README card |
 | `migrate_layout.py` | any | one-time move from the single-teacher layout (dry run by default) |
 | `bench_arch.py`, `band_profile.py`, `check_cache_align.py` | | speed benchmark, band statistics, mel alignment check |
@@ -149,6 +152,28 @@ Long ones go through `tools/launch_job.sh`; everything reads the teacher from `D
 
 `chain_*.sh` are the experiment chains that ran before `main.py`; they hard-code the pre-teacher layout
 and are kept as the record of those runs (`chain_frontends*.sh` map 1:1 onto `main.py --runs`).
+
+## The experiment log
+
+`05_distill/ladder/<teacher>.jsonl` is the distillation arm's log, the counterpart of the root `log.jsonl`,
+written by `ladder_record.py record` (main.py's `record` stage; `backfill_hitk.py --rescore` and
+`quarantine.py` are the only other writers): one row per judged student, with V
+readouts, headline, per fold, tiers, speed, and three bookkeeping fields:
+
+- `key`: what makes the row comparable: teacher build, V pool (the plan's V slices), eval roster (the
+  teacher set's rotating folds), as short hashes. Every table, the frontier, the stop rule's spread and the
+  plots read only rows whose key matches the current one; the rest are counted on stderr. A changed teacher,
+  replan or fold roster therefore retires old rows without touching them.
+- `date`, `commit`: when, and on which code.
+
+Closed eras: `tools/archive_era.py` copies the ladders to `archive/<era>/distill/` and truncates them along
+with `log.jsonl` (the headline is the era's metric against the era's baseline). A tagged file beside a live
+ladder (`<teacher>.contaminated_2026-10-02.jsonl`, the quarantined rows) is archived and removed.
+
+**Repeat rule**, as in LOOP.md ("confirm a large gain with one repeat run"): a cosine student that beats
+every other student of its rung at its speed or faster by more than 0.02 (headline seed noise), with no run at
+another seed yet, gets one repeat at the next seed before its point counts. `ladder_record.py frontier`
+lists them; `ladder_record.py repeats` prints the main.py commands, one per line, for a chain to run.
 
 ## Judging
 

@@ -10,7 +10,7 @@ non-dominated line (as frontier_svg.py). Coloured: each WSD trunk's branch at th
 budgets as small hollow markers on the same vertical (speed does not depend on steps). Black line: the frontier
 with the stop-rule branches added.
 
-    python tools/human/wsd_svg.py [out.svg] [--tol 1.85]     (train env; reads ladder.jsonl and each run's curve.json)
+    python tools/human/wsd_svg.py [out.svg] [--tol 1.85]     (train env; reads the comparable ladder rows and each run's curve.json)
 """
 import json
 import math
@@ -21,6 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, '..', '..', '05_distill'))
 import dpaths as D  # noqa: E402
+import ladder_record as LR  # noqa: E402
 import frontier_svg as F  # noqa: E402
 
 # categorical slots 1-4 (dataviz reference palette, light), fixed per trunk in this order
@@ -42,10 +43,9 @@ def hitk_pct(name):
 
 
 def trunks():
-    """{trunk name: [rows ascending by steps]} for every WSD branch in ladder.jsonl."""
+    """{trunk name: [rows ascending by steps]} for every comparable WSD branch in the ladder."""
     out = {}
-    for line in open(os.path.join(D.LOCAL, 'ladder.jsonl')):
-        r = json.loads(line)
+    for r in LR.rows():            # comparable rows only (ladder_record.comparability)
         if r.get('schedule') != 'wsd' or r['headline'] != r['headline']:
             continue
         out.setdefault(r['decay_from'].split(':')[0], []).append(r)
