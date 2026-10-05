@@ -231,7 +231,7 @@ of 0.01 here is not a finding.
   Ten rung-B runs are scored on the clean V pool and the rest on the old one (below), so these r are approximate.
 - Not yet done: the held-out test set on the 7k/28k/56k/112k fast32h16 a0.50 branches (Luke, when back).
 
-**Test-set contamination found while checking the backfill (open, Luke's call).** The 2026-10-02 re-plan
+**Test-set contamination found while checking the backfill; being redone (Luke: retrain everything).** The 2026-10-02 re-plan
 (`c5551d1`) blacklisted the SeeNote out-of-sample test set: `Luke - Pollinator Habitat/2025-07-11/gru` and
 `Luke - Diel Drivers/2026-08-18`. `distill_train.pack()` trusts any pack without a fingerprint, so the older packs
 were never rebuilt:
@@ -247,3 +247,10 @@ were never rebuilt:
   then, after `cache_fe.py --rung V` filled them, the same frame count by coincidence (teacher buzz 7,415, not
   7,685). Those 10 runs carry clean-pool hit@K. `backfill_hitk.py` now refuses to write when the frame
   count or the teacher's buzz count differs.
+
+The fix (2026-10-04): `pack()` now rebuilds any pack without a fingerprint and refuses an incomplete V pool.
+`quarantine.py` moved the 64 affected runs (runs, models, eval, ladder rows) to
+`data/<teacher>/_contaminated_2026-10-02/`, with a manifest of their args. `chain_clean.sh` refills the caches
+for the clean plan, re-scores V on the 9 clean fast32h16 rung-C branches (`backfill_hitk.py --rescore`), and
+retrains every quarantined run on rebuilt packs (~45 h). Every number above is from before the fix; the
+retrained ones replace them as they land.

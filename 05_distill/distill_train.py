@@ -112,10 +112,11 @@ def pack_fingerprint(cache, rung, frontend, n_avail):
 
 def pack(cache, rung, out_dir=None, frontend='yamnet'):
     """npz -> contiguous shards. Returns the shard dir. Reused when meta.json's fingerprint matches what
-    it would be built from now (a pack from before fingerprints is trusted); a stale pack is deleted and
-    rebuilt. `mel` comes from the shared `_mel/<frontend>` level (or a pre-split cache's embedded /
+    it would be built from now; a stale pack, or one without a fingerprint, is deleted and rebuilt
+    (2026-10-04: fingerprint-less packs had been trusted, kept a pre-blacklist plan and trained students on
+    test-set audio). `mel` comes from the shared `_mel/<frontend>` level (or a pre-split cache's embedded /
     `_fe` copy, store.mel_path), targets from the teacher's cache; slices missing either are dropped
-    together."""
+    together, except in V: the validation pool must be whole, or students' V numbers stop being comparable."""
     fe = None if frontend == 'yamnet' else fes.get(frontend)
     out = out_dir or os.path.join(D.SHARDS, rung if fe is None else f'{rung}__{frontend}')
     plan = pd.read_csv(os.path.join(cache, '_manifest', 'plan.csv'))
@@ -131,10 +132,13 @@ def pack(cache, rung, out_dir=None, frontend='yamnet'):
         pf = store.mel_path(frontend, r.relpath, r.hour, cache) if os.path.exists(p) else None
         if pf is not None:
             avail.append((r, p, pf))
+    if rung == 'V' and len(avail) < len(plan):
+        sys.exit(f'[pack V] {len(plan) - len(avail)} of {len(plan)} V slices lack targets or a {frontend} mel; '
+                 f'fill them first (cache.py / cache_fe.py --rung V --frontends {frontend})')
     fp = pack_fingerprint(cache, rung, frontend, len(avail))
     if os.path.exists(os.path.join(out, 'meta.json')):
         have = json.load(open(os.path.join(out, 'meta.json'))).get('fingerprint')
-        if have in (None, fp):
+        if have == fp:
             return out
         print(f'[pack {rung}] {out} is stale (fingerprint {have} != {fp}): rebuilding', flush=True)
         import shutil
