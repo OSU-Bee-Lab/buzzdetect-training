@@ -1,10 +1,9 @@
-"""Frontier scatter as a standalone SVG: every seed-1 student with a speed, all rungs, one point per (student,
-rung): a WSD curve's branch at the --wsd-stop rule, else its 7k cosine run. x = speed (x YAMNet, GPU, 200 s),
-y = headline (sensitivity_exclquiet @ fpr 0.005). Colour = trunk architecture, marker = front end, ring =
-class-subset student (plain ring: ins_buzz+rain+human, ring with a centre dot: ins_buzz alone), size = rung
-(A < B < C), solid = clean (the live log's comparable rows), faded = a tagged pool beside it (the quarantined
-contaminated_2026-10-02 rows: informative, not for the held-out test). A thin grey line joins one student
-across rungs; "28k" marks a budget other than 7k.
+"""Frontier scatter as a standalone SVG: every seed-1 buzz+rain+human student with a speed, all rungs, one point
+per (student, rung): a WSD curve's branch at the --wsd-stop rule, else its 7k cosine run. Clean rows (the live
+log) and the quarantined contaminated_2026-10-02 rows are drawn alike (informative). x = speed (x YAMNet, GPU,
+200 s), y = headline (sensitivity_exclquiet @ fpr 0.005). Colour = trunk architecture, marker = front end,
+outline = rung (none A, thin B, thick C, double D). A thin grey line joins one student across rungs; "28k"
+marks a budget other than 7k.
 
 Below it, a bar chart of the jet fold: for each non-dominated student, 1_95's false-positive rate when the pooled
 rotating-fold threshold (fpr 0.005 over every rotating fold's negatives) is applied to it, on all its negatives and on its
@@ -27,8 +26,8 @@ ARCH_COLOUR = {'a0.25': '#d95f02', 'a0.375': '#7570b3', 'a0.50': '#1b9e77', 'a0.
 FE_MARK = {'yamnet': 'circle', 'fast32': 'square', 'fast32h16': 'diamond', 'fast32h32': 'tri',
            'twofast32': 'cross', 'two32': 'hex', 'lo32': 'hex', 'fast32lo': 'square', 'fast32h16lo': 'diamond'}
 W, H, L, R, T, B = 960, 680, 70, 220, 40, 60
-RUNG_SIZE = {'A': 4.5, 'B': 6.5, 'C': 9, 'D': 11}
-FADED = 0.3
+BRH = 'ins_buzz,ambient_rain,human'
+RUNG_OUTLINE = {'A': 0, 'B': 1.2, 'C': 3, 'D': 3}      # stroke width; D adds an outer ring
 H2 = 340        # bar chart panel under the scatter
 
 
@@ -150,7 +149,7 @@ def bars(o, fr):
                      f'{c[key] * 100:.1f}</text>')
         o.append(f'<line x1="{cx - bw - 4:.1f}" x2="{cx + bw + 4:.1f}" y1="{py(c["rotating_fpr_max"]):.1f}" '
                  f'y2="{py(c["rotating_fpr_max"]):.1f}" stroke="#999" stroke-width="3"/>')
-        lab = r['frontend'] + SUB_LABEL[subset(r)]
+        lab = r['frontend']
         o.append(f'<text x="{cx:.1f}" y="{bot + 14}" font-size="9" text-anchor="middle">{lab}</text>'
                  f'<text x="{cx:.1f}" y="{bot + 26}" font-size="9" text-anchor="middle" fill="#555">{r["arch"]} · '
                  f'{r.get("rung", "B")} · {r["x_yamnet200"]:.1f}x</text>')
@@ -174,7 +173,8 @@ def subset(r):
 SUB_LABEL = {'': '', 'sub': ' +3cls', 'buzz': ' +buzz'}
 
 
-def marker(kind, x, y, c, ring, s=7, alpha=0.85):
+def marker(kind, x, y, c, rung=None, s=7, alpha=0.85):
+    """One point: shape = front end, fill = trunk colour, outline = rung (RUNG_OUTLINE)."""
     if kind == 'square':
         m = f'<rect x="{x - s}" y="{y - s}" width="{2 * s}" height="{2 * s}"'
     elif kind == 'diamond':
@@ -189,24 +189,22 @@ def marker(kind, x, y, c, ring, s=7, alpha=0.85):
              f'{x - 2.5},{y - 2.5}"')
     else:
         m = f'<circle cx="{x}" cy="{y}" r="{s}"'
-    stroke = '#111' if ring else 'none'
-    sw = 2.5 if ring else 0
-    out = (f'{m} fill="{c}" fill-opacity="{alpha}" stroke="{stroke}" stroke-width="{sw}" '
-           f'stroke-opacity="{min(1, alpha + 0.2)}"/>')
-    if ring == 'buzz':
-        out += f'<circle cx="{x}" cy="{y}" r="2.2" fill="#111" fill-opacity="{min(1, alpha + 0.2)}"/>'
+    sw = RUNG_OUTLINE.get(rung, 0)
+    out = f'{m} fill="{c}" fill-opacity="{alpha}" stroke="{"#111" if sw else "none"}" stroke-width="{sw}"/>'
+    if rung == 'D':
+        out += f'<circle cx="{x}" cy="{y}" r="{s + 5}" fill="none" stroke="#111" stroke-width="1.2"/>'
     return out
 
 
 def label(r):
-    lab = r['frontend'] + SUB_LABEL[subset(r)] + f' {r["arch"]}'
+    lab = f'{r["frontend"]} {r["arch"]}'
     return lab + f' · {r["rung"]}' + (f' {r["steps"] // 1000}k' if r['steps'] != 7000 else '')
 
 
 def main():
-    rows = load_all()
+    rows = [r for r in load_all() if r.get('classes') == BRH]
     if not rows:
-        sys.exit('no seed-1 students with a speed in the ladder yet')
+        sys.exit('no seed-1 buzz+rain+human students with a speed in the ladder yet')
     xs = [r['x_yamnet200'] for r in rows]
     x0, x1 = 0.6, max(xs) + 0.3
     y0, y1 = 0.35, 0.75
@@ -214,8 +212,8 @@ def main():
     py = lambda v: H - B - (v - y0) / (y1 - y0) * (H - B - T)
     o = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H + H2}" font-family="sans-serif" font-size="12">',
          f'<rect width="{W}" height="{H + H2}" fill="#fff"/>',
-         f'<text x="{L}" y="24" font-size="15" font-weight="bold">Speed / sensitivity frontier: every rung, seed 1, '
-         f'each student at its stop-rule budget</text>']
+         f'<text x="{L}" y="24" font-size="15" font-weight="bold">Speed / sensitivity frontier: buzz+rain+human '
+         f'students, every rung, seed 1, each at its stop-rule budget</text>']
     for v in [0.4, 0.5, 0.6, 0.7]:
         o.append(f'<line x1="{L}" x2="{W - R}" y1="{py(v)}" y2="{py(v)}" stroke="#e5e5e5"/>'
                  f'<text x="{L - 8}" y="{py(v) + 4}" text-anchor="end">{v:.1f}</text>')
@@ -255,11 +253,10 @@ def main():
         for halo in ('stroke="#fff" stroke-width="3" stroke-linejoin="round" ', ''):   # white halo, then the text
             o.append(f'<text x="{x0:.1f}" y="{ly:.1f}" font-size="10" {halo}>{text}</text>')
 
-    for r in sorted(rows, key=lambda r: (r['pool'] == 'clean', r['rung'])):      # clean and big on top
+    for r in sorted(rows, key=lambda r: r['rung']):                      # larger rungs on top
         x, y = px(r['x_yamnet200']), py(r['headline'])
         c = ARCH_COLOUR.get(r['arch'], '#888')
-        alpha = 0.9 if r['pool'] == 'clean' else FADED
-        o.append(f'<g>{marker(FE_MARK.get(r["frontend"], "circle"), round(x, 1), round(y, 1), c, subset(r), RUNG_SIZE.get(r["rung"], 7), alpha)}'
+        o.append(f'<g>{marker(FE_MARK.get(r["frontend"], "circle"), round(x, 1), round(y, 1), c, r["rung"])}'
                  f'<title>{r["name"]} ({r["pool"]})\nheadline {r["headline"]:.3f}  {r["x_yamnet200"]:.2f}x  '
                  f'{r["steps"] // 1000}k steps</title></g>')
         if r['steps'] != 7000 and r not in fr:
@@ -268,31 +265,25 @@ def main():
         put_label(px(r['x_yamnet200']), py(r['headline']), label(r))
     lx, ly = W - R + 20, T + 10
     o.append(f'<text x="{lx}" y="{ly}" font-weight="bold">Trunk</text>')
-    for i, (a, c) in enumerate(ARCH_COLOUR.items()):
+    archs = [(a, c) for a, c in ARCH_COLOUR.items() if any(r['arch'] == a for r in rows)]   # only what is drawn
+    for i, (a, c) in enumerate(archs):
         o.append(f'<rect x="{lx}" y="{ly + 8 + i * 18}" width="12" height="12" fill="{c}"/>'
                  f'<text x="{lx + 18}" y="{ly + 18 + i * 18}">{a}</text>')
-    ly += 100
+    ly += 18 * len(archs) + 28
     o.append(f'<text x="{lx}" y="{ly}" font-weight="bold">Front end</text>')
-    for i, (k, lab) in enumerate([('circle', 'YAMNet'), ('square', 'fast32 / lo'), ('diamond', 'fast32h16'),
-                                  ('tri', 'fast32h32'), ('cross', 'twofast32'), ('hex', 'two32 / lo32')]):
-        o.append(marker(k, lx + 6, ly + 16 + i * 18, '#888', False)
+    shapes = {FE_MARK.get(r['frontend'], 'circle') for r in rows}
+    fes = [(k, lab) for k, lab in [('circle', 'YAMNet'), ('square', 'fast32 / lo'), ('diamond', 'fast32h16'),
+                                   ('tri', 'fast32h32'), ('cross', 'twofast32'), ('hex', 'two32 / lo32')] if k in shapes]
+    for i, (k, lab) in enumerate(fes):
+        o.append(marker(k, lx + 6, ly + 16 + i * 18, '#888')
                  + f'<text x="{lx + 22}" y="{ly + 20 + i * 18}">{lab}</text>')
-    ly += 142
-    o.append(f'<text x="{lx}" y="{ly - 14}" font-weight="bold">Classes</text>')
-    o.append(marker('circle', lx + 6, ly + 2, '#fff', '') + f'<text x="{lx + 22}" y="{ly + 6}">all 15</text>')
-    o.append(marker('circle', lx + 6, ly + 20, '#fff', 'sub') + f'<text x="{lx + 22}" y="{ly + 24}">buzz + rain + human</text>')
-    o.append(marker('circle', lx + 6, ly + 38, '#fff', 'buzz') + f'<text x="{lx + 22}" y="{ly + 42}">buzz only</text>')
-    ly += 86
+    ly += 18 * len(fes) + 40
     o.append(f'<text x="{lx}" y="{ly - 14}" font-weight="bold">Rung (training data)</text>')
-    for i, (k, lab) in enumerate([('A', 'A: smallest'), ('B', 'B: 4x A'), ('C', 'C: 4x B')]):
-        o.append(marker('circle', lx + 8, ly + 4 + i * 22, '#888', False, RUNG_SIZE[k])
-                 + f'<text x="{lx + 26}" y="{ly + 8 + i * 22}">{lab}</text>')
-    ly += 92
-    o.append(f'<text x="{lx}" y="{ly - 14}" font-weight="bold">Pool</text>')
-    o.append(marker('circle', lx + 8, ly + 2, '#1b9e77', False, 6.5, 0.9) + f'<text x="{lx + 26}" y="{ly + 6}">clean</text>')
-    o.append(marker('circle', lx + 8, ly + 22, '#1b9e77', False, 6.5, FADED)
-             + f'<text x="{lx + 26}" y="{ly + 26}">saw test audio</text>')
-    ly += 44
+    rungs = sorted({r['rung'] for r in rows})
+    for i, k in enumerate(rungs):
+        o.append(marker('circle', lx + 8, ly + 4 + i * 22, '#bbb', k)
+                 + f'<text x="{lx + 26}" y="{ly + 8 + i * 22}">{ {"A": "A: smallest", "B": "B: 4x A", "C": "C: 4x B", "D": "D: all"}[k]}</text>')
+    ly += 22 * len(rungs) + 14
     o.append(f'<line x1="{lx}" x2="{lx + 16}" y1="{ly}" y2="{ly}" stroke="#9a9a9a" stroke-width="1.2"/>'
              f'<text x="{lx + 26}" y="{ly + 4}">same student, B -> C</text>'
              f'<line x1="{lx}" x2="{lx + 16}" y1="{ly + 20}" y2="{ly + 20}" stroke="#111" stroke-dasharray="2 3"/>'

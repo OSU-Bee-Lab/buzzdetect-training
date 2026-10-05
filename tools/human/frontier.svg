@@ -1,168 +1,89 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 1020" font-family="sans-serif" font-size="12">
 <rect width="960" height="1020" fill="#fff"/>
-<text x="70" y="24" font-size="15" font-weight="bold">Speed / sensitivity frontier: every rung, seed 1, each student at its stop-rule budget</text>
+<text x="70" y="24" font-size="15" font-weight="bold">Speed / sensitivity frontier: buzz+rain+human students, every rung, seed 1, each at its stop-rule budget</text>
 <line x1="70" x2="740" y1="547.4999999999999" y2="547.4999999999999" stroke="#e5e5e5"/><text x="62" y="551.4999999999999" text-anchor="end">0.4</text>
 <line x1="70" x2="740" y1="402.5" y2="402.5" stroke="#e5e5e5"/><text x="62" y="406.5" text-anchor="end">0.5</text>
 <line x1="70" x2="740" y1="257.5" y2="257.5" stroke="#e5e5e5"/><text x="62" y="261.5" text-anchor="end">0.6</text>
 <line x1="70" x2="740" y1="112.50000000000006" y2="112.50000000000006" stroke="#e5e5e5"/><text x="62" y="116.50000000000006" text-anchor="end">0.7</text>
-<line y1="40" y2="620" x1="179.0761090761091" x2="179.0761090761091" stroke="#e5e5e5"/><text x="179.0761090761091" y="638" text-anchor="middle">1x</text>
-<line y1="40" y2="620" x1="315.42124542124543" x2="315.42124542124543" stroke="#e5e5e5"/><text x="315.42124542124543" y="638" text-anchor="middle">1.5x</text>
-<line y1="40" y2="620" x1="451.76638176638176" x2="451.76638176638176" stroke="#e5e5e5"/><text x="451.76638176638176" y="638" text-anchor="middle">2x</text>
-<line y1="40" y2="620" x1="588.1115181115181" x2="588.1115181115181" stroke="#e5e5e5"/><text x="588.1115181115181" y="638" text-anchor="middle">2.5x</text>
-<line y1="40" y2="620" x1="724.4566544566544" x2="724.4566544566544" stroke="#e5e5e5"/><text x="724.4566544566544" y="638" text-anchor="middle">3x</text>
-<line x1="179.0761090761091" x2="179.0761090761091" y1="40" y2="620" stroke="#555" stroke-dasharray="4 3"/><text x="183.0761090761091" y="52" fill="#555">YAMNet speed</text>
+<line y1="40" y2="620" x1="179.29853181076675" x2="179.29853181076675" stroke="#e5e5e5"/><text x="179.29853181076675" y="638" text-anchor="middle">1x</text>
+<line y1="40" y2="620" x1="315.92169657422517" x2="315.92169657422517" stroke="#e5e5e5"/><text x="315.92169657422517" y="638" text-anchor="middle">1.5x</text>
+<line y1="40" y2="620" x1="452.5448613376835" x2="452.5448613376835" stroke="#e5e5e5"/><text x="452.5448613376835" y="638" text-anchor="middle">2x</text>
+<line y1="40" y2="620" x1="589.168026101142" x2="589.168026101142" stroke="#e5e5e5"/><text x="589.168026101142" y="638" text-anchor="middle">2.5x</text>
+<line y1="40" y2="620" x1="725.7911908646004" x2="725.7911908646004" stroke="#e5e5e5"/><text x="725.7911908646004" y="638" text-anchor="middle">3x</text>
+<line x1="179.29853181076675" x2="179.29853181076675" y1="40" y2="620" stroke="#555" stroke-dasharray="4 3"/><text x="183.29853181076675" y="52" fill="#555">YAMNet speed</text>
 <line x1="70" x2="740" y1="527.2" y2="527.2" stroke="#555" stroke-dasharray="4 3"/><text x="736" y="522.2" text-anchor="end" fill="#555">era baseline 0.414</text>
 <rect x="70" y="40" width="670" height="580" fill="none" stroke="#999"/>
 <text x="405.0" y="666" text-anchor="middle">speed, x YAMNet (GPU, 200 s audio; higher is faster)</text>
 <text transform="translate(18 330.0) rotate(-90)" text-anchor="middle">sensitivity (excl. quiet) @ 0.5% FPR</text>
-<polyline fill="none" stroke="#9a9a9a" stroke-width="1.2" points="656.8,354.6 656.3,240.1"/>
-<polyline fill="none" stroke="#9a9a9a" stroke-width="1.2" points="593.3,243.0 590.3,200.9"/>
-<polyline fill="none" stroke="#9a9a9a" stroke-width="1.2" points="281.6,105.2 283.8,80.6"/>
-<polyline fill="none" stroke="#111" stroke-width="1.5" stroke-dasharray="2 3" points="658.2,451.8 656.8,354.6 656.3,240.1 590.3,200.9 496.8,187.9 495.7,179.2 346.0,129.9 284.3,121.2 283.8,80.6"/>
-<g><circle cx="294.4" cy="224.1" r="6.5" fill="#e7298a" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>lad_B_a0.50_d12_s1 (contaminated_2026-10-02)
-headline 0.623  1.42x  7k steps</title></g>
-<g><circle cx="311.1" cy="374.9" r="6.5" fill="#7570b3" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>lad_B_a0.375_s1 (contaminated_2026-10-02)
-headline 0.519  1.48x  7k steps</title></g>
-<g><circle cx="284.3" cy="121.2" r="6.5" fill="#1b9e77" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>fe_B_yamnet_a0.50_s1_select (contaminated_2026-10-02)
-headline 0.694  1.39x  7k steps</title></g>
-<g><rect x="492.4" y="242.3" width="13.0" height="13.0" fill="#1b9e77" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>fe_B_fast32_a0.50_s1 (contaminated_2026-10-02)
-headline 0.606  2.17x  7k steps</title></g>
-<g><polygon points="590.8,304.1 599.3,312.6 590.8,321.1 582.3,312.6" fill="#1b9e77" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>fe_B_fast32h16_a0.50_s1 (contaminated_2026-10-02)
-headline 0.562  2.51x  7k steps</title></g>
-<g><polygon points="605.6,290.6 613.1,304.6 598.1,304.6" fill="#1b9e77" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>fe_B_fast32h32_a0.50_s1 (contaminated_2026-10-02)
-headline 0.572  2.56x  7k steps</title></g>
-<g><polygon points="650.0,418.6 658.5,427.1 650.0,435.6 641.5,427.1" fill="#d95f02" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>fe_B_fast32h16_a0.25_s1 (contaminated_2026-10-02)
-headline 0.483  2.73x  7k steps</title></g>
-<g><polygon points="658.2,443.3 666.7,451.8 658.2,460.3 649.7,451.8" fill="#d95f02" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>fe_B_fast32h16_a0.25_s1_lam0 (contaminated_2026-10-02)
-headline 0.466  2.76x  7k steps</title></g>
-<g><polygon points="656.8,346.1 665.3,354.6 656.8,363.1 648.3,354.6" fill="#d95f02" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_fast32h16_a0.25_s1_c-buzz-rain-human (contaminated_2026-10-02)
+<polyline fill="none" stroke="#9a9a9a" stroke-width="1.2" points="658.0,354.6 657.5,240.1"/>
+<polyline fill="none" stroke="#9a9a9a" stroke-width="1.2" points="594.4,243.0 591.4,200.9"/>
+<polyline fill="none" stroke="#9a9a9a" stroke-width="1.2" points="282.0,105.2 284.2,80.6"/>
+<polyline fill="none" stroke="#111" stroke-width="1.5" stroke-dasharray="2 3" points="658.0,354.6 657.5,240.1 591.4,200.9 497.6,187.9 388.3,180.6 346.5,129.9 284.2,80.6"/>
+<g><polygon points="658.0,345.6 667.0,354.6 658.0,363.6 649.0,354.6" fill="#d95f02" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32h16_a0.25_s1_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.533  2.75x  7k steps</title></g>
-<g><polygon points="654.1,391.1 662.6,399.6 654.1,408.1 645.6,399.6" fill="#d95f02" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_fast32h16_a0.25_s1_c-buzz-rain-human_lam0 (contaminated_2026-10-02)
+<g><polygon points="655.3,390.6 664.3,399.6 655.3,408.6 646.3,399.6" fill="#d95f02" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32h16_a0.25_s1_c-buzz-rain-human_lam0 (contaminated_2026-10-02)
 headline 0.502  2.74x  7k steps</title></g>
-<g><polygon points="383.5,216.2 388.5,216.2 388.5,220.2 392.5,220.2 392.5,225.2 388.5,225.2 388.5,229.2 383.5,229.2 383.5,225.2 379.5,225.2 379.5,220.2 383.5,220.2" fill="#1b9e77" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>fe_B_twofast32_a0.50_s1 (contaminated_2026-10-02)
-headline 0.624  1.76x  7k steps</title></g>
-<g><polygon points="617.6,363.5 626.1,372.0 617.6,380.5 609.1,372.0" fill="#7570b3" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>fe_B_fast32h16_a0.375_s1 (contaminated_2026-10-02)
-headline 0.521  2.61x  7k steps</title></g>
-<g><polygon points="648.6,455.9 656.1,469.9 641.1,469.9" fill="#d95f02" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>fe_B_fast32h32_a0.25_s1 (contaminated_2026-10-02)
-headline 0.458  2.72x  7k steps</title></g>
-<g><polygon points="118.9,227.1 122.15,220.6 128.65,220.6 131.9,227.1 128.65,233.6 122.15,233.6" fill="#1b9e77" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>fe_B_two32_a0.50_s1 (contaminated_2026-10-02)
-headline 0.621  0.80x  7k steps</title></g>
-<g><polygon points="142.6,235.8 145.85,229.3 152.35,229.3 155.6,235.8 152.35,242.3 145.85,242.3" fill="#1b9e77" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>fe_B_lo32_a0.50_s1 (contaminated_2026-10-02)
-headline 0.615  0.89x  7k steps</title></g>
-<g><polygon points="400.2,246.7 405.2,246.7 405.2,250.7 409.2,250.7 409.2,255.7 405.2,255.7 405.2,259.7 400.2,259.7 400.2,255.7 396.2,255.7 396.2,250.7 400.2,250.7" fill="#7570b3" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>fe_B_twofast32_a0.375_s1 (contaminated_2026-10-02)
-headline 0.603  1.82x  7k steps</title></g>
-<g><rect x="492.4" y="255.39999999999998" width="13.0" height="13.0" fill="#1b9e77" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>fe_B_fast32lo_a0.50_s1 (contaminated_2026-10-02)
-headline 0.597  2.17x  7k steps</title></g>
-<g><polygon points="589.7,301.2 598.2,309.7 589.7,318.2 581.2,309.7" fill="#1b9e77" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><title>fe_B_fast32h16lo_a0.50_s1 (contaminated_2026-10-02)
-headline 0.564  2.51x  7k steps</title></g>
-<g><polygon points="620.0,283.8 628.5,292.3 620.0,300.8 611.5,292.3" fill="#7570b3" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_fast32h16_a0.375_s1_c-buzz-rain-human (contaminated_2026-10-02)
+<g><polygon points="621.1,283.3 630.1,292.3 621.1,301.3 612.1,292.3" fill="#7570b3" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32h16_a0.375_s1_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.576  2.62x  7k steps</title></g>
-<g><polygon points="593.3,234.5 601.8,243.0 593.3,251.5 584.8,243.0" fill="#1b9e77" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_fast32h16_a0.50_s1_c-buzz-rain-human (contaminated_2026-10-02)
+<g><polygon points="594.4,234.0 603.4,243.0 594.4,252.0 585.4,243.0" fill="#1b9e77" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32h16_a0.50_s1_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.610  2.52x  7k steps</title></g>
-<g><polygon points="618.4,249.0 626.9,257.5 618.4,266.0 609.9,257.5" fill="#7570b3" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><circle cx="618.4" cy="257.5" r="2.2" fill="#111" fill-opacity="0.5"/><title>fe_B_fast32h16_a0.375_s1_c-buzz (contaminated_2026-10-02)
-headline 0.600  2.61x  7k steps</title></g>
-<g><circle cx="281.6" cy="105.2" r="6.5" fill="#1b9e77" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_yamnet_a0.50_s1_select_c-buzz-rain-human (contaminated_2026-10-02)
+<g><circle cx="282.0" cy="105.2" r="7" fill="#1b9e77" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_yamnet_a0.50_s1_select_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.705  1.38x  7k steps</title></g>
-<g><polygon points="385.2,174.1 390.2,174.1 390.2,178.1 394.2,178.1 394.2,183.1 390.2,183.1 390.2,187.1 385.2,187.1 385.2,183.1 381.2,183.1 381.2,178.1 385.2,178.1" fill="#1b9e77" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_twofast32_a0.50_s1_c-buzz-rain-human (contaminated_2026-10-02)
+<g><polygon points="385.8,173.6 390.8,173.6 390.8,178.1 395.3,178.1 395.3,183.1 390.8,183.1 390.8,187.6 385.8,187.6 385.8,183.1 381.3,183.1 381.3,178.1 385.8,178.1" fill="#1b9e77" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_twofast32_a0.50_s1_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.653  1.76x  7k steps</title></g>
-<g><rect x="490.3" y="181.4" width="13.0" height="13.0" fill="#1b9e77" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_fast32_a0.50_s1_c-buzz-rain-human (contaminated_2026-10-02)
+<g><rect x="490.6" y="180.9" width="14" height="14" fill="#1b9e77" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32_a0.50_s1_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.648  2.17x  7k steps</title></g>
-<g><rect x="566.1" y="258.3" width="13.0" height="13.0" fill="#d95f02" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_fast32_a0.25_s1_c-buzz-rain-human (contaminated_2026-10-02)
+<g><rect x="566.6" y="257.8" width="14" height="14" fill="#d95f02" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32_a0.25_s1_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.595  2.44x  7k steps</title></g>
-<g><rect x="568.0" y="298.9" width="13.0" height="13.0" fill="#d95f02" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_fast32lo_a0.25_s1_c-buzz-rain-human (contaminated_2026-10-02)
+<g><rect x="568.5" y="298.4" width="14" height="14" fill="#d95f02" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32lo_a0.25_s1_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.567  2.45x  7k steps</title></g>
-<g><polygon points="417.4,229.3 422.4,229.3 422.4,233.3 426.4,233.3 426.4,238.3 422.4,238.3 422.4,242.3 417.4,242.3 417.4,238.3 413.4,238.3 413.4,233.3 417.4,233.3" fill="#d95f02" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_twofast32_a0.25_s1_c-buzz-rain-human (contaminated_2026-10-02)
+<g><polygon points="418.1,228.8 423.1,228.8 423.1,233.3 427.6,233.3 427.6,238.3 423.1,238.3 423.1,242.8 418.1,242.8 418.1,238.3 413.6,238.3 413.6,233.3 418.1,233.3" fill="#d95f02" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_twofast32_a0.25_s1_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.615  1.88x  7k steps</title></g>
-<g><circle cx="346.0" cy="129.9" r="6.5" fill="#d95f02" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd28000 (contaminated_2026-10-02)
+<g><circle cx="346.5" cy="129.9" r="7" fill="#d95f02" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd28000 (contaminated_2026-10-02)
 headline 0.688  1.61x  28k steps</title></g>
-<g><rect x="523.3" y="210.4" width="13.0" height="13.0" fill="#7570b3" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_fast32_a0.375_s1_c-buzz-rain-human (contaminated_2026-10-02)
+<g><rect x="523.7" y="209.9" width="14" height="14" fill="#7570b3" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32_a0.375_s1_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.628  2.29x  7k steps</title></g>
-<g><rect x="525.7" y="261.2" width="13.0" height="13.0" fill="#7570b3" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_fast32lo_a0.375_s1_c-buzz-rain-human (contaminated_2026-10-02)
+<g><rect x="526.2" y="260.7" width="14" height="14" fill="#7570b3" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32lo_a0.375_s1_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.593  2.29x  7k steps</title></g>
-<g><polygon points="399.6,188.6 404.6,188.6 404.6,192.6 408.6,192.6 408.6,197.6 404.6,197.6 404.6,201.6 399.6,201.6 399.6,197.6 395.6,197.6 395.6,192.6 399.6,192.6" fill="#7570b3" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_twofast32_a0.375_s1_c-buzz-rain-human (contaminated_2026-10-02)
+<g><polygon points="400.3,188.1 405.3,188.1 405.3,192.6 409.8,192.6 409.8,197.6 405.3,197.6 405.3,202.1 400.3,202.1 400.3,197.6 395.8,197.6 395.8,192.6 400.3,192.6" fill="#7570b3" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_twofast32_a0.375_s1_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.643  1.82x  7k steps</title></g>
-<g><circle cx="308.3" cy="134.2" r="6.5" fill="#7570b3" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_yamnet_a0.375_s1_select_c-buzz-rain-human (contaminated_2026-10-02)
+<g><circle cx="308.8" cy="134.2" r="7" fill="#7570b3" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_yamnet_a0.375_s1_select_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.685  1.47x  7k steps</title></g>
-<g><rect x="488.1" y="217.6" width="13.0" height="13.0" fill="#1b9e77" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_B_fast32lo_a0.50_s1_c-buzz-rain-human (contaminated_2026-10-02)
+<g><rect x="488.4" y="217.1" width="14" height="14" fill="#1b9e77" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32lo_a0.50_s1_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.623  2.16x  7k steps</title></g>
-<g><polygon points="653.8,333.1 662.3,341.6 653.8,350.1 645.3,341.6" fill="#d95f02" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><circle cx="653.8" cy="341.6" r="2.2" fill="#111" fill-opacity="0.5"/><title>fe_B_fast32h16_a0.25_s1_c-buzz (contaminated_2026-10-02)
-headline 0.542  2.74x  7k steps</title></g>
-<g><rect x="565.0" y="233.6" width="13.0" height="13.0" fill="#d95f02" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><circle cx="571.5" cy="240.1" r="2.2" fill="#111" fill-opacity="0.5"/><title>fe_B_fast32_a0.25_s1_c-buzz (contaminated_2026-10-02)
-headline 0.612  2.44x  7k steps</title></g>
-<g><rect x="569.1" y="239.4" width="13.0" height="13.0" fill="#d95f02" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><circle cx="575.6" cy="245.9" r="2.2" fill="#111" fill-opacity="0.5"/><title>fe_B_fast32lo_a0.25_s1_c-buzz (contaminated_2026-10-02)
-headline 0.608  2.45x  7k steps</title></g>
-<g><polygon points="417.9,200.3 422.9,200.3 422.9,204.3 426.9,204.3 426.9,209.3 422.9,209.3 422.9,213.3 417.9,213.3 417.9,209.3 413.9,209.3 413.9,204.3 417.9,204.3" fill="#d95f02" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><circle cx="420.4" cy="206.8" r="2.2" fill="#111" fill-opacity="0.5"/><title>fe_B_twofast32_a0.25_s1_c-buzz (contaminated_2026-10-02)
-headline 0.635  1.89x  7k steps</title></g>
-<g><circle cx="345.4" cy="144.4" r="6.5" fill="#d95f02" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><circle cx="345.4" cy="144.4" r="2.2" fill="#111" fill-opacity="0.5"/><title>fe_B_yamnet_a0.25_s1_select_c-buzz (contaminated_2026-10-02)
-headline 0.678  1.61x  7k steps</title></g>
-<g><rect x="527.9" y="198.8" width="13.0" height="13.0" fill="#7570b3" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><circle cx="534.4" cy="205.3" r="2.2" fill="#111" fill-opacity="0.5"/><title>fe_B_fast32_a0.375_s1_c-buzz (contaminated_2026-10-02)
-headline 0.636  2.30x  7k steps</title></g>
-<g><rect x="523.8" y="207.5" width="13.0" height="13.0" fill="#7570b3" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><circle cx="530.3" cy="214.0" r="2.2" fill="#111" fill-opacity="0.5"/><title>fe_B_fast32lo_a0.375_s1_c-buzz (contaminated_2026-10-02)
-headline 0.630  2.29x  7k steps</title></g>
-<g><polygon points="400.2,190.1 405.2,190.1 405.2,194.1 409.2,194.1 409.2,199.1 405.2,199.1 405.2,203.1 400.2,203.1 400.2,199.1 396.2,199.1 396.2,194.1 400.2,194.1" fill="#7570b3" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><circle cx="402.7" cy="196.6" r="2.2" fill="#111" fill-opacity="0.5"/><title>fe_B_twofast32_a0.375_s1_c-buzz (contaminated_2026-10-02)
-headline 0.642  1.82x  7k steps</title></g>
-<g><circle cx="308.9" cy="129.9" r="6.5" fill="#7570b3" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><circle cx="308.9" cy="129.9" r="2.2" fill="#111" fill-opacity="0.5"/><title>fe_B_yamnet_a0.375_s1_select_c-buzz (contaminated_2026-10-02)
-headline 0.688  1.48x  7k steps</title></g>
-<g><polygon points="585.4,230.2 593.9,238.7 585.4,247.2 576.9,238.7" fill="#1b9e77" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><circle cx="585.4" cy="238.7" r="2.2" fill="#111" fill-opacity="0.5"/><title>fe_B_fast32h16_a0.50_s1_c-buzz (contaminated_2026-10-02)
-headline 0.613  2.49x  7k steps</title></g>
-<g><rect x="489.2" y="172.7" width="13.0" height="13.0" fill="#1b9e77" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><circle cx="495.7" cy="179.2" r="2.2" fill="#111" fill-opacity="0.5"/><title>fe_B_fast32_a0.50_s1_c-buzz (contaminated_2026-10-02)
-headline 0.654  2.16x  7k steps</title></g>
-<g><rect x="489.2" y="220.6" width="13.0" height="13.0" fill="#1b9e77" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><circle cx="495.7" cy="227.1" r="2.2" fill="#111" fill-opacity="0.5"/><title>fe_B_fast32lo_a0.50_s1_c-buzz (contaminated_2026-10-02)
-headline 0.621  2.16x  7k steps</title></g>
-<g><polygon points="381.1,194.4 386.1,194.4 386.1,198.4 390.1,198.4 390.1,203.4 386.1,203.4 386.1,207.4 381.1,207.4 381.1,203.4 377.1,203.4 377.1,198.4 381.1,198.4" fill="#1b9e77" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><circle cx="383.6" cy="200.9" r="2.2" fill="#111" fill-opacity="0.5"/><title>fe_B_twofast32_a0.50_s1_c-buzz (contaminated_2026-10-02)
-headline 0.639  1.75x  7k steps</title></g>
-<g><circle cx="282.4" cy="103.8" r="6.5" fill="#1b9e77" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><circle cx="282.4" cy="103.8" r="2.2" fill="#111" fill-opacity="0.5"/><title>fe_B_yamnet_a0.50_s1_select_c-buzz (contaminated_2026-10-02)
-headline 0.706  1.38x  7k steps</title></g>
-<g><circle cx="283.8" cy="80.6" r="9" fill="#1b9e77" fill-opacity="0.3" stroke="#111" stroke-width="2.5" stroke-opacity="0.5"/><title>fe_C_yamnet_a0.50_s1_select_c-buzz-rain-human_wsd14000 (contaminated_2026-10-02)
-headline 0.722  1.38x  14k steps</title></g>
-<g><circle cx="285.2" cy="385.1" r="4.5" fill="#1b9e77" fill-opacity="0.9" stroke="none" stroke-width="0" stroke-opacity="1"/><title>lad_A_s1 (clean)
-headline 0.512  1.39x  7k steps</title></g>
-<g><polygon points="590.3,189.9 601.3,200.9 590.3,211.9 579.3,200.9" fill="#1b9e77" fill-opacity="0.9" stroke="#111" stroke-width="2.5" stroke-opacity="1"/><title>fe_C_fast32h16_a0.50_s1_c-buzz-rain-human_wsd28000 (clean)
+<g><polygon points="591.4,191.9 600.4,200.9 591.4,209.9 582.4,200.9" fill="#1b9e77" fill-opacity="0.85" stroke="#111" stroke-width="3"/><title>fe_C_fast32h16_a0.50_s1_c-buzz-rain-human_wsd28000 (clean)
 headline 0.639  2.51x  28k steps</title></g>
-<g><polygon points="656.3,229.1 667.3,240.1 656.3,251.1 645.3,240.1" fill="#d95f02" fill-opacity="0.9" stroke="#111" stroke-width="2.5" stroke-opacity="1"/><title>fe_C_fast32h16_a0.25_s1_c-buzz-rain-human_wsd56000 (clean)
+<g><polygon points="657.5,231.1 666.5,240.1 657.5,249.1 648.5,240.1" fill="#d95f02" fill-opacity="0.85" stroke="#111" stroke-width="3"/><title>fe_C_fast32h16_a0.25_s1_c-buzz-rain-human_wsd56000 (clean)
 headline 0.612  2.75x  56k steps</title></g>
-<text x="294.8" y="71.6" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >yamnet +3cls a0.50 · C 14k</text>
-<text x="294.8" y="71.6" font-size="10" >yamnet +3cls a0.50 · C 14k</text>
-<text x="295.3" y="112.2" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >yamnet a0.50 · B</text>
-<text x="295.3" y="112.2" font-size="10" >yamnet a0.50 · B</text>
-<text x="357.0" y="132.9" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >yamnet +3cls a0.25 · B 28k</text>
-<text x="357.0" y="132.9" font-size="10" >yamnet +3cls a0.25 · B 28k</text>
-<text x="506.7" y="170.2" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >fast32 +buzz a0.50 · B</text>
-<text x="506.7" y="170.2" font-size="10" >fast32 +buzz a0.50 · B</text>
-<text x="507.8" y="190.9" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >fast32 +3cls a0.50 · B</text>
-<text x="507.8" y="190.9" font-size="10" >fast32 +3cls a0.50 · B</text>
-<text x="431.4" y="203.9" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >fast32h16 +3cls a0.50 · C 28k</text>
-<text x="431.4" y="203.9" font-size="10" >fast32h16 +3cls a0.50 · C 28k</text>
-<text x="497.4" y="231.1" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >fast32h16 +3cls a0.25 · C 56k</text>
-<text x="497.4" y="231.1" font-size="10" >fast32h16 +3cls a0.25 · C 56k</text>
-<text x="518.3" y="345.6" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >fast32h16 +3cls a0.25 · B</text>
-<text x="518.3" y="345.6" font-size="10" >fast32h16 +3cls a0.25 · B</text>
-<text x="550.3" y="442.8" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >fast32h16 a0.25 · B</text>
-<text x="550.3" y="442.8" font-size="10" >fast32h16 a0.25 · B</text>
+<g><circle cx="284.2" cy="80.6" r="7" fill="#1b9e77" fill-opacity="0.85" stroke="#111" stroke-width="3"/><title>fe_C_yamnet_a0.50_s1_select_c-buzz-rain-human_wsd14000 (contaminated_2026-10-02)
+headline 0.722  1.38x  14k steps</title></g>
+<text x="295.2" y="71.6" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >yamnet a0.50 · C 14k</text>
+<text x="295.2" y="71.6" font-size="10" >yamnet a0.50 · C 14k</text>
+<text x="357.5" y="120.9" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >yamnet a0.25 · B 28k</text>
+<text x="357.5" y="120.9" font-size="10" >yamnet a0.25 · B 28k</text>
+<text x="399.3" y="171.6" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >twofast32 a0.50 · B</text>
+<text x="399.3" y="171.6" font-size="10" >twofast32 a0.50 · B</text>
+<text x="508.6" y="178.9" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >fast32 a0.50 · B</text>
+<text x="508.6" y="178.9" font-size="10" >fast32 a0.50 · B</text>
+<text x="602.4" y="191.9" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >fast32h16 a0.50 · C 28k</text>
+<text x="602.4" y="191.9" font-size="10" >fast32h16 a0.50 · C 28k</text>
+<text x="529.2" y="231.1" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >fast32h16 a0.25 · C 56k</text>
+<text x="529.2" y="231.1" font-size="10" >fast32h16 a0.25 · C 56k</text>
+<text x="550.1" y="345.6" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >fast32h16 a0.25 · B</text>
+<text x="550.1" y="345.6" font-size="10" >fast32h16 a0.25 · B</text>
 <text x="760" y="50" font-weight="bold">Trunk</text>
 <rect x="760" y="58" width="12" height="12" fill="#d95f02"/><text x="778" y="68">a0.25</text>
 <rect x="760" y="76" width="12" height="12" fill="#7570b3"/><text x="778" y="86">a0.375</text>
 <rect x="760" y="94" width="12" height="12" fill="#1b9e77"/><text x="778" y="104">a0.50</text>
-<rect x="760" y="112" width="12" height="12" fill="#e7298a"/><text x="778" y="122">a0.50_d12</text>
-<text x="760" y="150" font-weight="bold">Front end</text>
-<circle cx="766" cy="166" r="7" fill="#888" fill-opacity="0.85" stroke="none" stroke-width="0" stroke-opacity="1"/><text x="782" y="170">YAMNet</text>
-<rect x="759" y="177" width="14" height="14" fill="#888" fill-opacity="0.85" stroke="none" stroke-width="0" stroke-opacity="1"/><text x="782" y="188">fast32 / lo</text>
-<polygon points="766,193 775,202 766,211 757,202" fill="#888" fill-opacity="0.85" stroke="none" stroke-width="0" stroke-opacity="1"/><text x="782" y="206">fast32h16</text>
-<polygon points="766,212 774,227 758,227" fill="#888" fill-opacity="0.85" stroke="none" stroke-width="0" stroke-opacity="1"/><text x="782" y="224">fast32h32</text>
-<polygon points="763.5,231 768.5,231 768.5,235.5 773,235.5 773,240.5 768.5,240.5 768.5,245 763.5,245 763.5,240.5 759,240.5 759,235.5 763.5,235.5" fill="#888" fill-opacity="0.85" stroke="none" stroke-width="0" stroke-opacity="1"/><text x="782" y="242">twofast32</text>
-<polygon points="759,256 762.5,249 769.5,249 773,256 769.5,263 762.5,263" fill="#888" fill-opacity="0.85" stroke="none" stroke-width="0" stroke-opacity="1"/><text x="782" y="260">two32 / lo32</text>
-<text x="760" y="278" font-weight="bold">Classes</text>
-<circle cx="766" cy="294" r="7" fill="#fff" fill-opacity="0.85" stroke="none" stroke-width="0" stroke-opacity="1"/><text x="782" y="298">all 15</text>
-<circle cx="766" cy="312" r="7" fill="#fff" fill-opacity="0.85" stroke="#111" stroke-width="2.5" stroke-opacity="1"/><text x="782" y="316">buzz + rain + human</text>
-<circle cx="766" cy="330" r="7" fill="#fff" fill-opacity="0.85" stroke="#111" stroke-width="2.5" stroke-opacity="1"/><circle cx="766" cy="330" r="2.2" fill="#111" fill-opacity="1"/><text x="782" y="334">buzz only</text>
-<text x="760" y="364" font-weight="bold">Rung (training data)</text>
-<circle cx="768" cy="382" r="4.5" fill="#888" fill-opacity="0.85" stroke="none" stroke-width="0" stroke-opacity="1"/><text x="786" y="386">A: smallest</text>
-<circle cx="768" cy="404" r="6.5" fill="#888" fill-opacity="0.85" stroke="none" stroke-width="0" stroke-opacity="1"/><text x="786" y="408">B: 4x A</text>
-<circle cx="768" cy="426" r="9" fill="#888" fill-opacity="0.85" stroke="none" stroke-width="0" stroke-opacity="1"/><text x="786" y="430">C: 4x B</text>
-<text x="760" y="456" font-weight="bold">Pool</text>
-<circle cx="768" cy="472" r="6.5" fill="#1b9e77" fill-opacity="0.9" stroke="none" stroke-width="0" stroke-opacity="1"/><text x="786" y="476">clean</text>
-<circle cx="768" cy="492" r="6.5" fill="#1b9e77" fill-opacity="0.3" stroke="none" stroke-width="0" stroke-opacity="0.5"/><text x="786" y="496">saw test audio</text>
-<line x1="760" x2="776" y1="514" y2="514" stroke="#9a9a9a" stroke-width="1.2"/><text x="786" y="518">same student, B -> C</text><line x1="760" x2="776" y1="534" y2="534" stroke="#111" stroke-dasharray="2 3"/><text x="786" y="538">non-dominated</text><text x="760" y="558" font-size="10" fill="#555">28k = steps, if not 7k</text>
+<text x="760" y="132" font-weight="bold">Front end</text>
+<circle cx="766" cy="148" r="7" fill="#888" fill-opacity="0.85" stroke="none" stroke-width="0"/><text x="782" y="152">YAMNet</text>
+<rect x="759" y="159" width="14" height="14" fill="#888" fill-opacity="0.85" stroke="none" stroke-width="0"/><text x="782" y="170">fast32 / lo</text>
+<polygon points="766,175 775,184 766,193 757,184" fill="#888" fill-opacity="0.85" stroke="none" stroke-width="0"/><text x="782" y="188">fast32h16</text>
+<polygon points="763.5,195 768.5,195 768.5,199.5 773,199.5 773,204.5 768.5,204.5 768.5,209 763.5,209 763.5,204.5 759,204.5 759,199.5 763.5,199.5" fill="#888" fill-opacity="0.85" stroke="none" stroke-width="0"/><text x="782" y="206">twofast32</text>
+<text x="760" y="230" font-weight="bold">Rung (training data)</text>
+<circle cx="768" cy="248" r="7" fill="#bbb" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><text x="786" y="252">B: 4x A</text>
+<circle cx="768" cy="270" r="7" fill="#bbb" fill-opacity="0.85" stroke="#111" stroke-width="3"/><text x="786" y="274">C: 4x B</text>
+<line x1="760" x2="776" y1="302" y2="302" stroke="#9a9a9a" stroke-width="1.2"/><text x="786" y="306">same student, B -> C</text><line x1="760" x2="776" y1="322" y2="322" stroke="#111" stroke-dasharray="2 3"/><text x="786" y="326">non-dominated</text><text x="760" y="346" font-size="10" fill="#555">28k = steps, if not 7k</text>
 <text x="70" y="692" font-size="15" font-weight="bold">Jet fold 1_95: false-positive rate at the rotating folds' threshold</text>
 <text x="70" y="710" fill="#555">pooled fpr-0.005 threshold from the five rotating folds, applied to 1_95 (a training fold); jets = frames labelled mech_plane</text>
 <line x1="70" x2="740" y1="950.0" y2="950.0" stroke="#e5e5e5"/><text x="62" y="954.0" text-anchor="end">0.0%</text>
@@ -172,42 +93,34 @@ headline 0.612  2.75x  56k steps</title></g>
 <line x1="70" x2="740" y1="730.0" y2="730.0" stroke="#e5e5e5"/><text x="62" y="734.0" text-anchor="end">3.0%</text>
 <line x1="70" x2="740" y1="913.3333333333334" y2="913.3333333333334" stroke="#555" stroke-dasharray="4 3"/><text x="746" y="917.3333333333334" fill="#555">target 0.5%</text>
 <text transform="translate(18 840.0) rotate(-90)" text-anchor="middle">1_95 false-positive rate</text>
-<rect x="83.0" y="870.4" width="23.3" height="79.6" fill="#d95f02" fill-opacity="0.85"><title>fe_B_fast32h16_a0.25_s1_lam0 fpr 1.09%</title></rect><text x="94.6" y="866.4" font-size="9" text-anchor="middle">1.1</text>
-<rect x="108.2" y="785.4" width="23.3" height="164.6" fill="#111" fill-opacity="0.85"><title>fe_B_fast32h16_a0.25_s1_lam0 fpr_jet 2.24%</title></rect><text x="119.9" y="781.4" font-size="9" text-anchor="middle">2.2</text>
-<line x1="80.0" x2="134.5" y1="889.9" y2="889.9" stroke="#999" stroke-width="3"/>
-<text x="107.2" y="964" font-size="9" text-anchor="middle">fast32h16</text><text x="107.2" y="976" font-size="9" text-anchor="middle" fill="#555">a0.25 · B · 2.8x</text>
-<rect x="157.4" y="874.5" width="23.3" height="75.5" fill="#d95f02" fill-opacity="0.85"><title>fe_B_fast32h16_a0.25_s1_c-buzz-rain-human fpr 1.03%</title></rect><text x="169.0" y="870.5" font-size="9" text-anchor="middle">1.0</text>
-<rect x="182.7" y="794.8" width="23.3" height="155.2" fill="#111" fill-opacity="0.85"><title>fe_B_fast32h16_a0.25_s1_c-buzz-rain-human fpr_jet 2.12%</title></rect><text x="194.3" y="790.8" font-size="9" text-anchor="middle">2.1</text>
-<line x1="154.4" x2="208.9" y1="876.4" y2="876.4" stroke="#999" stroke-width="3"/>
-<text x="181.7" y="964" font-size="9" text-anchor="middle">fast32h16 +3cls</text><text x="181.7" y="976" font-size="9" text-anchor="middle" fill="#555">a0.25 · B · 2.8x</text>
-<rect x="231.8" y="895.4" width="23.3" height="54.6" fill="#d95f02" fill-opacity="0.85"><title>fe_C_fast32h16_a0.25_s1_c-buzz-rain-human_wsd56000 fpr 0.74%</title></rect><text x="243.5" y="891.4" font-size="9" text-anchor="middle">0.7</text>
-<rect x="257.1" y="810.7" width="23.3" height="139.3" fill="#111" fill-opacity="0.85"><title>fe_C_fast32h16_a0.25_s1_c-buzz-rain-human_wsd56000 fpr_jet 1.90%</title></rect><text x="268.7" y="806.7" font-size="9" text-anchor="middle">1.9</text>
-<line x1="228.8" x2="283.4" y1="880.1" y2="880.1" stroke="#999" stroke-width="3"/>
-<text x="256.1" y="964" font-size="9" text-anchor="middle">fast32h16 +3cls</text><text x="256.1" y="976" font-size="9" text-anchor="middle" fill="#555">a0.25 · C · 2.8x</text>
-<rect x="306.3" y="904.4" width="23.3" height="45.6" fill="#1b9e77" fill-opacity="0.85"><title>fe_C_fast32h16_a0.50_s1_c-buzz-rain-human_wsd28000 fpr 0.62%</title></rect><text x="317.9" y="900.4" font-size="9" text-anchor="middle">0.6</text>
-<rect x="331.6" y="826.6" width="23.3" height="123.4" fill="#111" fill-opacity="0.85"><title>fe_C_fast32h16_a0.50_s1_c-buzz-rain-human_wsd28000 fpr_jet 1.68%</title></rect><text x="343.2" y="822.6" font-size="9" text-anchor="middle">1.7</text>
-<line x1="303.3" x2="357.8" y1="873.8" y2="873.8" stroke="#999" stroke-width="3"/>
-<text x="330.6" y="964" font-size="9" text-anchor="middle">fast32h16 +3cls</text><text x="330.6" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · C · 2.5x</text>
-<rect x="380.7" y="892.7" width="23.3" height="57.3" fill="#1b9e77" fill-opacity="0.85"><title>fe_B_fast32_a0.50_s1_c-buzz-rain-human fpr 0.78%</title></rect><text x="392.4" y="888.7" font-size="9" text-anchor="middle">0.8</text>
-<rect x="406.0" y="798.5" width="23.3" height="151.5" fill="#111" fill-opacity="0.85"><title>fe_B_fast32_a0.50_s1_c-buzz-rain-human fpr_jet 2.07%</title></rect><text x="417.6" y="794.5" font-size="9" text-anchor="middle">2.1</text>
-<line x1="377.7" x2="432.3" y1="884.2" y2="884.2" stroke="#999" stroke-width="3"/>
-<text x="405.0" y="964" font-size="9" text-anchor="middle">fast32 +3cls</text><text x="405.0" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · B · 2.2x</text>
-<rect x="455.2" y="885.2" width="23.3" height="64.8" fill="#1b9e77" fill-opacity="0.85"><title>fe_B_fast32_a0.50_s1_c-buzz fpr 0.88%</title></rect><text x="466.8" y="881.2" font-size="9" text-anchor="middle">0.9</text>
-<rect x="480.4" y="783.5" width="23.3" height="166.5" fill="#111" fill-opacity="0.85"><title>fe_B_fast32_a0.50_s1_c-buzz fpr_jet 2.27%</title></rect><text x="492.1" y="779.5" font-size="9" text-anchor="middle">2.3</text>
-<line x1="452.2" x2="506.7" y1="890.7" y2="890.7" stroke="#999" stroke-width="3"/>
-<text x="479.4" y="964" font-size="9" text-anchor="middle">fast32 +buzz</text><text x="479.4" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · B · 2.2x</text>
-<rect x="529.6" y="913.9" width="23.3" height="36.1" fill="#d95f02" fill-opacity="0.85"><title>fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd28000 fpr 0.49%</title></rect><text x="541.3" y="909.9" font-size="9" text-anchor="middle">0.5</text>
-<rect x="554.9" y="873.3" width="23.3" height="76.7" fill="#111" fill-opacity="0.85"><title>fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd28000 fpr_jet 1.05%</title></rect><text x="566.5" y="869.3" font-size="9" text-anchor="middle">1.0</text>
-<line x1="526.6" x2="581.2" y1="848.8" y2="848.8" stroke="#999" stroke-width="3"/>
-<text x="553.9" y="964" font-size="9" text-anchor="middle">yamnet +3cls</text><text x="553.9" y="976" font-size="9" text-anchor="middle" fill="#555">a0.25 · B · 1.6x</text>
-<rect x="604.1" y="885.6" width="23.3" height="64.4" fill="#1b9e77" fill-opacity="0.85"><title>fe_B_yamnet_a0.50_s1_select fpr 0.88%</title></rect><text x="615.7" y="881.6" font-size="9" text-anchor="middle">0.9</text>
-<rect x="629.3" y="807.9" width="23.3" height="142.1" fill="#111" fill-opacity="0.85"><title>fe_B_yamnet_a0.50_s1_select fpr_jet 1.94%</title></rect><text x="641.0" y="803.9" font-size="9" text-anchor="middle">1.9</text>
-<line x1="601.1" x2="655.6" y1="880.4" y2="880.4" stroke="#999" stroke-width="3"/>
-<text x="628.3" y="964" font-size="9" text-anchor="middle">yamnet</text><text x="628.3" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · B · 1.4x</text>
-<rect x="678.5" y="900.5" width="23.3" height="49.5" fill="#1b9e77" fill-opacity="0.85"><title>fe_C_yamnet_a0.50_s1_select_c-buzz-rain-human_wsd14000 fpr 0.67%</title></rect><text x="690.1" y="896.5" font-size="9" text-anchor="middle">0.7</text>
-<rect x="703.8" y="842.5" width="23.3" height="107.5" fill="#111" fill-opacity="0.85"><title>fe_C_yamnet_a0.50_s1_select_c-buzz-rain-human_wsd14000 fpr_jet 1.47%</title></rect><text x="715.4" y="838.5" font-size="9" text-anchor="middle">1.5</text>
-<line x1="675.5" x2="730.0" y1="856.7" y2="856.7" stroke="#999" stroke-width="3"/>
-<text x="702.8" y="964" font-size="9" text-anchor="middle">yamnet +3cls</text><text x="702.8" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · C · 1.4x</text>
+<rect x="90.9" y="874.5" width="26.0" height="75.5" fill="#d95f02" fill-opacity="0.85"><title>fe_B_fast32h16_a0.25_s1_c-buzz-rain-human fpr 1.03%</title></rect><text x="103.9" y="870.5" font-size="9" text-anchor="middle">1.0</text>
+<rect x="118.9" y="794.8" width="26.0" height="155.2" fill="#111" fill-opacity="0.85"><title>fe_B_fast32h16_a0.25_s1_c-buzz-rain-human fpr_jet 2.12%</title></rect><text x="131.9" y="790.8" font-size="9" text-anchor="middle">2.1</text>
+<line x1="87.9" x2="147.9" y1="876.4" y2="876.4" stroke="#999" stroke-width="3"/>
+<text x="117.9" y="964" font-size="9" text-anchor="middle">fast32h16</text><text x="117.9" y="976" font-size="9" text-anchor="middle" fill="#555">a0.25 · B · 2.8x</text>
+<rect x="186.6" y="895.4" width="26.0" height="54.6" fill="#d95f02" fill-opacity="0.85"><title>fe_C_fast32h16_a0.25_s1_c-buzz-rain-human_wsd56000 fpr 0.74%</title></rect><text x="199.6" y="891.4" font-size="9" text-anchor="middle">0.7</text>
+<rect x="214.6" y="810.7" width="26.0" height="139.3" fill="#111" fill-opacity="0.85"><title>fe_C_fast32h16_a0.25_s1_c-buzz-rain-human_wsd56000 fpr_jet 1.90%</title></rect><text x="227.6" y="806.7" font-size="9" text-anchor="middle">1.9</text>
+<line x1="183.6" x2="243.6" y1="880.1" y2="880.1" stroke="#999" stroke-width="3"/>
+<text x="213.6" y="964" font-size="9" text-anchor="middle">fast32h16</text><text x="213.6" y="976" font-size="9" text-anchor="middle" fill="#555">a0.25 · C · 2.8x</text>
+<rect x="282.3" y="904.4" width="26.0" height="45.6" fill="#1b9e77" fill-opacity="0.85"><title>fe_C_fast32h16_a0.50_s1_c-buzz-rain-human_wsd28000 fpr 0.62%</title></rect><text x="295.3" y="900.4" font-size="9" text-anchor="middle">0.6</text>
+<rect x="310.3" y="826.6" width="26.0" height="123.4" fill="#111" fill-opacity="0.85"><title>fe_C_fast32h16_a0.50_s1_c-buzz-rain-human_wsd28000 fpr_jet 1.68%</title></rect><text x="323.3" y="822.6" font-size="9" text-anchor="middle">1.7</text>
+<line x1="279.3" x2="339.3" y1="873.8" y2="873.8" stroke="#999" stroke-width="3"/>
+<text x="309.3" y="964" font-size="9" text-anchor="middle">fast32h16</text><text x="309.3" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · C · 2.5x</text>
+<rect x="378.0" y="892.7" width="26.0" height="57.3" fill="#1b9e77" fill-opacity="0.85"><title>fe_B_fast32_a0.50_s1_c-buzz-rain-human fpr 0.78%</title></rect><text x="391.0" y="888.7" font-size="9" text-anchor="middle">0.8</text>
+<rect x="406.0" y="798.5" width="26.0" height="151.5" fill="#111" fill-opacity="0.85"><title>fe_B_fast32_a0.50_s1_c-buzz-rain-human fpr_jet 2.07%</title></rect><text x="419.0" y="794.5" font-size="9" text-anchor="middle">2.1</text>
+<line x1="375.0" x2="435.0" y1="884.2" y2="884.2" stroke="#999" stroke-width="3"/>
+<text x="405.0" y="964" font-size="9" text-anchor="middle">fast32</text><text x="405.0" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · B · 2.2x</text>
+<rect x="473.7" y="893.8" width="26.0" height="56.2" fill="#1b9e77" fill-opacity="0.85"><title>fe_B_twofast32_a0.50_s1_c-buzz-rain-human fpr 0.77%</title></rect><text x="486.7" y="889.8" font-size="9" text-anchor="middle">0.8</text>
+<rect x="501.7" y="835.0" width="26.0" height="115.0" fill="#111" fill-opacity="0.85"><title>fe_B_twofast32_a0.50_s1_c-buzz-rain-human fpr_jet 1.57%</title></rect><text x="514.7" y="831.0" font-size="9" text-anchor="middle">1.6</text>
+<line x1="470.7" x2="530.7" y1="886.0" y2="886.0" stroke="#999" stroke-width="3"/>
+<text x="500.7" y="964" font-size="9" text-anchor="middle">twofast32</text><text x="500.7" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · B · 1.8x</text>
+<rect x="569.4" y="913.9" width="26.0" height="36.1" fill="#d95f02" fill-opacity="0.85"><title>fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd28000 fpr 0.49%</title></rect><text x="582.4" y="909.9" font-size="9" text-anchor="middle">0.5</text>
+<rect x="597.4" y="873.3" width="26.0" height="76.7" fill="#111" fill-opacity="0.85"><title>fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd28000 fpr_jet 1.05%</title></rect><text x="610.4" y="869.3" font-size="9" text-anchor="middle">1.0</text>
+<line x1="566.4" x2="626.4" y1="848.8" y2="848.8" stroke="#999" stroke-width="3"/>
+<text x="596.4" y="964" font-size="9" text-anchor="middle">yamnet</text><text x="596.4" y="976" font-size="9" text-anchor="middle" fill="#555">a0.25 · B · 1.6x</text>
+<rect x="665.1" y="900.5" width="26.0" height="49.5" fill="#1b9e77" fill-opacity="0.85"><title>fe_C_yamnet_a0.50_s1_select_c-buzz-rain-human_wsd14000 fpr 0.67%</title></rect><text x="678.1" y="896.5" font-size="9" text-anchor="middle">0.7</text>
+<rect x="693.1" y="842.5" width="26.0" height="107.5" fill="#111" fill-opacity="0.85"><title>fe_C_yamnet_a0.50_s1_select_c-buzz-rain-human_wsd14000 fpr_jet 1.47%</title></rect><text x="706.1" y="838.5" font-size="9" text-anchor="middle">1.5</text>
+<line x1="662.1" x2="722.1" y1="856.7" y2="856.7" stroke="#999" stroke-width="3"/>
+<text x="692.1" y="964" font-size="9" text-anchor="middle">yamnet</text><text x="692.1" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · C · 1.4x</text>
 <rect x="70" y="730" width="670" height="220" fill="none" stroke="#999"/>
 <rect x="760" y="740" width="12" height="12" fill="#888"/><text x="778" y="750" font-size="11">1_95, all negatives</text>
 <rect x="760" y="758" width="12" height="12" fill="#111"/><text x="778" y="768" font-size="11">1_95, jet frames only</text>
