@@ -4,7 +4,7 @@ Hover a point for its exact model name and numbers; click to pin it and see per-
 jet-fold probe. Filters: trunk, front end, class subset, speed/sensitivity range, name search; the dashed frontier can be
 computed over the visible points or over every run.
 
-    python tools/human/frontier_html.py [out.html]      (train env; frontier_svg.load's comparable ladder rows)
+    python tools/human/frontier_html.py [out.html]      (train env; frontier_svg.load_all: every rung, clean and tagged pools)
 """
 import json
 import os
@@ -16,12 +16,12 @@ import dpaths as D  # noqa: E402
 import frontier_svg as F  # noqa: E402
 
 KEEP = ('name', 'frontend', 'arch', 'classes', 'init', 'seed', 'steps', 'headline', 'headline_inclusive', 'x_yamnet200',
-        'x_yamnet20', 'lost_pct', 'gained_pct', 'mae_live', 'mae_buzz', 'per_fold', 'tiers', 'wall_s')
+        'x_yamnet20', 'lost_pct', 'gained_pct', 'mae_live', 'mae_buzz', 'per_fold', 'tiers', 'wall_s', 'rung', 'pool')
 
 
 def rows():
     out = []
-    for r in F.load():
+    for r in F.load_all():            # every rung, one point per student and rung (frontier_svg.py)
         d = {k: r.get(k) for k in KEEP}
         d['subset'] = F.subset(r) or 'all'
         d['probe'] = F.probe_of(r['name'])
@@ -62,7 +62,7 @@ table.list tr:hover td{background:var(--panel)}
 .num{text-align:right;font-variant-numeric:tabular-nums}
 .mut{color:var(--mut)}
 </style></head><body><main>
-<h1>Speed / sensitivity frontier (rung B, seed 1)</h1>
+<h1>Speed / sensitivity frontier (every rung, seed 1, each student at its stop-rule budget)</h1>
 <p class="sub" id="sub"></p>
 <div id="layout">
  <div id="controls">
@@ -144,7 +144,7 @@ function detail(){
  const pf=(d.per_fold||[]).map(v=>f(v,2)).join(' · ');
  const tiers=Object.entries(d.tiers||{}).filter(([,v])=>v!=null).map(([k,v])=>`${k} ${f(v,2)}`).join(' · ');
  const p=d.probe;
- el.innerHTML=`<b>${d.name}</b> <span class="mut">${d.frontend} · ${d.arch} · ${SUB_NAME[d.subset]} · seed ${d.seed} · ${d.steps} steps · wall ${f(d.wall_s/60,0)} min</span>
+ el.innerHTML=`<b>${d.name}</b> <span class="mut">${d.frontend} · ${d.arch} · ${SUB_NAME[d.subset]} · rung ${d.rung} · ${d.pool} · seed ${d.seed} · ${d.steps} steps · wall ${f(d.wall_s/60,0)} min</span>
  <table><tr><th>headline (excl. quiet, fpr 0.005)</th><td>${f(d.headline)}</td><th>incl. quiet</th><td>${f(d.headline_inclusive)}</td></tr>
  <tr><th>speed (200 s / 20 s)</th><td>${f(d.x_yamnet200,2)}× / ${f(d.x_yamnet20,2)}×</td><th>buzz lost / gained</th><td>${f(d.lost_pct,1)}% / ${f(d.gained_pct,1)}%</td></tr>
  <tr><th>logit error (all / buzz)</th><td>${f(d.mae_live)} / ${f(d.mae_buzz)}</td><th></th><td></td></tr>

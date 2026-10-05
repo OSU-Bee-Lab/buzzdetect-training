@@ -72,8 +72,8 @@ python tools/human/wsd_svg.py [--tol 1.85]   # every WSD curve + the frontier it
 - A finished trunk rerun with a larger last budget **extends** from its last checkpoint (its `--steps` is a
   horizon, not part of the schedule). Everything resumes like any run.
 - Ladder rows carry `schedule`, `lr`, `warmup`, `decay_from` and `passes`. WSD rows are left out of
-  `table`'s ladder levels, `frontier`, `decide`, `gate` and `tools/human/frontier_*`: they are points on a
-  curve, not alternatives. A branch's `wall_s` is its decay only; its real cost includes the trunk up to `s`.
+  `table`'s ladder levels, `frontier`, `decide` and `gate`: they are points on a curve, not alternatives.
+  `tools/human/frontier_*` show each curve once, at the branch where the stop rule ends it. A branch's `wall_s` is its decay only; its real cost includes the trunk up to `s`.
 - `--passes X` sets a cosine run's budget in passes. Passes come from the plan's nominal frame count;
   training prints, and `curve.json` records, the real `passes` over the packed rung.
 
