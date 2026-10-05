@@ -231,7 +231,7 @@ of 0.01 here is not a finding.
   Ten rung-B runs are scored on the clean V pool and the rest on the old one (below), so these r are approximate.
 - Not yet done: the held-out test set on the 7k/28k/56k/112k fast32h16 a0.50 branches (Luke, when back).
 
-**Test-set contamination found while checking the backfill; being redone (Luke: retrain everything).** The 2026-10-02 re-plan
+**Test-set contamination found while checking the backfill; retrain started, then dropped (Luke, 2026-10-04: informative only).** The 2026-10-02 re-plan
 (`c5551d1`) blacklisted the SeeNote out-of-sample test set: `Luke - Pollinator Habitat/2025-07-11/gru` and
 `Luke - Diel Drivers/2026-08-18`. `distill_train.pack()` trusts any pack without a fingerprint, so the older packs
 were never rebuilt:
@@ -252,5 +252,8 @@ The fix (2026-10-04): `pack()` now rebuilds any pack without a fingerprint and r
 `quarantine.py` moved the 64 affected runs (runs, models, eval, ladder rows) to
 `data/<teacher>/_contaminated_2026-10-02/`, with a manifest of their args. `chain_clean.sh` refills the caches
 for the clean plan, re-scores V on the 9 clean fast32h16 rung-C branches (`backfill_hitk.py --rescore`), and
-retrains every quarantined run on rebuilt packs (~45 h). Every number above is from before the fix; the
-retrained ones replace them as they land.
+was to retrain every quarantined run on rebuilt packs (~45 h). It was stopped after one run: lad_A_s1 retrained
+clean scored 0.512 against 0.519 contaminated (its seed-2 repeat: 0.510), inside seed noise, and these results
+are informative, not shipped. So the numbers above stand as contaminated-era readings: fine for direction,
+not for the held-out SeeNote test. Their rows are in `ladder/<teacher>.contaminated_2026-10-02.jsonl`, outside
+the comparable set. The clean, comparable students are the 9 fast32h16 rung-C branches and lad_A_s1.
