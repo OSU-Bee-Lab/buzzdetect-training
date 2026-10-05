@@ -47,8 +47,9 @@ lad_run() {  # the old ladder runs (chain_ladder2.sh's stages, plus probe): lad_
   [ -f "$ev/folds_sx.csv" ] || (cd 05_distill && "$PY" -u eval_folds.py run --check-labels --onnx "../$m/model.onnx" --out "../$ev") || return 1
   [ -f "$ev/probe/probe.json" ] || (cd 05_distill && "$PY" -u eval_folds.py probe --onnx "../$m/model.onnx" --out "../$ev") || return 1
   [ -f "$m/speed_200.json" ] || (cd 05_distill && "$ENGINE_PY" export_student.py time --name "$name" --repeats 15) || return 1
+  local wall; wall=$(cat "$d/wall.txt") || return 1    # read before the cd: $d is relative to the repo root
   grep -q "\"name\": \"$name\"" "$L/ladder.jsonl" || (cd 05_distill && "$PY" ladder_record.py record --rung "$rung" \
-    --seed "$seed" --steps 7000 --name "$name" --wall "$(cat "$d/wall.txt")" ${arch:+--arch "$arch"}) || return 1
+    --seed "$seed" --steps 7000 --name "$name" --wall "$wall" ${arch:+--arch "$arch"}) || return 1
 }
 lad() { attempt "$1" lad_run "$@"; }
 
