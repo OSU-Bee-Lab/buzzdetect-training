@@ -21,7 +21,7 @@ Rung C, WSD, seed 1, eval on the 5 rotating folds (headline = sensitivity_exclqu
 | 28k | 0.666 | 0.680 | -0.014 | 65.3 | 2.30 |
 | 56k | 0.675 | 0.687 | -0.012 | 65.8 | 2.27 |
 
-Control speed: x_yamnet200 2.15-2.17. Stop rule: hit@K gains +5.0, +2.5, +0.45; only one small gain, so it ran to 56k.
+Control speed: x_yamnet200 2.15-2.17. results.py at 28k: -0.014 ± 0.006 (eval sampling), every fold negative-or-flat (1_143 -0.026 ± 0.012). Stop rule: hit@K gains +5.0, +2.5, +0.45; only one small gain, so it ran to 56k.
 Per fold at 56k (a0.375 vs a0.50): 0.754/0.760, 0.658/0.658, 0.658/0.668, 0.611/0.660, 0.696/0.688. The
 fourth fold carries most of the gap (-0.049); single seed, per-fold SD ~0.01-0.02, so weak.
 
