@@ -205,19 +205,6 @@ Speeds are x YAMNet at 200 s on the GTX 1650; headlines are as in the training a
 - **Untried:** pruning dead channels, non-uniform widths, a learned (conv) front
   end, int8 (needs modern hardware to time), dropping layers beyond d12.
 
-## D1. A clean YAMNet-front-end a0.50 student: the standard tier's only reading is contaminated
-
-*Evidence: contaminated-era rung C, `fe_C_yamnet_a0.50` 7k/14k = 0.723/0.722 at
-1.38x (FRONTENDS.md, closed); YAMNet-trunk students are flat from 7k.*
-
-The top of the frontier, the candidate *standard* student, has no clean,
-comparable row: the yamnet a0.50 rung-C runs trained on the contaminated `C`
-pack. The pack has since been rebuilt (`fe_C_yamnet_a0.25_s1_select_...` trained
-on it clean), so one rung-C 7k run (`yamnet:a0.50:select:classes=ins_buzz+ambient_rain+human`,
-seed 1) puts it back in the comparable set, matched to that a0.25 run. Falsifier: a clean headline more than
-~0.02 below 0.722 says the contamination was worth something after all, which
-would also reopen how far to trust the other contaminated readings.
-
 ## D2. 56k branches of fast32 and twofast32 a0.50, rung C
 
 *Evidence: both stopped at 28k by the hit@K rule, still +0.012 per doubling
