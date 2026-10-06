@@ -156,14 +156,59 @@ Ranked best-first by expected value on the headline and the hard folds, cost sec
 # Queue — distillation arm
 
 Ranked best-first by expected movement of the speed / sensitivity frontier,
-cost second. State and numbers: `05_distill/FRONTENDS.md` (2026-10-05 update);
-`python 05_distill/ladder_record.py frontier` is the source of truth. Comparable
-(clean) students only; contaminated-era readings are leads.
+cost second. `python 05_distill/ladder_record.py frontier` is the current state;
+comparable (clean) students only, contaminated-era readings are leads.
+
+## Standing facts a distillation proposer needs
+
+Detail and evidence for each: `05_distill/FRONTENDS.md` (closed 2026-10-06).
+Speeds are x YAMNet at 200 s on the GTX 1650; headlines are as in the training arm.
+
+- **Speed is set by the front end, and within it by FFT length.** YAMNet's own
+  front end alone runs ~2.1x YAMNet, which caps every YAMNet-front-end student
+  (a0.25 ≈ 1.6x). fft 256 ~2.7-3.1x, fft 512 ~1.65-2.0x, fft >= 1024 is slower
+  than YAMNet; a lower frame rate (hop 16/32 ms) helps. Shrinking the trunk buys
+  little: 14x fewer MACs (a1.00 to a0.25) is 2.0x. Band count barely matters, and
+  band placement (`lo` twins) ties its twin.
+- **No narrow buzz band.** Buzz frames differ from clean negatives nearly flat
+  across frequency (`band_profile.py`); no reason to expect a band-limited front
+  end to win big.
+- **Distil only `ins_buzz`, `ambient_rain`, `human`:** +0.05 at every width on
+  fast32h16 (rung B), same speed. `lam=0` (no code regression) hurts. Every live
+  frontier student is such a subset student.
+- **Seed noise on the headline is ~0.01-0.02**; the repeat rule's bar is 0.02.
+  Read single-seed gaps under ~0.03 as ties.
+- **Steps vs data.** At equal steps rung C ≈ rung B; past ~14k steps the gain
+  needs C's data (B overfits: 0.616 at 14k, 0.588 at 56k; C keeps climbing to
+  0.650). YAMNet-trunk students are flat from 7k; fast-front-end students keep
+  learning to 28-56k. A 7k WSD branch matches a 7k cosine run.
+- **hit@K tracks the headline** (r 0.94 over buzz+rain+human students) and is
+  calibration-blind, which is why it is the WSD stop signal. hit% at logit 0 is
+  as good a proxy but also reads the student's calibration offset.
+- **The clean frontier (2026-10-05), rung C at the rule's stop:** yamnet a0.25
+  0.707 at 1.62x, twofast32 a0.50 0.690 at 1.76x, fast32 a0.50 0.680 at 2.17x,
+  fast32h16 a0.50 0.639 at 2.51x, fast32h16 a0.25 0.612 at 2.75x. All far above
+  the floor (0.207) and the CV baseline (0.414). Comparison points: teacher
+  honest rotation 0.574; teacher ONNX through the harness 0.692 (inflated, trained
+  on those folds). Students inherit fold knowledge through the teacher, so beating
+  0.574 is not "better than the teacher".
+- **Contamination:** every rung-B student and the yamnet rung-C runs before
+  2026-10-04 trained on test-set audio; their rows are in
+  `05_distill/log.contaminated_2026-10-02.jsonl`. Directions survive (one retrain
+  landed inside seed noise), numbers are not comparable.
+- **Jets at `1_95`:** 36-76% of the threshold-setting false positives in every
+  student; none rejects them. Class subsets help on that fold (0.134 to 0.200,
+  fast32h16 a0.50). `eval_folds.py probe` scores it (a training fold, not
+  held-out). The teacher has not been probed.
+- **Eval is slightly pessimistic for long windows** (each frame scored alone,
+  zero-padded), and the headline is the student ONNX's, not the full pipeline's.
+- **Untried:** pruning dead channels, non-uniform widths, a learned (conv) front
+  end, int8 (needs modern hardware to time), dropping layers beyond d12.
 
 ## D1. A clean YAMNet-front-end a0.50 student: the standard tier's only reading is contaminated
 
 *Evidence: contaminated-era rung C, `fe_C_yamnet_a0.50` 7k/14k = 0.723/0.722 at
-1.38x (FRONTENDS.md); YAMNet-trunk students are flat from 7k.*
+1.38x (FRONTENDS.md, closed); YAMNet-trunk students are flat from 7k.*
 
 The top of the frontier, the candidate *standard* student, has no clean,
 comparable row: the yamnet a0.50 rung-C runs trained on the contaminated `C`

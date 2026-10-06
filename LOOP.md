@@ -117,9 +117,12 @@ wins still hold in the current era.
 
 # Distillation arm (`05_distill`)
 
-`05_distill/README.md` is the operator's guide, `05_distill/FRONTENDS.md` the
-state of the frontier (read its latest update before proposing), `DESIGN.md` the
-contract. This section is only what the loop needs on top of them.
+`05_distill/README.md` is the operator's guide and `DESIGN.md` the contract.
+Before proposing, read IDEAS.md's distillation standing facts and run
+`python 05_distill/ladder_record.py frontier` (the current frontier).
+`FRONTENDS.md` and `LADDER.md` are closed records of the work before the loop:
+read them for the reasoning behind a fact, never append to them. This section is
+only what the loop needs on top of these.
 
 ## Goal
 
@@ -146,7 +149,7 @@ budget, seed, front end and width, differing only in your change. Look for it in
 comparable rows); if it isn't there, put it in the same `main.py --runs` call.
 Also say where the student lands against the frontier, which is the real goal.
 
-Noise: headline seed noise on a student is ~0.01 (FRONTENDS.md); the repeat rule
+Noise: headline seed noise on a student is ~0.01-0.02; the repeat rule
 (a gain > 0.02 over everything at its speed or faster gets one repeat at the next
 seed before it counts) is built in: `ladder_record.py repeats` prints the commands.
 

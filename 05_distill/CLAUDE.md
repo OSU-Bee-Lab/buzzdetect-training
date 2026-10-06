@@ -1,7 +1,8 @@
 # 05_distill: stage-local gotchas
 
 `README.md` is the operator's guide (one command, new teachers, what is cached where, resume semantics).
-`DESIGN.md` is the contract, `FRONTENDS.md` the live experiment, `LADDER.md` the closed data-size ladder.
+`DESIGN.md` is the contract. `LADDER.md` (data-size ladder) and `FRONTENDS.md` (front-end frontier) are closed
+records of the work before the distillation arm joined LOOP.md (2026-10-06); don't append to them.
 The experiment log is `log.jsonl` (tracked, every teacher; README, "The experiment log"): only scripts write it
 (`ladder_record.py record`, `backfill_hitk.py --rescore`, `quarantine.py`, `log_exp.py`); never hand-edit a row's
 `key` or `teacher`. Read and rewrite it through `D.read_log` / `D.write_log`, which keep other teachers' rows.
@@ -31,7 +32,7 @@ The experiment log is `log.jsonl` (tracked, every teacher; README, "The experime
 
 ## Gotchas
 
-- **A running job is launched from the `distill-lite` worktree, not the main checkout** (FRONTENDS.md, "Running job"), so
+- **A running job is launched from the `distill-lite` worktree, not the main checkout** (FRONTENDS.md's "Running job" explains why), so
   edits to `05_distill/*.py` in the main checkout cannot change it mid-flight; refresh the worktree (`merge --ff-only main`) between
   jobs. The data root is `05_distill/data/` in the *main* checkout whichever worktree runs (`dpaths.MAIN`).
 - **Never edit scripts here while a chain runs from this worktree.** A chain re-reads its python stage scripts

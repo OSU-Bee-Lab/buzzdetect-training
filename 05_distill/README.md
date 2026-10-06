@@ -7,8 +7,8 @@ the evaluation deployments; it learns the teacher's logits and head-input code o
 unlabelled deployment audio, and is judged on the same rotating CV folds as every other model.
 
 Read `DESIGN.md` for the contract (teacher targets, sampling, loss, judging), `LADDER.md` for the
-data-size ladder (closed), and `FRONTENDS.md` for the front-end frontier (the live experiment). This file
-is the operator's guide.
+data-size ladder and `FRONTENDS.md` for the front-end frontier (both closed records; new work runs through
+LOOP.md's distillation arm, its facts in IDEAS.md). This file is the operator's guide.
 
 ## One command
 
@@ -209,7 +209,7 @@ own (flips vs cached teacher logits on the held-out V pool) and against labels (
 
 The front end alone runs at 6280 s/s, so it caps any student with YAMNet's front end at about 2.1x
 YAMNet on GPU. Speedup saturates well before the MAC count does: 68.6 to 4.8 MMACs (14x) buys only 2.0x.
-That is why the live work is the front end: **FRONTENDS.md**.
+That is why the work moved to the front end: **FRONTENDS.md** (closed).
 
 ## Testing
 
