@@ -29,8 +29,7 @@ attempt() {  # attempt <label> <cmd...>: run, retry once
 }
 main() { "$PY" -u 05_distill/main.py --teacher "$DISTILL_TEACHER" "$@"; }
 
-# the rung-A hit@K spread needs two clean rung-A repeats; until then the last measured spread (2026-10-04)
-STOP=$(cd 05_distill && "$PY" ladder_record.py spread 2>/dev/null) || STOP=1.85
+STOP=1.3   # LOOP.md's --wsd-stop (README, "Step budget"); this chain ran 2026-10-05 with 1.85, the old rung-A spread
 echo "[fillchain] --wsd-stop $STOP"
 
 attempt B-fast32h16-56k main --rung B --wsd-max 56000 --runs "fast32h16:a0.50:$BRH"

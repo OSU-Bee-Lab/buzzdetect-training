@@ -7,7 +7,7 @@ the variant-qualification decision.
     ladder_record.py gate            # exit 0 if rung C beat B by more than the A spread, else 1
     ladder_record.py wsd --name <trunk>   # step-budget curve: a WSD trunk's decayed branches (+ cosine reference)
     ladder_record.py proxy           # how well each V readout (hit at 0, hit@K, mae) tracks the fold headline
-    ladder_record.py spread          # prints the rung-A hit@K spread (the --wsd-stop tolerance); exit 1 if unknown
+    ladder_record.py spread          # prints the rung-A hit@K spread (a noise readout; --wsd-stop is D.WSD_STOP); exit 1 if unknown
     ladder_record.py repeats         # runs the repeat rule asks for: one main.py command per line
 
 The ladder is the distillation experiment log, tracked at `05_distill/log.jsonl` (D.LOG), one file for every
@@ -177,7 +177,7 @@ def hitk_pct(v):
 
 
 def hitk_spread():
-    """|difference| of hit@K between the two rung-A repeats (the noise floor --wsd-stop is set against)."""
+    """|difference| of hit@K between the two rung-A repeats (seed noise at one budget; not --wsd-stop's tolerance)."""
     a = [hitk_pct(final_val(r['name'])) for r in rows() if is_ladder(r) and r['rung'] == 'A']
     a = [x for x in a if x is not None]
     return abs(a[0] - a[1]) if len(a) >= 2 else None

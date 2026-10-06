@@ -72,8 +72,8 @@ def hitk(r):
 
 def load_all(tol=None):
     """Every seed-1 student with a speed, live log (pool 'clean') plus the tagged logs beside it (pool = tag),
-    one point per ident(): a WSD curve's stop-rule branch (main.py's `plateaued`), else its cosine run."""
-    tol = tol or LR.hitk_spread() or 1.85
+    one point per ident(): a WSD curve's stop-rule branch (`dpaths.wsd_stop_index`), else its cosine run."""
+    tol = tol or D.WSD_STOP
     raw = [dict(r, pool='clean') for r in LR.rows()]
     for tag, f in D.tagged_logs().items():
         raw += [dict(r, pool=tag) for r in D.read_log(f)]
@@ -92,8 +92,8 @@ def load_all(tol=None):
             continue
         rs.sort(key=lambda r: r['steps'])
         hk = [hitk(r) for r in rs]
-        i = next((j for j in range(1, len(rs)) if None not in (hk[j - 1], hk[j]) and hk[j] - hk[j - 1] < tol),
-                 len(rs) - 1)
+        i = D.wsd_stop_index(hk, tol)
+        i = len(rs) - 1 if i is None else i
         pts[ident(rs[i])] = rs[i]
     return list(pts.values())
 

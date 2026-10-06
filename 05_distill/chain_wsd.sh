@@ -7,7 +7,7 @@
 #   3 fast32h16 a0.50 rung C to 112k, no stop: a check on the new rule (hit% at 0 dipped at 56k, the headline rose)
 #   4 rung-B curve on the frontier student yamnet a0.25, new rule
 #   5 fast32h16 a0.25 rung C to 56k, new rule (does the faster, smaller student also keep rising?)
-# The --wsd-stop tolerance is the rung-A repeat spread of hit@K (ladder_record.py spread), measured in step 0.
+# The --wsd-stop tolerance is LOOP.md's 1.3 (README, "Step budget"); it was the rung-A hit@K spread, measured in step 0.
 #
 #   tools/launch_job.sh 05_distill/data/chain_wsd.log -- bash 05_distill/chain_wsd.sh
 set -uo pipefail
@@ -34,8 +34,8 @@ attempt backfill-hitk "$PY" -u 05_distill/backfill_hitk.py
 "$PY" 05_distill/ladder_record.py proxy || true
 curve fe_C_yamnet_a0.50_s1_select_c-buzz-rain-human_wsd
 curve fe_C_fast32h16_a0.50_s1_c-buzz-rain-human_wsd
-STOP=$("$PY" 05_distill/ladder_record.py spread) || { echo "[wsdchain] no hit@K spread; stopping"; exit 1; }
-echo "[wsdchain] --wsd-stop $STOP (rung-A hit@K spread)"
+STOP=1.3
+echo "[wsdchain] --wsd-stop $STOP"
 
 step equivalence --rung B --wsd 7000 --runs "yamnet:a0.50:select:$BRH fast32h16:a0.50:$BRH"
 step yamnet-C-56k --rung C --wsd-max 56000 --wsd-stop "$STOP" --runs "yamnet:a0.50:select:$BRH"

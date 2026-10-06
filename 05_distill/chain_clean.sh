@@ -6,7 +6,7 @@
 # resumes), then the chain moves on; re-running the chain redoes only what is missing.
 #   0 fill the caches for the clean plan (its new-audio slices): teacher targets to rung C, fast mels to rung B;
 #     then re-score V on the 11 clean fast32h16 rung-C runs (their packs were clean, their V pool was not)
-#   1 rung-A repeats lad_A_s1/s2 (the noise floor: --wsd-stop's hit@K spread)
+#   1 rung-A repeats lad_A_s1/s2 (the noise floor)
 #   2 the 46 rung-B cosine students, one main.py each (frontier_svg.py's points)
 #   3 WSD: rung-B 7k equivalence pair, yamnet a0.25 rung-B curve, yamnet a0.50 rung-C curve (rule on)
 #   4 the rest of the old ladder: lad_B_s1, lad_B_a0.375_s1, lad_B_a0.50_d12_s1, lad_C_s1
@@ -109,8 +109,8 @@ cos B 1 yamnet:a0.50:select
 cos B 1 yamnet:a0.50:select:classes=ins_buzz
 cos B 1 yamnet:a0.50:select:classes=ins_buzz+ambient_rain+human
 
-STOP=$(cd 05_distill && "$PY" ladder_record.py spread) || { echo "[cleanchain] no hit@K spread; WSD steps use 1.85"; STOP=1.85; }
-echo "[cleanchain] --wsd-stop $STOP (rung-A hit@K spread)"
+STOP=1.3   # LOOP.md's --wsd-stop (README, "Step budget"); was the rung-A hit@K spread
+echo "[cleanchain] --wsd-stop $STOP"
 attempt wsd-equivalence main --rung B --wsd 7000 --runs "yamnet:a0.50:select:$BRH fast32h16:a0.50:$BRH"
 attempt wsd-yamnet-a0.25-B main --rung B --wsd 7000,14000,28000,70000 --wsd-stop "$STOP" --runs "yamnet:a0.25:select:$BRH"
 attempt wsd-yamnet-a0.50-C main --rung C --wsd-max 56000 --wsd-stop "$STOP" --runs "yamnet:a0.50:select:$BRH"

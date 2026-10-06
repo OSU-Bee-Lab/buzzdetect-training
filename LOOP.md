@@ -163,7 +163,8 @@ seed before it counts) is built in: `ladder_record.py repeats` prints the comman
   don't compare against them by hand.
 - **Rung C is the working rung; rung D does not run** (LADDER.md's rule; LADDER is
   closed). Prefer WSD step-budget curves to single cosine runs: `--wsd-max 56000
-  --wsd-stop 1.3` (README, "Step budget"), stopped by hit@K.
+  --wsd-stop 1.3` (README, "Step budget"): the trunk stops after two doublings
+  in a row each gain < 1.3 points of hit@K.
 - **Speed is GPU only.** CPU int8 timings on this machine are meaningless (no AVX2).
 - **A front end is edited by renaming it** (`05_distill/CLAUDE.md`); its
   spectrogram cache is stamped with its definition.

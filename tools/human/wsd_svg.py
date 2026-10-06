@@ -2,7 +2,8 @@
 
 Left: headline (sensitivity_exclquiet @ fpr 0.005) against training steps, one line per WSD trunk (its decayed
 branches). Filled markers are budgets the --wsd-stop rule would run; the ringed one is where it ends the trunk
-(the first branch whose hit@K gain on its predecessor is under the tolerance, main.py's `plateaued`); hollow
+(the second of two branches in a row whose hit@K gain on its predecessor is under the tolerance,
+`dpaths.wsd_stop_index`); hollow
 markers lie past that stop (run without the rule, e.g. chain_wsd.sh step 3).
 
 Right: the speed / sensitivity frontier. Grey: every rung-B seed-1 cosine run at its fixed 7k budget, and its
@@ -10,7 +11,7 @@ non-dominated line (as frontier_svg.py). Coloured: each WSD trunk's branch at th
 budgets as small hollow markers on the same vertical (speed does not depend on steps). Black line: the frontier
 with the stop-rule branches added.
 
-    python tools/human/wsd_svg.py [out.svg] [--tol 1.85]     (train env; reads the comparable ladder rows and each run's curve.json)
+    python tools/human/wsd_svg.py [out.svg] [--tol 1.3]     (train env; reads the comparable ladder rows and each run's curve.json)
 """
 import json
 import math
@@ -58,11 +59,8 @@ def trunks():
 
 def stop_index(rows, tol):
     """Index of the branch where the rule ends the trunk (the last one it runs)."""
-    for i in range(1, len(rows)):
-        p, c = rows[i - 1]['hitk'], rows[i]['hitk']
-        if p is not None and c is not None and c - p < tol:
-            return i
-    return len(rows) - 1
+    i = D.wsd_stop_index([r['hitk'] for r in rows], tol)
+    return len(rows) - 1 if i is None else i
 
 
 def label(r):
@@ -85,7 +83,7 @@ def mark(fe, x, y, c, filled, ring=False, s=6):
 
 def main():
     args = [a for a in sys.argv[1:]]
-    tol = 1.85
+    tol = D.WSD_STOP
     if '--tol' in args:
         i = args.index('--tol')
         tol = float(args[i + 1])
@@ -100,7 +98,7 @@ def main():
          f'<rect width="{W}" height="{H}" fill="#fcfcfb"/>',
          f'<text x="{PL}" y="26" font-size="16" font-weight="bold">Step budget (WSD): sensitivity by training steps, and the frontier it moves</text>',
          f'<text x="{PL}" y="46" fill="{INK2}">buzz+rain+human students (seed 1 unless labelled); ringed = where --wsd-stop {tol:g} '
-         f'(hit@K gain) ends the trunk; hollow = past that stop; headline seed noise ~0.01-0.02 (rung-A repeats)</text>']
+         f'(hit@K gain) ends the trunk (two small gains in a row); hollow = past that stop; headline seed noise ~0.01</text>']
 
     # ---- left: headline vs steps (log2)
     steps = sorted({r['steps'] for k in order for r in tr[k]})

@@ -173,22 +173,32 @@ def test_main_wsd():
           f'{t}_wsd20 train (decay 17-20)' in out and f'{t}_wsd40 train (decay 34-40)' in out)
     r = run(base + ['--passes', '1'])
     check('--passes sets the cosine steps', '= 20 steps' in r.stdout)
-    # hit@K 90.0 then 90.1 (below a 1.3 tolerance) while hit% at logit 0 jumps 70 -> 90: the rule reads hit@K
-    for b, lost, hitk in ((100, 300, 900), (200, 100, 901)):
+    # hit@K 90.0, 90.1, 90.2 (gains below a 1.3 tolerance) while hit% at logit 0 jumps 70 -> 90 -> 95: the rule
+    # reads hit@K
+    def branch(b, lost, hitk):
         d = f'{D.RUNS}/{t}_wsd{b}'
         os.makedirs(d, exist_ok=True)
         json.dump({'val': [{'final': True, 'buzz_lost': lost, 'buzz_teacher': 1000, 'buzz_hitk': hitk}]},
                   open(f'{d}/curve.json', 'w'))
         open(f'{d}/TRAIN_DONE', 'w').close()
-    out = run(base + ['--wsd', '100,200,400', '--wsd-stop', '1.3']).stdout
-    check('--wsd-stop: after a hit@K plateau the trunk goes no further',
-          f'[plateau  ] {t}_wsd trunk to 340' in out and f'[plateau  ] {t}_wsd400 train' in out
+    branch(100, 300, 900)
+    branch(200, 100, 901)
+    wsd4 = base + ['--wsd', '100,200,400,800', '--wsd-stop', '1.3']
+    out = run(wsd4).stdout
+    check('--wsd-stop: one small hit@K gain does not end the trunk', f'[pending  ] {t}_wsd trunk to 340' in out)
+    branch(400, 50, 902)
+    out = run(wsd4).stdout
+    check('--wsd-stop: after two small hit@K gains in a row the trunk goes no further',
+          f'[plateau  ] {t}_wsd trunk to 680' in out and f'[plateau  ] {t}_wsd800 train' in out
           and f'[pending  ] {t}_wsd trunk to 170' in out)
-    out = run(base + ['--wsd', '100,200,400', '--wsd-stop', '0.05']).stdout
-    check('--wsd-stop: a gain above the tolerance keeps going', f'[pending  ] {t}_wsd trunk to 340' in out)
+    branch(400, 50, 950)
+    out = run(wsd4).stdout
+    check('--wsd-stop: a small gain then a large one keeps going', f'[pending  ] {t}_wsd trunk to 680' in out)
+    out = run(base + ['--wsd', '100,200,400,800', '--wsd-stop', '0.05']).stdout
+    check('--wsd-stop: gains above the tolerance keep going', f'[pending  ] {t}_wsd trunk to 680' in out)
     json.dump({'val': [{'final': True, 'buzz_lost': 100, 'buzz_teacher': 1000}]},
               open(f'{D.RUNS}/{t}_wsd200/curve.json', 'w'))
-    r = run(base + ['--wsd', '100,200,400', '--wsd-stop', '1.3'])
+    r = run(wsd4)
     check('--wsd-stop: a branch without hit@K is refused, not read as no plateau',
           r.returncode != 0 and 'backfill_hitk.py' in r.stdout + r.stderr)
     open(D.PLAN, 'w').write(plan)

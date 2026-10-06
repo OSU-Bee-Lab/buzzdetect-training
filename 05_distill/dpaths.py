@@ -138,6 +138,16 @@ HOP = 15360                 # samples per frame at 16 kHz
 SLICE_FRAMES = 62
 SLICE_SAMPLES = 953600      # 62 frames + 240 samples of STFT lookahead
 
+WSD_STOP = 1.3              # --wsd-stop's hit@K tolerance (LOOP.md; README, "Step budget": a working value)
+
+
+def wsd_stop_index(hitk, tol=WSD_STOP):
+    """The --wsd-stop rule over one trunk's branches (hit@K %, ascending budgets, None = unknown): the index
+    of the last branch it runs, the second of two branches in a row that each gained < tol on the one
+    before; None while it has not fired. main.py's `plateaued` and the human/ SVGs both read it."""
+    small = [None not in (p, c) and c - p < tol for p, c in zip(hitk, hitk[1:])]
+    return next((i + 2 for i in range(len(small) - 1) if small[i] and small[i + 1]), None)
+
 
 def need_cache():
     if not CACHE_ROOT:

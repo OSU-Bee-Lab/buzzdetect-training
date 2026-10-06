@@ -45,9 +45,9 @@ steps-versus-quality curve for about the cost of the longest budget:
 ```bash
 main.py --rung B --runs "yamnet:a0.25:select:classes=ins_buzz+ambient_rain+human" --wsd 7000,14000,28000,70000
 main.py ... --wsd 1p,2p,4p,10p          # budgets in passes over the rung (plan frame count / --batch)
-main.py ... --wsd-max 56000 --wsd-stop 1.3   # ceiling + 3 halvings (7000-56000); stop once a doubling gains < 1.3 points of hit@K
+main.py ... --wsd-max 56000 --wsd-stop 1.3   # ceiling + 3 halvings (7000-56000); stop once two doublings in a row gain < 1.3 points of hit@K
 ladder_record.py wsd --name fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd [--ref <cosine run>,...]
-python tools/human/wsd_svg.py [--tol 1.85]   # every WSD curve + the frontier it moves -> tools/human/wsd.svg
+python tools/human/wsd_svg.py [--tol 1.3]   # every WSD curve + the frontier it moves -> tools/human/wsd.svg
 ```
 
 - One **trunk** `<name>_wsd` trains at a constant `--lr` after a linear `--warmup` (300 steps). For each
@@ -59,8 +59,13 @@ python tools/human/wsd_svg.py [--tol 1.85]   # every WSD curve + the frontier it
   limits those costly stages to some budgets; every branch still has the cheap V readouts (`mae_live`,
   buzz lost/gained) in its `curve.json`.
 - Stages interleave (trunk to the first branch point, that branch, trunk on), so early points arrive early.
-  `--wsd-stop <points>` ends the trunk once a branch raises **hit@K** on the one before by less than that
-  (set it from the rung-A hit@K spread that `ladder_record.py wsd` prints). hit@K: the teacher makes K buzz
+  `--wsd-stop <points>` ends the trunk once **two branches in a row** each raise **hit@K** on the one before
+  by less than that. Use 1.3 (LOOP.md). It is a working value, not a measured noise floor: 1.3 began as a
+  lost% bar (2026-10-02) and 1.85 was one contaminated rung-A seed pair. Two small gains, not one, because
+  within a trunk a sub-2-point hit@K gain barely tracks the headline (+0.05 hit@K came with +0.011 headline,
+  +1.80 with -0.003), and the one-gain rule stopped the fast32-family rung-C students a doubling short,
+  ~0.01-0.02 headline each, at ~15-30 min training per extra doubling (2026-10-06). Kept on hit@K, not the
+  headline, so the eval folds do not pick the budget whose headline goes on the frontier. hit@K: the teacher makes K buzz
   detections on the held-out V pool; hit@K is the share of them among the student's K highest buzz scores.
   It replaced teacher-hit % (the share the student also calls at its own logit 0, 100 - lost%) on 2026-10-03.
   A small student trained by Huber regression under-calls a rare class (fast32h16 rung C: 5,195 buzz calls on
