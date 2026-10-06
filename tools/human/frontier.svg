@@ -16,17 +16,20 @@
 <text x="405.0" y="666" text-anchor="middle">speed, x YAMNet (GPU, 200 s audio; higher is faster)</text>
 <text transform="translate(18 330.0) rotate(-90)" text-anchor="middle">sensitivity (excl. quiet) @ 0.5% FPR</text>
 <polyline fill="none" stroke="#9a9a9a" stroke-width="1.2" points="658.0,354.6 657.5,240.1"/>
-<polyline fill="none" stroke="#9a9a9a" stroke-width="1.2" points="594.4,243.0 591.4,200.9"/>
+<polyline fill="none" stroke="#9a9a9a" stroke-width="1.2" points="587.0,247.4 591.4,200.9"/>
 <polyline fill="none" stroke="#9a9a9a" stroke-width="1.2" points="282.0,105.2 284.2,80.6"/>
-<polyline fill="none" stroke="#111" stroke-width="1.5" stroke-dasharray="2 3" points="658.0,354.6 657.5,240.1 591.4,200.9 497.6,187.9 388.3,180.6 346.5,129.9 284.2,80.6"/>
+<polyline fill="none" stroke="#9a9a9a" stroke-width="1.2" points="388.3,180.6 385.6,127.0"/>
+<polyline fill="none" stroke="#9a9a9a" stroke-width="1.2" points="497.6,187.9 497.6,141.5"/>
+<polyline fill="none" stroke="#9a9a9a" stroke-width="1.2" points="346.5,129.9 349.3,102.4"/>
+<polyline fill="none" stroke="#111" stroke-width="1.5" stroke-dasharray="2 3" points="658.0,354.6 657.5,240.1 591.4,200.9 497.6,187.9 497.6,141.5 385.6,127.0 349.3,102.4 284.2,80.6"/>
 <g><polygon points="658.0,345.6 667.0,354.6 658.0,363.6 649.0,354.6" fill="#d95f02" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32h16_a0.25_s1_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.533  2.75x  7k steps</title></g>
 <g><polygon points="655.3,390.6 664.3,399.6 655.3,408.6 646.3,399.6" fill="#d95f02" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32h16_a0.25_s1_c-buzz-rain-human_lam0 (contaminated_2026-10-02)
 headline 0.502  2.74x  7k steps</title></g>
 <g><polygon points="621.1,283.3 630.1,292.3 621.1,301.3 612.1,292.3" fill="#7570b3" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32h16_a0.375_s1_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.576  2.62x  7k steps</title></g>
-<g><polygon points="594.4,234.0 603.4,243.0 594.4,252.0 585.4,243.0" fill="#1b9e77" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32h16_a0.50_s1_c-buzz-rain-human (contaminated_2026-10-02)
-headline 0.610  2.52x  7k steps</title></g>
+<g><polygon points="587.0,238.4 596.0,247.4 587.0,256.4 578.0,247.4" fill="#1b9e77" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32h16_a0.50_s1_c-buzz-rain-human_wsd7000 (contaminated_2026-10-02)
+headline 0.607  2.49x  7k steps</title></g>
 <g><circle cx="282.0" cy="105.2" r="7" fill="#1b9e77" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_yamnet_a0.50_s1_select_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.705  1.38x  7k steps</title></g>
 <g><polygon points="385.8,173.6 390.8,173.6 390.8,178.1 395.3,178.1 395.3,183.1 390.8,183.1 390.8,187.6 385.8,187.6 385.8,183.1 381.3,183.1 381.3,178.1 385.8,178.1" fill="#1b9e77" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_twofast32_a0.50_s1_c-buzz-rain-human (contaminated_2026-10-02)
@@ -41,6 +44,7 @@ headline 0.567  2.45x  7k steps</title></g>
 headline 0.615  1.88x  7k steps</title></g>
 <g><circle cx="346.5" cy="129.9" r="7" fill="#d95f02" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd28000 (contaminated_2026-10-02)
 headline 0.688  1.61x  28k steps</title></g>
+<text x="355.5" y="133.9" font-size="9" fill="#555">28k</text>
 <g><rect x="523.7" y="209.9" width="14" height="14" fill="#7570b3" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32_a0.375_s1_c-buzz-rain-human (contaminated_2026-10-02)
 headline 0.628  2.29x  7k steps</title></g>
 <g><rect x="526.2" y="260.7" width="14" height="14" fill="#7570b3" fill-opacity="0.85" stroke="#111" stroke-width="1.2"/><title>fe_B_fast32lo_a0.375_s1_c-buzz-rain-human (contaminated_2026-10-02)
@@ -55,14 +59,22 @@ headline 0.623  2.16x  7k steps</title></g>
 headline 0.639  2.51x  28k steps</title></g>
 <g><polygon points="657.5,231.1 666.5,240.1 657.5,249.1 648.5,240.1" fill="#d95f02" fill-opacity="0.85" stroke="#111" stroke-width="3"/><title>fe_C_fast32h16_a0.25_s1_c-buzz-rain-human_wsd56000 (clean)
 headline 0.612  2.75x  56k steps</title></g>
+<g><circle cx="349.3" cy="102.4" r="7" fill="#d95f02" fill-opacity="0.85" stroke="#111" stroke-width="3"/><title>fe_C_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd56000 (clean)
+headline 0.707  1.62x  56k steps</title></g>
+<g><rect x="490.6" y="134.5" width="14" height="14" fill="#1b9e77" fill-opacity="0.85" stroke="#111" stroke-width="3"/><title>fe_C_fast32_a0.50_s1_c-buzz-rain-human_wsd28000 (clean)
+headline 0.680  2.17x  28k steps</title></g>
+<g><polygon points="383.1,120.0 388.1,120.0 388.1,124.5 392.6,124.5 392.6,129.5 388.1,129.5 388.1,134.0 383.1,134.0 383.1,129.5 378.6,129.5 378.6,124.5 383.1,124.5" fill="#1b9e77" fill-opacity="0.85" stroke="#111" stroke-width="3"/><title>fe_C_twofast32_a0.50_s1_c-buzz-rain-human_wsd28000 (clean)
+headline 0.690  1.75x  28k steps</title></g>
 <g><circle cx="284.2" cy="80.6" r="7" fill="#1b9e77" fill-opacity="0.85" stroke="#111" stroke-width="3"/><title>fe_C_yamnet_a0.50_s1_select_c-buzz-rain-human_wsd14000 (contaminated_2026-10-02)
 headline 0.722  1.38x  14k steps</title></g>
 <text x="295.2" y="71.6" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >yamnet a0.50 · C 14k</text>
 <text x="295.2" y="71.6" font-size="10" >yamnet a0.50 · C 14k</text>
-<text x="357.5" y="120.9" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >yamnet a0.25 · B 28k</text>
-<text x="357.5" y="120.9" font-size="10" >yamnet a0.25 · B 28k</text>
-<text x="399.3" y="171.6" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >twofast32 a0.50 · B</text>
-<text x="399.3" y="171.6" font-size="10" >twofast32 a0.50 · B</text>
+<text x="360.3" y="93.4" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >yamnet a0.25 · C 56k</text>
+<text x="360.3" y="93.4" font-size="10" >yamnet a0.25 · C 56k</text>
+<text x="396.6" y="118.0" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >twofast32 a0.50 · C 28k</text>
+<text x="396.6" y="118.0" font-size="10" >twofast32 a0.50 · C 28k</text>
+<text x="508.6" y="132.5" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >fast32 a0.50 · C 28k</text>
+<text x="508.6" y="132.5" font-size="10" >fast32 a0.50 · C 28k</text>
 <text x="508.6" y="178.9" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >fast32 a0.50 · B</text>
 <text x="508.6" y="178.9" font-size="10" >fast32 a0.50 · B</text>
 <text x="602.4" y="191.9" font-size="10" stroke="#fff" stroke-width="3" stroke-linejoin="round" >fast32h16 a0.50 · C 28k</text>
@@ -93,34 +105,38 @@ headline 0.722  1.38x  14k steps</title></g>
 <line x1="70" x2="740" y1="730.0" y2="730.0" stroke="#e5e5e5"/><text x="62" y="734.0" text-anchor="end">3.0%</text>
 <line x1="70" x2="740" y1="913.3333333333334" y2="913.3333333333334" stroke="#555" stroke-dasharray="4 3"/><text x="746" y="917.3333333333334" fill="#555">target 0.5%</text>
 <text transform="translate(18 840.0) rotate(-90)" text-anchor="middle">1_95 false-positive rate</text>
-<rect x="90.9" y="874.5" width="26.0" height="75.5" fill="#d95f02" fill-opacity="0.85"><title>fe_B_fast32h16_a0.25_s1_c-buzz-rain-human fpr 1.03%</title></rect><text x="103.9" y="870.5" font-size="9" text-anchor="middle">1.0</text>
-<rect x="118.9" y="794.8" width="26.0" height="155.2" fill="#111" fill-opacity="0.85"><title>fe_B_fast32h16_a0.25_s1_c-buzz-rain-human fpr_jet 2.12%</title></rect><text x="131.9" y="790.8" font-size="9" text-anchor="middle">2.1</text>
-<line x1="87.9" x2="147.9" y1="876.4" y2="876.4" stroke="#999" stroke-width="3"/>
-<text x="117.9" y="964" font-size="9" text-anchor="middle">fast32h16</text><text x="117.9" y="976" font-size="9" text-anchor="middle" fill="#555">a0.25 · B · 2.8x</text>
-<rect x="186.6" y="895.4" width="26.0" height="54.6" fill="#d95f02" fill-opacity="0.85"><title>fe_C_fast32h16_a0.25_s1_c-buzz-rain-human_wsd56000 fpr 0.74%</title></rect><text x="199.6" y="891.4" font-size="9" text-anchor="middle">0.7</text>
-<rect x="214.6" y="810.7" width="26.0" height="139.3" fill="#111" fill-opacity="0.85"><title>fe_C_fast32h16_a0.25_s1_c-buzz-rain-human_wsd56000 fpr_jet 1.90%</title></rect><text x="227.6" y="806.7" font-size="9" text-anchor="middle">1.9</text>
-<line x1="183.6" x2="243.6" y1="880.1" y2="880.1" stroke="#999" stroke-width="3"/>
-<text x="213.6" y="964" font-size="9" text-anchor="middle">fast32h16</text><text x="213.6" y="976" font-size="9" text-anchor="middle" fill="#555">a0.25 · C · 2.8x</text>
-<rect x="282.3" y="904.4" width="26.0" height="45.6" fill="#1b9e77" fill-opacity="0.85"><title>fe_C_fast32h16_a0.50_s1_c-buzz-rain-human_wsd28000 fpr 0.62%</title></rect><text x="295.3" y="900.4" font-size="9" text-anchor="middle">0.6</text>
-<rect x="310.3" y="826.6" width="26.0" height="123.4" fill="#111" fill-opacity="0.85"><title>fe_C_fast32h16_a0.50_s1_c-buzz-rain-human_wsd28000 fpr_jet 1.68%</title></rect><text x="323.3" y="822.6" font-size="9" text-anchor="middle">1.7</text>
-<line x1="279.3" x2="339.3" y1="873.8" y2="873.8" stroke="#999" stroke-width="3"/>
-<text x="309.3" y="964" font-size="9" text-anchor="middle">fast32h16</text><text x="309.3" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · C · 2.5x</text>
-<rect x="378.0" y="892.7" width="26.0" height="57.3" fill="#1b9e77" fill-opacity="0.85"><title>fe_B_fast32_a0.50_s1_c-buzz-rain-human fpr 0.78%</title></rect><text x="391.0" y="888.7" font-size="9" text-anchor="middle">0.8</text>
-<rect x="406.0" y="798.5" width="26.0" height="151.5" fill="#111" fill-opacity="0.85"><title>fe_B_fast32_a0.50_s1_c-buzz-rain-human fpr_jet 2.07%</title></rect><text x="419.0" y="794.5" font-size="9" text-anchor="middle">2.1</text>
-<line x1="375.0" x2="435.0" y1="884.2" y2="884.2" stroke="#999" stroke-width="3"/>
-<text x="405.0" y="964" font-size="9" text-anchor="middle">fast32</text><text x="405.0" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · B · 2.2x</text>
-<rect x="473.7" y="893.8" width="26.0" height="56.2" fill="#1b9e77" fill-opacity="0.85"><title>fe_B_twofast32_a0.50_s1_c-buzz-rain-human fpr 0.77%</title></rect><text x="486.7" y="889.8" font-size="9" text-anchor="middle">0.8</text>
-<rect x="501.7" y="835.0" width="26.0" height="115.0" fill="#111" fill-opacity="0.85"><title>fe_B_twofast32_a0.50_s1_c-buzz-rain-human fpr_jet 1.57%</title></rect><text x="514.7" y="831.0" font-size="9" text-anchor="middle">1.6</text>
-<line x1="470.7" x2="530.7" y1="886.0" y2="886.0" stroke="#999" stroke-width="3"/>
-<text x="500.7" y="964" font-size="9" text-anchor="middle">twofast32</text><text x="500.7" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · B · 1.8x</text>
-<rect x="569.4" y="913.9" width="26.0" height="36.1" fill="#d95f02" fill-opacity="0.85"><title>fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd28000 fpr 0.49%</title></rect><text x="582.4" y="909.9" font-size="9" text-anchor="middle">0.5</text>
-<rect x="597.4" y="873.3" width="26.0" height="76.7" fill="#111" fill-opacity="0.85"><title>fe_B_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd28000 fpr_jet 1.05%</title></rect><text x="610.4" y="869.3" font-size="9" text-anchor="middle">1.0</text>
-<line x1="566.4" x2="626.4" y1="848.8" y2="848.8" stroke="#999" stroke-width="3"/>
-<text x="596.4" y="964" font-size="9" text-anchor="middle">yamnet</text><text x="596.4" y="976" font-size="9" text-anchor="middle" fill="#555">a0.25 · B · 1.6x</text>
-<rect x="665.1" y="900.5" width="26.0" height="49.5" fill="#1b9e77" fill-opacity="0.85"><title>fe_C_yamnet_a0.50_s1_select_c-buzz-rain-human_wsd14000 fpr 0.67%</title></rect><text x="678.1" y="896.5" font-size="9" text-anchor="middle">0.7</text>
-<rect x="693.1" y="842.5" width="26.0" height="107.5" fill="#111" fill-opacity="0.85"><title>fe_C_yamnet_a0.50_s1_select_c-buzz-rain-human_wsd14000 fpr_jet 1.47%</title></rect><text x="706.1" y="838.5" font-size="9" text-anchor="middle">1.5</text>
-<line x1="662.1" x2="722.1" y1="856.7" y2="856.7" stroke="#999" stroke-width="3"/>
-<text x="692.1" y="964" font-size="9" text-anchor="middle">yamnet</text><text x="692.1" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · C · 1.4x</text>
+<rect x="84.9" y="874.5" width="26.0" height="75.5" fill="#d95f02" fill-opacity="0.85"><title>fe_B_fast32h16_a0.25_s1_c-buzz-rain-human fpr 1.03%</title></rect><text x="97.9" y="870.5" font-size="9" text-anchor="middle">1.0</text>
+<rect x="112.9" y="794.8" width="26.0" height="155.2" fill="#111" fill-opacity="0.85"><title>fe_B_fast32h16_a0.25_s1_c-buzz-rain-human fpr_jet 2.12%</title></rect><text x="125.9" y="790.8" font-size="9" text-anchor="middle">2.1</text>
+<line x1="81.9" x2="141.9" y1="876.4" y2="876.4" stroke="#999" stroke-width="3"/>
+<text x="111.9" y="964" font-size="9" text-anchor="middle">fast32h16</text><text x="111.9" y="976" font-size="9" text-anchor="middle" fill="#555">a0.25 · B · 2.8x</text>
+<rect x="168.6" y="895.4" width="26.0" height="54.6" fill="#d95f02" fill-opacity="0.85"><title>fe_C_fast32h16_a0.25_s1_c-buzz-rain-human_wsd56000 fpr 0.74%</title></rect><text x="181.6" y="891.4" font-size="9" text-anchor="middle">0.7</text>
+<rect x="196.6" y="810.7" width="26.0" height="139.3" fill="#111" fill-opacity="0.85"><title>fe_C_fast32h16_a0.25_s1_c-buzz-rain-human_wsd56000 fpr_jet 1.90%</title></rect><text x="209.6" y="806.7" font-size="9" text-anchor="middle">1.9</text>
+<line x1="165.6" x2="225.6" y1="880.1" y2="880.1" stroke="#999" stroke-width="3"/>
+<text x="195.6" y="964" font-size="9" text-anchor="middle">fast32h16</text><text x="195.6" y="976" font-size="9" text-anchor="middle" fill="#555">a0.25 · C · 2.8x</text>
+<rect x="252.4" y="904.4" width="26.0" height="45.6" fill="#1b9e77" fill-opacity="0.85"><title>fe_C_fast32h16_a0.50_s1_c-buzz-rain-human_wsd28000 fpr 0.62%</title></rect><text x="265.4" y="900.4" font-size="9" text-anchor="middle">0.6</text>
+<rect x="280.4" y="826.6" width="26.0" height="123.4" fill="#111" fill-opacity="0.85"><title>fe_C_fast32h16_a0.50_s1_c-buzz-rain-human_wsd28000 fpr_jet 1.68%</title></rect><text x="293.4" y="822.6" font-size="9" text-anchor="middle">1.7</text>
+<line x1="249.4" x2="309.4" y1="873.8" y2="873.8" stroke="#999" stroke-width="3"/>
+<text x="279.4" y="964" font-size="9" text-anchor="middle">fast32h16</text><text x="279.4" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · C · 2.5x</text>
+<rect x="336.1" y="892.7" width="26.0" height="57.3" fill="#1b9e77" fill-opacity="0.85"><title>fe_B_fast32_a0.50_s1_c-buzz-rain-human fpr 0.78%</title></rect><text x="349.1" y="888.7" font-size="9" text-anchor="middle">0.8</text>
+<rect x="364.1" y="798.5" width="26.0" height="151.5" fill="#111" fill-opacity="0.85"><title>fe_B_fast32_a0.50_s1_c-buzz-rain-human fpr_jet 2.07%</title></rect><text x="377.1" y="794.5" font-size="9" text-anchor="middle">2.1</text>
+<line x1="333.1" x2="393.1" y1="884.2" y2="884.2" stroke="#999" stroke-width="3"/>
+<text x="363.1" y="964" font-size="9" text-anchor="middle">fast32</text><text x="363.1" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · B · 2.2x</text>
+<rect x="419.9" y="906.7" width="26.0" height="43.3" fill="#1b9e77" fill-opacity="0.85"><title>fe_C_fast32_a0.50_s1_c-buzz-rain-human_wsd28000 fpr 0.59%</title></rect><text x="432.9" y="902.7" font-size="9" text-anchor="middle">0.6</text>
+<rect x="447.9" y="835.0" width="26.0" height="115.0" fill="#111" fill-opacity="0.85"><title>fe_C_fast32_a0.50_s1_c-buzz-rain-human_wsd28000 fpr_jet 1.57%</title></rect><text x="460.9" y="831.0" font-size="9" text-anchor="middle">1.6</text>
+<line x1="416.9" x2="476.9" y1="863.2" y2="863.2" stroke="#999" stroke-width="3"/>
+<text x="446.9" y="964" font-size="9" text-anchor="middle">fast32</text><text x="446.9" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · C · 2.2x</text>
+<rect x="503.6" y="895.0" width="26.0" height="55.0" fill="#1b9e77" fill-opacity="0.85"><title>fe_C_twofast32_a0.50_s1_c-buzz-rain-human_wsd28000 fpr 0.75%</title></rect><text x="516.6" y="891.0" font-size="9" text-anchor="middle">0.7</text>
+<rect x="531.6" y="813.5" width="26.0" height="136.5" fill="#111" fill-opacity="0.85"><title>fe_C_twofast32_a0.50_s1_c-buzz-rain-human_wsd28000 fpr_jet 1.86%</title></rect><text x="544.6" y="809.5" font-size="9" text-anchor="middle">1.9</text>
+<line x1="500.6" x2="560.6" y1="883.9" y2="883.9" stroke="#999" stroke-width="3"/>
+<text x="530.6" y="964" font-size="9" text-anchor="middle">twofast32</text><text x="530.6" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · C · 1.8x</text>
+<rect x="587.4" y="893.4" width="26.0" height="56.6" fill="#d95f02" fill-opacity="0.85"><title>fe_C_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd56000 fpr 0.77%</title></rect><text x="600.4" y="889.4" font-size="9" text-anchor="middle">0.8</text>
+<rect x="615.4" y="825.6" width="26.0" height="124.4" fill="#111" fill-opacity="0.85"><title>fe_C_yamnet_a0.25_s1_select_c-buzz-rain-human_wsd56000 fpr_jet 1.70%</title></rect><text x="628.4" y="821.6" font-size="9" text-anchor="middle">1.7</text>
+<line x1="584.4" x2="644.4" y1="864.3" y2="864.3" stroke="#999" stroke-width="3"/>
+<text x="614.4" y="964" font-size="9" text-anchor="middle">yamnet</text><text x="614.4" y="976" font-size="9" text-anchor="middle" fill="#555">a0.25 · C · 1.6x</text>
+<rect x="671.1" y="900.5" width="26.0" height="49.5" fill="#1b9e77" fill-opacity="0.85"><title>fe_C_yamnet_a0.50_s1_select_c-buzz-rain-human_wsd14000 fpr 0.67%</title></rect><text x="684.1" y="896.5" font-size="9" text-anchor="middle">0.7</text>
+<rect x="699.1" y="842.5" width="26.0" height="107.5" fill="#111" fill-opacity="0.85"><title>fe_C_yamnet_a0.50_s1_select_c-buzz-rain-human_wsd14000 fpr_jet 1.47%</title></rect><text x="712.1" y="838.5" font-size="9" text-anchor="middle">1.5</text>
+<line x1="668.1" x2="728.1" y1="856.7" y2="856.7" stroke="#999" stroke-width="3"/>
+<text x="698.1" y="964" font-size="9" text-anchor="middle">yamnet</text><text x="698.1" y="976" font-size="9" text-anchor="middle" fill="#555">a0.50 · C · 1.4x</text>
 <rect x="70" y="730" width="670" height="220" fill="none" stroke="#999"/>
 <rect x="760" y="740" width="12" height="12" fill="#888"/><text x="778" y="750" font-size="11">1_95, all negatives</text>
 <rect x="760" y="758" width="12" height="12" fill="#111"/><text x="778" y="768" font-size="11">1_95, jet frames only</text>

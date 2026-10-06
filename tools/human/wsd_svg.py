@@ -24,8 +24,8 @@ import dpaths as D  # noqa: E402
 import ladder_record as LR  # noqa: E402
 import frontier_svg as F  # noqa: E402
 
-# categorical slots 1-4 (dataviz reference palette, light), fixed per trunk in this order
-SLOT = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100']
+# categorical slots 1-4 (dataviz reference palette, light) then 5-8, fixed per trunk in this order
+SLOT = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#8a5cd0', '#d6457a', '#3d8f9e', '#7a6a4f']
 INK, INK2, GRID, FRAME = '#0b0b0b', '#52514e', '#e5e5e3', '#a9a8a3'
 W, H = 1180, 560
 PL, PR, PT, PB = 70, 150, 70, 60          # left panel margins
@@ -66,7 +66,8 @@ def stop_index(rows, tol):
 
 
 def label(r):
-    return f'{r["frontend"]} {r["arch"]}, rung {r["rung"]}'
+    seed = f', seed {r["seed"]}' if r.get('seed', 1) != 1 else ''
+    return f'{r["frontend"]} {r["arch"]}, rung {r["rung"]}{seed}'
 
 
 def mark(fe, x, y, c, filled, ring=False, s=6):
@@ -92,13 +93,13 @@ def main():
     out_path = args[0] if args else os.path.join(HERE, 'wsd.svg')
     tr = trunks()
     order = sorted(tr, key=lambda k: (tr[k][0]['frontend'] != 'yamnet', tr[k][0]['arch'] != 'a0.50', k))
-    colour = {k: SLOT[i] for i, k in enumerate(order)}
+    colour = {k: SLOT[i % len(SLOT)] for i, k in enumerate(order)}
     stop = {k: stop_index(tr[k], tol) for k in order}
 
     o = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" font-family="sans-serif" font-size="12" fill="{INK}">',
          f'<rect width="{W}" height="{H}" fill="#fcfcfb"/>',
          f'<text x="{PL}" y="26" font-size="16" font-weight="bold">Step budget (WSD): sensitivity by training steps, and the frontier it moves</text>',
-         f'<text x="{PL}" y="46" fill="{INK2}">seed 1, buzz+rain+human students; ringed = where --wsd-stop {tol:g} '
+         f'<text x="{PL}" y="46" fill="{INK2}">buzz+rain+human students (seed 1 unless labelled); ringed = where --wsd-stop {tol:g} '
          f'(hit@K gain) ends the trunk; hollow = past that stop; headline seed noise ~0.01-0.02 (rung-A repeats)</text>']
 
     # ---- left: headline vs steps (log2)
@@ -192,7 +193,7 @@ def main():
              f'<circle cx="{lx + 9}" cy="{ly + 38}" r="5" fill="#fff" stroke="{INK2}" stroke-width="2"/>'
              f'<text x="{lx + 24}" y="{ly + 42}" font-size="11">YAMNet front end</text>'
              f'<polygon points="{lx + 9},{ly + 50} {lx + 16},{ly + 57} {lx + 9},{ly + 64} {lx + 2},{ly + 57}" fill="#fff" stroke="{INK2}" stroke-width="2"/>'
-             f'<text x="{lx + 24}" y="{ly + 61}" font-size="11">fast32h16 front end</text>')
+             f'<text x="{lx + 24}" y="{ly + 61}" font-size="11">fast32* front end</text>')
     o.append('</svg>')
     open(out_path, 'w').write('\n'.join(o))
     print(out_path)

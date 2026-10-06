@@ -257,3 +257,49 @@ clean scored 0.512 against 0.519 contaminated (its seed-2 repeat: 0.510), inside
 are informative, not shipped. So the numbers above stand as contaminated-era readings: fine for direction,
 not for the held-out SeeNote test. Their rows are in `ladder/<teacher>.contaminated_2026-10-02.jsonl`, outside
 the comparable set. The clean, comparable students are the 9 fast32h16 rung-C branches and lad_A_s1.
+
+## Update 2026-10-05: rung-C frontier fill and B vs C at equal steps (`chain_fill.sh`)
+
+![frontier](../tools/human/frontier.svg)
+![step budget](../tools/human/wsd.svg)
+
+Every run here trained on clean (rebuilt, fingerprinted) packs and is in the comparable log. Seed 1 unless
+marked. The rung-B cosine 7k numbers it is compared against are contaminated-era readings (2026-10-04 update).
+
+    trunk                              7k     14k    28k    56k    112k  (headline; * = --wsd-stop 1.85's last branch)
+    fast32h16 a0.50, rung B            0.596  0.616* 0.611  0.588         (run to 56k on purpose, no rule)
+    fast32h16 a0.50, rung C            0.605  0.621  0.639* 0.650  0.649 (2026-10-04)
+    fast32h16 a0.50, rung C, seed 2    0.603  0.628* 0.650                (run to 28k on purpose, no rule)
+    yamnet a0.25, rung C               0.693  0.691  0.704  0.707*
+    fast32 a0.50, rung C               0.654  0.668  0.680*
+    twofast32 a0.50, rung C            0.659  0.678  0.690*
+
+- **Seed noise on a WSD branch is ~0.01.** fast32h16 a0.50 rung C, seed 1 vs 2: 0.605/0.603, 0.621/0.628,
+  0.639/0.650 at 7k/14k/28k. The rule's stop is seed-sensitive too: seed 2's hit@K gain at 14k was +1.44
+  (under 1.85), so the rule would have ended it there, 0.022 short of where it got by 28k (seed 1 stops at 28k).
+- **B vs C: steps alone do not buy rung C's gain; past ~14k steps it needs C's data.** At equal steps, fast32h16
+  a0.50: 7k 0.596 vs 0.605/0.603, 14k 0.616 vs 0.621/0.628 (both inside noise); 28k 0.611 vs 0.639/0.650
+  (+0.03-0.04); 56k 0.588 vs 0.650 (+0.06). Rung B peaks at 14k (9.6 passes) and then falls as passes grow (19 at 28k,
+  38 at 56k) while V mae_live rises (0.197 to 0.204): it overfits. Rung C at the same steps is only 2.4-9.6
+  passes in and keeps climbing to 28-56k. So the 2026-10-04 open question is answered: B with the same
+  steps does not match C.
+- **At 7k, C ≈ B on every new trunk too** (C WSD vs B cosine): fast32 0.654 vs 0.648, twofast32 0.659 vs 0.653,
+  yamnet a0.25 0.693 vs 0.685. All inside noise; the gain arrives with steps.
+- **Where the new rung-C students stop:** yamnet a0.25 runs to 56k (0.707; hit@K +2.0 at 28k, +0.7 at 56k), unlike
+  the flat contaminated-era YAMNet trunks. fast32 and twofast32 a0.50 stop at 28k (hit@K +1.3 and +1.4) at
+  0.680 and 0.690, still +0.012 per doubling when stopped, so a 56k branch might add ~0.01 (inside noise).
+- **The frontier moved up by 0.02-0.04 at every speed between 1.6x and 2.75x**, all clean students:
+
+        speed   rung-B cosine 7k (contaminated)    rung C at the rule's stop (clean)    delta
+        1.62x   yamnet a0.25        0.685          yamnet a0.25 56k       0.707         +0.022
+        1.76x   twofast32 a0.50     0.653          twofast32 a0.50 28k    0.690         +0.037
+        2.17x   fast32 a0.50        0.648          fast32 a0.50 28k       0.680         +0.032
+        2.51x   fast32h16 a0.50     0.610          fast32h16 a0.50 28k    0.639         +0.029
+        2.75x   fast32h16 a0.25     0.533          fast32h16 a0.25 56k    0.612         +0.079
+
+  The non-dominated line from 1.6x to 2.75x is now all clean rung-C students; only yamnet a0.50 rung C 14k
+  (0.722, 1.38x, contaminated) is above it, below the 1.5x floor anyway. Every frontier student is above the
+  era baseline (0.414) by a wide margin. twofast32 at 1.76x, 0.690 is within 0.02 of yamnet a0.25 at
+  1.62x: the best student just above the 1.5x floor is close to the YAMNet-trunk one.
+- Not yet done: the held-out SeeNote test on the clean frontier students (Luke, when back); a 56k branch of
+  fast32/twofast32 if the extra ~0.01 matters.
