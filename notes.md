@@ -20,7 +20,8 @@ Rows in main's `05_distill/log.jsonl` (rung C, V-pool hit@K; headline = sensitiv
 fast32 56k vs its 28k branch (`tools/results.py`): +0.007 ± 0.005 (eval sampling only);
 per fold 1_29 +0.014, 53 -0.008, 1_11 +0.020, 1_143 +0.018, 1_37 -0.010 (each ± ~0.01).
 Loud +0.013, untagged +0.007, background +0.004, quiet +0.001. Inclusive 0.565 -> 0.571.
-twofast32 56k vs 28k: +0.001 headline, inclusive 0.578 -> 0.578.
+twofast32 56k vs 28k: +0.001 ± 0.005; per fold 1_29 +0.004, 53 +0.000, 1_11 -0.001, 1_143 -0.006,
+1_37 +0.011 (each ± ~0.01); every loudness tier within ±0.003. Inclusive 0.578 -> 0.578.
 Speed unchanged (same graph). hit% at logit 0 fell for fast32 (56.99 -> 55.39); the
 offset at a fixed cutoff doesn't matter in deployment (users set the threshold).
 
