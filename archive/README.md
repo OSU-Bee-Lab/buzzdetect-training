@@ -13,8 +13,9 @@ roster, or the training data.
 Directory names are `<first-entry-date>_<slug>` so they sort in the order the
 eras ran. Each holds:
 
-- `log.jsonl` — the entries, verbatim as they were written
-- `per_fold.jsonl` — per-fold sensitivities recovered on 2026-09-28 from
+- `03_train/log.jsonl` — the training arm's entries, verbatim as they were written
+  (eras closed before 2026-10-06 had it at the era root; moved here then)
+- `03_train/per_fold.jsonl` — per-fold sensitivities recovered on 2026-09-28 from
   surviving model dirs (main's `models/` or a worktree's), one line per entry by
   `name`, with the `model_dir` it came from. Only dirs whose `folds_sx.csv`
   reproduces the logged headline were used; entries with no such dir are
@@ -22,9 +23,10 @@ eras ran. Each holds:
 - `README.md` — what made these numbers comparable, and what ended that
 - `notes/` — the per-experiment working notes
 - `set/` — a snapshot of the training set as of the cutover *(where it survives)*
-- `distill/` — the distillation logs (`05_distill/ladder/<teacher>.jsonl`, one row
-  per judged student) as they stood at cutover *(from the first era closed after
-  2026-10-04; earlier distillation results were in a gitignored file)*
+- `05_distill/log.jsonl` — the distillation arm's log (one row per judged student,
+  every teacher) as it stood at cutover, plus any tagged `log.<tag>.jsonl` beside it
+  *(from the first era closed after 2026-10-04; earlier distillation results were
+  in a gitignored file)*
 
 ## Why the set snapshot is here
 

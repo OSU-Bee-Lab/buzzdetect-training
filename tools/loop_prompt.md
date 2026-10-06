@@ -27,11 +27,11 @@ Cleanup is the loop's job. Once you signal `done` or `issue`, it stops this sess
 `park`, an `issue` or a `halt`. Watch your jobs with one Monitor on `tools/watch_job.sh` (no
 arguments: it follows every job you launch, later ones too, so never arm a
 second), re-armed at every 30-min expiry (CLAUDE.md "Running long jobs"); that keeps a
-waiting session alive, so a slow run is never a reason to write one. Between its events, don't look at the job: no `tail` of the log, no ReadNotifications-then-check loop. Each look is a full turn (CLAUDE.md "Running long jobs"). The next experiment agent resumes every handoff whose experiment isn't in
-`log.jsonl` yet. The loop lists those handoffs at the end of this prompt (none
+waiting session alive, so a slow run is never a reason to write one. Between its events, don't look at the job: no `tail` of the log, no ReadNotifications-then-check loop. Each look is a full turn (CLAUDE.md "Running long jobs"). The next experiment agent resumes every handoff whose experiment isn't logged
+yet (`03_train/log.jsonl` or `05_distill/log.jsonl`). The loop lists those handoffs at the end of this prompt (none
 listed means none to resume); any
 other `HANDOFF*.md` under `.local/worktrees/` belongs to a closed era (its
-experiment is in an `archive/*/log.jsonl`), so ignore it. Commit a handoff in
+experiment is in an `archive/*/<stage>/log.jsonl`), so ignore it. Commit a handoff in
 the worktree with four things:
 
 - the job's pid and log: the resuming session runs `tools/watch_job.sh --adopt <pid>`,

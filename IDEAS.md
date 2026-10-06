@@ -1,10 +1,13 @@
 # Experiment Ideas
 
 **A queue of untried ideas. Candidate experiments, nothing else — closed items
-do not belong here in any form.** Results go in `log.jsonl`, protocol in
-`LOOP.md`, closed eras in `archive/`. When you run an idea, **delete its
+do not belong here in any form.** Ideas for both arms of the loop live here,
+under their arm's queue: **training** (`03_train`) and **distillation**
+(`05_distill`); either is a legitimate next experiment. Results go in the arm's
+log (`03_train/log.jsonl`, `05_distill/log.jsonl`), protocol in `LOOP.md`,
+closed eras in `archive/`. When you run an idea, **delete its
 section entirely** — the verdict, the mechanism and the "don't rerun this" live
-in that run's `log.jsonl` entry and its `notes.md` on `exp/<slug>`. **A
+in that run's log entry (or rows) and its `notes.md` on `exp/<slug>`. **A
 strikethrough heading, "DONE"/"ANSWERED" writeup, or `## Closed:` summary left
 in its place is the same violation as not deleting it** — it still costs every
 future agent an uncached re-read for a verdict that's already durably recorded
@@ -14,7 +17,7 @@ outright non-deletion) — see `CLAUDE.md`'s Invariants for the standing note. I
 only part of an idea is tested, trim to the untested remainder; don't narrate
 the tested part here.
 
-**State as of 2026-09-14.** Anchor **`cv_baseline_v3` = 0.330** (bare linear
+**Training arm, state as of 2026-09-14.** Anchor **`cv_baseline_v3` = 0.330** (bare linear
 probe on frozen YAMNet, `--epochs 400`). Provisional era lead
 **`pitchshift-aves-mid` = 0.422** — `[yamnet(t), yamnet(octave-up(t)), AVES
 layers 6/9/12 mean-pooled]`, 4352-d, linear. Its repeat draw
@@ -38,7 +41,7 @@ An untagged claim is a proposal, not a measurement.
 | **E1** | `archive/2026-06_fixed-test` — 29 runs | Different metric, different data, two revisions ago. **Not a verdict.** Re-establish or don't cite. |
 | **E2** | `archive/2026-08_cv-medium-v1` — 30 runs | Right metric, wrong data and roster. Directions survive; numbers don't. |
 | **E3** | `archive/2026-09-08_cv-medium-v2` — 24 runs | Right metric family, but pre-revision data, `Dropout(0.2)`, and a mix of three epoch rules. Directions survive; numbers don't. |
-| **E4** | current `log.jsonl` — 2026-09-11 on | Directly comparable. |
+| **E4** | current `03_train/log.jsonl` — 2026-09-11 on | Directly comparable. |
 
 `temporal-context` was a clear E1 negative and, rerun as `context-stack` in E2,
 became the largest gain in the log. **E1/E2/E3 negatives are leads, not
@@ -144,9 +147,43 @@ using only rows whose `label` does not contain `ins_buzz`.
 
 ---
 
-# Queue
+# Queue — training arm
 
 Ranked best-first by expected value on the headline and the hard folds, cost second.
+
+---
+
+# Queue — distillation arm
+
+Ranked best-first by expected movement of the speed / sensitivity frontier,
+cost second. State and numbers: `05_distill/FRONTENDS.md` (2026-10-05 update);
+`python 05_distill/ladder_record.py frontier` is the source of truth. Comparable
+(clean) students only; contaminated-era readings are leads.
+
+## D1. A clean YAMNet-front-end a0.50 student: the standard tier's only reading is contaminated
+
+*Evidence: contaminated-era rung C, `fe_C_yamnet_a0.50` 7k/14k = 0.723/0.722 at
+1.38x (FRONTENDS.md); YAMNet-trunk students are flat from 7k.*
+
+The top of the frontier, the candidate *standard* student, has no clean,
+comparable row: the yamnet a0.50 rung-C runs trained on the contaminated `C`
+pack. The pack has since been rebuilt (`fe_C_yamnet_a0.25_s1_select_...` trained
+on it clean), so one rung-C 7k run (`yamnet:a0.50:select:classes=ins_buzz+ambient_rain+human`,
+seed 1) puts it back in the comparable set, matched to that a0.25 run. Falsifier: a clean headline more than
+~0.02 below 0.722 says the contamination was worth something after all, which
+would also reopen how far to trust the other contaminated readings.
+
+## D2. 56k branches of fast32 and twofast32 a0.50, rung C
+
+*Evidence: both stopped at 28k by the hit@K rule, still +0.012 per doubling
+(FRONTENDS.md, 2026-10-05).*
+
+The rule stopped them with hit@K gains of +1.3 and +1.4 (under the 1.85 spread),
+but the headline was still rising. Extending each trunk to 56k (`--wsd-max 56000`
+on the same run spec resumes the trunk) costs one more doubling each. Expected
+~+0.01, inside seed noise, so read it as a curve shape (does it flatten like
+fast32h16 a0.50, or keep rising like fast32h16 a0.25?), not as a frontier move on
+its own. Low priority.
 
 ---
 
@@ -237,7 +274,7 @@ training. Do not relabel anything.
 
 # Ruled out — do not re-propose
 
-Full reasoning is in `log.jsonl` and each branch's `notes.md`.
+Full reasoning is in `03_train/log.jsonl` and each branch's `notes.md`.
 
 - **Per-site score calibration / label-free threshold selection** — inert by
   construction.

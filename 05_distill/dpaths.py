@@ -17,8 +17,9 @@ Layout (all under paths that live outside the repo):
   <repo main checkout>/05_distill/data/     (gitignored, like 02_set's data; main checkout even from a worktree)
       _shared/arch/                      speed timings of random-weight candidates, frontend_only.onnx
       <teacher>/                         runs/, models/, eval/, shards/ (packed rungs)
-  <repo main checkout>/05_distill/ladder/   (TRACKED: the distillation experiment log)
-      <teacher>.jsonl                    one row per judged run (ladder_record.py record); comparability key in each row
+  <repo main checkout>/05_distill/log.jsonl   (TRACKED: the distillation experiment log, every teacher)
+                                         one row per judged run (ladder_record.py record): `teacher`, comparability `key`
+  <repo main checkout>/05_distill/log.<tag>.jsonl   rows set aside by quarantine.py, same shape
 
 `<teacher>` is the name of the model dir the teacher lives in: `models/<name>/` in this project
 (config_model.json: classes, activation_centers, set, folds_train) and `<buzzdetect_dest>/<name>/model.onnx`.
@@ -76,10 +77,42 @@ LOCAL_ROOT = os.environ.get('DISTILL_LOCAL_ROOT') or os.path.join(MAIN, '05_dist
 SHARED = os.path.join(LOCAL_ROOT, '_shared')
 LOCAL = os.path.join(LOCAL_ROOT, TEACHER)
 RUNS, MODELS, EVAL, SHARDS = (os.path.join(LOCAL, d) for d in ('runs', 'models', 'eval', 'shards'))
-# the distillation experiment log is tracked (it was a gitignored data file until 2026-10-04); tests, which point
+# the distillation experiment log: one tracked file for every teacher, each row naming its `teacher` (it was a
+# gitignored data file until 2026-10-04, one file per teacher until 2026-10-06); tests, which point
 # DISTILL_LOCAL_ROOT at a temp dir, keep theirs there
-LADDER_DIR = os.path.join(MAIN, '05_distill', 'ladder') if not os.environ.get('DISTILL_LOCAL_ROOT') else LOCAL
-LADDER = os.path.join(LADDER_DIR, f'{TEACHER}.jsonl' if not os.environ.get('DISTILL_LOCAL_ROOT') else 'ladder.jsonl')
+LOG = (os.path.join(LOCAL_ROOT, 'log.jsonl') if os.environ.get('DISTILL_LOCAL_ROOT')
+       else os.path.join(MAIN, os.path.relpath(config.DISTILL_LOG, config.ROOT)))
+
+
+def tagged_log(tag):
+    """log.<tag>.jsonl beside the live log: rows quarantine.py set aside."""
+    return LOG[:-len('.jsonl')] + f'.{tag}.jsonl'
+
+
+def tagged_logs():
+    """{tag: path} for every tagged log beside the live one."""
+    d, stem = os.path.dirname(LOG), os.path.basename(LOG)[:-len('.jsonl')] + '.'
+    return {f[len(stem):-len('.jsonl')]: os.path.join(d, f) for f in sorted(os.listdir(d) if os.path.isdir(d) else [])
+            if f.startswith(stem) and f.endswith('.jsonl') and len(f) > len(stem) + len('jsonl')}
+
+
+def read_log(path=None, teacher=TEACHER):
+    """The rows of a log (default: the live one) for `teacher`; every teacher's with teacher=None."""
+    path = path or LOG
+    if not os.path.exists(path):
+        return []
+    rs = [json.loads(line) for line in open(path) if line.strip()]
+    return rs if teacher is None else [r for r in rs if r.get('teacher') == teacher]
+
+
+def write_log(rows, path=None):
+    """Replace a whole log (every teacher's rows) atomically."""
+    path = path or LOG
+    with open(path + '.tmp', 'w') as f:
+        f.writelines(json.dumps(r) + '\n' for r in rows)
+    os.replace(path + '.tmp', path)
+
+
 ARCH = os.path.join(SHARED, 'arch')
 FRONTEND_ONNX = os.path.join(ARCH, 'frontend_only', 'model.onnx')
 

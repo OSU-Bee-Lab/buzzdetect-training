@@ -327,11 +327,11 @@
 
 <header>
   <h1>buzzdetect experiment log</h1>
-  <div class="subtitle">reads <code>log.jsonl</code> from the project root; archived eras from <code>archive/&lt;era&gt;/</code></div>
+  <div class="subtitle">reads <code>03_train/log.jsonl</code>; archived eras from <code>archive/&lt;era&gt;/03_train/</code></div>
 </header>
 
 <div class="toolbar">
-  <input type="text" id="fetchpath" placeholder="path or URL to fetch, e.g. ../../log.jsonl">
+  <input type="text" id="fetchpath" placeholder="path or URL to fetch, e.g. ../../03_train/log.jsonl">
   <button id="reload-btn" title="retry fetching the path above">reload</button>
   <label class="file-btn">load files…
     <input type="file" id="filepicker" accept=".jsonl,.json,.txt,.md" multiple>
@@ -886,7 +886,7 @@ const LS_TEXT = "buzzdetect_log_viewer.cached_text";
 const LS_META = "buzzdetect_log_viewer.cached_meta"; // {source, time}
 const LS_DEPLOY = "buzzdetect_log_viewer.deployments";
 const LS_TAB = "buzzdetect_log_viewer.tab";
-const DEFAULT_PATH = "../../log.jsonl";
+const DEFAULT_PATH = "../../03_train/log.jsonl";
 
 function relTime(ms) {
   const s = Math.round((Date.now() - ms) / 1000);
@@ -980,13 +980,14 @@ document.addEventListener("drop", e => {
 const pathInput = document.getElementById("fetchpath");
 let storedPath = null;
 try { storedPath = localStorage.getItem(LS_PATH); } catch (e) {}
-// "../log.jsonl" was the default before the viewer moved into tools/human/
-pathInput.value = !storedPath || storedPath === "../log.jsonl" ? DEFAULT_PATH : storedPath;
+// "../log.jsonl" and "../../log.jsonl" were defaults before the viewer moved into tools/human/ and the log into 03_train/
+pathInput.value = !storedPath || storedPath === "../log.jsonl" || storedPath === "../../log.jsonl" ? DEFAULT_PATH : storedPath;
 pathInput.addEventListener("change", () => {
   try { localStorage.setItem(LS_PATH, pathInput.value.trim()); } catch (e) {}
 });
 
-const rootOf = path => path.replace(/[^/]*$/, "");
+// the repo root: the log's directory, minus 03_train/ (where the training log lives)
+const rootOf = path => path.replace(/[^/]*$/, "").replace(/03_train\/$/, "");
 const fetchText = p => fetch(p).then(r => r.ok ? r.text() : Promise.reject(new Error("http " + r.status)));
 
 // the era list comes from archive/README.md, the only listing a browser can fetch
@@ -1012,7 +1013,7 @@ document.getElementById("era").addEventListener("change", ev => {
   const slug = ev.target.value;
   if (slug === "current") return attemptLoad();
   if (!slug) return;
-  const root = rootOf(pathInput.value.trim() || DEFAULT_PATH) + `archive/${slug}/`;
+  const root = rootOf(pathInput.value.trim() || DEFAULT_PATH) + `archive/${slug}/03_train/`;
   Promise.all([fetchText(root + "log.jsonl"), fetchText(root + "per_fold.jsonl").catch(() => "")])
     .then(([log, pf]) => loadEntries(mergePerFold(parseJsonl(log), parseJsonl(pf)), { source: root + "log.jsonl" }))
     .catch(() => {

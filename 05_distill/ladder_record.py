@@ -10,11 +10,11 @@ the variant-qualification decision.
     ladder_record.py spread          # prints the rung-A hit@K spread (the --wsd-stop tolerance); exit 1 if unknown
     ladder_record.py repeats         # runs the repeat rule asks for: one main.py command per line
 
-The ladder is the distillation experiment log, tracked at `05_distill/ladder/<teacher>.jsonl` (D.LADDER).
-Each row carries `key`, what makes its numbers comparable: the teacher build, the V pool (the plan's V slices)
+The ladder is the distillation experiment log, tracked at `05_distill/log.jsonl` (D.LOG), one file for every
+teacher; each row names its `teacher` and this script reads only the current teacher's. Each row carries `key`, what makes its numbers comparable: the teacher build, the V pool (the plan's V slices)
 and the eval roster (the teacher set's rotating folds). Every comparison here reads only the rows whose key
 matches the current one; the others are counted on stderr, never mixed in (2026-10-04: a V pool changed
-under 64 runs and nothing said so). Closed eras: `archive/<era>/distill/` (tools/archive_era.py).
+under 64 runs and nothing said so). Closed eras: `archive/<era>/05_distill/` (tools/archive_era.py).
 
 Repeat rule (LOOP.md's "confirm a large gain with one repeat run"): a cosine run that beats every other
 student of its rung at its speed or faster by more than HEADLINE_NOISE, with no repeat at another seed yet, gets one
@@ -40,7 +40,6 @@ import dpaths as D  # noqa: E402
 
 MAIN = D.MAIN
 LOCAL = D.LOCAL                # 05_distill/data/<teacher>
-LADDER = D.LADDER
 COL = 'sensitivity_exclquiet'
 TIERS = ['faint', 'quiet', 'background', 'untagged', 'normal', 'loud']
 HEADLINE_TOL = 0.03
@@ -89,7 +88,7 @@ def comparability():
 def rows(everything=False):
     """The ladder rows comparable with the current teacher, V pool and eval roster (all of them with
     `everything`). The rest are counted on stderr."""
-    rs = [json.loads(l) for l in open(LADDER)] if os.path.exists(LADDER) else []
+    rs = D.read_log()
     if everything:
         return rs
     key = comparability()
@@ -189,7 +188,7 @@ def record(a):
     v = [x for x in cur['val'] if x.get('final')][-1]
     head, per, tiers, incl = sx(os.path.join(LOCAL, 'eval', a.name, 'folds_sx.csv'))
     args = cur.get('args', {})
-    row = {'rung': a.rung, 'seed': a.seed, 'steps': a.steps, 'name': a.name, 'arch': a.arch, 'loader': a.loader,
+    row = {'teacher': D.TEACHER, 'rung': a.rung, 'seed': a.seed, 'steps': a.steps, 'name': a.name, 'arch': a.arch, 'loader': a.loader,
            'frontend': a.frontend, 'init': a.init, 'classes': a.classes, 'lam': a.lam,
            'schedule': args.get('schedule', 'cosine'), 'lr': args.get('lr'), 'warmup': args.get('warmup', 0),
            'decay_from': args.get('decay_from', ''),
@@ -206,7 +205,7 @@ def record(a):
            'key': comparability(), 'date': time.strftime('%Y-%m-%d'),
            'commit': subprocess.run(['git', '-C', MAIN, 'rev-parse', '--short', 'HEAD'], capture_output=True,
                                     text=True).stdout.strip()}
-    with open(LADDER, 'a') as f:
+    with open(D.LOG, 'a') as f:
         f.write(json.dumps(row) + '\n')
     print('[ladder]', json.dumps(row))
 

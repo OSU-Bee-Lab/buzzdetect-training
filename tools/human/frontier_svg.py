@@ -9,7 +9,7 @@ Below it, a bar chart of the jet fold: for each non-dominated student, 1_95's fa
 rotating-fold threshold (fpr 0.005 over every rotating fold's negatives) is applied to it, on all its negatives and on its
 jet frames alone, against the rotating folds' own worst FPR at that threshold (eval_folds.py probe -> probe.json).
 
-    python tools/human/frontier_svg.py [out.svg]      (train env; reads the comparable rows of 05_distill/ladder/<teacher>.jsonl)
+    python tools/human/frontier_svg.py [out.svg]      (train env; reads the teacher's comparable rows of 05_distill/log.jsonl)
 """
 import glob
 import json
@@ -75,9 +75,8 @@ def load_all(tol=None):
     one point per ident(): a WSD curve's stop-rule branch (main.py's `plateaued`), else its cosine run."""
     tol = tol or LR.hitk_spread() or 1.85
     raw = [dict(r, pool='clean') for r in LR.rows()]
-    for f in sorted(glob.glob(D.LADDER[:-len('.jsonl')] + '.*.jsonl')):
-        tag = os.path.basename(f)[len(D.TEACHER) + 1:-len('.jsonl')]
-        raw += [dict(json.loads(line), pool=tag) for line in open(f) if line.strip()]
+    for tag, f in D.tagged_logs().items():
+        raw += [dict(r, pool=tag) for r in D.read_log(f)]
     curves, pts = {}, {}
     for r in raw:
         if r.get('seed') != 1 or not r.get('x_yamnet200') or r.get('headline') is None \

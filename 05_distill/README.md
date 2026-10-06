@@ -109,7 +109,7 @@ depends on, and stamped so a stale product is caught instead of silently mixed:
 | teacher targets | `<distill_cache>/<teacher>/<relpath>/h<hour>.npz` (`code`, `logits`) | audio + teacher ONNX | that teacher's students |
 | packed rungs | `05_distill/data/<teacher>/shards/<rung>[__<frontend>]` | rung + front end + teacher + plan | all architectures of a (rung, front end) |
 | runs, models, eval | `05_distill/data/<teacher>/` | one student | - |
-| **the experiment log** (tracked) | `05_distill/ladder/<teacher>.jsonl` | one row per judged student | - |
+| **the experiment log** (tracked) | `05_distill/log.jsonl` | one row per judged student, every teacher | - |
 | random-weight speed timings, `frontend_only.onnx` | `05_distill/data/_shared/arch/` | the architecture | all teachers |
 
 Pre-split caches embedded the YAMNet `mel` in every targets npz; readers still accept that
@@ -155,10 +155,15 @@ and are kept as the record of those runs (`chain_frontends*.sh` map 1:1 onto `ma
 
 ## The experiment log
 
-`05_distill/ladder/<teacher>.jsonl` is the distillation arm's log, the counterpart of the root `log.jsonl`,
-written by `ladder_record.py record` (main.py's `record` stage; `backfill_hitk.py --rescore` and
-`quarantine.py` are the only other writers): one row per judged student, with V
-readouts, headline, per fold, tiers, speed, and three bookkeeping fields:
+`05_distill/log.jsonl` is the distillation arm's log, the counterpart of `03_train/log.jsonl`,
+written by `ladder_record.py record` (main.py's `record` stage; `backfill_hitk.py --rescore`, `quarantine.py`
+and `log_exp.py` are the only other writers): one row per judged student, with V readouts, headline, per fold,
+tiers, speed, and these bookkeeping fields:
+
+- `teacher`: whose student it is. One file holds every teacher; scripts read and rewrite only the current
+  teacher's rows (`D.read_log`, `D.write_log`).
+- `exp`: the loop experiment that produced it, stamped by `log_exp.py` when `tools/finish_experiment.sh
+  --arm distill` closes the experiment (LOOP.md step 5). Absent on rows from outside the loop.
 
 - `key`: what makes the row comparable: teacher build, V pool (the plan's V slices), eval roster (the
   teacher set's rotating folds), as short hashes. Every table, the frontier, the stop rule's spread and the
@@ -166,9 +171,9 @@ readouts, headline, per fold, tiers, speed, and three bookkeeping fields:
   replan or fold roster therefore retires old rows without touching them.
 - `date`, `commit`: when, and on which code.
 
-Closed eras: `tools/archive_era.py` copies the ladders to `archive/<era>/distill/` and truncates them along
-with `log.jsonl` (the headline is the era's metric against the era's baseline). A tagged file beside a live
-ladder (`<teacher>.contaminated_2026-10-02.jsonl`, the quarantined rows) is archived and removed.
+Closed eras: `tools/archive_era.py` copies it to `archive/<era>/05_distill/` and truncates it along
+with `03_train/log.jsonl` (the headline is the era's metric against the era's baseline). A tagged log beside
+it (`log.contaminated_2026-10-02.jsonl`, the quarantined rows) is archived and removed.
 
 **Repeat rule**, as in LOOP.md ("confirm a large gain with one repeat run"): a cosine student that beats
 every other student of its rung at its speed or faster by more than 0.02 (headline seed noise), with no run at

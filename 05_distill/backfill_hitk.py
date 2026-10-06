@@ -14,7 +14,7 @@ Runs named test_* are left alone.
 
 --rescore is for a run whose V pool changed under it (2026-10-04: the clean fast32h16 rung-C runs, scored on
 the pre-blacklist pool). It replaces every V readout in the final entry (frames, buzz and other-class flips,
-mae, hit@K) and the matching fields of the run's ladder.jsonl row (ladder_record.record's formulas); the
+mae, hit@K) and the matching fields of the run's log row (ladder_record.record's formulas); the
 headline, speed and the training curve are untouched.
 Default order: WSD branches, then the rung-A repeats (the noise spread), then the rest. Train env, GPU.
 """
@@ -46,21 +46,18 @@ def write(path, obj):
 
 
 def ladder_patch(name, v):
-    """Rewrite the V fields of `name`'s ladder.jsonl row(s), as ladder_record.record computes them."""
+    """Rewrite the V fields of `name`'s log row(s), as ladder_record.record computes them."""
     t = max(1, v['buzz_teacher'])
     upd = {'val_frames': v['frames'], 'buzz_teacher_pos': v['buzz_teacher'], 'buzz_student_pos': v['buzz_student'],
            'buzz_gained': v['buzz_gained'], 'buzz_lost': v['buzz_lost'],
            'lost_pct': round(100 * v['buzz_lost'] / t, 2), 'hitk_pct': round(100 * v['buzz_hitk'] / t, 2),
            'gained_pct': round(100 * v['buzz_gained'] / t, 2), 'other_gained': v['other_gained'],
            'other_lost': v['other_lost'], 'mae_live': round(v['mae_live'], 4), 'mae_buzz': round(v['mae_buzz'], 4)}
-    rows = [json.loads(line) for line in open(D.LADDER)]
+    rows = D.read_log(teacher=None)
     for r in rows:
-        if r['name'] == name:
+        if r['name'] == name and r.get('teacher') == D.TEACHER:
             r.update(upd)
-    tmp = D.LADDER + '.tmp'
-    with open(tmp, 'w') as fh:
-        fh.writelines(json.dumps(r) + '\n' for r in rows)
-    os.replace(tmp, D.LADDER)
+    D.write_log(rows)
 
 
 def todo(names, redo=False):

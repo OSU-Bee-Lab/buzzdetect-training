@@ -1,8 +1,20 @@
-# autoresearch model training loop
-This document describes the workflow for iteratively improving buzzdetect model training in a series of experiments.
+# autoresearch loop
+This document describes the workflow for iteratively improving buzzdetect models in a series of experiments.
 
-One experiment is one hypothesis, one worktree, one CV against a matched control,
-and one line in `log.jsonl`.
+The loop has two arms, and **either is a legitimate target for an experiment**:
+
+| arm | stage | what improves | log |
+|---|---|---|---|
+| **training** | `03_train` | `ins_buzz` sensitivity of the probe models (the *standard* tier) | `03_train/log.jsonl` |
+| **distillation** | `05_distill` | the speed / sensitivity frontier of students distilled from a deployed teacher (the *lite* tier) | `05_distill/log.jsonl` |
+
+One experiment is one hypothesis in one arm, one worktree, one run against a
+matched control, and its record in that arm's log. The lifecycle below is shared;
+where the arms differ (goal, baseline, constraints, how to run, read and record)
+each has its own section or sub-step. Pick the arm the hypothesis belongs to; a
+change that touches both (e.g. a better teacher) is a training experiment first,
+and its distillation is a follow-up experiment.
+
 Results from different eras may be directionally informative within an era, but are not numerically comparable between eras.
 
 **This era (`cv-medium-v4`) started 2026-09-25.
@@ -12,6 +24,8 @@ folds and metric are unchanged from `cv-medium-v3` (archived), but its numbers
 are not comparable. `moderate` (framehop 0.2) replaces `large` as the big-data set.
 Old verdicts are leads, not answers: `temporal-context` was a clear negative in
 era 1 and, rerun, the largest gain in era 2. Rerun rather than defer.
+
+# Training arm (`03_train`)
 
 ## Goal
 
@@ -55,14 +69,6 @@ The baseline model is **not** the last era's best.
 Its purpose is not to stack the gains of a prior era.
 The early experiments in a new era will often be checking to see that a prior era's
 wins still hold in the current era.
-
-
-## Building off of prior work
-Check log.jsonl to see the results of previous experiments.
-If you are building off of a prior experiment, you may branch from that experiment's worktree,
-or you can manually copy the code you need.
-If you are building off of a previous experiment, you should compare your results against that experiment's
-in addition to the baseline.
 
 
 ## Constraints
@@ -109,11 +115,74 @@ in addition to the baseline.
 - Do not modify `01_annotate/`, any set's `build.R`, or
 `03_train/metrics.py`.
 
+# Distillation arm (`05_distill`)
+
+`05_distill/README.md` is the operator's guide, `05_distill/FRONTENDS.md` the
+state of the frontier (read its latest update before proposing), `DESIGN.md` the
+contract. This section is only what the loop needs on top of them.
+
+## Goal
+
+**Push out the speed / sensitivity frontier of students of the era's teacher**
+(`v4-ft-ps-e60-moderate`, two YAMNet trunk passes). There is no target (Luke,
+2026-09-29): a student is a gain if it sits above the current non-dominated line,
+i.e. a higher headline than every student at its speed or faster, or the same
+headline faster. The two tiers it feeds are a *standard* (teacher-like) and a
+*lite* (faster, less sensitive) model.
+
+**The number is the same headline as the training arm** (`sensitivity_exclquiet`
+at fpr 0.005 over the teacher's set's rotating folds, `eval_folds.py`), against
+**speed**: `x YAMNet` at 200 s of audio on the GPU (`speed_200.json`). Both are in
+the student's `05_distill/log.jsonl` row. Floors: headline >= 50% of the era
+baseline's (0.207 against `cv-baseline-v4-moderate`'s 0.414), and a lite student
+must beat YAMNet's speed (>= 1.5x) to be worth having. Read loudness tiers as in
+the training arm.
+
+## Baseline
+
+The comparator is the **matched student**: same teacher, rung, schedule and step
+budget, seed, front end and width, differing only in your change. Look for it in
+`05_distill/log.jsonl` (`python 05_distill/ladder_record.py frontier` lists the
+comparable rows); if it isn't there, put it in the same `main.py --runs` call.
+Also say where the student lands against the frontier, which is the real goal.
+
+Noise: headline seed noise on a student is ~0.01 (FRONTENDS.md); the repeat rule
+(a gain > 0.02 over everything at its speed or faster gets one repeat at the next
+seed before it counts) is built in: `ladder_record.py repeats` prints the commands.
+
+## Constraints
+
+- **Students never see labels or the eval deployments.** Any new data path goes
+  through the plan's blacklist; 59 rows were quarantined on 2026-10-04 for
+  training on test-set audio (FRONTENDS.md, "Update 2026-10-04").
+- **Only comparable rows count.** Rows whose `key` (teacher build, V pool, eval
+  roster) differs from the current one are left out of every table automatically;
+  don't compare against them by hand.
+- **Rung C is the working rung; rung D does not run** (LADDER.md's rule; LADDER is
+  closed). Prefer WSD step-budget curves to single cosine runs: `--wsd-max 56000
+  --wsd-stop 1.3` (README, "Step budget"), stopped by hit@K.
+- **Speed is GPU only.** CPU int8 timings on this machine are meaningless (no AVX2).
+- **A front end is edited by renaming it** (`05_distill/CLAUDE.md`); its
+  spectrogram cache is stamped with its definition.
+- `05_distill/CLAUDE.md`'s invariants hold: no teacher names, class indices or
+  widths as literals; paths only from `dpaths.py`.
+
+# Both arms
+
+## Building off of prior work
+Check the arm's log (`03_train/log.jsonl` or `05_distill/log.jsonl`) to see the results of previous experiments.
+If you are building off of a prior experiment, you may branch from that experiment's worktree,
+or you can manually copy the code you need.
+If you are building off of a previous experiment, you should compare your results against that experiment's
+in addition to the baseline.
+
+
 ## Experiment lifecycle
 
 ### 0. Orient
 
-Read `log.jsonl` and `IDEAS.md`. If and only if you want to examine prior eras, see `archive/`.
+Read both logs (`03_train/log.jsonl`, `05_distill/log.jsonl`) and `IDEAS.md`, and pick the arm. If and only if
+you want to examine prior eras, see `archive/` (each era keeps both logs under `<era>/<stage>/`).
 Detail on an archived run is in `archive/<era>/notes/<slug>.md`, and its code on
 `exp/<slug>` or `refs/archive/<slug>`.
 
@@ -150,7 +219,7 @@ not be perfectly representative of medium (e.g., missing a class).
 
 ### 3. Run it
 
-From the worktree:
+From the worktree. **Training arm:**
 
 ```bash
 # stage 2, only if extraction changed
@@ -159,15 +228,35 @@ tools/launch_job.sh extract.log -- 02_set/main.py --set medium --embedder <emb>
 tools/launch_job.sh train.log -- 03_train/main.py --name <name> --set medium --embedder yamnet --translation general -y
 ```
 
-### Phase 2
+**Distillation arm:** one `main.py` call trains, exports, evaluates, times and
+records every student in `--runs`, and resumes on rerun. Give it a `--prefix`
+or run-spec suffix that names your experiment, so its students are easy to find:
+
+```bash
+tools/launch_job.sh distill.log -- 05_distill/main.py --rung C --runs "<frontend>:<arch>[:...] <matched control>" \
+    --wsd-max 56000 --wsd-stop 1.3
+```
+
+It writes data under the main checkout's `05_distill/data/` and its rows into
+the main checkout's `05_distill/log.jsonl` (`dpaths.MAIN`), even from a worktree.
+A WSD trunk reaches its later budgets in hours: the park rule applies.
+
+### Phase 2 (training arm)
 Extractions re-launch safely, picking up where the last left off.
 Idents have wildly varying sample sizes, so it's difficult to extrapolate ETA from per-ident times.
 
-### Phase 3
+### Phase 3 (training arm)
 Per-fold training durations are even, so you can derive a fairly accurate ETA after the first.
 Leave the shipped model untrained. `folds_sx.csv` comes entirely from the rotations, so there's no research benefit to training the production model.
 
 ### 4. Read the results
+
+**Distillation arm:** `python 05_distill/ladder_record.py frontier` (where each
+student sits, repeat rule), `ladder_record.py wsd --name <trunk>` (a step-budget
+curve), and `tools/results.py <control> <student>` works on the students' eval
+dirs (`05_distill/data/<teacher>/eval/<name>`) for the per-fold and tier table.
+Report headline and speed together; a student slower than its control needs a
+headline gain to count. The rest of this step is the training arm.
 
 ```bash
 python tools/results.py <matched control model> <experiment model>
@@ -203,18 +292,26 @@ If you used an idea, delete its section from main's `IDEAS.md` (not the
 worktree's copy, which `--commit-also` never sees). Then, from main:
 
 ```bash
+# training arm
 tools/finish_experiment.sh <slug> --summary "<what was tried, and the outcome>" \
   --model .local/worktrees/<slug>/models/<name> --baseline-model <matched control> \
   --hypothesis "..." --trust <trust> --conclusion "..." [--commit-also IDEAS.md]
+# distillation arm: the rows are already written by main.py's record stage
+tools/finish_experiment.sh <slug> --arm distill --summary "<what was tried, and the outcome>" \
+  --runs "<student name> [<student name> ...]" [--commit-also IDEAS.md]
 ```
 
 It commits and pushes `exp/<slug>` (the only durable copy of `notes.md`), then
-appends the `log.jsonl` line in main and commits it. Keep `conclusion` brief,
+records the experiment in main and commits it: the training arm appends the
+`03_train/log.jsonl` line; the distillation arm stamps `"exp": "<slug>"` on its
+students' rows in `05_distill/log.jsonl` (`05_distill/log_exp.py`). For the
+distillation arm, the hypothesis, verdict and tier reading live in `notes.md`
+only, so write its Conclusion as you would the training arm's `conclusion`. Keep `conclusion` brief,
 since it only points later agents at where to dig, and put the tier reading in
 it. Pass `--commit-also IDEAS.md` only if `git diff IDEAS.md` shows nothing but
 your deletion.
 
-To amend an earlier entry, don't rewrite its conclusion or metrics.
+To amend an earlier training entry, don't rewrite its conclusion or metrics.
 Do a new experiment with the amendment you'd like to make, then set `trust`
 of the prior experiment and add a dated `amended` field saying what changed and which run supersedes it.
 
@@ -228,8 +325,8 @@ result, and 31 branches' notes. `models/.gitignore` re-includes each model's
 multi-GB unshared cache, remove just that directory.
 
 If instructed to run more than one loop, go back to the top and do it all again.
-Run experiments sequentially, not in parallel. CPU and GPU are likely fully saturated by a single experiment,
-so you'll see no gain from concurrency.
+Run experiments sequentially, not in parallel, in either arm. CPU and GPU are likely fully saturated by a
+single experiment (the 4 GB card fits one job), so you'll see no gain from concurrency.
 
 
 ## Restoring a worktree
@@ -245,6 +342,8 @@ Keep the main thread context minimal - don't give long summaries or interpretati
 Even when finishing a loop, give only a brief couple-sentence summary of the results.
 
 # Special instructions
+These bind both arms (a teacher or a student front end included).
+
 ## INJUNCTION: aves models are forbidden
 The aves embedder has shown to be intolerably slow. Future loops may not utilize aves unless they are able to bring it to within an order of magnitude of the YAMNet inference rate.
 

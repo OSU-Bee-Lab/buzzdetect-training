@@ -2,8 +2,9 @@
 
 `README.md` is the operator's guide (one command, new teachers, what is cached where, resume semantics).
 `DESIGN.md` is the contract, `FRONTENDS.md` the live experiment, `LADDER.md` the closed data-size ladder.
-The experiment log is `ladder/<teacher>.jsonl` (tracked; README, "The experiment log"): only scripts write it
-(`ladder_record.py record`, `backfill_hitk.py --rescore`, `quarantine.py`); never hand-edit a row's `key`.
+The experiment log is `log.jsonl` (tracked, every teacher; README, "The experiment log"): only scripts write it
+(`ladder_record.py record`, `backfill_hitk.py --rescore`, `quarantine.py`, `log_exp.py`); never hand-edit a row's
+`key` or `teacher`. Read and rewrite it through `D.read_log` / `D.write_log`, which keep other teachers' rows.
 
 ## Invariants
 

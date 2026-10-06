@@ -1,4 +1,4 @@
-"""Build and append one log.jsonl entry — LOOP.md step 5 — without hand-typing
+"""Build and append one 03_train/log.jsonl entry — LOOP.md step 5 — without hand-typing
 JSON in a shell heredoc.
 
 Pulls the `total` row's sensitivity straight from folds_sx.csv for both the
@@ -22,8 +22,8 @@ fold after the model dir is gone. The baseline's folds live on its own entry.
       --trust caveated \\
       --conclusion "..."
 
-Prints the entry by default; pass --write to append it to log.jsonl (default
-path: log.jsonl in the repo root) instead.
+Prints the entry by default; pass --write to append it to the training log (default
+path: 03_train/log.jsonl, config.TRAIN_LOG) instead.
 
 No TensorFlow: reads folds_sx.csv only, same as compare_folds.py.
 """
@@ -136,7 +136,7 @@ if __name__ == '__main__':
     parser.add_argument('--date', default=None, help='default: today, YYYY-MM-DD')
     parser.add_argument('--fpr', type=float, default=0.005, choices=[0.001, 0.005, 0.01])
     parser.add_argument('--method', default='cv')
-    parser.add_argument('--log', default=os.path.join(ROOT, 'log.jsonl'))
+    parser.add_argument('--log', default=os.path.join(ROOT, '03_train', 'log.jsonl'))   # config.TRAIN_LOG
     parser.add_argument('--write', action='store_true', help='append to --log instead of just printing')
     args = parser.parse_args()
     if args.baseline_name is None:

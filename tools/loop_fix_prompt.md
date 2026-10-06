@@ -8,7 +8,7 @@ You are the fixer that opens batch {BATCH} of `tools/human/agent_loop.sh`, which
 How to work:
 
 - Fix each problem where it lives: in an experiment's worktree, or in main for shared tooling, the loop harness (`tools/human/agent_loop.sh`, `tools/loop_signal.sh`, the prompts) and docs. Commit and push fixes to main, so later worktrees get them.
-- For a blocking issue, record the cause and fix in the `notes.md` it points to. If the interrupted experiment can be finished, finish it by following its `HANDOFF.md` through LOOP.md steps 4-5. Once it's in `log.jsonl` the handoff retires on its own. If you can't finish it, leave the handoff; the batch's experiment agent resumes it. Update the handoff if your fix changes the relaunch command.
+- For a blocking issue, record the cause and fix in the `notes.md` it points to. If the interrupted experiment can be finished, finish it by following its `HANDOFF.md` through LOOP.md steps 4-5. Once it's logged (`03_train/log.jsonl`, or its rows' `exp` in `05_distill/log.jsonl`) the handoff retires on its own. If you can't finish it, leave the handoff; the batch's experiment agent resumes it. Update the handoff if your fix changes the relaunch command.
 - Fix friction you hit yourself on the spot rather than reporting it.
 - Keep each fix small and in the style of the code around it.
 - Nobody is watching live, though Luke may message you over Remote Control. Don't end your turn waiting for an answer.

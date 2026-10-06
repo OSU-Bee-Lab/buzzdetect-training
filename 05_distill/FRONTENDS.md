@@ -255,7 +255,7 @@ for the clean plan, re-scores V on the 9 clean fast32h16 rung-C branches (`backf
 was to retrain every quarantined run on rebuilt packs (~45 h). It was stopped after one run: lad_A_s1 retrained
 clean scored 0.512 against 0.519 contaminated (its seed-2 repeat: 0.510), inside seed noise, and these results
 are informative, not shipped. So the numbers above stand as contaminated-era readings: fine for direction,
-not for the held-out SeeNote test. Their rows are in `ladder/<teacher>.contaminated_2026-10-02.jsonl`, outside
+not for the held-out SeeNote test. Their rows are in `log.contaminated_2026-10-02.jsonl`, outside
 the comparable set. The clean, comparable students are the 9 fast32h16 rung-C branches and lad_A_s1.
 
 ## Update 2026-10-05: rung-C frontier fill and B vs C at equal steps (`chain_fill.sh`)

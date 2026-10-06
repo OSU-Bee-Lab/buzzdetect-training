@@ -1,7 +1,7 @@
 #!/bin/bash
 # Fill out the rung-C frontier for buzz+rain+human students, and separate data from steps (2026-10-04).
 # Steps run in order on the one GPU; a failed step is retried once (main.py resumes), then the chain moves on.
-# Re-running resumes it. Every row lands in the tracked log, 05_distill/ladder/<teacher>.jsonl.
+# Re-running resumes it. Every row lands in the tracked log, 05_distill/log.jsonl.
 #   1 fast32h16 a0.50 on rung B, WSD 7k-56k, no stop: against the rung-C curve, is C's gain data or steps?
 #   2 yamnet a0.25 rung C, stop rule: the frontier near the 1.5x speed floor (only a rung-B point there now)
 #   3 rung-C mels for fast32 + twofast32 (one decode), then fast32 a0.50 rung C, stop rule (2.2x)

@@ -246,16 +246,18 @@ session_field() {  # id, jq filter -> that field of the session's `claude agents
 }
 
 # Unfinished experiments to resume: a worktree HANDOFF.md from this era (no
-# older than log.jsonl's first entry) whose slug has no log.jsonl entry yet.
-# Logging the experiment retires its handoff.
+# older than the earlier first entry of 03_train/log.jsonl and 05_distill/log.jsonl)
+# whose slug is in neither log yet: a training entry's "name", or a distillation
+# row's "exp". Logging the experiment retires its handoff.
 find_handoffs() {
   local era f slug
-  era=$(head -n 1 "$ROOT/log.jsonl" 2>/dev/null | jq -r '.date // empty' 2>/dev/null)
+  era=$(for l in "$ROOT/03_train/log.jsonl" "$ROOT/05_distill/log.jsonl"; do
+          head -n 1 "$l" 2>/dev/null | jq -r '.date // empty' 2>/dev/null; done | sort | head -n 1)
   for f in "$ROOT"/.local/worktrees/*/HANDOFF.md; do
     [ -e "$f" ] || continue
     slug=$(basename "$(dirname "$f")")
     [ -n "$era" ] && [[ $(date -r "$f" +%F) < $era ]] && continue
-    grep -q "\"name\": \"$slug\"" "$ROOT/log.jsonl" 2>/dev/null && continue
+    grep -q -e "\"name\": \"$slug\"" -e "\"exp\": \"$slug\"" "$ROOT/03_train/log.jsonl" "$ROOT/05_distill/log.jsonl" 2>/dev/null && continue
     echo "$f"
   done
 }

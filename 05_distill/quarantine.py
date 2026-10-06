@@ -3,8 +3,8 @@
     python 05_distill/quarantine.py --tag contaminated_2026-10-02 --keep fe_C_fast32h16_ [--dry-run]
 
 Every run under runs/ is moved unless its name starts with a --keep prefix (repeatable) or `test_`:
-runs/<n>, models/<n> and eval/<n> go to <teacher data>/_<tag>/{runs,models,eval}/<n>, and its ladder rows
-to the tracked 05_distill/ladder/<teacher>.<tag>.jsonl beside the live log. _<tag>/manifest.json lists each
+runs/<n>, models/<n> and eval/<n> go to <teacher data>/_<tag>/{runs,models,eval}/<n>, and its log rows
+to the tracked 05_distill/log.<tag>.jsonl beside the live log. _<tag>/manifest.json lists each
 moved run with its curve.json args, which is what chain_clean.sh retrains from. Idempotent: a rerun moves what is still live and appends to the manifest.
 
 Written for 2026-10-04: packs without a fingerprint predated the 2026-10-02 SeeNote blacklist, so every
@@ -42,14 +42,12 @@ def main():
                   'done': os.path.exists(os.path.join(D.RUNS, n, 'TRAIN_DONE'))}
     os.makedirs(q, exist_ok=True)
     json.dump(man, open(man_path, 'w'), indent=1)          # manifest first: a crash below leaves it complete
-    rows = [json.loads(line) for line in open(D.LADDER)]
-    moved = [r for r in rows if r['name'] in names]
-    with open(D.LADDER[:-len('.jsonl')] + f'.{a.tag}.jsonl', 'a') as f:
+    rows = D.read_log(teacher=None)
+    mine = [r.get('teacher') == D.TEACHER and r['name'] in names for r in rows]
+    moved = [r for r, m in zip(rows, mine) if m]
+    with open(D.tagged_log(a.tag), 'a') as f:
         f.writelines(json.dumps(r) + '\n' for r in moved)
-    tmp = D.LADDER + '.tmp'
-    with open(tmp, 'w') as f:
-        f.writelines(json.dumps(r) + '\n' for r in rows if r['name'] not in names)
-    os.replace(tmp, D.LADDER)
+    D.write_log([r for r, m in zip(rows, mine) if not m])
     for n in names:
         for kind, root in (('runs', D.RUNS), ('models', D.MODELS), ('eval', D.EVAL)):
             src = os.path.join(root, n)
@@ -59,7 +57,7 @@ def main():
                 if os.path.exists(dst):
                     sys.exit(f'{dst} exists already; not overwriting')
                 shutil.move(src, dst)
-    print(f'[quarantine] moved {len(names)} runs and {len(moved)} ladder rows; {len(rows) - len(moved)} rows stay live')
+    print(f'[quarantine] moved {len(names)} runs and {len(moved)} ladder rows; {len(rows) - len(moved)} rows stay live (all teachers)')
 
 
 if __name__ == '__main__':

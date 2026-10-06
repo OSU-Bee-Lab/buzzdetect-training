@@ -33,6 +33,10 @@ def local(key, default=None):
         node = node[part]
     return node
 
+# Experiment logs, one per stage (tracked; current era only, closed eras in archive/<era>/<stage>/).
+TRAIN_LOG = _p('03_train', 'log.jsonl')        # one entry per CV experiment (tools/log_entry.py)
+DISTILL_LOG = _p('05_distill', 'log.jsonl')    # one row per judged student, every teacher (`teacher` field)
+
 DIR_EMBEDDERS = _p('embedders')
 DIR_MODELS = _p('models')
 # Scratch for TRUNK_STREAM's per-fold disk-backed training pool (03_train/train.py).

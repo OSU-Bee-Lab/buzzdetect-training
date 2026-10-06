@@ -47,10 +47,12 @@ Check if you need further interpretation on folds.
 
 ## Experiment history
 
-`log.jsonl` holds the current era only. The distillation arm logs to
-`05_distill/ladder/<teacher>.jsonl` (tracked, script-written by
-`05_distill/ladder_record.py record`). Closed eras, both logs, live in
-`archive/<first-date>_<slug>/`; `archive/README.md` covers the layout, how to
+Two arms, one log each, current era only: `03_train/log.jsonl` (training, one
+entry per CV experiment, `tools/log_entry.py`) and `05_distill/log.jsonl`
+(distillation, one row per judged student, every teacher, written by
+`05_distill/ladder_record.py record`). Both are tracked and script-written;
+`config.TRAIN_LOG` / `config.DISTILL_LOG` name them. Closed eras, both logs,
+live in `archive/<first-date>_<slug>/<stage>/`; `archive/README.md` covers the layout, how to
 close an era, and how to reach deleted branches (`refs/archive/<slug>`).
 
 Never archive to `.local/` or any gitignored path. That was tried in 2026-08; the
