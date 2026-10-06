@@ -37,8 +37,11 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 import config  # noqa: E402
 
-MARKER = os.sep + '.claude' + os.sep + 'worktrees' + os.sep
-MAIN = ROOT.split(MARKER)[0]
+# a worktree lives under <main>/.claude/worktrees/ (Claude Code) or <main>/.local/worktrees/ (setup_worktree.sh)
+MARKERS = [os.sep + d + os.sep + 'worktrees' + os.sep for d in ('.claude', '.local')]
+MAIN = ROOT
+for _m in MARKERS:
+    MAIN = MAIN.split(_m)[0]
 
 DEFAULT_TEACHER = 'v4-ft-ps-e60-moderate'
 DEFAULT_BASELINE = 'cv-baseline-v4-moderate'
