@@ -38,6 +38,10 @@ Every stage resumes on rerun. Launch_job's --verbose breaks distill main.py (fri
   (edit its first `while kill -0 2589974` line out if pid 1 is gone; finished stages skip themselves).
 Each worktree carries the dpaths.py/student.py `.local/worktrees` fix; without it main.py can't find the onnx venv.
 
+## Progress at re-park (2026-10-06 16:33)
+Exp 3: 28k branch recorded 16:27 (stop rule did not fire at 28k), trunk continuing 23.8k->47.6k at ~3.7 step/s,
+so trunk ends ~18:20, 56k decay + record ~18:45. Exp 4 then starts from scratch (+2-4 h).
+
 ## Progress at park (2026-10-06 15:05)
 Exp 2 finished 14:07 (exit 0) and is logged. Exp 3 fast32 a0.375: 7k branch recorded at 14:43, then trunk at ~10k/11.9k at 15:00 (4.7 step/s).
 With the 1.3 stop rule, exp 3 should end ~16:30 if it stops at 28k, ~18:30 if it runs to 56k. Exp 4 (fast32h16 a0.375) follows from scratch, +2-4 h.
