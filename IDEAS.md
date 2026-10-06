@@ -205,18 +205,6 @@ Speeds are x YAMNet at 200 s on the GTX 1650; headlines are as in the training a
 - **Untried:** pruning dead channels, non-uniform widths, a learned (conv) front
   end, int8 (needs modern hardware to time), dropping layers beyond d12.
 
-## D2. 56k branches of fast32 and twofast32 a0.50, rung C
-
-*Evidence: both stopped at 28k by the hit@K rule, still +0.012 per doubling
-(FRONTENDS.md, 2026-10-05).*
-
-The rule stopped them with hit@K gains of +1.3 and +1.4 (under the 1.85 spread),
-but the headline was still rising. Extending each trunk to 56k (`--wsd-max 56000`
-on the same run spec resumes the trunk) costs one more doubling each. Expected
-~+0.01, inside seed noise, so read it as a curve shape (does it flatten like
-fast32h16 a0.50, or keep rising like fast32h16 a0.25?), not as a frontier move on
-its own. Low priority.
-
 ---
 
 # Low priority — deploy speed, not accuracy
