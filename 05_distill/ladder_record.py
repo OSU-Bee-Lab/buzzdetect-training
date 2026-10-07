@@ -31,6 +31,7 @@ import time
 import argparse
 import json
 import os
+import re
 import sys
 
 import pandas as pd
@@ -132,7 +133,8 @@ def repeat_cmd(r):
 
 def is_cosine(r):
     """Rows from before the schedule field are cosine. WSD branches stay out of every ladder/frontier
-    comparison: they are points on a step-budget curve (`wsd`), not alternatives to a 7k cosine run."""
+    comparison except `frontier`'s: they are points on a step-budget curve (`wsd`), not alternatives to a 7k
+    cosine run."""
     return r.get('schedule', 'cosine') == 'cosine'
 
 
@@ -267,16 +269,24 @@ def streamcheck(a):
 
 
 def frontier(a):
-    """Speed / sensitivity of every rung-B run, any front end, sorted by 200 s speed.
-    Speed is x YAMNet (GPU, same harness); sensitivity is the ladder headline and % of the baseline's."""
+    """Speed / sensitivity of every evaluated in-memory run (cosine and WSD branches; `--rung` keeps one
+    rung), sorted by 200 s speed. Speed is x YAMNet (GPU, same harness); sensitivity is the ladder
+    headline and % of the baseline's. A WSD trunk shows one row per decayed budget (`steps`)."""
     base = sx(REFS[0][1])[0]
-    rs = [r for r in rows() if r['rung'] == 'B' and r.get('loader', 'mem') == 'mem' and is_cosine(r)]
-    rs.sort(key=lambda r: -(r.get('x_yamnet200') or 0))
-    print(f'\nrung B, seed-1 runs by 200 s speed (baseline headline {base:.3f}; 50% of it = {base / 2:.3f})')
-    print(f'{"run":44s} {"frontend":9s} {"arch":10s} {"init":7s} {"x YAM 20s":>9s} {"x YAM 200s":>10s} '
-          f'{"headline":>8s} {"% base":>6s} {"incl-quiet":>10s} {"lost%":>6s}')
+    rs = [r for r in rows() if r.get('loader', 'mem') == 'mem' and r.get('headline') is not None
+          and (a.rung is None or r['rung'] == a.rung)]
+    trunk = lambda r: re.sub(r'\d+$', '', r['name']) if r.get('schedule') == 'wsd' else r['name']
+    speed = {}  # a trunk's budgets sort together, at their mean speed
     for r in rs:
-        print(f'{r["name"]:44s} {r.get("frontend", "yamnet"):9s} {r.get("arch", "a0.50"):10s} {r.get("init", "") or "-":7s} '
+        speed.setdefault(trunk(r), []).append(r.get('x_yamnet200') or 0)
+    rs.sort(key=lambda r: (-sum(speed[trunk(r)]) / len(speed[trunk(r)]), trunk(r), r['steps']))
+    print(f'\n{"rung " + a.rung if a.rung else "all rungs"}, evaluated runs by 200 s speed '
+          f'(baseline headline {base:.3f}; 50% of it = {base / 2:.3f})')
+    print(f'{"run":56s} {"rung":4s} {"frontend":9s} {"arch":10s} {"sched":6s} {"steps":>6s} {"x YAM 20s":>9s} '
+          f'{"x YAM 200s":>10s} {"headline":>8s} {"% base":>6s} {"incl-quiet":>10s} {"lost%":>6s}')
+    for r in rs:
+        print(f'{r["name"]:56s} {r["rung"]:4s} {r.get("frontend", "yamnet"):9s} {r.get("arch", "a0.50"):10s} '
+              f'{r.get("schedule", "cosine"):6s} {r["steps"]:6d} '
               f'{r.get("x_yamnet20", float("nan")):9.2f} {r.get("x_yamnet200", float("nan")):10.2f} '
               f'{r["headline"]:8.3f} {100 * r["headline"] / base:5.0f}% {r["headline_inclusive"]:10.3f} {r["lost_pct"]:6.1f}')
     rep = needs_repeat(rows())

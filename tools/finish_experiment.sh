@@ -60,7 +60,7 @@ esac
 ! grep -q -e "\"name\": \"$slug\"" -e "\"exp\": \"$slug\"" "$ROOT/03_train/log.jsonl" "$ROOT/05_distill/log.jsonl" \
   || fail "$slug is already logged (03_train/log.jsonl or 05_distill/log.jsonl)"
 handoffs=("$WT"/HANDOFF*.md)
-[ -e "${handoffs[0]}" ] && fail "$WT still has ${handoffs[*]##*/}; the job it describes is over once notes.md is written -- rm it before finishing" || true
+[ -e "${handoffs[0]}" ] && fail "$WT still has ${handoffs[*]##*/}; the job it describes is over once notes.md is written -- rm it before finishing (if it also covers other unfinished slugs, move that part to their worktrees)" || true
 for p in "${also[@]}"; do
   ! git -C "$ROOT" diff --quiet -- "$p" || fail "--commit-also $p: main's copy is unchanged; edit it in main ($ROOT/$p), not the worktree"
 done
@@ -68,7 +68,7 @@ done
 run() { if [ "${DRY_RUN:-0}" = 1 ]; then printf '+'; printf ' %q' "$@"; echo; else "$@"; fi; }
 
 cd "$ROOT"
-read -ra run_names <<< "$runs"   # --runs is one space-separated string
+read -ra run_names <<< "${runs//,/ }"   # --runs is one space- (or comma-) separated string
 if [ "$arm" = train ]; then
   "$PY" tools/log_entry.py --name "$slug" "${entry[@]}" > /dev/null   # fails here, before any commit
 else

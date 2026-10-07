@@ -31,8 +31,11 @@ waiting session alive, so a slow run is never a reason to write one. Between its
 yet (`03_train/log.jsonl` or `05_distill/log.jsonl`). The loop lists those handoffs at the end of this prompt (none
 listed means none to resume); any
 other `HANDOFF*.md` under `.local/worktrees/` belongs to a closed era (its
-experiment is in an `archive/*/<stage>/log.jsonl`), so ignore it. Commit a handoff in
-the worktree with four things:
+experiment is in an `archive/*/<stage>/log.jsonl`), so ignore it. Write one handoff
+per unfinished experiment, in that experiment's own worktree (a single job chaining
+several experiments still gets one per worktree, each saying which part is its own):
+`finish_experiment.sh` refuses a slug whose worktree still has a handoff. Commit each
+with four things:
 
 - the job's pid and log: the resuming session runs `tools/watch_job.sh --adopt <pid>`,
   then watches it with its one `tools/watch_job.sh` Monitor;

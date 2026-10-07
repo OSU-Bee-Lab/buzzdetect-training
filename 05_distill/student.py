@@ -56,8 +56,10 @@ def student_params(n_out):
 def main_checkout():
     """The main checkout's root. A worktree lacks the gitignored data (YAMNet
     weights, sets, models), so data reads go through here."""
-    marker = os.sep + '.claude' + os.sep + 'worktrees' + os.sep
-    return ROOT.split(marker)[0] if marker in ROOT else ROOT
+    root = ROOT
+    for d in ('.claude', '.local'):
+        root = root.split(os.sep + d + os.sep + 'worktrees' + os.sep)[0]
+    return root
 
 
 def _stack(net, filters, params):

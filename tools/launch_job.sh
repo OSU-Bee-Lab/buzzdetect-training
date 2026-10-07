@@ -52,8 +52,8 @@ if [[ $1 == *.py ]]; then
   source "$(dirname "$(realpath "$0")")/python_path.sh"  # sets PY
   envs+=(MALLOC_ARENA_MAX=2)
   [[ $1 == *02_set/main.py ]] && envs+=("BUZZDETECT_CHUNK_FRAMES=${BUZZDETECT_CHUNK_FRAMES:-48}")
-  # 04_deploy/main.py has no --verbose; only stages 1-3 and the root chain do
-  [[ $1 == *main.py && $1 != *04_deploy/main.py && " $* " != *" --verbose "* ]] && cmd+=(--verbose)
+  # 04_deploy and 05_distill main.py have no --verbose; only stages 1-3 and the root chain do
+  [[ $1 == *main.py && $1 != *04_deploy/main.py && $1 != *05_distill/main.py && " $* " != *" --verbose "* ]] && cmd+=(--verbose)
   cmd=("$PY" -u "${cmd[@]}")
 fi
 
