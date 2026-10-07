@@ -1,0 +1,15 @@
+# HANDOFF: fast32-d8d6 (chain part 1: fast32 a0.50_d8, a0.50_d6)
+
+## Batch 25 state (2026-10-07 17:25)
+0 of 4 experiments logged. One chained job runs three of them in sequence: `fast32-d8d6` (fast32 a0.50_d8 then a0.50_d6), then `fast32h16-depth` (fast32h16 a0.50_d8), then `shallow-wide` (fast32h16 a0.75_d8). Experiment 4 is not started (see fast32-d8d6/HANDOFF.md, "Experiment 4").
+
+- **Job:** launch_job pid **3824760**, log `.local/worktrees/fast32-d8d6/distill.log`, script `.local/worktrees/fast32-d8d6/chain.sh`. Adopt with `tools/watch_job.sh --adopt 3824760`, then one `tools/watch_job.sh` Monitor.
+- **If it is still running, report progress and stop** (park again with an ETA). Measured: fast32 d8 trunk at ~4.8 step/s; WSD to 56k is ~3.2 h trunk + decays/evals, ~4 h per student unless the stop rule fires; four students ≈ 15 h from 16:50.
+- **If it died:** read distill.log. Relaunch the whole chain from the fast32-d8d6 worktree (main.py skips finished students and resumes checkpoints): `cd .local/worktrees/fast32-d8d6 && /home/luke/projects/buzzdetect-training/tools/launch_job.sh distill.log -- ./chain.sh`. The archs (`a0.50_d8`, `a0.50_d6`, `a0.75_d8`) exist only on these branches, so never run from main.
+- **When this experiment's students are recorded:** `python 05_distill/ladder_record.py frontier`, `ladder_record.py wsd --name <trunk>`, per-fold tables with `tools/results.py 05_distill/data/v4-ft-ps-e60-moderate/eval/<control> .../eval/<student>` (launch_job it, can exceed 2 min). Fill notes.md Results/Conclusion (headline and speed together, tiers, frontier position), delete this file, commit, then from main `tools/finish_experiment.sh <slug> --arm distill --summary "..." --runs "<every recorded student name>"`. Logging may happen while the chain still runs later experiments: finishing one does not touch the others' worktrees.
+
+- **This experiment's comparators:** fe_C_fast32_a0.50_s1_c-buzz-rain-human_wsd* (0.687 @2.15x at 56k) and fe_C_fast32_a0.50_d10_s1_* (0.696 @2.28x). Students: fe_C_fast32_a0.50_d8_s1_c-buzz-rain-human_wsd*, fe_C_fast32_a0.50_d6_s1_c-buzz-rain-human_wsd*.
+- If IDEAS.md's "Shallower fast32 trunks (d8, d6), or a depth cut on fast32h16" bullet is fully answered after `fast32h16-depth` too, delete it from main's IDEAS.md (`--commit-also IDEAS.md`) with whichever of the two finishes last.
+
+## Experiment 4
+Not chosen yet. Lead: a depth cut on the YAMNet front end, `yamnet:a0.50_d10:select:classes=ins_buzz+ambient_rain+human` (or d8), aiming above yamnet a0.25 (0.707 @1.62x) at the high-sensitivity end of the frontier; contaminated-era rung B had yamnet a0.50_d12 tie a0.50 at 1.61x vs 1.47x. Bench it first with the GPU idle (`bench_arch.py export/time --seconds 200 --candidates a0.50_d10 a0.50_d8 a0.25 a0.50 --out <tmp>`, recipe in /home/luke/.claude/jobs/021ed8c9/tmp/bench.sh) after the chain ends; pick the depth whose ratio to a0.50 puts it at >= 1.62x logged. Its own worktree, its own arch commit (cherry-pick 4b90b5c from exp/fast32-d8d6).
