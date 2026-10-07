@@ -259,6 +259,8 @@ Leave the shipped model untrained. `folds_sx.csv` comes entirely from the rotati
 student sits, repeat rule), `ladder_record.py wsd --name <trunk>` (a step-budget
 curve), and `tools/results.py <control> <student>` works on the students' eval
 dirs (`05_distill/data/<teacher>/eval/<name>`) for the per-fold and tier table.
+On eval dirs it can run past 2 min, so launch it with `tools/launch_job.sh`
+(CLAUDE.md "Running long jobs") rather than in the foreground.
 Report headline and speed together; a student slower than its control needs a
 headline gain to count. The rest of this step is the training arm.
 

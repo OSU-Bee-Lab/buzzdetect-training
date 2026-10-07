@@ -1,4 +1,5 @@
-# Sourced, not run: sets PY to the buzzdetect-train python for this machine.
+# Sourced, sets PY to the buzzdetect-train python for this machine; run, prints
+# it, so `$(tools/python_path.sh) script.py` works too.
 # paths.local.json's "python" key wins; otherwise the env under conda's base
 # (or ~/anaconda3 when conda isn't on PATH, as in a bare non-login shell).
 _root=$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.." && pwd)
@@ -12,3 +13,4 @@ if [ -z "$PY" ]; then
 fi
 [ -x "${PY:-}" ] || { echo "no buzzdetect-train python found; set \"python\" in paths.local.json" >&2; exit 1; }
 unset _root _base
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then echo "$PY"; fi

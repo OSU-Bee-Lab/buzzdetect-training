@@ -171,6 +171,12 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
   logits (only `yamnet_trunk` and `yamnet_trunk_depth12` family heads). Their 12288-d+ float16 embeddings need
   `TRUNK_FP16=1` (`_to_tf_lowmem`, one float16 copy) and `TRUNK_BATCH=1024`, or
   the first fold OOMs the GPU with "Dst tensor is not initialized".
+  1024 fits only down to depth 8: a deeper fine-tuned tail OOMs in fold 1's
+  first train step. Keep the update size with `TRUNK_ACCUM` (Keras gradient
+  accumulation; frozen BN, so 512x2 is batch 1024's update) and shrink the
+  scoring/surprisal chunk with `SCORE_CHUNK` (default 1024; logits unchanged):
+  depth 6 ran at `TRUNK_BATCH=512 TRUNK_ACCUM=2`, depth 4 at
+  `TRUNK_BATCH=256 TRUNK_ACCUM=4 SCORE_CHUNK=128`.
   `_to_tf_lowmem` must stay pure tf.data: anything Python-fed (`from_generator`,
   or a keras `PyDataset`, which Keras 3 wraps in one) keeps each fold's whole
   array alive and the host OOMs 2-4 folds in. The per-fold line prints host RAM;
