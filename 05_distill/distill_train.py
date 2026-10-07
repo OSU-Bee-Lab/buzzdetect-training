@@ -88,7 +88,7 @@ def set_active(names=None):
 
 set_active()
 RUNG_ORDER = 'ABCDE'
-ARCHS = {'a0.50': (0.5, 14), 'a0.50_d12': (0.5, 12), 'a0.375': (0.375, 14), 'a0.25': (0.25, 14)}   # name -> (alpha, depth)
+ARCHS = {'a0.50': (0.5, 14), 'a0.50_d12': (0.5, 12), 'a0.50_d10': (0.5, 10), 'a0.375': (0.375, 14), 'a0.25': (0.25, 14)}   # name -> (alpha, depth)
 
 
 def cache_root(arg=None):
