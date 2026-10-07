@@ -493,6 +493,12 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             lr_head=float(os.environ.get('TRUNK_LR_HEAD', 2e-4)), dropout=dropout, name=tf_name,
             **({'hidden': int(os.environ['TRUNK_HIDDEN'])} if os.environ.get('TRUNK_HIDDEN') else {}))
         optimizer = model.optimizer
+        if os.environ.get('TRUNK_ACCUM'):
+            # TRUNK_BATCH=512 TRUNK_ACCUM=2 is batch 1024's update for a tail too
+            # deep to fit 1024 on the 4 GB card (BN is frozen, so no batch stats
+            # change; Keras averages the micro-batches, then clips). Set before
+            # fit: the optimizer builds its accumulators lazily.
+            optimizer.gradient_accumulation_steps = int(os.environ['TRUNK_ACCUM'])
 
     # Per-class weights go in the loss, not in fit(class_weight=). Keras'
     # class_weight= assumes single-label targets: for a multi-hot y it collapses
