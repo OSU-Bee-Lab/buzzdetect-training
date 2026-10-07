@@ -49,6 +49,10 @@ from dataset import build_fold_dataset
 FNAME_FRAMETIMES = 'frametimes.csv'
 SUBDIR_SURPRISAL = 'surprisal'
 
+# Inference chunk for fold scoring; a deep trunk tail (depth 6) OOMs the 4 GB
+# card at 1024. Chunking leaves logits unchanged (training=False, frozen BN).
+_SCORE_CHUNK = int(os.environ.get('SCORE_CHUNK', 1024))
+
 
 def _frametimes_by_stem(dir_pickle):
     """{collapsed-label stem: start[] ordered by embedding row}, or None if the
@@ -93,8 +97,8 @@ def write_fold_surprisal(dir_model_full, model, setname, embeddername, fold,
 
         embeddings = np.asarray(s.embeddings, dtype=np.float32)
         logits = np.concatenate([
-            model(embeddings[i:i + 1024], training=False).numpy()
-            for i in range(0, len(embeddings), 1024)
+            model(embeddings[i:i + _SCORE_CHUNK], training=False).numpy()
+            for i in range(0, len(embeddings), _SCORE_CHUNK)
         ]) if len(embeddings) else np.empty((0, len(classes)), dtype=np.float32)
         probs = 1.0 / (1.0 + np.exp(-logits))
         probs_c = np.clip(probs, 1e-12, 1.0 - 1e-12)
