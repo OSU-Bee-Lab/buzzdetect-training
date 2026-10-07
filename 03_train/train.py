@@ -62,6 +62,10 @@ class TrainingData:
     # for the per-epoch sens@FPR monitor. None when there is no val fold.
     val_eval: tuple = None
 
+# Inference chunk for fold scoring; a deep trunk tail (depth 6) OOMs the 4 GB
+# card at 1024. Chunking leaves logits unchanged (training=False, frozen BN).
+_SCORE_CHUNK = int(os.environ.get('SCORE_CHUNK', 1024))
+
 
 def _rss_gb():
     try:
@@ -330,8 +334,8 @@ def _score_fold(model, setname, embeddername, fold, translation, classes):
         return None, None
 
     embeddings, correct, loudness, sample_id = _eval_arrays(samples, classes)
-    logits = np.concatenate([model(embeddings[i:i + 1024], training=False).numpy()
-                             for i in range(0, len(embeddings), 1024)])
+    logits = np.concatenate([model(embeddings[i:i + _SCORE_CHUNK], training=False).numpy()
+                             for i in range(0, len(embeddings), _SCORE_CHUNK)])
     activation = logits[:, classes.index('ins_buzz')]
     targets = np.concatenate([np.tile(np.asarray(s.target_array), (s.frames, 1))
                               for s in samples])
