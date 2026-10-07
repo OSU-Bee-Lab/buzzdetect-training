@@ -1,3 +1,7 @@
 # fast32h16-depth
 ## Hypothesis
 `fast32-depth` showed trunk depth beyond 10 layers is free in sensitivity on fast32. fast32h16 (hop 16 ms, the fastest front end on the frontier: 2.93x alone) is where the trunk is the largest remaining share of wall time, so a depth cut there should buy speed at a smaller headline cost than narrowing the width does (a0.50 0.650 @2.51x -> a0.375 0.639 @2.63x -> a0.25 0.612 @2.75x). Students: fast32h16 a0.50 with the trunk cut (depths chosen from a random-weight speed bench, see Changes), rung C, buzz+rain+human, seed 1, WSD to 56k with the stop rule. Matched control: fe_C_fast32h16_a0.50_s1_c-buzz-rain-human (0.650 @2.50x at 56k). Gain: a student above the frontier line at its speed, e.g. > 0.639 at >= 2.63x or > 0.612 at >= 2.75x. Falsifier: the cut students lose as much headline per unit of speed as the width ladder does.
+
+## Changes
+`a0.50_d10`, `a0.50_d8`, `a0.50_d6` added to `distill_train.ARCHS` and `bench_arch.CANDIDATES` (shared commit with `fast32-d8d6`).
+Depth chosen from a random-weight bench (bench_arch, 200 s, GPU, x YAMNet): fast32h16 a0.50 2.50, _d10 2.60, _d8 2.66, _d6 2.65, a0.25 2.75, front end alone 2.97. d10 would land behind a0.375's 2.63x and d6 buys nothing over d8, so the student is **fast32h16 a0.50_d8** alone (fe_C_fast32h16_a0.50_d8_s1_c-buzz-rain-human_wsd*).
