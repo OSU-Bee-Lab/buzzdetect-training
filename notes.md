@@ -1,0 +1,3 @@
+# yamnet-d8-repeat
+## Hypothesis
+Repeat rule (LOOP.md distillation baseline): `yamnet-depth`'s yamnet a0.50_d8 (0.735 @1.52x, seed 1) beats every student at its speed or faster by > 0.02 (a0.25 0.707 @1.62x, +0.028), so it gets one repeat at the next seed before its point counts. `ladder_record.py repeats` does not flag it because it only considers cosine runs. Student: yamnet a0.50_d8, seed 2, same spec. Rung C, buzz+rain+human (select), WSD to 56k with the stop rule (--wsd-max 56000 --wsd-stop 1.3), teacher v4-ft-ps-e60-moderate. Confirms: seed-2 headline > 0.727 (0.707 + 0.02) at ~1.52x. Fails: <= 0.707, i.e. the seed-1 margin over a0.25 was seed noise.
