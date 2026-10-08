@@ -80,6 +80,9 @@ it does not rule out band-limited front ends, but gives no reason to expect a bi
 - `ladder_record.py`: rows now carry `frontend` and `init`; ladder-rule maths ignores non-YAMNet-front-end and
   init-control rows. `ladder_record.py frontier` prints every rung-B run by 200 s speed with headline and % of baseline.
 - `bench_arch.py` names: `a0.50@two32` (trunk on front end), `fe@two32` (front end alone), `a0.25` etc; `--out DIR`.
+  Random-weight rates are only comparable within one bench run: a0.50@fast32 benched 6144 s/s (1.55x) against its trained
+  student's 8500 s/s (2.15x, `speed_200.json`), while a0.50@fast32h16 agreed (9933 vs 2.50x). Cause unknown (random-weight
+  denormals? a pass that differs from `export_student`?). Pick archs on within-bench ratios; quote logged speeds from trained students.
 
 ## Running job (as of 2026-09-29 ~13:55; the handoff: enough to resume or take over)
 

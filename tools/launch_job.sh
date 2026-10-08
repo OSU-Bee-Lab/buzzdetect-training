@@ -11,8 +11,9 @@
 #
 # A .py command runs under the buzzdetect-train python, unbuffered, with
 # MALLOC_ARENA_MAX=2. Stage 2 also gets BUZZDETECT_CHUNK_FRAMES=48, and any
-# pipeline main.py (not 04_deploy) gets --verbose. Other commands run as given. Env vars set by
-# the caller pass through.
+# pipeline main.py (not 04_deploy) gets --verbose. Other commands run as given,
+# with the buzzdetect-train python's bin/ first on PATH, so a bare `python` inside
+# `bash -c "..."` is the env python too. Env vars set by the caller pass through.
 #
 # The GPU is visible by default. --cpu hides it (CUDA_VISIBLE_DEVICES= for CUDA,
 # BUZZDETECT_NO_GPU=1 for Apple Metal, which ignores the former); use it
@@ -48,8 +49,11 @@ log=${1:?$usage}; shift
 envs=(PYTHONUNBUFFERED=1)
 [ "$cpu" = 1 ] && envs+=(CUDA_VISIBLE_DEVICES= BUZZDETECT_NO_GPU=1)
 cmd=("$@")
+# Every command, not just a .py one, finds the env python first on PATH.
+PY=$(bash "$(dirname "$(realpath "$0")")/python_path.sh" 2>/dev/null) || PY=
+[ -n "$PY" ] && envs+=("PATH=$(dirname "$PY"):$PATH")
 if [[ $1 == *.py ]]; then
-  source "$(dirname "$(realpath "$0")")/python_path.sh"  # sets PY
+  source "$(dirname "$(realpath "$0")")/python_path.sh"  # sets PY, or fails loudly
   envs+=(MALLOC_ARENA_MAX=2)
   [[ $1 == *02_set/main.py ]] && envs+=("BUZZDETECT_CHUNK_FRAMES=${BUZZDETECT_CHUNK_FRAMES:-48}")
   # 04_deploy and 05_distill main.py have no --verbose; only stages 1-3 and the root chain do
