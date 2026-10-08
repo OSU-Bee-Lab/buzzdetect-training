@@ -1,6 +1,9 @@
 # HANDOFF: yamnet-depth (batch 25, experiment 4 of 4)
 
-## Batch 25 state (2026-10-08 07:40)
+## Batch 25 state (2026-10-08 07:40; re-parked 12:40)
+
+12:40 resume: still running, trunk step 35000/47600 at 3.2 step/s (~2000 steps/10 min). wsd28000 already recorded (headline 0.735 @1.52x/1.76x). Remaining: trunk ~63 min + 47600->56000 decay/probe/speed ~45 min (28k decay took 2410 s) -> ETA ~14:30. Parked again.
+
 3 of 4 experiments logged (fast32-d8d6, fast32h16-depth, shallow-wide). This is the 4th and last; once it is logged, send `loop_signal.sh done "fast32-d8d6 fast32h16-depth shallow-wide yamnet-depth"`.
 
 - **Job:** launch_job pid **145616**, log `.local/worktrees/yamnet-depth/distill.log`. Adopt with `tools/watch_job.sh --adopt 145616`, then one `tools/watch_job.sh` Monitor.
