@@ -204,10 +204,6 @@ Speeds are x YAMNet at 200 s on the GTX 1650; headlines are as in the training a
   zero-padded), and the headline is the student ONNX's, not the full pipeline's.
 - **Untried:** pruning dead channels, non-uniform widths, a learned (conv) front
   end, int8 (needs modern hardware to time).
-- **Shallower fast32 trunks (d8, d6), or a depth cut on fast32h16.** fast32-depth:
-  a0.50_d12/d10 matched full depth (0.697/0.696 vs 0.687) at 2.21x/2.28x vs 2.15x;
-  the cut costs no sensitivity but buys little speed at d10, so test deeper cuts
-  or apply it to the faster h16 front end to move past 2.5x.
 
 ---
 
