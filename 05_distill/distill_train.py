@@ -38,6 +38,7 @@ ins_buzz, the other 12 live classes, mean |logit error|. Outputs in
 `05_distill/data/runs/<name>/`: student_mel.keras, aux.npz, curve.json.
 """
 import argparse
+import re
 import json
 import os
 import sys
@@ -88,7 +89,12 @@ def set_active(names=None):
 
 set_active()
 RUNG_ORDER = 'ABCDE'
-ARCHS = {'a0.50': (0.5, 14), 'a0.50_d12': (0.5, 12), 'a0.375': (0.375, 14), 'a0.25': (0.25, 14)}   # name -> (alpha, depth)
+def parse_arch(name):
+    """'a<alpha>[_d<depth>]' -> (alpha, depth): 'a0.50' is (0.5, 14), 'a0.375_d8' is (0.375, 8)."""
+    m = re.fullmatch(r'a(\d+(?:\.\d+)?)(?:_d(\d+))?', name)
+    if not m or not 0 < int(m.group(2) or 14) <= 14:
+        raise argparse.ArgumentTypeError(f'arch {name!r} is not a<alpha>[_d<depth 1-14>]')
+    return float(m.group(1)), int(m.group(2) or 14)
 
 
 def cache_root(arg=None):
@@ -418,7 +424,7 @@ def main():
     ap.add_argument('--depth', type=int, default=14)
     ap.add_argument('--frontend', default='yamnet', choices=list(fes.FRONTENDS),
                     help='spectrogram the student sees (frontends.py); needs cache_fe.py output for the rung and V')
-    ap.add_argument('--arch', choices=list(ARCHS), help='named variant: sets alpha and depth')
+    ap.add_argument('--arch', help='a<alpha>[_d<depth>] (e.g. a0.50_d8): sets alpha and depth')
     ap.add_argument('--loader', choices=['mem', 'stream'], default='mem',
                     help='mem: pack the rung locally (memmap); stream: shard-level shuffle buffer from <cache>/_shards')
     ap.add_argument('--buffer-gb', type=float, default=0, help='stream: shuffle buffer size (0 = auto from free RAM, max 8)')
@@ -461,7 +467,7 @@ def main():
         tf.config.experimental.set_memory_growth(g, True)
     tf.keras.utils.set_random_seed(a.seed)
     if a.arch:
-        a.alpha, a.depth = ARCHS[a.arch]
+        a.alpha, a.depth = parse_arch(a.arch)
     cache = None if a.shards else cache_root()
     out = os.path.join(D.RUNS, a.name)
     os.makedirs(out, exist_ok=True)
