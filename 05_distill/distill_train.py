@@ -234,8 +234,9 @@ def hit_at_k(s, t):
     return int(t[np.argpartition(-s, k - 1)[:k]].sum())
 
 
-def val_flips(model, val, limit=None, batch=512):
-    """Detections vs the teacher's cached logits on the validation pool."""
+def val_flips(model, val, limit=None, batch=128):
+    """Detections vs the teacher's cached logits on the validation pool. Inference only, so the batch is a
+    memory knob, not a result one: at 512, a0.75_d8 OOMs the 4 GB card in eager mode (2026-10-09)."""
     n = val.n if not limit else min(limit, val.n)
     idx = np.linspace(0, val.n - 1, n).astype(int) if limit else np.arange(val.n)
     S, T = [], []
