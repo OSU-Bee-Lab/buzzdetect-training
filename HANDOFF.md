@@ -1,5 +1,19 @@
 # HANDOFF (batch 26, parked 2026-10-08 ~15:30)
 
+**Update 2026-10-09 ~10:45: 3 of 4 logged; only this worktree's a0.75_d8 student remains, now running alone.**
+The chain (pid 399369) died at 10:17 with an OOM at step 0 (notes.md, "Run log"). It was fixed on
+exp/yamnet-d8-repeat (a56376c, val batch 128) and relaunched alone: **pid 1377627**, log
+`.local/worktrees/yamnet-d8-repeat/distill.log`, started 10:28; expect ~8 h, done ~18:30. Resume:
+`tools/watch_job.sh --adopt 1377627`. The pid 399369 and relaunch-command bullets below are superseded: if it
+died, relaunch from `.local/worktrees/yamnet-d8-repeat` (it resumes from its last checkpoint):
+```
+S="classes=ins_buzz+ambient_rain+human"; W="--rung C --wsd-max 56000 --wsd-stop 1.3"
+/home/luke/projects/buzzdetect-training/tools/launch_job.sh distill.log -- bash -c "python 05_distill/main.py $W --runs 'yamnet:a0.75_d8:select:$S'"
+```
+If it OOMs again *in training* (not val), the 4 GB card can't hold a0.75_d8 at batch 512 next to whatever else is
+resident; write that up as the result (width beyond a0.50 not trainable on this card at the recipe's batch) rather
+than change the batch.
+
 One job runs all four of batch 26's distillation experiments, in order, from the
 `yamnet-d8-repeat` worktree (the only branch with the `parse_arch` fix in
 `05_distill/distill_train.py`; the other three worktrees lack it, so never launch from them):
