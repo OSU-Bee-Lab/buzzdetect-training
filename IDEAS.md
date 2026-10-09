@@ -15,7 +15,25 @@ distillation arm's facts are below.
 
 Ranked best-first by expected value on the headline and the hard folds, cost second.
 
-*(empty)*
+*(Added 2026-10-09 from a literature pass; none of these has a log entry. All three are off the pitch-shift line.)*
+
+## 27. Site-adversarial tail
+
+*Evidence: untagged proposal. Domain-adversarial training (gradient reversal) is standard for cross-site shift; MetaPerch (arXiv 2607.14072) uses site/time metadata as auxiliary losses.*
+
+Folds are deployments, so the hard folds are a site-shift problem. On the fine-tuned tail (`v4-ft-ps` recipe), add a head that predicts which **training** fold a frame came from, behind a gradient-reversal layer, so the tail is pushed to drop site identity while keeping buzz. The adversary sees only training folds; the scored fold never enters. Dose ladder on the reversal weight (e.g. 0.1 / 0.3 / 1.0) rather than one run. Judge on `1_95`/`1_114`/`1_150` and the `untagged`/`loud` tiers, not the headline alone. Prior to argue past: input normalisation has gone four for four negative, but that rescales inputs; this changes the objective.
+
+## 28. Pseudo-labelled unlabeled audio from training deployments
+
+*Evidence: untagged proposal. MAST (arXiv 2609.15221) gets +0.12 to +0.22 mAP under cross-site shift from two-stage self-training.*
+
+Annotation covers 24 snips per fold; the rest of each recording is unlabeled. Score the unlabeled audio of the **training** folds with the current model, take high-confidence positives and negatives as pseudo-labels, and retrain with them added. Confident negatives are the cheap win: they widen the negative tail where the 0.5% FPR threshold is read. First check how much unlabeled audio exists per training fold and that nothing from the scored fold is touched (`03_train/CLAUDE.md`: no augmentation or mix may cross a fold boundary). Using the *held-out* fold's unlabeled audio is a protocol change and needs Luke.
+
+## 29. BEATs / AVES2 as an extra block on the fine-tuned trunk
+
+*Evidence: untagged proposal. The foundation-model review (arXiv 2508.01277) finds AudioSet-pretrained SSL models beat many bird-specific ones; AVES middle layers were a confirmed gain in the frozen era (+0.026 to +0.032).*
+
+Write a `Recipe` embedder (not a hand-written ONNX) for `EarthSpeciesProject/esp-aves2-sl-beats-all` (PyTorch, so GPU extraction like AVES, `BUZZDETECT_NO_GPU=1` per CLAUDE.md). Probe layers 6/9/12 mean-pooled, concatenated to the `v4-ft-ps` features. Check licence and model size before building. Costs an extraction, so it comes after 27 and 28. Falsifier: no gain on `untagged`/`loud` tiers means it is another rich-fold lever (see the context prior in `docs/training-proposer-facts.md`).
 
 ---
 
