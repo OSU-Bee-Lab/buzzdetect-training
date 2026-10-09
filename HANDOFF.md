@@ -3,7 +3,7 @@
 **Update 2026-10-09 ~10:45: 3 of 4 logged; only this worktree's a0.75_d8 student remains, now running alone.**
 The chain (pid 399369) died at 10:17 with an OOM at step 0 (notes.md, "Run log"). It was fixed on
 exp/yamnet-d8-repeat (a56376c, val batch 128) and relaunched alone: **pid 1377627**, log
-`.local/worktrees/yamnet-d8-repeat/distill.log`, started 10:28; expect ~8 h, done ~18:30. Resume:
+`.local/worktrees/yamnet-d8-repeat/distill.log`, started 10:28; at 10:55 it was at train 3500/47600, 2.3 step/s (past the step-0 val that OOMed); ETA ~18:00. Resume:
 `tools/watch_job.sh --adopt 1377627`. The pid 399369 and relaunch-command bullets below are superseded: if it
 died, relaunch from `.local/worktrees/yamnet-d8-repeat` (it resumes from its last checkpoint):
 ```
