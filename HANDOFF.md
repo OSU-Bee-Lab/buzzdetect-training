@@ -10,7 +10,7 @@ One job runs all four of batch 26's distillation experiments, in order, from the
 4. `yamnet-a075-d8`: yamnet a0.75_d8, seed 1
 
 All rung C, classes buzz+rain+human, select init, WSD to 56k with --wsd-stop 1.3.
-0 of 4 logged at park time. **This worktree's part: student 3 (a0.25_d8); comparators: a0.25 s1 wsd56000 (depth only), a0.50_d8 s1 wsd56000, fast32 a0.50_d12 (0.697 @2.21x).**
+**Update 2026-10-08 22:40 (re-park): 1 of 4 logged** (`yamnet-d8-repeat` done: seed 2 0.725 @1.51x, stopped at 28k; use the **two-seed a0.50_d8 mean 0.730** as the a0.50_d8 comparator point, not seed 1's 0.735; eval dirs for both seeds exist). At 22:26 the chain was on student 2 (a0.375_d8) at train step 20500/47600; student 1 took 4.3 h wall. **This worktree's part: student 3 (a0.25_d8); comparators: a0.25 s1 wsd56000 (depth only), a0.50_d8 s1 wsd56000, fast32 a0.50_d12 (0.697 @2.21x).**
 
 - **pid 399369**, log `.local/worktrees/yamnet-d8-repeat/distill.log`.
   Resume: `tools/watch_job.sh --adopt 399369`, then one `tools/watch_job.sh` Monitor (30 min, re-arm).
