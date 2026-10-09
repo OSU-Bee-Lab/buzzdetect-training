@@ -1,5 +1,11 @@
 # HANDOFF (batch 26, parked 2026-10-08 ~15:30)
 
+**Update 2026-10-09 18:00 (re-park): still 3 of 4 logged; pid 1377627 still running.** a0.75_d8 rows wsd7000/14000/28000
+are already in `05_distill/log.jsonl` (0.728 / 0.730 / 0.729 @1.47x; hit@K 68.6 / 70.1 / 71.3, so the stop rule did not
+fire: one doubling under 1.3 only). Trunk was at 38500/47600 at 17:59 (2.2 step/s), then decay 47600->56000 and eval:
+ETA ~20:20. The wsd56000 row is the last one; once it is recorded, do the "when this worktree's student finishes" steps
+with all four wsd rows as `--runs`.
+
 **Update 2026-10-09 ~10:45: 3 of 4 logged; only this worktree's a0.75_d8 student remains, now running alone.**
 The chain (pid 399369) died at 10:17 with an OOM at step 0 (notes.md, "Run log"). It was fixed on
 exp/yamnet-d8-repeat (a56376c, val batch 128) and relaunched alone: **pid 1377627**, log
