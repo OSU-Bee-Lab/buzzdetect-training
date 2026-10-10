@@ -152,6 +152,7 @@ Also say where the student lands against the frontier, which is the real goal.
 Noise: headline seed noise on a student is ~0.01-0.02; the repeat rule
 (a gain > 0.02 over everything at its speed or faster gets one repeat at the next
 seed before it counts) is built in: `ladder_record.py repeats` prints the commands.
+A WSD trunk is judged once, at the last budget it recorded.
 
 ## Constraints
 
@@ -243,7 +244,11 @@ tools/launch_job.sh distill.log -- 05_distill/main.py --rung C --runs "<frontend
 
 It writes data under the main checkout's `05_distill/data/` and its rows into
 the main checkout's `05_distill/log.jsonl` (`dpaths.MAIN`), even from a worktree.
-A WSD trunk reaches its later budgets in hours: the park rule applies.
+A WSD trunk reaches its later budgets in hours: the park rule applies. At each
+training stage the chain prints `[chain] left: at most <steps> train steps ...,
+about <h>h<mm>m as of <time>` (decay branches and judging included, fitted to
+the stages it has run so far); take the ETA from that, not from the trunk's
+step rate alone.
 
 ### Phase 2 (training arm)
 Extractions re-launch safely, picking up where the last left off.
@@ -256,8 +261,8 @@ Leave the shipped model untrained. `folds_sx.csv` comes entirely from the rotati
 ### 4. Read the results
 
 **Distillation arm:** `python 05_distill/ladder_record.py frontier` (where each
-student sits, repeat rule), `ladder_record.py wsd --name <trunk>` (a step-budget
-curve), and `tools/results.py <control> <student>` works on the students' eval
+student sits, repeat rule), `ladder_record.py wsd --name <student>_wsd` (a step-budget
+curve; the trunk's name, with its `_wsd`), and `tools/results.py <control> <student>` works on the students' eval
 dirs (`05_distill/data/<teacher>/eval/<name>`) for the per-fold and tier table.
 On eval dirs it can run past 2 min, so launch it with `tools/launch_job.sh`
 (CLAUDE.md "Running long jobs") rather than in the foreground.

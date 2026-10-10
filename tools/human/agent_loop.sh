@@ -384,7 +384,7 @@ while true; do
         cause="$cause; unlogged results in $(xargs -n 1 basename <<<"$unlogged" | paste -sd, -)"
       fi
       if [ "$resuming" = 1 ]; then
-        prompt+=$'\n\n'"This session RESUMES batch $batch: the previous agent parked it (loop_signal.sh park) with jobs still running. Its HANDOFF.md says what to do and how many of your $N experiments are already logged; do the rest of the $N after the handoff. Follow the handoff's \"if it's still running\" branch: if the job is still going, report progress and park again rather than waiting."
+        prompt+=$'\n\n'"This session RESUMES batch $batch: the previous agent parked it (loop_signal.sh park) with jobs still running. Its HANDOFF.md says what to do and how many of your $N experiments are already logged; do the rest of the $N after the handoff. Follow the handoff's \"if it's still running\" branch: if the job is still going, report progress and park again if more than 1.5 hours remain; with less, watch it out on one Monitor."
         cause="resuming the parked batch"; action="relaunching its agent"
       fi
     fi
