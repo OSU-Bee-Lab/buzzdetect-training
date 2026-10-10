@@ -17,6 +17,8 @@
 # Its first lines say where each job stands, so each re-arm doubles as a check
 # and covers anything logged while no Monitor was armed:
 #   <now> running · <k/N folds> · <n> error lines · last: <last log line>
+#   (a distillation chain adds "left: at most <steps> train steps ..., about
+#   <h>h<mm>m as of <time>" before "last:": 05_distill/main.py's own estimate)
 #   <now> not running · <same counts> · [launch_job] exit N
 # (a job that ended unseen is reported once; a job launched later gets a
 # "started" line). Then it stays silent until something completes: stage 3's
@@ -41,7 +43,7 @@ EVENTS='^\[launch_job\] exit|^[0-9-]+ [0-9:]+ (\[[^]]+\] sens@fpr[^ ]* per deplo
 ERRORS='^[0-9-]+ [0-9:]+ (Traceback|[A-Za-z_.]*(Error|Exception)( |:|$)|.*line [0-9]+: +[0-9]+ (Killed|Segmentation fault))'
 
 state() {  # <pid> <log> -> one line: where the job stands
-  local fold counts now status
+  local fold counts now status left
   fold=$(grep -oE '^[0-9-]+ [0-9:]+ \[[0-9]+/[0-9]+\] [^ ].*: ' "$2" 2>/dev/null | tail -n 1 | grep -oE '[0-9]+/[0-9]+')
   counts="${fold:-0} folds · $(grep -cE "$ERRORS" "$2" 2>/dev/null || true) error lines"
   now=$(date '+%m-%d %T')
@@ -49,7 +51,9 @@ state() {  # <pid> <log> -> one line: where the job stands
     status=$(grep -E '^\[launch_job\] exit' "$2" 2>/dev/null | tail -n 1)
     echo "$now not running · $counts · ${status:-no [launch_job] exit line}"
   else
-    echo "$now running · $counts · last: $(tail -n 1 "$2" | tr -d '\r\033' | cut -c1-160)"
+    # 05_distill/main.py's estimate of what its chain still has to run, as of that line's time
+    left=$(grep -oE '\[chain\] left: .*' "$2" 2>/dev/null | tail -n 1)
+    echo "$now running · $counts${left:+ · ${left#\[chain\] }} · last: $(tail -n 1 "$2" | tr -d '\r\033' | cut -c1-160)"
   fi
 }
 follow() {  # <pid> <log> -> its events until it exits

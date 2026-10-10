@@ -188,10 +188,12 @@ def plateaued(earlier):
 
 class Stage:
     """One subprocess with a done-check; `artifact` is a path or a callable returning bool. `skip` (callable)
-    is checked right before running: True leaves the stage out (a WSD plateau)."""
+    is checked right before running: True leaves the stage out (a WSD plateau). `steps`: the training steps
+    it runs (0 for any other stage), for `left`."""
 
-    def __init__(self, key, label, cmd, done, env=None, wall=None, skip=None):
+    def __init__(self, key, label, cmd, done, env=None, wall=None, skip=None, steps=0):
         self.key, self.label, self.cmd, self.done, self.env, self.wall, self.skip = key, label, cmd, done, env, wall, skip
+        self.steps = steps
 
     def is_done(self):
         return self.done() if callable(self.done) else (self.done is not None and os.path.exists(self.done))
@@ -282,19 +284,22 @@ def wsd_stages(spec, name):
     s_max = pts[-1][1]
     trunk_args = ['--schedule', 'wsd', '--warmup', A.warmup, '--branch-at', ','.join(str(s) for _, s in pts)]
     trunk_dir = os.path.join(D.RUNS, trunk)
-    st, done = [], []
+    st, done, s_prev = [], [], 0
     for b, s in pts:
         skip = (lambda earlier=tuple(done): plateaued(earlier))
         bname = f'{name}_wsd{b}'
         st.append(Stage('train', f'{trunk} trunk to {s}',
                         train_cmd(spec, trunk, s_max, trunk_args + (['--stop-at', s] if s != s_max else [])),
-                        os.path.join(trunk_dir, 'branches', f's{s}.npz'), None, os.path.join(trunk_dir, 'wall.txt'), skip))
+                        os.path.join(trunk_dir, 'branches', f's{s}.npz'), None, os.path.join(trunk_dir, 'wall.txt'), skip,
+                        s - s_prev))
         st.append(Stage('train', f'{bname} train (decay {s}-{b})',
                         train_cmd(spec, bname, b, ['--schedule', 'wsd', '--warmup', A.warmup, '--decay-from', f'{trunk}:{s}']),
-                        os.path.join(D.RUNS, bname, 'TRAIN_DONE'), None, os.path.join(D.RUNS, bname, 'wall.txt'), skip))
+                        os.path.join(D.RUNS, bname, 'TRAIN_DONE'), None, os.path.join(D.RUNS, bname, 'wall.txt'), skip,
+                        b - s))
         if b in judged:
             st += judge_stages(spec, bname, b, skip)
         done.append(bname)
+        s_prev = s
     st.append(Stage('record', f'{trunk} curve', [TRAIN_PY, 'ladder_record.py', 'wsd', '--name', trunk], lambda: False))
     return trunk, trunk_dir, st
 
@@ -305,7 +310,7 @@ def stages_for_run(spec):
         return wsd_stages(spec, name)
     d = os.path.join(D.RUNS, name)
     st = [Stage('train', f'{name} train', train_cmd(spec, name, A.steps), os.path.join(d, 'TRAIN_DONE'), None,
-                os.path.join(d, 'wall.txt'))]
+                os.path.join(d, 'wall.txt'), steps=A.steps)]
     st += judge_stages(spec, name, A.steps)
     st.append(Stage('record', 'frontier table', [TRAIN_PY, 'ladder_record.py', 'frontier'], lambda: False))
     return name, d, st
@@ -336,6 +341,29 @@ def execute(stage):
         add_wall(stage.wall, t0)
     say(f'{stage.label}: done')
     return True
+
+
+def left(todo, seen):
+    """What `todo` (the stages not done yet) still costs, for the park rule: its training steps, and a time
+    once this process has run a training stage. `seen` is (key, steps, wall s) per stage run here. A train
+    stage costs a fixed start-up (data load, the V readouts) plus its steps, fitted by least squares over the
+    train stages seen (one seen, or all one size: a flat per-step rate, which overstates); any other stage
+    costs its key's mean wall. An upper bound: --wsd-stop can end a trunk early, and a resumed trunk segment
+    has fewer steps left than counted."""
+    tr = [s for s in todo if s.steps]
+    msg = f'left: at most {sum(s.steps for s in tr)} train steps in {len(tr)} train stages'
+    obs = [(n, w) for k, n, w in seen if n]
+    if not obs:
+        return msg + ' (no time estimate until a train stage has run here)'
+    mn, mw = sum(n for n, _ in obs) / len(obs), sum(w for _, w in obs) / len(obs)
+    var = sum((n - mn) ** 2 for n, _ in obs)
+    per = sum((n - mn) * (w - mw) for n, w in obs) / var if var else 0
+    fixed = mw - per * mn
+    if per <= 0 or fixed < 0:
+        fixed, per = 0, mw / mn
+    other = {k: [w for k2, n, w in seen if k2 == k and not n] for k in {s.key for s in todo}}
+    sec = sum(fixed + per * s.steps if s.steps else sum(other[s.key]) / max(1, len(other[s.key])) for s in todo)
+    return msg + f', about {int(sec // 3600)}h{int(sec % 3600 // 60):02d}m as of'
 
 
 def preflight(all_stages):
@@ -374,13 +402,18 @@ def main():
     if A.until:
         stop = max(i for i, s in enumerate(all_stages) if s.key == A.until) if any(
             s.key == A.until for s in all_stages) else stop
-    for s in all_stages[:stop + 1]:
+    seen = []
+    for i, s in enumerate(all_stages[:stop + 1]):
         if s.skip and not s.is_done() and s.skip():
             say(f'{s.label}: skipped (WSD plateau, --wsd-stop {A.wsd_stop})')
             continue
         if s.wall:
             os.makedirs(os.path.dirname(s.wall), exist_ok=True)
-        execute(s)
+        if s.steps and not s.is_done():
+            say(left([x for x in all_stages[i:stop + 1] if not x.is_done()], seen))
+        t0 = time.time()
+        if execute(s):
+            seen.append((s.key, s.steps, time.time() - t0))
     say(f'stopped after {A.until}' if A.until else 'all done')
 
 
