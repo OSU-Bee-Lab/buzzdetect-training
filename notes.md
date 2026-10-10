@@ -1,6 +1,6 @@
-# site-adv-w01
+# site-adv-w10
 ## Hypothesis
-IDEAS.md item 27 (site-adversarial tail), first rung of a dose ladder (reversal weight 0.1 / 0.3 / 1.0; `site-adv-w03` and `site-adv-w10` are the other two).
+IDEAS.md item 27 (site-adversarial tail), reversal weight 1.0, one rung of the dose ladder 0.1 / 0.3 / 1.0 (`site-adv-w01`, `site-adv-w03`, `site-adv-w10`; same code, commit f1b6a56 cherry-picked).
 
 Folds are deployments, so the hard folds are a site-shift problem. If the fine-tuned tail keeps site identity in its pooled code, a head that predicts which **training** fold a frame came from, behind a gradient-reversal layer, pushes the tail to drop it while the class head keeps buzz. Expected signature of a real effect: `1_95` / `1_114` / `1_150` and the `untagged` / `loud` tiers move up with dose. Falsifier: hard folds flat or down at every dose, or a headline that only moves through `1_29` / `53`'s background tier.
 
