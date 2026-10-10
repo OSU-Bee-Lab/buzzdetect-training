@@ -122,9 +122,41 @@ def _targets(data):
 #     bounded below (0 when the adversary is at chance); the adversary itself
 #     trains on a stop-gradient copy of the code, so neither loss reaches the
 #     other's weights.
+#   entropy: as confuse, but the tail minimises ln(n) - H(adversary's
+#     prediction), bounded on both sides ([0, ln n]). KL(uniform || p) grows
+#     without limit as the head rules sites out; site-conf-w01 flattened the
+#     pooled code on it.
 _ADV_MODE = os.environ.get('TRUNK_ADV_MODE', 'reverse')
-if _ADV_MODE not in ('reverse', 'confuse'):
-    raise ValueError(f'TRUNK_ADV_MODE is reverse or confuse, not {_ADV_MODE}')
+if _ADV_MODE not in ('reverse', 'confuse', 'entropy'):
+    raise ValueError(f'TRUNK_ADV_MODE is reverse, confuse or entropy, not {_ADV_MODE}')
+# TRUNK_ADV_SCOPE: which training frames the tail's site term acts on (confuse
+# and entropy only; the adversary itself always trains on every frame).
+#   all (default), or nonbuzz: frames with no ins_buzz label, so the term cannot
+#   push against the site/label dependence in the pool (the Hard Negatives folds
+#   hold no buzz).
+_ADV_SCOPE = os.environ.get('TRUNK_ADV_SCOPE', 'all')
+if _ADV_SCOPE not in ('all', 'nonbuzz'):
+    raise ValueError(f'TRUNK_ADV_SCOPE is all or nonbuzz, not {_ADV_SCOPE}')
+if _ADV_SCOPE != 'all' and _ADV_MODE == 'reverse':
+    raise ValueError('TRUNK_ADV_SCOPE needs TRUNK_ADV_MODE=confuse or entropy')
+# TRUNK_ADV_RAMP=<epochs>: the tail's site weight climbs linearly from 0 to
+# TRUNK_ADV over this many epochs (confuse and entropy only). 0/unset: no ramp.
+_ADV_RAMP = int(os.environ.get('TRUNK_ADV_RAMP', 0))
+# TRUNK_GATE=<epoch>:<sens>: stop the CV after its first rotation if that fold's
+# per-epoch sens@fpr0.005 monitor sat below <sens> at <epoch>. A collapsed class
+# head shows there and not in val_loss; the fold's results stay on disk.
+_GATE = os.environ.get('TRUNK_GATE')
+
+
+class _RampWeight(tf.keras.callbacks.Callback):
+    """Sets the tail's site weight at the start of each epoch (TRUNK_ADV_RAMP)."""
+
+    def __init__(self, var, target, epochs):
+        super().__init__()
+        self.var, self.target, self.epochs = var, target, epochs
+
+    def on_epoch_begin(self, epoch, logs=None):
+        self.var.assign(self.target * min(1.0, epoch / self.epochs))
 
 
 class _GradReverse(tf.keras.layers.Layer):
@@ -162,15 +194,18 @@ class _SiteConfuse(tf.keras.layers.Layer):
                           head(code, *[tf.stop_gradient(v) for v in live])], axis=-1)
 
 
-def _add_site_adversary(model, n_sites, loss_classes):
-    """(fit model, loss, metrics) for a trunk head with a site adversary.
+def _add_site_adversary(model, n_sites, loss_classes, buzz_index):
+    """(fit model, loss, metrics, callbacks) for a trunk head with a site adversary.
 
     The fit model's output is [class logits | site logits]; `model` itself
     shares every class-path weight and stays the one that is scored. The site
     terms are masked where the site index is -1, so val_loss is the class loss."""
     n_classes = model.output_shape[-1]
     code = model.layers[-1].input  # the pooled trunk code the class Dense reads
-    confuse = _ADV_MODE == 'confuse'
+    confuse = _ADV_MODE in ('confuse', 'entropy')
+    # the tail's site weight; a variable so TRUNK_ADV_RAMP can move it per epoch
+    weight = tf.Variable(0.0 if _ADV_RAMP else _ADV, trainable=False, dtype=tf.float32)
+    callbacks = [_RampWeight(weight, _ADV, _ADV_RAMP)] if confuse and _ADV_RAMP else []
     if confuse:
         site = _SiteConfuse(n_sites, name='site_confuse')(code)
     else:
@@ -190,9 +225,16 @@ def _add_site_adversary(model, n_sites, loss_classes):
         idx, logits, mask = _site_terms(y_true, y_pred)
         site_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=idx, logits=logits)
         if confuse:
-            # KL(uniform || p) = -mean_k log p_k - ln n; 0 at chance
             logp = tf.nn.log_softmax(tf.cast(y_pred[:, n_classes + n_sites:], tf.float32))
-            site_loss += _ADV * (-tf.reduce_mean(logp, axis=-1) - float(np.log(n_sites)))
+            if _ADV_MODE == 'entropy':
+                # ln n - H(p): 0 at chance, ln n when the head is certain
+                term = float(np.log(n_sites)) + tf.reduce_sum(tf.exp(logp) * logp, axis=-1)
+            else:
+                # KL(uniform || p) = -mean_k log p_k - ln n; 0 at chance
+                term = -tf.reduce_mean(logp, axis=-1) - float(np.log(n_sites))
+            if _ADV_SCOPE == 'nonbuzz':
+                term *= tf.cast(y_true[:, buzz_index] < 0.5, tf.float32)
+            site_loss += weight * term
         return loss_classes(y_true[:, :n_classes], y_pred[:, :n_classes]) + site_loss * mask
 
     def accuracy(y_true, y_pred):
@@ -205,7 +247,7 @@ def _add_site_adversary(model, n_sites, loss_classes):
         idx, logits, mask = _site_terms(y_true, y_pred)
         return tf.cast(tf.equal(tf.argmax(logits, -1, output_type=tf.int32), idx), tf.float32) * mask
 
-    return fit_model, loss, [accuracy, site_acc]
+    return fit_model, loss, [accuracy, site_acc], callbacks
 
 
 def _to_tf_lowmem(data, size_batch, free=False):
@@ -633,12 +675,14 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     # `model` is what gets scored and saved; under TRUNK_ADV a wider model
     # sharing its weights is the one that is fit.
     model_scored = model
+    callbacks_adv = []
     if _ADV:
         if not (hasattr(embedder, 'build_head') and os.environ.get('TRUNK_FP16')):
             raise NotImplementedError('TRUNK_ADV needs a trunk embedder and TRUNK_FP16=1')
         if save_binary:
             raise NotImplementedError('TRUNK_ADV has no shipped-model path yet')
-        model, loss, metrics = _add_site_adversary(model, data.n_sites, loss)
+        model, loss, metrics, callbacks_adv = _add_site_adversary(
+            model, data.n_sites, loss, data.classes.index('ins_buzz'))
     model.compile(
         loss=loss,
         optimizer=optimizer,
@@ -701,7 +745,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             data.train_tf,
             epochs=epochs,
             validation_data=data.val_tf,
-            callbacks=[sens_callback, tf.keras.callbacks.TerminateOnNaN()],
+            callbacks=[sens_callback, tf.keras.callbacks.TerminateOnNaN(), *callbacks_adv],
             shuffle=False,  # _to_tf already shuffles
             # --verbose is for a human watching: 1 = live progress bar.
             # Agents leave the flag off (0) so per-epoch lines don't fill
@@ -1014,6 +1058,7 @@ def train_set(name, embeddername, setname, name_translation,
     if skip_cv:
         print(f'[{name}] --skip-cv: no rotations trained; shipped epoch count '
               f'comes from existing fold results only')
+    gated = None  # TRUNK_GATE's message once it has tripped
     for i, held_out in enumerate([] if skip_cv else folds_scored, 1):
         folds_train = [f for f in folds_rotate if f != held_out] + folds_train_always
         dir_model = os.path.join(dir_folds, str(held_out))
@@ -1075,6 +1120,15 @@ def train_set(name, embeddername, setname, name_translation,
               f"{data.frames_train}/{data.frames_val} frames train/val, "
               f"{_format_sens(sens)}, host RAM {_rss_gb():.1f} GB", flush=True)
 
+        if _GATE and held_out == folds_scored[0]:
+            gate_epoch, gate_sens = _GATE.split(':')
+            at = result['val_sens_fpr0.005_curve'][int(gate_epoch) - 1]
+            if at < float(gate_sens):
+                gated = (f'[gate] {held_out}: sens@fpr0.005 {at:.3f} at epoch {gate_epoch}, '
+                         f'below {gate_sens}; CV stopped after its first rotation')
+                print(gated, flush=True)
+                break
+
         # Each fold builds a fresh model and loads its own data; without this
         # GPU allocations and the fold's arrays pile up, and a wide embedder's
         # later fold dies with "Dst tensor is not initialized" (from
@@ -1084,7 +1138,7 @@ def train_set(name, embeddername, setname, name_translation,
         _close_streams()
         gc.collect()
 
-    summary_rows, predictions_pooled = _collect_fold_results(dir_folds, folds_scored)
+    summary_rows, predictions_pooled = _collect_fold_results(dir_folds, [held_out] if gated else folds_scored)
 
     if skip_cv and not summary_rows:
         raise ValueError(
@@ -1103,6 +1157,9 @@ def train_set(name, embeddername, setname, name_translation,
         sx = summarize_folds(pooled, facts)
         sx.to_csv(os.path.join(dir_model_full, FNAME_SX_SUMMARY), index=False)
         print(format_sx_report(name, sx))
+
+    if gated:
+        sys.exit(gated)
 
     # The shipped model is a deliverable, not a measurement: folds_sx.csv is
     # built entirely from the rotations above, so nothing an experiment is judged
