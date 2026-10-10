@@ -57,6 +57,15 @@ if [ -e "$ROOT/paths.local.json" ] && [ ! -e "$WT/paths.local.json" ]; then
     ln -s "$ROOT/paths.local.json" "$WT/paths.local.json"
 fi
 
+# Source audio: `audio` is a tracked symlink holding one machine's path. Where
+# main has repointed it (skip-worktree), a fresh checkout gets the path in git,
+# which dangles, and config.TRAIN_DIR_AUDIO finds no source audio for any ident.
+if [ -L "$ROOT/audio" ] && [ -e "$ROOT/audio" ] && [ ! -e "$WT/audio" ]; then
+    echo "Pointing audio at main's target..."
+    ln -sfn "$(readlink "$ROOT/audio")" "$WT/audio"
+    git -C "$WT" update-index --skip-worktree audio
+fi
+
 # Set data: symlink the gitignored products of build.R and extraction for every
 # set that exists. A set whose build.R isn't committed has no directory in the
 # worktree at all — skip it rather than dying halfway through the loop, or the
