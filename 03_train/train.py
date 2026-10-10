@@ -95,6 +95,25 @@ def _to_tf(data, size_batch, size_shuffle, free=False):
         )
 
 
+# TRUNK_FOLDBAL=<p>: fold-balanced loss (ps-d8-foldbal). Each training frame's
+# loss is scaled by its fold's n_frames ** -p, normalised to mean 1 over the
+# pool, so p=1 gives every deployment the same total weight and p=0 (unset) is
+# the plain frame-weighted pool. The validation fold's frames keep weight 1.
+_FOLDBAL = float(os.environ.get('TRUNK_FOLDBAL', 0))
+
+
+def _targets(data):
+    """Frame-level float32 targets. Under TRUNK_FOLDBAL a trailing column carries
+    each frame's loss weight (`Sample.fold_weight`, set in _load_data)."""
+    tgt = np.concatenate(
+        [np.tile(s.target_array, (s.frames, 1)) for s in data]).astype(np.float32)
+    if _FOLDBAL:
+        w = np.concatenate([np.full(s.frames, getattr(s, 'fold_weight', 1.0), np.float32)
+                            for s in data])
+        tgt = np.concatenate([tgt, w[:, None]], axis=1)
+    return tgt
+
+
 def _to_tf_lowmem(data, size_batch, free=False):
     """Wide float16 embeddings (yamnet_trunk 12288-d, yamnet_trunk_context 36864-d):
     one float16 buffer, reshuffled every epoch, cast to float32 per batch. The plain
@@ -123,8 +142,7 @@ def _to_tf_lowmem(data, size_batch, free=False):
                 emb.scatter_update(tf.IndexedSlices(block, tf.range(at, at + len(block))))
                 at += len(block)
                 block = []
-        tgt = tf.constant(np.concatenate(
-            [np.tile(s.target_array, (s.frames, 1)) for s in data]).astype(np.float32))
+        tgt = tf.constant(_targets(data))
 
     def gather(idx):
         idx = tf.sort(idx)
@@ -255,14 +273,29 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     if pool is not None and aug_dirnames:
         raise NotImplementedError('TRUNK_STREAM does not stream augmented embeddings')
     data_train = []
+    frames_fold = {}  # frames per training fold with any (TRUNK_FOLDBAL)
     for fold in folds_train:
         samples = build_fold_dataset(
             cfg.dir_embeddings_fold(setname, embeddername, fold), translation,
         )
         if pool is not None:
             pool.append(samples)
+        if samples:
+            frames_fold[fold] = sum(s.frames for s in samples)
+            for s in samples:
+                s.fold_train = fold
         data_train += samples
     frames_train = sum(s.frames for s in data_train)
+    if _FOLDBAL:
+        if pool is not None or aug_dirnames or not os.environ.get('TRUNK_FP16'):
+            raise NotImplementedError('TRUNK_FOLDBAL needs TRUNK_FP16, without TRUNK_STREAM or --augment')
+        raw = {fold: n ** -_FOLDBAL for fold, n in frames_fold.items()}
+        scale = frames_train / sum(raw[fold] * n for fold, n in frames_fold.items())
+        for s in data_train:
+            s.fold_weight = raw[s.fold_train] * scale
+        w = sorted(raw[fold] * scale for fold in frames_fold)
+        print(f'[foldbal] p={_FOLDBAL}: {len(w)} folds, frame weight min {w[0]:.2f}, '
+              f'median {w[len(w) // 2]:.2f}, max {w[-1]:.2f}', flush=True)
 
     data_val = None
     frames_val = 0
@@ -510,10 +543,22 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     # a buzz frame co-occurring with an earlier-indexed class never gets
     # ins_buzz's weight at all. See train_utils.weighted_bce_loss.
     weights_ordered = [data.weight_dict[i] for i in range(len(data.classes))]
+    loss_fn, metrics = weighted_bce_loss(weights_ordered, label_smoothing=0.2), ['accuracy']
+    if _FOLDBAL:
+        # y_true's trailing column is the frame's fold weight (_targets)
+        n_classes, loss_classes = len(data.classes), loss_fn
+
+        def loss_fn(y_true, y_pred):
+            return loss_classes(y_true[:, :n_classes], y_pred) * tf.cast(y_true[:, n_classes], y_pred.dtype)
+
+        def accuracy(y_true, y_pred):
+            hit = tf.equal(y_true[:, :n_classes] > 0.5, y_pred > 0.0)
+            return tf.reduce_mean(tf.cast(hit, tf.float32), axis=-1)
+        metrics = [accuracy]
     model.compile(
-        loss=weighted_bce_loss(weights_ordered, label_smoothing=0.2),
+        loss=loss_fn,
         optimizer=optimizer,
-        metrics=['accuracy'],
+        metrics=metrics,
     )
 
     if data.val_tf is None:
