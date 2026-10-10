@@ -332,8 +332,12 @@ def _add_taps(model, embedder, lr_backbone, lr_head):
         l for l in model.layers if isinstance(l, keras.Model))
     pooled = [keras.layers.GlobalAveragePooling2D(name=f'tap_{t}')(tail.get_layer(t).output)
               for t in _TAPS]
-    tail_taps = keras.Model(tail.input, keras.layers.Concatenate()(pooled + [tail.output]),
-                            name=tail.name + '_taps')
+    # build_head cut the tail out of the full YAMNet graph, so its layers'
+    # tensors belong to that graph, not to tail.input: cut the same way.
+    tail_taps = keras.Model(
+        tail.layers[1].input,
+        keras.layers.Concatenate()(pooled + [tail.layers[-1].output]),
+        name=tail.name + '_taps')
     n_classes = model.output_shape[-1]
     n_ctx = getattr(embedder, 'n_ctx', 1)
     shape = tuple(tail.input.shape[1:])
