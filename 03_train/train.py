@@ -317,6 +317,39 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     )
 
 
+# TRUNK_TAPS=<layer>[,<layer>...]: multi-layer readout (ps-d8-taps). The class
+# Dense reads, per view, the global-average-pooled output of each named layer
+# of the trainable trunk tail next to the tail's own pooled code. Unset: off.
+_TAPS = [t for t in os.environ.get('TRUNK_TAPS', '').split(',') if t]
+
+
+def _add_taps(model, embedder, lr_backbone, lr_head):
+    """Rebuild a build_head() model so its readout also sees the tapped layers.
+    The tail's layers (and so its weights) are the ones build_head made."""
+    import keras
+    wrapped = [l for l in model.layers if isinstance(l, keras.layers.TimeDistributed)]
+    tail = wrapped[0].layer if wrapped else next(
+        l for l in model.layers if isinstance(l, keras.Model))
+    pooled = [keras.layers.GlobalAveragePooling2D(name=f'tap_{t}')(tail.get_layer(t).output)
+              for t in _TAPS]
+    tail_taps = keras.Model(tail.input, keras.layers.Concatenate()(pooled + [tail.output]),
+                            name=tail.name + '_taps')
+    n_classes = model.output_shape[-1]
+    n_ctx = getattr(embedder, 'n_ctx', 1)
+    shape = tuple(tail.input.shape[1:])
+    inp = keras.layers.Input(shape=(embedder.n_embeddings,), dtype=tf.float32, name='input')
+    if n_ctx == 1:
+        x = tail_taps(keras.layers.Reshape(shape)(inp))
+    else:
+        x = keras.layers.Reshape((n_ctx,) + shape)(inp)
+        x = keras.layers.Flatten()(keras.layers.TimeDistributed(tail_taps)(x))
+    print(f'[taps] readout width {x.shape[-1]} (taps {_TAPS})', flush=True)
+    out = keras.layers.Dense(n_classes)(x)
+    new = keras.Model(inp, out, name=model.name)
+    backbone_mult = 1.0 if lr_backbone <= 0 else lr_backbone / lr_head
+    return new, embedder._optimizer(lr_head, backbone_mult, tail.trainable_variables)
+
+
 def _score_fold(model, setname, embeddername, fold, translation, classes):
     """Score a trained model on a fold it never saw.
 
@@ -497,6 +530,12 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             lr_head=float(os.environ.get('TRUNK_LR_HEAD', 2e-4)), dropout=dropout, name=tf_name,
             **({'hidden': int(os.environ['TRUNK_HIDDEN'])} if os.environ.get('TRUNK_HIDDEN') else {}))
         optimizer = model.optimizer
+        if _TAPS:
+            if dropout or os.environ.get('TRUNK_HIDDEN'):
+                raise NotImplementedError('TRUNK_TAPS has no dropout or hidden layer')
+            model, optimizer = _add_taps(
+                model, embedder, float(os.environ.get('TRUNK_LR_BACKBONE', 0)),
+                float(os.environ.get('TRUNK_LR_HEAD', 2e-4)))
         if os.environ.get('TRUNK_ACCUM'):
             # TRUNK_BATCH=512 TRUNK_ACCUM=2 is batch 1024's update for a tail too
             # deep to fit 1024 on the 4 GB card (BN is frozen, so no batch stats
