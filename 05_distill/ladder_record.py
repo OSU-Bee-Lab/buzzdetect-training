@@ -105,30 +105,41 @@ def twin(r):
     return tuple(r.get(k) for k in ('rung', 'frontend', 'arch', 'init', 'classes', 'lam', 'lr', 'schedule', 'steps'))
 
 
+def student(r):
+    """`twin`, but a WSD trunk is one student whatever budget it stopped at."""
+    return twin(r)[:-1] if r.get('schedule') == 'wsd' else twin(r)
+
+
 def needs_repeat(rs):
-    """[(row, gain)] for the cosine runs the repeat rule asks to repeat: gain over the best other student
-    of the same rung at the same speed or faster > HEADLINE_NOISE, and no run of the same student at another
-    seed. A student alone on its rung gains over nothing, so it is repeated too."""
-    cos = [r for r in rs if is_cosine(r) and r.get('x_yamnet200') and r.get('headline') is not None]
+    """[(row, gain)] for the runs the repeat rule asks to repeat: gain over the best other student of the
+    same rung at the same speed or faster > HEADLINE_NOISE, and no run of the same student at another seed.
+    A WSD trunk counts once, at the last budget it recorded (where --wsd-stop or the ceiling ended it). A
+    student alone on its rung gains over nothing, so it is repeated too."""
+    ok = [r for r in rs if r.get('x_yamnet200') and r.get('headline') is not None]
+    cand = [r for r in ok if is_cosine(r) or r['steps'] == max(
+        o['steps'] for o in ok if student(o) == student(r) and o['seed'] == r['seed'])]
     out = []
-    for r in cos:
-        others = [o['headline'] for o in cos if twin(o) != twin(r) and o['rung'] == r['rung']
+    for r in cand:
+        others = [o['headline'] for o in cand if student(o) != student(r) and o['rung'] == r['rung']
                   and o['x_yamnet200'] >= r['x_yamnet200']]
         gain = r['headline'] - max(others, default=0.0)
-        if gain > HEADLINE_NOISE and not any(twin(o) == twin(r) and o['seed'] != r['seed'] for o in cos):
+        if gain > HEADLINE_NOISE and not any(student(o) == student(r) and o['seed'] != r['seed'] for o in ok):
             out.append((r, gain))
     return out
 
 
-def repeat_cmd(r):
-    """The main.py command that repeats `r` at the next seed (None for a run main.py did not name)."""
+def repeat_cmd(r, rs):
+    """The main.py command that repeats `r` at the next seed (None for a run main.py did not name). A WSD
+    trunk repeats over the budgets it recorded (the rows of `rs`)."""
     if not r['name'].startswith('fe_'):
         return None
     spec = f'{r.get("frontend") or "yamnet"}:{r.get("arch") or "a0.50"}' + (f':{r["init"]}' if r.get('init') else '') \
         + (f':classes={r["classes"].replace(",", "+")}' if r.get('classes') else '') \
         + (f':lam={r["lam"]:g}' if r.get('lam') not in (None, 0.1) else '') \
         + (f':lr={r["lr"]:g}' if r.get('lr') not in (None, 0.001) else '')
-    return f'main.py --rung {r["rung"]} --seed {r["seed"] + 1} --steps {r["steps"]} --runs "{spec}"'
+    budget = f'--steps {r["steps"]}' if is_cosine(r) else '--wsd ' + ','.join(str(b) for b in sorted(
+        {o['steps'] for o in rs if student(o) == student(r) and o['seed'] == r['seed']}))
+    return f'main.py --rung {r["rung"]} --seed {r["seed"] + 1} {budget} --runs "{spec}"'
 
 
 def is_cosine(r):
@@ -293,13 +304,13 @@ def frontier(a):
     print(f'\nrepeat rule (gain over every student of its rung at its speed or faster > {HEADLINE_NOISE}, no other seed yet): '
           + ('none' if not rep else ''))
     for r, g in rep:
-        print(f'  {r["name"]}: +{g:.3f} -> {repeat_cmd(r) or "(not a main.py run: repeat by hand)"}')
+        print(f'  {r["name"]}: +{g:.3f} -> {repeat_cmd(r, rows()) or "(not a main.py run: repeat by hand)"}')
 
 
 def repeats(a):
     """One main.py command per run the repeat rule asks for (a chain can run them as they are)."""
     for r, _ in needs_repeat(rows()):
-        c = repeat_cmd(r)
+        c = repeat_cmd(r, rows())
         if c:
             print(c)
 
@@ -316,6 +327,8 @@ def wsd(a):
     base = a.name[:-len('_wsd')] if a.name.endswith('_wsd') else a.name
     branches = sorted((p for p in glob.glob(os.path.join(runs, a.name + '*'))
                        if os.path.basename(p)[len(a.name):].isdigit()), key=lambda p: int(p.rsplit('_wsd', 1)[1]))
+    if not branches:
+        sys.exit(f'[wsd] no branches {a.name}<B> under {runs}: --name is the trunk, `<student>_wsd`')
     print(f'\nstep-budget curve of {a.name} (V pool vs teacher; headline = {COL} @0.005 where evaluated)')
     print(f'{"run":58s} {"steps":>6s} {"passes":>6s} {"loss":>6s} {"mae":>6s} {"hit%":>6s} {"dhit":>6s} '
           f'{"hit@K":>6s} {"dK":>6s} {"gain%":>6s} {"headline":>8s}')
