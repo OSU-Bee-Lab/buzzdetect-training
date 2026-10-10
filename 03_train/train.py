@@ -115,6 +115,18 @@ def _targets(data):
     return tgt
 
 
+# TRUNK_ADV_MODE: how the tail is turned against the site head.
+#   reverse (default): gradient reversal; the tail maximises the adversary's
+#     cross-entropy. Unbounded: site-adv-w01/w03/w10 all diverged on it.
+#   confuse: the tail minimises KL(uniform || adversary's prediction), which is
+#     bounded below (0 when the adversary is at chance); the adversary itself
+#     trains on a stop-gradient copy of the code, so neither loss reaches the
+#     other's weights.
+_ADV_MODE = os.environ.get('TRUNK_ADV_MODE', 'reverse')
+if _ADV_MODE not in ('reverse', 'confuse'):
+    raise ValueError(f'TRUNK_ADV_MODE is reverse or confuse, not {_ADV_MODE}')
+
+
 class _GradReverse(tf.keras.layers.Layer):
     """Identity forward, gradient scaled by -weight backward."""
 
@@ -126,29 +138,62 @@ class _GradReverse(tf.keras.layers.Layer):
         return (1.0 + self.weight) * tf.stop_gradient(x) - self.weight * x
 
 
+class _SiteConfuse(tf.keras.layers.Layer):
+    """Site head for TRUNK_ADV_MODE=confuse. Output is [adversary logits |
+    confusion logits]: the same Dense(units, relu) -> Dense(n_sites), once on
+    stop_gradient(code) with live weights (trains the adversary only) and once
+    on the code with the weights stopped (its gradient reaches the tail only)."""
+
+    def __init__(self, n_sites, units=256, **kw):
+        super().__init__(**kw)
+        self.n_sites, self.units = n_sites, units
+
+    def build(self, shape):
+        self.w1 = self.add_weight(name='w1', shape=(shape[-1], self.units), initializer='glorot_uniform')
+        self.b1 = self.add_weight(name='b1', shape=(self.units,), initializer='zeros')
+        self.w2 = self.add_weight(name='w2', shape=(self.units, self.n_sites), initializer='glorot_uniform')
+        self.b2 = self.add_weight(name='b2', shape=(self.n_sites,), initializer='zeros')
+
+    def call(self, code):
+        def head(x, w1, b1, w2, b2):
+            return tf.matmul(tf.nn.relu(tf.matmul(x, w1) + b1), w2) + b2
+        live = [tf.cast(v, code.dtype) for v in (self.w1, self.b1, self.w2, self.b2)]
+        return tf.concat([head(tf.stop_gradient(code), *live),
+                          head(code, *[tf.stop_gradient(v) for v in live])], axis=-1)
+
+
 def _add_site_adversary(model, n_sites, loss_classes):
     """(fit model, loss, metrics) for a trunk head with a site adversary.
 
     The fit model's output is [class logits | site logits]; `model` itself
     shares every class-path weight and stays the one that is scored. The site
-    term is masked where the site index is -1, so val_loss is the class loss."""
+    terms are masked where the site index is -1, so val_loss is the class loss."""
     n_classes = model.output_shape[-1]
     code = model.layers[-1].input  # the pooled trunk code the class Dense reads
-    x = _GradReverse(_ADV, name='site_reverse')(code)
-    x = tf.keras.layers.Dense(256, activation='relu', name='site_hidden')(x)
-    site = tf.keras.layers.Dense(n_sites, name='site_logits')(x)
+    confuse = _ADV_MODE == 'confuse'
+    if confuse:
+        site = _SiteConfuse(n_sites, name='site_confuse')(code)
+    else:
+        x = _GradReverse(_ADV, name='site_reverse')(code)
+        x = tf.keras.layers.Dense(256, activation='relu', name='site_hidden')(x)
+        site = tf.keras.layers.Dense(n_sites, name='site_logits')(x)
     fit_model = tf.keras.Model(
         model.input, tf.keras.layers.Concatenate()([model.output, site]), name=model.name)
 
     def _site_terms(y_true, y_pred):
         idx = tf.cast(y_true[:, n_classes], tf.int32)
         mask = tf.cast(idx >= 0, tf.float32)
-        return tf.maximum(idx, 0), y_pred[:, n_classes:], mask
+        logits = tf.cast(y_pred[:, n_classes:n_classes + n_sites], tf.float32)
+        return tf.maximum(idx, 0), logits, mask
 
     def loss(y_true, y_pred):
         idx, logits, mask = _site_terms(y_true, y_pred)
-        ce = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=idx, logits=logits)
-        return loss_classes(y_true[:, :n_classes], y_pred[:, :n_classes]) + ce * mask
+        site_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=idx, logits=logits)
+        if confuse:
+            # KL(uniform || p) = -mean_k log p_k - ln n; 0 at chance
+            logp = tf.nn.log_softmax(tf.cast(y_pred[:, n_classes + n_sites:], tf.float32))
+            site_loss += _ADV * (-tf.reduce_mean(logp, axis=-1) - float(np.log(n_sites)))
+        return loss_classes(y_true[:, :n_classes], y_pred[:, :n_classes]) + site_loss * mask
 
     def accuracy(y_true, y_pred):
         hit = tf.equal(y_true[:, :n_classes] > 0.5, y_pred[:, :n_classes] > 0.0)
