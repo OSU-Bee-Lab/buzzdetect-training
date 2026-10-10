@@ -10,6 +10,13 @@ the 4th and last; nothing else remains after it.
 `ps-depth8` recipe. notes.md has the hypothesis and the code change; Results and
 Conclusion are still to write.
 
+First fold in (`1_29`): training is stable (`val_loss` max 0.76, 0.68 at epoch
+30) and `site_acc` falls 0.278 -> 0.169 (8x chance still), yet the fold's
+per-epoch sensitivity monitor reads 0.002 at epoch 30 against the control's
+~0.57. One fold, so only a pointer: if the others follow, this is a stable run
+that loses sensitivity, i.e. the site/label-dependence risk in notes.md, not
+divergence.
+
 ## The job
 pid **1911772**, log `.local/worktrees/site-conf-w01/train.log` (launch_job; this run alone).
 Started 03:52; ~16 min per fold (1 fold done and the 2nd at epoch 27/30 at
