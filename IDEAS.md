@@ -29,6 +29,12 @@ Annotation covers 24 snips per fold; the rest of each recording is unlabeled. Sc
 
 Write a `Recipe` embedder (not a hand-written ONNX) for `EarthSpeciesProject/esp-aves2-sl-beats-all` (PyTorch, so GPU extraction like AVES, `BUZZDETECT_NO_GPU=1` per CLAUDE.md). Probe layers 6/9/12 mean-pooled, concatenated to the `v4-ft-ps` features. Check licence and model size before building. Costs an extraction, so it comes after 28. Falsifier: no gain on `untagged`/`loud` tiers means it is another rich-fold lever (see the context prior in `docs/training-proposer-facts.md`).
 
+## 30. Site invariance with a term that cannot be met by flattening the code
+
+*Evidence: untested remainder of item 27. `site-adv-w01/w03/w10` (gradient reversal) diverged; `site-conf-w01` (KL to uniform, weight 0.1) trained stably but flattened the pooled code: held-out `ins_buzz` logit SD 0.1 against the control's 0.65-1.2, headline 0.004. In all four the adversary still named the training fold at 4-9x chance, so site invariance itself has never been reached or tested.*
+
+Ranked last: four runs in this family have cost the whole headline. Only worth a run if it changes what the site term acts on, not its weight. Candidates, one per run: (a) apply the site term on non-buzz frames only, so it cannot push against the site/label dependence in the pool (Hard Negatives folds hold no buzz); (b) replace KL(uniform || p), which is unbounded above, with the site head's negative entropy (bounded by ln 48) and ramp its weight from 0 over the first epochs. Code is on `exp/site-conf-w01` (`TRUNK_ADV`, `TRUNK_ADV_MODE` in `03_train/train.py`). Gate on the per-epoch sensitivity monitor and the held-out logit SD after one fold, not on `val_loss`: a near-constant output sits in the same 0.6-0.8 `val_loss` basin as a trained model. Kill the run if fold 1's sensitivity is below 0.3 at epoch 10 (control `1_29`: 0.49).
+
 ---
 
 # Queue — distillation arm
