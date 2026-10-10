@@ -68,6 +68,10 @@ for set_dir in "$ROOT/02_set/sets/"/*/; do
         echo "  skipping '$setname' (not tracked in git; nothing in the worktree to link into)"
         continue
     fi
+    # A set nobody has extracted in main yet (lite, tiny) still gets a shared
+    # embeddings dir, or a worktree's smoke extraction writes a cache no other
+    # worktree sees.
+    mkdir -p "$ROOT/02_set/sets/$setname/embeddings"
     # folds.csv and annotations.csv are as necessary as the embeddings —
     # 03_train reads folds.csv before it opens a single pickle.
     for name in embeddings audio folds.csv annotations.csv \

@@ -270,8 +270,10 @@ Report headline and speed together; a student slower than its control needs a
 headline gain to count. The rest of this step is the training arm.
 
 ```bash
-python tools/results.py <matched control model> <experiment model>
+$(bash tools/python_path.sh) tools/results.py <matched control model> <experiment model>
 ```
+
+Bare `python` has no tensorflow outside the conda env.
 
 Bare model names work from main or the worktree: a name is looked up in this
 checkout's `models/`, then main's, then the worktrees'. A path works too.
@@ -281,6 +283,11 @@ eval-sampling SD, the headline ± SD, the inclusive figure, and the tier deltas.
 `tools/compare_folds.py` and `tools/eval_sampling_sd.py` are its parts, if you
 need more detail. A blank ± SD means the two models' frame grids differ (for
 example, an AVES-hop embedder against YAMNet), and no paired SD exists.
+
+Check each fold line's `buzz logit SD` in the training log before reading
+anything else. A trained head sits around 0.65-1.2; near 0.1 means the class
+output collapsed, which val_loss does not show (a constant output scores within
+0.03 of a trained one).
 
 Always read `docs/judging-results.md` for guidance before interpretation.
 

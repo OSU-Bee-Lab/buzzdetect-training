@@ -914,7 +914,7 @@ def train_set(name, embeddername, setname, name_translation,
         if result is None:
             continue
 
-        _, sens = _write_predictions(
+        predictions, sens = _write_predictions(
             dir_model, model, setname, embeddername, held_out,
             data.translation, data.classes,
         )
@@ -931,8 +931,14 @@ def train_set(name, embeddername, setname, name_translation,
 
         # One line per fold: everything worth knowing about this rotation, so a
         # default run stays roughly one line per fold rather than three.
+        # The held-out ins_buzz logit SD is there to expose a dead class head:
+        # a near-constant output still lands in the normal val_loss range on
+        # the label-smoothed loss (site-conf-w01: SD 0.1 against a trained
+        # head's 0.65-1.2, val_loss within 0.03 of the control).
+        logit_sd = float('nan') if predictions is None else predictions['activation_ins_buzz'].std()
         print(f"{tag}: {result['n_epochs']} epochs (best {result['best_epoch']}), "
               f"val_loss {result['best_val_loss']:.4f}, "
+              f"buzz logit SD {logit_sd:.2f}, "
               f"{data.frames_train}/{data.frames_val} frames train/val, "
               f"{_format_sens(sens)}, host RAM {_rss_gb():.1f} GB", flush=True)
 

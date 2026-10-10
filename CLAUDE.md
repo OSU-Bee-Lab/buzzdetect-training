@@ -26,7 +26,8 @@ resumable at stage and training-checkpoint level, and has its own operator's
 guide in `05_distill/README.md`.
 
 Environment: `conda run -n buzzdetect-train python <script>` for anything short;
-long jobs are below. Embedder interface: `embedders/embedding.py`. Model loader:
+long jobs are below. `conda run` swallows stdin, so a heredoc (`python - <<EOF`)
+prints nothing: use `$(bash tools/python_path.sh) - <<EOF`. Embedder interface: `embedders/embedding.py`. Model loader:
 `models/models.py`.
 
 An embedder built from framing, per-frame ops (slice, resample, tile) and
