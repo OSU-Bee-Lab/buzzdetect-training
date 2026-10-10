@@ -1,5 +1,6 @@
 # TensorFlow imported first — see 03_train/main.py for rationale.
 import gc
+import glob
 import json
 import math
 import os
@@ -9,6 +10,7 @@ import re
 import shutil
 import sys
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from datetime import date
 
 import numpy as np
@@ -19,7 +21,7 @@ import config as cfg
 
 from dataset import (
     build_fold_dataset, load_augmented, read_fold_roles, folds_by_role,
-    survey_untranslated, ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT,
+    survey_untranslated, read_pickle_exhaustive, ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT,
 )
 from train_utils import (build_weights, build_classes, can_write,
                          weighted_bce_loss, Sample, buzz_tier,
@@ -236,8 +238,56 @@ def _eval_arrays(samples, classes):
     return embeddings, correct, loudness, sample_id
 
 
+# PSEUDO_SET=<set>: two-stage self-training (exp/pseudo-label). Each rotation
+# first trains a teacher on its labelled pool, exactly as a plain rotation, and
+# scores it on the held-out fold into models/<name>_teacher (a matched control
+# from the same run). The teacher then labels <set>'s frames -- unannotated
+# audio of this rotation's *training* folds, extracted for real by 02_set -- and
+# the student, the model that is reported, retrains from scratch on the
+# labelled pool plus the confident ones. The held-out fold's audio is in
+# neither stage: <set> holds no rotating fold, and only folds_train are read.
+# A frame is a pseudo-positive above PSEUDO_POS (ins_buzz logit) and a
+# pseudo-negative below PSEUDO_NEG; the band between is dropped. Its other
+# classes take the teacher's own calls (logit > 0).
+_PSEUDO = os.environ.get('PSEUDO_SET')
+_PSEUDO_POS = float(os.environ.get('PSEUDO_POS', 0.0))
+_PSEUDO_NEG = float(os.environ.get('PSEUDO_NEG', -3.5))
+
+
+def _pseudo_samples(teacher, embeddername, folds_train, classes):
+    """(samples, counts): the teacher's confident frames from _PSEUDO's audio of
+    folds_train, as one sample per fold and distinct target vector."""
+    buzz = classes.index('ins_buzz')
+    samples, counts = [], {'frames': 0, 'positive': 0, 'negative': 0, 'folds': 0}
+    for fold in folds_train:
+        paths = sorted(glob.glob(os.path.join(
+            cfg.dir_embeddings_fold(_PSEUDO, embeddername, fold), '**', '*.pickle'), recursive=True))
+        if not paths:
+            continue
+        emb = np.concatenate([np.asarray(read_pickle_exhaustive(p), dtype=np.float16) for p in paths])
+        logits = np.concatenate([
+            teacher(emb[i:i + _SCORE_CHUNK].astype(np.float32), training=False).numpy()
+            for i in range(0, len(emb), _SCORE_CHUNK)])
+        positive, negative = logits[:, buzz] > _PSEUDO_POS, logits[:, buzz] < _PSEUDO_NEG
+        targets = (logits > 0).astype(np.float32)
+        targets[:, buzz] = positive
+        keep = positive | negative
+        counts['frames'] += len(emb)
+        counts['positive'] += int(positive.sum())
+        counts['negative'] += int(negative.sum())
+        counts['folds'] += 1
+        if not keep.any():
+            continue
+        emb, targets = emb[keep], targets[keep]
+        vectors, inverse = np.unique(targets, axis=0, return_inverse=True)
+        for k, vector in enumerate(vectors):
+            rows = emb[inverse.ravel() == k]
+            samples.append(SimpleNamespace(embeddings=rows, frames=len(rows), target_array=vector))
+    return samples, counts
+
+
 def _load_data(setname, embeddername, folds_train, name_translation, aug_dirnames,
-               val_fold=None):
+               val_fold=None, extra_samples=()):
     """Pool folds_train for training; val_fold, if given, is a whole separate
     deployment used to record the val_loss curve (nothing stops on it).
 
@@ -295,6 +345,10 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
 
     weights = build_weights(data_train, classes)
     weight_dict = {i: w for i, w in enumerate(weights['weight'])}
+    # pseudo-labelled frames join the pool after the class weights are set, so
+    # the loss weighting is the labelled pool's, the same as the teacher's
+    data_train += list(extra_samples)
+    frames_train = sum(s.frames for s in data_train)
 
     size_batch = int(os.environ.get('TRUNK_BATCH', 65568))
     size_shuffle = 10 * size_batch
@@ -906,6 +960,36 @@ def train_set(name, embeddername, setname, name_translation,
             print(f'{tag}: no usable frames under this translation; skipping rotation')
             continue
 
+        pseudo_counts = None
+        if _PSEUDO:
+            # stage 1: the teacher, a plain rotation, scored as this run's control
+            dir_teacher = os.path.join(cfg.DIR_MODELS, f'{name}_teacher', 'folds', str(held_out))
+            shutil.rmtree(dir_teacher, ignore_errors=True)
+            result_teacher, teacher = _train_one(
+                dir_teacher, f'{modelname}_teacher', embeddername, setname, name_translation,
+                data, epochs, aug_dirnames, verbose,
+                held_out, save_binary=False, dropout=dropout,
+            )
+            predictions_teacher, sens_teacher = _write_predictions(
+                dir_teacher, teacher, setname, embeddername, held_out,
+                data.translation, data.classes,
+            )
+            with open(os.path.join(dir_teacher, FNAME_FOLD_SUMMARY), 'w') as f:
+                json.dump(result_teacher, f)
+            pseudo, pseudo_counts = _pseudo_samples(teacher, embeddername, folds_train, data.classes)
+            print(f"{tag} teacher: buzz logit SD {predictions_teacher['activation_ins_buzz'].std():.2f}, "
+                  f"{_format_sens(sens_teacher)}; pseudo-labels from {pseudo_counts['folds']} fold(s): "
+                  f"{pseudo_counts['positive']} positive, {pseudo_counts['negative']} negative "
+                  f"of {pseudo_counts['frames']} frames", flush=True)
+            # stage 2: the student, from scratch on the labelled pool + pseudo-labels
+            del teacher, data
+            tf.keras.backend.clear_session()
+            _close_streams()
+            gc.collect()
+            data = _load_data(setname, embeddername, folds_train, name_translation,
+                              aug_dirnames, val_fold=held_out, extra_samples=pseudo)
+            del pseudo
+
         result, model = _train_one(
             dir_model, modelname, embeddername, setname, name_translation,
             data, epochs, aug_dirnames, verbose,
@@ -913,6 +997,8 @@ def train_set(name, embeddername, setname, name_translation,
         )
         if result is None:
             continue
+        if pseudo_counts:
+            result['pseudo'] = pseudo_counts
 
         predictions, sens = _write_predictions(
             dir_model, model, setname, embeddername, held_out,
