@@ -1,6 +1,6 @@
 # HANDOFF: ps-d8-foldbal
 
-Batch 29 (4 experiments, 0 logged when this was written at 15:12 on 2026-10-10). In running order: `ps-depth8-redraw`, `ps-d8-taps`, `ps-d8-foldbal` (training arm), `fast32-d8-repeat` (distillation arm). Each has its own HANDOFF.md; an experiment is done when its slug is in `03_train/log.jsonl` (or, for the distill one, its students carry `"exp"` in `05_distill/log.jsonl`).
+Batch 29 (4 experiments; **2 logged as of 19:35 on 2026-10-10: `ps-depth8-redraw` (0.497) and `ps-d8-taps` (0.481)**; `ps-d8-foldbal` and `fast32-d8-repeat` remain). pid 2744321 has exited; only the chain (2780967) is alive: taps exit 0 at 19:15, foldbal started then (ends ~21:25), distill follows (~5 h). In running order: `ps-depth8-redraw`, `ps-d8-taps`, `ps-d8-foldbal` (training arm), `fast32-d8-repeat` (distillation arm). Each has its own HANDOFF.md; an experiment is done when its slug is in `03_train/log.jsonl` (or, for the distill one, its students carry `"exp"` in `05_distill/log.jsonl`).
 
 Jobs (both started by `tools/launch_job.sh`; adopt each with `tools/watch_job.sh --adopt <pid>`, then arm the one `tools/watch_job.sh` Monitor):
 - pid 2744321, log `.local/worktrees/ps-depth8-redraw/train.log`: the control CV `ps-depth8-r3` (8 folds, ~16 min each, started 14:57).
