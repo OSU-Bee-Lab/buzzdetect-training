@@ -61,6 +61,8 @@ class TrainingData:
     # (embeddings, is_buzz) for the validation fold, unshuffled and paired,
     # for the per-epoch sens@FPR monitor. None when there is no val fold.
     val_eval: tuple = None
+    # training folds with frames: the site adversary's classes (TRUNK_ADV)
+    n_sites: int = 0
 
 # Inference chunk for fold scoring; a deep trunk tail (depth 6) OOMs the 4 GB
 # card at 1024. Chunking leaves logits unchanged (training=False, frozen BN).
@@ -95,6 +97,117 @@ def _to_tf(data, size_batch, size_shuffle, free=False):
         )
 
 
+# TRUNK_ADV=<weight>: site-adversarial tail (site-adv). A head predicts which
+# training fold a frame came from, behind a gradient reversal of this weight,
+# so the fine-tuned tail is pushed to drop site identity. 0/unset: off.
+_ADV = float(os.environ.get('TRUNK_ADV', 0))
+
+
+def _targets(data):
+    """Frame-level float32 targets for the trunk pipelines. Under TRUNK_ADV a
+    trailing column carries each frame's training-fold index (`Sample.site`, set
+    in _load_data; -1 for the validation fold, which the adversary never sees)."""
+    tgt = np.concatenate(
+        [np.tile(s.target_array, (s.frames, 1)) for s in data]).astype(np.float32)
+    if _ADV:
+        site = np.concatenate([np.full(s.frames, s.site, np.float32) for s in data])
+        tgt = np.concatenate([tgt, site[:, None]], axis=1)
+    return tgt
+
+
+# TRUNK_ADV_MODE: how the tail is turned against the site head.
+#   reverse (default): gradient reversal; the tail maximises the adversary's
+#     cross-entropy. Unbounded: site-adv-w01/w03/w10 all diverged on it.
+#   confuse: the tail minimises KL(uniform || adversary's prediction), which is
+#     bounded below (0 when the adversary is at chance); the adversary itself
+#     trains on a stop-gradient copy of the code, so neither loss reaches the
+#     other's weights.
+_ADV_MODE = os.environ.get('TRUNK_ADV_MODE', 'reverse')
+if _ADV_MODE not in ('reverse', 'confuse'):
+    raise ValueError(f'TRUNK_ADV_MODE is reverse or confuse, not {_ADV_MODE}')
+
+
+class _GradReverse(tf.keras.layers.Layer):
+    """Identity forward, gradient scaled by -weight backward."""
+
+    def __init__(self, weight, **kw):
+        super().__init__(**kw)
+        self.weight = weight
+
+    def call(self, x):
+        return (1.0 + self.weight) * tf.stop_gradient(x) - self.weight * x
+
+
+class _SiteConfuse(tf.keras.layers.Layer):
+    """Site head for TRUNK_ADV_MODE=confuse. Output is [adversary logits |
+    confusion logits]: the same Dense(units, relu) -> Dense(n_sites), once on
+    stop_gradient(code) with live weights (trains the adversary only) and once
+    on the code with the weights stopped (its gradient reaches the tail only)."""
+
+    def __init__(self, n_sites, units=256, **kw):
+        super().__init__(**kw)
+        self.n_sites, self.units = n_sites, units
+
+    def build(self, shape):
+        self.w1 = self.add_weight(name='w1', shape=(shape[-1], self.units), initializer='glorot_uniform')
+        self.b1 = self.add_weight(name='b1', shape=(self.units,), initializer='zeros')
+        self.w2 = self.add_weight(name='w2', shape=(self.units, self.n_sites), initializer='glorot_uniform')
+        self.b2 = self.add_weight(name='b2', shape=(self.n_sites,), initializer='zeros')
+
+    def call(self, code):
+        def head(x, w1, b1, w2, b2):
+            return tf.matmul(tf.nn.relu(tf.matmul(x, w1) + b1), w2) + b2
+        live = [tf.cast(v, code.dtype) for v in (self.w1, self.b1, self.w2, self.b2)]
+        return tf.concat([head(tf.stop_gradient(code), *live),
+                          head(code, *[tf.stop_gradient(v) for v in live])], axis=-1)
+
+
+def _add_site_adversary(model, n_sites, loss_classes):
+    """(fit model, loss, metrics) for a trunk head with a site adversary.
+
+    The fit model's output is [class logits | site logits]; `model` itself
+    shares every class-path weight and stays the one that is scored. The site
+    terms are masked where the site index is -1, so val_loss is the class loss."""
+    n_classes = model.output_shape[-1]
+    code = model.layers[-1].input  # the pooled trunk code the class Dense reads
+    confuse = _ADV_MODE == 'confuse'
+    if confuse:
+        site = _SiteConfuse(n_sites, name='site_confuse')(code)
+    else:
+        x = _GradReverse(_ADV, name='site_reverse')(code)
+        x = tf.keras.layers.Dense(256, activation='relu', name='site_hidden')(x)
+        site = tf.keras.layers.Dense(n_sites, name='site_logits')(x)
+    fit_model = tf.keras.Model(
+        model.input, tf.keras.layers.Concatenate()([model.output, site]), name=model.name)
+
+    def _site_terms(y_true, y_pred):
+        idx = tf.cast(y_true[:, n_classes], tf.int32)
+        mask = tf.cast(idx >= 0, tf.float32)
+        logits = tf.cast(y_pred[:, n_classes:n_classes + n_sites], tf.float32)
+        return tf.maximum(idx, 0), logits, mask
+
+    def loss(y_true, y_pred):
+        idx, logits, mask = _site_terms(y_true, y_pred)
+        site_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=idx, logits=logits)
+        if confuse:
+            # KL(uniform || p) = -mean_k log p_k - ln n; 0 at chance
+            logp = tf.nn.log_softmax(tf.cast(y_pred[:, n_classes + n_sites:], tf.float32))
+            site_loss += _ADV * (-tf.reduce_mean(logp, axis=-1) - float(np.log(n_sites)))
+        return loss_classes(y_true[:, :n_classes], y_pred[:, :n_classes]) + site_loss * mask
+
+    def accuracy(y_true, y_pred):
+        hit = tf.equal(y_true[:, :n_classes] > 0.5, y_pred[:, :n_classes] > 0.0)
+        return tf.reduce_mean(tf.cast(hit, tf.float32), axis=-1)
+
+    def site_acc(y_true, y_pred):
+        # the adversary's accuracy on training folds (chance is 1/n_sites);
+        # 0 on the validation fold, where there is no site to predict
+        idx, logits, mask = _site_terms(y_true, y_pred)
+        return tf.cast(tf.equal(tf.argmax(logits, -1, output_type=tf.int32), idx), tf.float32) * mask
+
+    return fit_model, loss, [accuracy, site_acc]
+
+
 def _to_tf_lowmem(data, size_batch, free=False):
     """Wide float16 embeddings (yamnet_trunk 12288-d, yamnet_trunk_context 36864-d):
     one float16 buffer, reshuffled every epoch, cast to float32 per batch. The plain
@@ -123,8 +236,7 @@ def _to_tf_lowmem(data, size_batch, free=False):
                 emb.scatter_update(tf.IndexedSlices(block, tf.range(at, at + len(block))))
                 at += len(block)
                 block = []
-        tgt = tf.constant(np.concatenate(
-            [np.tile(s.target_array, (s.frames, 1)) for s in data]).astype(np.float32))
+        tgt = tf.constant(_targets(data))
 
     def gather(idx):
         idx = tf.sort(idx)
@@ -170,8 +282,7 @@ class _StreamPool:
         self.arr = np.memmap(self.path, dtype=np.float16, mode='r', shape=(self.n, self.width))
         os.unlink(self.path)
         _streams.append(self)
-        tgt = tf.constant(np.concatenate(
-            [np.tile(s.target_array, (s.frames, 1)) for s in data]).astype(np.float32))
+        tgt = tf.constant(_targets(data))
         width = self.width
 
         # numpy_function keeps this closure alive in TF's py-function registry
@@ -255,10 +366,15 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     if pool is not None and aug_dirnames:
         raise NotImplementedError('TRUNK_STREAM does not stream augmented embeddings')
     data_train = []
+    sites = []  # training folds that contributed frames, in site-index order
     for fold in folds_train:
         samples = build_fold_dataset(
             cfg.dir_embeddings_fold(setname, embeddername, fold), translation,
         )
+        for s in samples:
+            s.site = len(sites)
+        if samples:
+            sites.append(fold)
         if pool is not None:
             pool.append(samples)
         data_train += samples
@@ -272,6 +388,8 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
             cfg.dir_embeddings_fold(setname, embeddername, val_fold), translation,
         )
         frames_val = sum(s.frames for s in data_val)
+        for s in data_val:
+            s.site = -1
         if data_val:
             # The per-epoch monitor stays on the inclusive reading (all buzz,
             # every tier) as its first two elements. It steers nothing under
@@ -314,6 +432,7 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
         frames_val=frames_val,
         val_fold=val_fold,
         val_eval=val_eval,
+        n_sites=len(sites),
     )
 
 
@@ -510,10 +629,20 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     # a buzz frame co-occurring with an earlier-indexed class never gets
     # ins_buzz's weight at all. See train_utils.weighted_bce_loss.
     weights_ordered = [data.weight_dict[i] for i in range(len(data.classes))]
+    loss, metrics = weighted_bce_loss(weights_ordered, label_smoothing=0.2), ['accuracy']
+    # `model` is what gets scored and saved; under TRUNK_ADV a wider model
+    # sharing its weights is the one that is fit.
+    model_scored = model
+    if _ADV:
+        if not (hasattr(embedder, 'build_head') and os.environ.get('TRUNK_FP16')):
+            raise NotImplementedError('TRUNK_ADV needs a trunk embedder and TRUNK_FP16=1')
+        if save_binary:
+            raise NotImplementedError('TRUNK_ADV has no shipped-model path yet')
+        model, loss, metrics = _add_site_adversary(model, data.n_sites, loss)
     model.compile(
-        loss=weighted_bce_loss(weights_ordered, label_smoothing=0.2),
+        loss=loss,
         optimizer=optimizer,
-        metrics=['accuracy'],
+        metrics=metrics,
     )
 
     if data.val_tf is None:
@@ -591,6 +720,10 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             # epoch count is read off the pooled curve (_consensus_epoch), and
             # per-fold argmins are too jumpy in this flat basin to median.
             'val_loss_curve': [float(x) for x in history.history['val_loss']],
+            # TRUNK_ADV instrumentation: the adversary's per-epoch accuracy at
+            # naming the training fold (chance is 1/n_sites)
+            **({'site_acc_curve': [float(x) for x in history.history['site_acc']],
+                'n_sites': data.n_sites} if _ADV else {}),
             **_sens_history_summary(history.history, best_epoch),
         }
 
@@ -661,7 +794,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     if save_binary:
         write_model_py(dir_model, modelname, embeddername, config_model['digits_results'])
 
-    return result, model
+    return result, model_scored
 
 
 def _sens_history_summary(hist, best_epoch):
