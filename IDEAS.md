@@ -29,12 +29,6 @@ Annotation covers 24 snips per fold; the rest of each recording is unlabeled. Sc
 
 Write a `Recipe` embedder (not a hand-written ONNX) for `EarthSpeciesProject/esp-aves2-sl-beats-all` (PyTorch, so GPU extraction like AVES, `BUZZDETECT_NO_GPU=1` per CLAUDE.md). Probe layers 6/9/12 mean-pooled, concatenated to the `v4-ft-ps` features. Check licence and model size before building. Costs an extraction, so it comes after 28. Falsifier: no gain on `untagged`/`loud` tiers means it is another rich-fold lever (see the context prior in `docs/training-proposer-facts.md`).
 
-## 30. Site invariance with a term that cannot be met by flattening the code
-
-*Evidence: untested remainder of item 27. Five runs on `ps-depth8` have cost the class signal without removing site identity: `site-adv-w01/w03/w10` (gradient reversal) diverged; `site-conf-w01` (KL to uniform, weight 0.1) and `site-neg-w01` (the same term on non-buzz frames only, gated after one fold) trained stably but flattened the pooled code: held-out `ins_buzz` logit SD 0.1 against the control's 0.65-1.2. `site-neg-w01`'s weight-zero control cleared the plumbing (`1_29` 0.639 with the site head attached and no tail term) and measured the unopposed site head at 84% training-fold accuracy (chance 2.1%); under the term it sits at 15-19% with the class output already dead.*
-
-Ranked last. Only worth a run if it changes what the site term acts on or its shape, not its weight. Remaining candidate: (b) replace KL(uniform || p), which is unbounded above, with the site head's negative entropy (bounded by ln 48) and ramp its weight from 0 over the first epochs. Code is on `exp/site-neg-w01` (`TRUNK_ADV`, `TRUNK_ADV_MODE=entropy`, `TRUNK_ADV_RAMP`, `TRUNK_ADV_SCOPE` in `03_train/train.py`). `TRUNK_GATE=10:0.3` on that branch stops the CV after fold 1 if its sensitivity monitor is below 0.3 at epoch 10 (control `1_29`: 0.49), so a failed variant costs 16 minutes; a near-constant output sits in the same 0.6-0.8 `val_loss` basin as a trained model, so never gate on `val_loss`.
-
 ---
 
 # Queue — distillation arm
@@ -171,6 +165,14 @@ training. Do not relabel anything.
 
 Full reasoning is in `03_train/log.jsonl` and each branch's `notes.md`.
 
+- **Site-adversarial / site-confusion terms on the fine-tuned tail's pooled
+  code** (`site-adv-w01/w03/w10`, `site-conf-w01`, `site-neg-w01`,
+  `site-ent-ramp`): six runs, four shapes of the term (gradient reversal, KL to
+  uniform on all frames, the same on non-buzz frames, bounded entropy ramped
+  from 0). Each lost the class output before the site head left ~15% (chance
+  2.1%; unopposed it reads the training fold at 84%). The ramped run kept the
+  class head only while the weight was <= 0.02, where site accuracy was still
+  ~0.5. Not a weight-tuning question; a different mechanism would be a new idea.
 - **Per-site score calibration / label-free threshold selection** — inert by
   construction.
 - **`1_150` as an annotation-quality problem** — Luke listened 2026-09-09:
