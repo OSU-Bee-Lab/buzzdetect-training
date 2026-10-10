@@ -17,12 +17,6 @@ Ranked best-first by expected value on the headline and the hard folds, cost sec
 
 *(Added 2026-10-09 from a literature pass; neither has a log entry. Both are off the pitch-shift line.)*
 
-## 28. Pseudo-labelled unlabeled audio from training deployments
-
-*Evidence: untagged proposal. MAST (arXiv 2609.15221) gets +0.12 to +0.22 mAP under cross-site shift from two-stage self-training.*
-
-Annotation covers 24 snips per fold; the rest of each recording is unlabeled. Score the unlabeled audio of the **training** folds with the current model, take high-confidence positives and negatives as pseudo-labels, and retrain with them added. Confident negatives are the cheap win: they widen the negative tail where the 0.5% FPR threshold is read. First check how much unlabeled audio exists per training fold and that nothing from the scored fold is touched (`03_train/CLAUDE.md`: no augmentation or mix may cross a fold boundary). Using the *held-out* fold's unlabeled audio is a protocol change and needs Luke.
-
 ## 29. BEATs / AVES2 as an extra block on the fine-tuned trunk
 
 *Evidence: untagged proposal. The foundation-model review (arXiv 2508.01277) finds AudioSet-pretrained SSL models beat many bird-specific ones; AVES middle layers were a confirmed gain in the frozen era (+0.026 to +0.032).*
