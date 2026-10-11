@@ -262,8 +262,9 @@ Leave the shipped model untrained. `folds_sx.csv` comes entirely from the rotati
 
 **Distillation arm:** `python 05_distill/ladder_record.py frontier` (where each
 student sits, repeat rule), `ladder_record.py wsd --name <student>_wsd` (a step-budget
-curve; the trunk's name, with its `_wsd`), and `tools/results.py <control> <student>` works on the students' eval
-dirs (`05_distill/data/<teacher>/eval/<name>`) for the per-fold and tier table.
+curve; the trunk's name, with its `_wsd`), and `tools/results.py <control> <student>` for the per-fold and tier table: a bare
+student name resolves to its eval dir (main's `05_distill/data/<teacher>/eval/<name>`)
+from main or a worktree, and the path works too.
 On eval dirs it can run past 2 min, so launch it with `tools/launch_job.sh`
 (CLAUDE.md "Running long jobs") rather than in the foreground.
 Report headline and speed together; a student slower than its control needs a

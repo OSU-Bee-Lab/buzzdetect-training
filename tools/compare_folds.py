@@ -59,7 +59,9 @@ def resolve_dir_model(name):
     so a bare name is looked up in this checkout's models/, then main's, then
     any one worktree's. That makes both names work from main and a worktree.
     Worktrees can hold a stub of a control (folds_sx.csv and fold summaries,
-    no predictions.csv), so a copy with predictions beats one without."""
+    no predictions.csv), so a copy with predictions beats one without.
+    A distilled student has no models/ dir: its name falls through to main's
+    eval dirs (05_distill/data/<teacher>/eval/<name>), if one teacher has it."""
     if os.path.exists(os.path.join(name, FNAME_SX_SUMMARY)):
         return name
     local = os.path.join(cfg.DIR_MODELS, name)
@@ -73,6 +75,9 @@ def resolve_dir_model(name):
                       if tier(p)]
         if len(candidates) == 1:
             return candidates[0]
+    students = glob.glob(os.path.join(main, '05_distill', 'data', '*', 'eval', glob.escape(name), FNAME_SX_SUMMARY))
+    if len(students) == 1:
+        return os.path.dirname(students[0])
     return local
 
 
