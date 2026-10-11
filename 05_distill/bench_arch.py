@@ -43,7 +43,7 @@ CANDIDATES = {
 
 
 def parse(name):
-    """(kind, alpha, depth, frontend). 'a0.50@two32' = trunk a0.50 on front end two32;
+    """(kind, alpha, depth, frontend); a front end may carry '+conv' (frontends' conv implementation). 'a0.50@two32' = trunk a0.50 on front end two32;
     'fe@two32' = that front end alone; plain names are the YAMNet front end."""
     base, _, fe = name.partition('@')
     if base == 'fe':
@@ -80,8 +80,9 @@ def do_export(names):
 
     for name in names:
         kind, alpha, depth, fe = parse(name)
+        fe, _, impl = fe.partition('+')
         filters = st.widths_for(alpha, depth)
-        model = st.build_student(filters, stop_at_features=(kind == 'frontend'), frontend=fe,
+        model = st.build_student(filters, stop_at_features=(kind == 'frontend'), frontend=fe, fe_impl=impl or 'stft',
                                  name=name.replace('.', '_').replace('@', '_'))
         model(tensorflow.zeros([16000], tensorflow.float32))
         d = os.path.join(OUT, name)

@@ -70,7 +70,7 @@ def _stack(net, filters, params):
 
 
 def build_student(filters, n_out=15, stop_at_features=False, name='student',
-                  input_type='waveform', expose_code=False, frontend='yamnet'):
+                  input_type='waveform', expose_code=False, frontend='yamnet', fe_impl='stft'):
     """The student, waveform-in (deploy graph) or mel-in (training graph).
 
     filters: list of per-layer filter counts, len 1..14 (layer i uses
@@ -84,6 +84,7 @@ def build_student(filters, n_out=15, stop_at_features=False, name='student',
         output: outputs [logits, code].
     stop_at_features: waveform only; return the log-mel patches instead --
         the front end alone, for timing its floor.
+    fe_impl: 'stft' | 'conv', how a non-YAMNet front end's graph is built (frontends.make_features_layer).
     frontend: name in frontends.FRONTENDS. 'yamnet' (default) is YAMNet's own layer,
         exactly as before; any other spec has its own STFT/mel channels, and the
         mel input becomes (96, bands, channels).
@@ -100,10 +101,12 @@ def build_student(filters, n_out=15, stop_at_features=False, name='student',
     else:
         assert input_type == 'waveform'
         inp = layers.Input(shape=(), dtype=tf.float32, name='waveform')
-        if fe is None:
+        if fe is None and fe_impl == 'conv':     # YAMNet's log-mel from the 'yamnet' spec's conv graph (equal to 3e-5)
+            feats = fes.make_features_layer(fes.get('yamnet'), 'conv')(inp)[..., 0]
+        elif fe is None:
             _, feats = WaveformFeatures(params)(inp)
         else:
-            feats = fes.make_features_layer(fe)(inp)
+            feats = fes.make_features_layer(fe, fe_impl)(inp)
         if stop_at_features:
             return Model(name=name + '_frontend', inputs=inp, outputs=feats)
     net = layers.Reshape((params.patch_frames, params.patch_bands, 1))(feats) if fe is None else feats

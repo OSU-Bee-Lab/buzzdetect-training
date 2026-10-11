@@ -166,8 +166,25 @@ def _tf():
     return tf
 
 
-def make_features_layer(fe):
-    """Keras layer: waveform (samples,) -> (log_mel_frames_of_first_channel, patches (n,96,B,C))."""
+def stft_kernel(ch):
+    """(window, 1, 2 * bins) conv kernels and the DFT bins they stand for: the Hann-windowed real DFT of one
+    frame as a strided Conv1D. Channels [:bins] are the real parts, [bins:] the imaginary parts, of the bins
+    the mel matrix reads (the DC bin and any bin above fmax have zero weight in every band and are left out)."""
+    n = ch.window
+    win = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(n) / n)                     # periodic Hann, as tf.signal.stft
+    bins = np.flatnonzero(mel_matrix(ch.n_fft, ch.bands, ch.fmin, ch.fmax).sum(1) > 0)
+    ang = 2 * np.pi * np.outer(np.arange(n), bins) / ch.n_fft
+    k = np.concatenate([win[:, None] * np.cos(ang), -win[:, None] * np.sin(ang)], axis=1)
+    return k[:, None, :].astype(np.float32), bins
+
+
+def make_features_layer(fe, impl='stft'):
+    """Keras layer: waveform (samples,) -> (log_mel_frames_of_first_channel, patches (n,96,B,C)).
+
+    impl 'stft': tf.signal.stft and tf.signal.frame, the graph every student was exported with until
+    2026-10-11. 'conv': the same spectrogram from one strided Conv1D per channel (`stft_kernel`) and a
+    Reshape for the patch cut; equal up to float rounding (test_frontends.py), a cheaper exported graph."""
+    assert impl in ('stft', 'conv')
     tf = _tf()
     from tensorflow.keras import layers
 
@@ -186,16 +203,29 @@ def make_features_layer(fe):
             pad = tf.maximum(0, self.min_samples - n) + PATCH_SAMPLES * hops - after
             return tf.pad(waveform, [[0, pad]], mode='CONSTANT', constant_values=0.0)
 
+        def _log_mel(self, padded, c):
+            mm = mel_matrix(c.n_fft, c.bands, c.fmin, c.fmax)
+            if impl == 'stft':
+                mag = tf.abs(tf.signal.stft(padded, frame_length=c.window, frame_step=fe.hop,
+                                            fft_length=c.n_fft))
+            else:
+                kernel, bins = stft_kernel(c)
+                y = tf.nn.conv1d(padded[tf.newaxis, :, tf.newaxis], tf.constant(kernel), stride=fe.hop,
+                                 padding='VALID')[0]                         # (frames, 2 * bins)
+                re, im = y[:, :len(bins)], y[:, len(bins):]
+                mag, mm = tf.sqrt(re * re + im * im), mm[bins]
+            return tf.math.log(tf.matmul(mag, tf.constant(mm)) + LOG_OFFSET)
+
+        def _patches(self, lm):
+            if impl == 'stft':
+                return tf.signal.frame(lm, fe.frames, fe.frames, axis=0)
+            n = tf.shape(lm)[0] // fe.frames                                 # patches do not overlap
+            return tf.reshape(lm[:n * fe.frames], [n, fe.frames, fe.bands])
+
         def call(self, waveform):
             with tf.name_scope('frontend'):
                 padded = self._pad(waveform)
-                per = []
-                for c in fe.channels:
-                    stft = tf.abs(tf.signal.stft(padded, frame_length=c.window, frame_step=fe.hop,
-                                                 fft_length=c.n_fft))
-                    mm = tf.constant(mel_matrix(c.n_fft, c.bands, c.fmin, c.fmax))
-                    lm = tf.math.log(tf.matmul(stft, mm) + LOG_OFFSET)
-                    per.append(tf.signal.frame(lm, fe.frames, fe.frames, axis=0))
+                per = [self._patches(self._log_mel(padded, c)) for c in fe.channels]
                 n = tf.reduce_min([tf.shape(p)[0] for p in per])
                 per = [p[:n] for p in per]
                 return tf.stack(per, axis=-1)
