@@ -1,0 +1,111 @@
+10-11 11:46:39 2026-10-11 11:46:39.854614: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:479] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+10-11 11:46:39 2026-10-11 11:46:39.878493: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:10575] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+10-11 11:46:39 2026-10-11 11:46:39.878543: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1442] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+10-11 11:46:40 2026-10-11 11:46:40.898993: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+10-11 11:46:43 2026-10-11 11:46:43.450058: E external/local_xla/xla/stream_executor/cuda/cuda_driver.cc:282] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+10-11 11:46:43 2026-10-11 11:46:43.450094: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:134] retrieving CUDA diagnostic information for host: beelab-files
+10-11 11:46:43 2026-10-11 11:46:43.450102: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:141] hostname: beelab-files
+10-11 11:46:43 2026-10-11 11:46:43.450217: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:165] libcuda reported version is: 580.178.4
+10-11 11:46:43 2026-10-11 11:46:43.450253: I external/local_xla/xla/stream_executor/cuda/cuda_diagnostics.cc:169] kernel reported version is: NOT_FOUND: could not find kernel module information in driver version file contents: "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.178.04  Release Build  (dvs-builder@U22-I3-AE18-16-4)  Tue Jul  7 12:18:12 UTC 2026
+10-11 11:46:43 GCC version:  gcc version 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 
+10-11 11:46:43 "
+10-11 11:46:43 /home/luke/anaconda3/envs/buzzdetect-train/lib/python3.12/site-packages/keras/src/export/tf2onnx_lib.py:21: FutureWarning: In the future `np.object` will be defined as the corresponding NumPy scalar.
+10-11 11:46:43   if not hasattr(np, "object"):
+10-11 11:46:43 2026-10-11 11:46:43.964917: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:46:43 2026-10-11 11:46:43.965087: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:46:44 2026-10-11 11:46:44.207328: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:46:44 2026-10-11 11:46:44.207463: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:46:44 fe@twofast32+mmt {'filters': [16, 32, 64, 64, 128, 128, 256, 256, 256, 256, 256, 256, 512, 512], 'params': 0, 'macs': None, 'frontend': 'twofast32', 'folded': 0, 'fused': 0}
+10-11 11:46:46 2026-10-11 11:46:46.215275: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:46:46 2026-10-11 11:46:46.215434: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:46:46 2026-10-11 11:46:46.966106: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:46:46 2026-10-11 11:46:46.966273: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:46:48 a0.50@twofast32+mmt {'filters': [16, 32, 64, 64, 128, 128, 256, 256, 256, 256, 256, 256, 512, 512], 'params': 831615, 'macs': 5928704, 'frontend': 'twofast32', 'folded': 0, 'fused': 14}
+10-11 11:46:49 2026-10-11 11:46:49.224332: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:46:49 2026-10-11 11:46:49.224471: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:46:49 2026-10-11 11:46:49.900003: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:46:49 2026-10-11 11:46:49.900176: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:46:50 a0.50_d10@twofast32+mmt {'filters': [16, 32, 64, 64, 128, 128, 256, 256, 256, 256], 'params': 283519, 'macs': 4039168, 'frontend': 'twofast32', 'folded': 0, 'fused': 10}
+10-11 11:46:51 2026-10-11 11:46:51.709919: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:46:51 2026-10-11 11:46:51.710074: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:46:52 2026-10-11 11:46:52.095196: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:46:52 2026-10-11 11:46:52.095368: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:46:53 a0.50_d8@twofast32+mmt {'filters': [16, 32, 64, 64, 128, 128, 256, 256], 'params': 144767, 'macs': 2953728, 'frontend': 'twofast32', 'folded': 0, 'fused': 8}
+10-11 11:46:54 2026-10-11 11:46:54.016584: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:46:54 2026-10-11 11:46:54.016722: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:46:54 2026-10-11 11:46:54.405400: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:46:54 2026-10-11 11:46:54.405564: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:46:55 a0.75_d8@twofast32+mmt {'filters': [24, 48, 96, 96, 192, 192, 384, 384], 'params': 314295, 'macs': 6347520, 'frontend': 'twofast32', 'folded': 0, 'fused': 8}
+10-11 11:46:56 2026-10-11 11:46:56.393911: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:46:56 2026-10-11 11:46:56.394055: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:46:56 2026-10-11 11:46:56.773258: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:46:56 2026-10-11 11:46:56.773395: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:46:57 a0.375_d8@twofast32+mmt {'filters': [12, 24, 48, 48, 96, 96, 192, 192], 'params': 84291, 'macs': 1736064, 'frontend': 'twofast32', 'folded': 0, 'fused': 8}
+10-11 11:46:58 2026-10-11 11:46:58.669616: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:46:58 2026-10-11 11:46:58.669774: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:46:59 2026-10-11 11:46:59.048318: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:46:59 2026-10-11 11:46:59.048477: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:46:59 a0.25_d8@twofast32+mmt {'filters': [8, 16, 32, 32, 64, 64, 128, 128], 'params': 40007, 'macs': 837888, 'frontend': 'twofast32', 'folded': 0, 'fused': 8}
+10-11 11:47:01 2026-10-11 11:47:01.324242: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:47:01 2026-10-11 11:47:01.324401: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:47:01 2026-10-11 11:47:01.861854: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:47:01 2026-10-11 11:47:01.862005: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:47:02 a0.25@twofast32+mmt {'filters': [8, 16, 32, 32, 64, 64, 128, 128, 128, 128, 128, 128, 256, 256], 'params': 219591, 'macs': 1604480, 'frontend': 'twofast32', 'folded': 0, 'fused': 14}
+10-11 11:47:03 2026-10-11 11:47:03.579556: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:47:03 2026-10-11 11:47:03.579705: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:47:04 2026-10-11 11:47:04.090045: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:47:04 2026-10-11 11:47:04.090221: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:47:04 a0.50_d8@fast32h16+mmt {'filters': [16, 32, 64, 64, 128, 128, 256, 256], 'params': 144623, 'macs': 2884608, 'frontend': 'fast32h16', 'folded': 0, 'fused': 8}
+10-11 11:47:05 2026-10-11 11:47:05.410506: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:47:05 2026-10-11 11:47:05.410625: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:47:05 2026-10-11 11:47:05.731593: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:47:05 2026-10-11 11:47:05.731756: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:47:06 a0.75_d8@fast32h16+mmt {'filters': [24, 48, 96, 96, 192, 192, 384, 384], 'params': 314079, 'macs': 6243840, 'frontend': 'fast32h16', 'folded': 0, 'fused': 8}
+10-11 11:47:07 2026-10-11 11:47:07.643693: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:47:07 2026-10-11 11:47:07.643865: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:47:08 2026-10-11 11:47:08.091606: I tensorflow/core/grappler/devices.cc:66] Number of eligible GPUs (core count >= 8, compute capability >= 0.0): 0
+10-11 11:47:08 2026-10-11 11:47:08.091777: I tensorflow/core/grappler/clusters/single_machine.cc:361] Starting new session
+10-11 11:47:08 a0.25@fast32h16+mmt {'filters': [8, 16, 32, 32, 64, 64, 128, 128, 128, 128, 128, 128, 256, 256], 'params': 219519, 'macs': 1569920, 'frontend': 'fast32h16', 'folded': 0, 'fused': 14}
+10-11 11:47:14 yamnet_large_general     GPU     3962 +- 2 s/s  (CUDAExecutionProvider)
+10-11 11:47:20 yamnet_large_general     CPU      589 +- 9 s/s  (CPUExecutionProvider)
+10-11 11:47:29 v4-ft-ps-e60-moderate    GPU     1442 +- 1 s/s  (CUDAExecutionProvider)
+10-11 11:47:44 v4-ft-ps-e60-moderate    CPU      240 +- 4 s/s  (CPUExecutionProvider)
+10-11 11:47:44 fe@twofast32+mmt         GPU    25968 +- 37 s/s  (CUDAExecutionProvider)
+10-11 11:47:44 fe@twofast32+mmt         CPU     6140 +- 25 s/s  (CPUExecutionProvider)
+10-11 11:47:45 a0.50@twofast32+mmt      GPU    19017 +- 95 s/s  (CUDAExecutionProvider)
+10-11 11:47:47 a0.50@twofast32+mmt      CPU     2279 +- 3 s/s  (CPUExecutionProvider)
+10-11 11:47:47 a0.50_d10@twofast32+mmt  GPU    20417 +- 59 s/s  (CUDAExecutionProvider)
+10-11 11:47:48 a0.50_d10@twofast32+mmt  CPU     2598 +- 12 s/s  (CPUExecutionProvider)
+10-11 11:47:49 a0.50_d8@twofast32+mmt   GPU    21225 +- 47 s/s  (CUDAExecutionProvider)
+10-11 11:47:50 a0.50_d8@twofast32+mmt   CPU     2731 +- 37 s/s  (CPUExecutionProvider)
+10-11 11:47:50 a0.75_d8@twofast32+mmt   GPU    18549 +- 54 s/s  (CUDAExecutionProvider)
+10-11 11:47:51 a0.75_d8@twofast32+mmt   CPU     3431 +- 24 s/s  (CPUExecutionProvider)
+10-11 11:47:52 a0.375_d8@twofast32+mmt  GPU    22822 +- 25 s/s  (CUDAExecutionProvider)
+10-11 11:47:52 a0.375_d8@twofast32+mmt  CPU     4688 +- 39 s/s  (CPUExecutionProvider)
+10-11 11:47:53 a0.25_d8@twofast32+mmt   GPU    24555 +- 34 s/s  (CUDAExecutionProvider)
+10-11 11:47:54 a0.25_d8@twofast32+mmt   CPU     3483 +- 14 s/s  (CPUExecutionProvider)
+10-11 11:47:54 a0.25@twofast32+mmt      GPU    23248 +- 65 s/s  (CUDAExecutionProvider)
+10-11 11:47:55 a0.25@twofast32+mmt      CPU     4778 +- 131 s/s  (CPUExecutionProvider)
+10-11 11:47:55 a0.50_d8@fast32h16+mmt   GPU    26609 +- 34 s/s  (CUDAExecutionProvider)
+10-11 11:47:56 a0.50_d8@fast32h16+mmt   CPU     5533 +- 10 s/s  (CPUExecutionProvider)
+10-11 11:47:56 a0.75_d8@fast32h16+mmt   GPU    22101 +- 101 s/s  (CUDAExecutionProvider)
+10-11 11:47:57 a0.75_d8@fast32h16+mmt   CPU     4208 +- 5 s/s  (CPUExecutionProvider)
+10-11 11:47:57 a0.25@fast32h16+mmt      GPU    29061 +- 50 s/s  (CUDAExecutionProvider)
+10-11 11:47:57 a0.25@fast32h16+mmt      CPU     6802 +- 7 s/s  (CPUExecutionProvider)
+10-11 11:47:57 
+10-11 11:47:57 200 s audio/run, 15 runs (2 warmup); CPU is an i7-2600, informational only
+10-11 11:47:57 model                     GPU s/s   xYAM  xTeach  CPU s/s     params    MMACs
+10-11 11:47:57 yamnet_large_general         3962   1.00    2.75      589          0        -
+10-11 11:47:57 v4-ft-ps-e60-moderate        1442   0.36    1.00      240          0        -
+10-11 11:47:57 fe@twofast32+mmt            25968   6.55   18.00     6140          0        -
+10-11 11:47:57 a0.50@twofast32+mmt         19017   4.80   13.18     2279     831615      5.9
+10-11 11:47:57 a0.50_d10@twofast32+mmt     20417   5.15   14.15     2598     283519      4.0
+10-11 11:47:57 a0.50_d8@twofast32+mmt      21225   5.36   14.71     2731     144767      3.0
+10-11 11:47:57 a0.75_d8@twofast32+mmt      18549   4.68   12.86     3431     314295      6.3
+10-11 11:47:57 a0.375_d8@twofast32+mmt     22822   5.76   15.82     4688      84291      1.7
+10-11 11:47:57 a0.25_d8@twofast32+mmt      24555   6.20   17.02     3483      40007      0.8
+10-11 11:47:57 a0.25@twofast32+mmt         23248   5.87   16.12     4778     219591      1.6
+10-11 11:47:57 a0.50_d8@fast32h16+mmt      26609   6.72   18.45     5533     144623      2.9
+10-11 11:47:57 a0.75_d8@fast32h16+mmt      22101   5.58   15.32     4208     314079      6.2
+10-11 11:47:57 a0.25@fast32h16+mmt         29061   7.34   20.15     6802     219519      1.6
+[launch_job] exit 0
