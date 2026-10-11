@@ -43,24 +43,37 @@ comparable (clean) students only, contaminated-era readings are leads.
 
 A student's speed does not depend on its teacher's cost, so the ensemble gain is free at the lite tier if it survives distillation. Train N (3) draws of the teacher's recipe on `moderate`, deploy one graph that averages their logits (and pick one member's code, or the mean code, for the code-regression loss: say which), and distil the frontier's anchor students from it against their existing rows. It is a new teacher: its own `<distill_cache>/<teacher>/` targets (the `_mel` cache is shared), its own log `key`, so the matched controls must be re-judged under it or compared by headline only. Costly (N teacher trainings plus a target re-cache); a training-arm confirmation on `moderate` comes first and needs Luke's go-ahead for the big-set runs. Falsifier: the student of the ensemble lands within seed noise (0.02) of the same student of one member.
 
+## D2. A 64-band, hop-16 front end between `yamnet` and `fast32h16`
+
+*Evidence: `matmul-stft` (2026-10-11): with the Pad gone, the frontier has a hole between yamnet a0.25_d8 (0.713 at 3.24x) and twofast32 a0.50 (0.691 at 4.81x), and frame rate is the largest speed term (front end alone: yamnet 3.6x, fast32 6.7x, fast32h16 9.2x). Hop 10 -> 16 ms cost ~0.035 on fast32 (0.687 -> 0.650 at a0.50); 64 -> 32 bands and the 25 -> 16 ms window are not separated.*
+
+Register `yam64h16` (25 ms window, 64 bands, 125-7500 Hz, hop 256; 60 frames) and distil `a0.25_d8` and `a0.50_d8` on it at rung C (WSD to 56000, buzz+rain+human), exported with `mmt`. Bench it with random weights first (`bench_arch.py --seconds 200`, `+mmt`): it should land near 4-5x. Costs a `cache_fe` pass and ~25-45 GB of rung-C shards on the root disk (149 GB free on 2026-10-11). Gain: a student above the line from 0.713 at 3.24x to 0.691 at 4.81x by more than 0.02. Falsifier: it lands on that line (frame rate, not bands or window, is what the fast front ends lose to).
+
 ## Standing facts a distillation proposer needs
 
 Detail and evidence for each: `05_distill/FRONTENDS.md` (closed 2026-10-06).
 Speeds are x YAMNet at 200 s on the GTX 1650; headlines are as in the training arm.
 
-- **Speed is set by the front end, and within it by FFT length.** YAMNet's own
-  front end alone runs ~2.1x YAMNet, which caps every YAMNet-front-end student
-  (a0.25 ≈ 1.6x). fft 256 ~2.7-3.1x, fft 512 ~1.65-2.0x, fft >= 1024 is slower
-  than YAMNet; a lower frame rate (hop 16/32 ms) helps. Shrinking the trunk buys
-  little: 14x fewer MACs (a1.00 to a0.25) is 2.0x. Band count barely matters, and
-  band placement (`lo` twins) ties its twin.
+- **Export with `--fe-impl mmt`; every speed measured before 2026-10-11 included a
+  Pad node that cost more than the student** (`matmul-stft`). A `Pad` (or
+  `Concat`) over a 200 s waveform takes 11-20 ms on the CUDA EP; the rest of a
+  fast student's call is ~4 ms. `mmt` (Slice + Reshape + MatMul, tail padded
+  apart) is the same numbers and no retraining: every rung-C student has an
+  `_mmt` row with an identical headline, 1.5-2.7x faster. The code is on
+  `exp/matmul-stft` (not merged): bring it over as a patch.
+- **Without the Pad, front end and trunk both set the speed.** Front end alone,
+  x YAMNet at 200 s: fast32h16 9.2, fast32h32 8.4, twofast32 6.9, fast32 6.7,
+  yamnet 3.6. Frame rate (hop 16 ms against 10 ms) is the large term; trunks on
+  fast32h16 now span 5.6x (a0.75_d8) to 7.3x (a0.25). The older readings (FFT
+  length sets the speed, shrinking the trunk buys little, a ~2.7x ceiling) were
+  the Pad. Band count and band placement (`lo` twins) were not re-timed.
 - **Time whole graphs; don't read per-node profiles on the GPU.** An onnxruntime
   per-node profile on the CUDA EP reports asynchronous kernel launches, not
   costs (it put ~60% in depthwise convs; fused full-conv trunks then timed
   slower at equal width). Run `bench_arch.py` first, with `--seconds 200` (its
-  default is 20; every table here quotes 200 s). Measured ceiling on fast32h16:
-  every trunk under ~6 MMACs times 2.5-2.75x, whatever its blocks (fused-blocks,
-  2026-10-11).
+  default is 20; every table here quotes 200 s). To find where a graph's time
+  goes, `prefix_bench.py` (on `exp/matmul-stft`) times prefixes of it; that is
+  what found the Pad.
 - **No narrow buzz band.** Buzz frames differ from clean negatives nearly flat
   across frequency (`band_profile.py`); no reason to expect a band-limited front
   end to win big.
@@ -76,9 +89,10 @@ Speeds are x YAMNet at 200 s on the GTX 1650; headlines are as in the training a
 - **hit@K tracks the headline** (r 0.94 over buzz+rain+human students) and is
   calibration-blind, which is why it is the WSD stop signal. hit% at logit 0 is
   as good a proxy but also reads the student's calibration offset.
-- **The clean frontier (2026-10-05), rung C at the rule's stop:** yamnet a0.25
-  0.707 at 1.62x, twofast32 a0.50 0.690 at 1.76x, fast32 a0.50 0.680 at 2.17x,
-  fast32h16 a0.50 0.639 at 2.51x, fast32h16 a0.25 0.612 at 2.75x. All far above
+- **The clean frontier (2026-10-11, `_mmt` rows), rung C:** yamnet a0.50_d8
+  0.735 at 2.60x, yamnet a0.25_d8 0.713 at 3.24x, fast32 a0.50_d10 0.696 at
+  4.55x, twofast32 a0.50 0.691 at 4.81x, fast32h16 a0.75_d8 0.656 at 5.57x,
+  fast32h16 a0.50_d8 0.646 at 6.67x, fast32h16 a0.25 0.612 at 7.28x. All far above
   the floor (0.207) and the CV baseline (0.414). Comparison points: teacher
   honest rotation 0.574; teacher ONNX through the harness 0.692 (inflated, trained
   on those folds). Students inherit fold knowledge through the teacher, so beating
@@ -107,6 +121,12 @@ when the queue above is empty or blocked, never ahead of it. **Profile first:**
 time a deploy run on NVMe split into decode/front end vs ONNX inference. If
 inference is a small share, both items stop there. In stage 2 the GPU sat ~10%
 busy, held back by the CPU (CLAUDE.md).
+
+## 31. Take the waveform Pad out of the deployed graphs
+
+*Evidence: `matmul-stft` (2026-10-11), measured by prefix timing at 200 s on the GTX 1650: the `Pad` over the waveform is 11.0 of 50.6 ms in `yamnet_large_general` and 2 x 10.8 of 140 ms in `v4-ft-ps-e60-moderate`; YAMNet's whole front end is ~24 ms, of which the pad-free MatMul form needs ~4 on the same spectrogram. The teacher's octave-up resampling Conv is another 54 ms.*
+
+`04_deploy`'s exported front end (YAMNet's `WaveformFeatures`) pads the whole waveform before the STFT. Replace it with `frontends.make_features_layer(get('yamnet'), 'mmt')` from `exp/matmul-stft` (equal to the STFT form within 2e-5 on the log-mel, patch counts identical at every length tried), or do it as an ONNX pass in `04_deploy/onnx_passes.py`. Parity as in the int8 work: detections flipped in both directions at logit > 0, `ins_buzz` first, then raw logit difference. Expected: YAMNet-headed models ~1.3x from the Pad alone, more with the MatMul STFT; the two-pass teacher ~1.2x. Not low-value "fun": it is a measured, exact-parity speedup of the standard tier, and it also moves the denominator of every "x YAMNet" in the distillation log, so re-time the reference when it lands. Needs Luke's nod only because it changes shipped graphs.
 
 ## 26. Post-training int8 quantization of the shipped ONNX graph
 
