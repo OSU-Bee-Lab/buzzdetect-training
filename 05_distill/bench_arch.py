@@ -165,7 +165,8 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('phase', choices=['export', 'time'])
-    ap.add_argument('--seconds', type=float, default=20)
+    ap.add_argument('--seconds', type=float, default=20,
+                    help='audio per run (default 20, as bench_models.py; the frontier tables quote 200)')
     ap.add_argument('--repeats', type=int, default=15)
     ap.add_argument('--warmup', type=int, default=2)
     ap.add_argument('--candidates', nargs='*', default=list(CANDIDATES))

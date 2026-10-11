@@ -42,6 +42,13 @@ Speeds are x YAMNet at 200 s on the GTX 1650; headlines are as in the training a
   than YAMNet; a lower frame rate (hop 16/32 ms) helps. Shrinking the trunk buys
   little: 14x fewer MACs (a1.00 to a0.25) is 2.0x. Band count barely matters, and
   band placement (`lo` twins) ties its twin.
+- **Time whole graphs; don't read per-node profiles on the GPU.** An onnxruntime
+  per-node profile on the CUDA EP reports asynchronous kernel launches, not
+  costs (it put ~60% in depthwise convs; fused full-conv trunks then timed
+  slower at equal width). Run `bench_arch.py` first, with `--seconds 200` (its
+  default is 20; every table here quotes 200 s). Measured ceiling on fast32h16:
+  every trunk under ~6 MMACs times 2.5-2.75x, whatever its blocks (fused-blocks,
+  2026-10-11).
 - **No narrow buzz band.** Buzz frames differ from clean negatives nearly flat
   across frequency (`band_profile.py`); no reason to expect a band-limited front
   end to win big.

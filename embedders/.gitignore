@@ -34,9 +34,17 @@
 !yamnet_pitchshift_contrast
 !yamnet_trunk
 !yamnet_trunk_context
+!yamnet_trunk_depth4
+!yamnet_trunk_depth6
+!yamnet_trunk_depth8
+!yamnet_trunk_depth10
 !yamnet_trunk_depth12
 !yamnet_trunk_pitchshift
 !yamnet_trunk_pitchshift_contrast
+!yamnet_trunk_pitchshift_depth4
+!yamnet_trunk_pitchshift_depth6
+!yamnet_trunk_pitchshift_depth8
+!yamnet_trunk_pitchshift_depth10
 !yamnet_trunk_pitchshift_depth12
 !yamnet_trunk_pitchshift_updown_depth12
 !yamnet_trunk_pitchshift_down_depth12

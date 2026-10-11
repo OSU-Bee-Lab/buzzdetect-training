@@ -178,6 +178,9 @@ A WSD trunk is judged once, at the last budget it recorded.
 Check the arm's log (`03_train/log.jsonl` or `05_distill/log.jsonl`) to see the results of previous experiments.
 If you are building off of a prior experiment, you may branch from that experiment's worktree,
 or you can manually copy the code you need.
+`git merge exp/<other>` fails inside an experiment worktree (the embedder symlinks make the tree dirty:
+"beyond a symbolic link"). Bring the other experiment's code over as a patch instead:
+`git diff $(git merge-base HEAD exp/<other>) exp/<other> -- <paths> | git apply --3way`.
 If you are building off of a previous experiment, you should compare your results against that experiment's
 in addition to the baseline.
 

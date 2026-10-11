@@ -198,7 +198,9 @@ own (flips vs cached teacher logits on the held-out V pool) and against labels (
 
 `bench_arch.py export` (train env) then `time` (engine venv) time random-weight candidates; outputs in
 `05_distill/data/_shared/arch/`. Method matches `buzzdetect/benchmarks/model-speed`: 20 s audio, 2 warmup +
-15 timed runs. CPU rates are informational only (i7-2600, no AVX2).
+15 timed runs. CPU rates are informational only (i7-2600, no AVX2). `time` defaults to `--seconds 20`; the
+frontier tables quote 200 s, so pass `--seconds 200` to compare with them. Time whole graphs this way rather
+than reading an onnxruntime per-node profile: on the CUDA EP its kernel times are asynchronous launches, not costs.
 
 | model | GPU | x YAMNet | x teacher | CPU | params | MMACs/frame |
 |---|---|---|---|---|---|---|
