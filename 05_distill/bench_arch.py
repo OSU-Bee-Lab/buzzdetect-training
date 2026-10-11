@@ -43,17 +43,20 @@ CANDIDATES = {
 
 
 def parse(name):
-    """(kind, alpha, depth, frontend); a front end may carry '+conv' (frontends' conv implementation). 'a0.50@two32' = trunk a0.50 on front end two32;
+    """(kind, alpha, depth, frontend, fused_from); a front end may carry '+conv' (frontends' conv
+    implementation). 'a0.50@two32' = trunk a0.50 on front end two32;
     'fe@two32' = that front end alone; plain names are the YAMNet front end."""
     base, _, fe = name.partition('@')
     if base == 'fe':
-        return 'frontend', 0.5, 14, fe
+        return 'frontend', 0.5, 14, fe, 0
     if base in CANDIDATES:
         kind, alpha, depth = CANDIDATES[base]
-    else:                                   # a<alpha>[_d<depth>]
+    else:                                   # a<alpha>[_d<depth>][_f<first fused layer>]
+        base, _, f = base.partition('_f')
         a, _, d = base[1:].partition('_d')
         kind, alpha, depth = 'net', float(a), int(d or 14)
-    return kind, alpha, depth, fe or 'yamnet'
+        return kind, alpha, depth, fe or 'yamnet', int(f or 0)
+    return kind, alpha, depth, fe or 'yamnet', 0
 
 
 def do_export(names):
@@ -79,10 +82,11 @@ def do_export(names):
         return model
 
     for name in names:
-        kind, alpha, depth, fe = parse(name)
+        kind, alpha, depth, fe, fused = parse(name)
         fe, _, impl = fe.partition('+')
         filters = st.widths_for(alpha, depth)
         model = st.build_student(filters, stop_at_features=(kind == 'frontend'), frontend=fe, fe_impl=impl or 'stft',
+                                 fused_from=fused,
                                  name=name.replace('.', '_').replace('@', '_'))
         model(tensorflow.zeros([16000], tensorflow.float32))
         d = os.path.join(OUT, name)
@@ -99,7 +103,7 @@ def do_export(names):
                  'macs': None if kind == 'frontend' else st.macs_per_frame(
                      filters, h=(96 if fe == 'yamnet' else st.fes.get(fe).frames),
                      w=(64 if fe == 'yamnet' else st.fes.get(fe).bands),
-                     in_channels=(1 if fe == 'yamnet' else st.fes.get(fe).n_channels)),
+                     in_channels=(1 if fe == 'yamnet' else st.fes.get(fe).n_channels), fused_from=fused),
                  'frontend': fe,
                  'folded': n_folded, 'fused': n_fused}
         json.dump(stats, open(os.path.join(d, 'stats.json'), 'w'), indent=1)

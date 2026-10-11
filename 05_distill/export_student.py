@@ -60,9 +60,9 @@ def rename_io(model):
 def filters_of(mel_model):
     out, i = [], 0
     while True:
-        try:
-            l = mel_model.get_layer(f'layer{i + 1}_' + ('conv' if i == 0 else 'pointwise_conv'))
-        except ValueError:
+        names = [f'layer{i + 1}_conv'] if i == 0 else [f'layer{i + 1}_pointwise_conv', f'layer{i + 1}_conv']
+        l = next((x for x in mel_model.layers if x.name in names), None)      # a fused layer is `layer{i}_conv`
+        if l is None:
             return out
         out.append(l.filters)
         i += 1
@@ -102,7 +102,7 @@ def do_export(a):
     classes = run_classes(a)
     wav = st.build_student(filters, n_out=len(classes) if classes else D.spec().n_classes,
                            name=a.name.replace('-', '_').replace('.', '_'), frontend=fe_name,
-                           fe_impl=a.fe_impl)
+                           fe_impl=a.fe_impl, fused_from=st.fused_from_of(mel))
     n = st.copy_weights(mel, wav)
     # No center shift here: the student learned the cached teacher logits, which come from the deployed teacher
     # ONNX with its activation_centers already subtracted, so its output is on the deployed scale (detect at
