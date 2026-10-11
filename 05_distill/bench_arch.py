@@ -87,7 +87,7 @@ def do_export(names):
         filters = st.widths_for(alpha, depth)
         model = st.build_student(filters, stop_at_features=(kind == 'frontend'), frontend=fe, fe_impl=impl or 'stft',
                                  fused_from=fused,
-                                 name=name.replace('.', '_').replace('@', '_'))
+                                 name=name.replace('.', '_').replace('@', '_').replace('+', '_'))
         model(tensorflow.zeros([16000], tensorflow.float32))
         d = os.path.join(OUT, name)
         os.makedirs(d, exist_ok=True)
