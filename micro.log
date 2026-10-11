@@ -1,0 +1,33 @@
+10-11 10:47:54 200 s of audio (12.9 MB); ms per call
+10-11 10:47:54 graph                            GPU  GPU, input on device     CPU  nodes on CPU EP (GPU session)
+10-11 10:47:56 concatconst_sum                21.86                 19.96    2.56
+10-11 10:47:56 mul_sum                         2.74                  0.40    3.14
+10-11 10:47:57 padconst_sum                   13.12                 10.78    2.42
+10-11 10:47:57 relu_sum                        2.71                  0.40    3.05
+10-11 10:47:58 reshape_matmul_sum              3.24                  0.94   10.28
+10-11 10:47:58 slice_reshape_matmul_sum        3.42                  1.11   11.41
+10-11 10:47:58 sum                             2.51                  0.15    0.87
+10-11 10:47:59 20 s of audio (1.4 MB); ms per call
+10-11 10:47:59 graph                            GPU  GPU, input on device     CPU  nodes on CPU EP (GPU session)
+10-11 10:47:59 concatconst_sum                 2.11                  2.01    0.12
+10-11 10:47:59 mul_sum                         0.37                  0.08    0.11
+10-11 10:47:59 padconst_sum                    1.52                  1.21    0.25
+10-11 10:47:59 relu_sum                        0.39                  0.08    0.11
+10-11 10:47:59 reshape_matmul_sum              0.46                  0.16    1.01
+10-11 10:47:59 [1;31m2026-10-11 10:47:59.879138913 [E:onnxruntime:, sequential_executor.cc:615 ExecuteKernel] Non-zero status code returned while running Reshape node. Name:'' Status Message: /onnxruntime_src/onnxruntime/core/providers/cpu/tensor/reshape_helper.h:49 onnxruntime::ReshapeHelper::ReshapeHelper(const onnxruntime::TensorShape&, onnxruntime::TensorShapeVector&, bool) requested_shape_size != 0 && (input_shape_size % requested_shape_size) == 0 was false. The input tensor cannot be reshaped to the requested shape. Input shape:{338160}, requested shape:{-1,256}
+10-11 10:47:59 [m
+10-11 10:47:59 Traceback (most recent call last):
+10-11 10:47:59   File "/home/luke/projects/buzzdetect-training/.local/worktrees/matmul-stft/micro/time.py", line 25, in <module>
+10-11 10:47:59     t_g = med(lambda: g.run(None, {'waveform': x}))
+10-11 10:47:59   File "/home/luke/projects/buzzdetect-training/.local/worktrees/matmul-stft/micro/time.py", line 12, in med
+10-11 10:47:59     for _ in range(3): f()
+10-11 10:47:59                        ~^^
+10-11 10:47:59   File "/home/luke/projects/buzzdetect-training/.local/worktrees/matmul-stft/micro/time.py", line 25, in <lambda>
+10-11 10:47:59     t_g = med(lambda: g.run(None, {'waveform': x}))
+10-11 10:47:59                       ~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+10-11 10:47:59   File "/home/luke/projects/buzzdetect/engine/.venv/lib/python3.13/site-packages/onnxruntime/capi/onnxruntime_inference_collection.py", line 322, in run
+10-11 10:47:59     return self._sess.run(output_names, input_feed, run_options)
+10-11 10:47:59            ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+10-11 10:47:59 onnxruntime.capi.onnxruntime_pybind11_state.RuntimeException: [ONNXRuntimeError] : 6 : RUNTIME_EXCEPTION : Non-zero status code returned while running Reshape node. Name:'' Status Message: /onnxruntime_src/onnxruntime/core/providers/cpu/tensor/reshape_helper.h:49 onnxruntime::ReshapeHelper::ReshapeHelper(const onnxruntime::TensorShape&, onnxruntime::TensorShapeVector&, bool) requested_shape_size != 0 && (input_shape_size % requested_shape_size) == 0 was false. The input tensor cannot be reshaped to the requested shape. Input shape:{338160}, requested shape:{-1,256}
+10-11 10:47:59 
+[launch_job] exit 1

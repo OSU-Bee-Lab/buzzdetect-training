@@ -60,9 +60,9 @@ def rename_io(model):
 def filters_of(mel_model):
     out, i = [], 0
     while True:
-        try:
-            l = mel_model.get_layer(f'layer{i + 1}_' + ('conv' if i == 0 else 'pointwise_conv'))
-        except ValueError:
+        names = [f'layer{i + 1}_conv'] if i == 0 else [f'layer{i + 1}_pointwise_conv', f'layer{i + 1}_conv']
+        l = next((x for x in mel_model.layers if x.name in names), None)      # a fused layer is `layer{i}_conv`
+        if l is None:
             return out
         out.append(l.filters)
         i += 1
@@ -101,7 +101,8 @@ def do_export(a):
     fe_name = run_frontend(a)
     classes = run_classes(a)
     wav = st.build_student(filters, n_out=len(classes) if classes else D.spec().n_classes,
-                           name=a.name.replace('-', '_').replace('.', '_'), frontend=fe_name)
+                           name=a.name.replace('-', '_').replace('.', '_'), frontend=fe_name,
+                           fe_impl=a.fe_impl, fused_from=st.fused_from_of(mel))
     n = st.copy_weights(mel, wav)
     # No center shift here: the student learned the cached teacher logits, which come from the deployed teacher
     # ONNX with its activation_centers already subtracted, so its output is on the deployed scale (detect at
@@ -133,7 +134,7 @@ def do_export(a):
                        'trained_date': __import__('datetime').date.today().isoformat(),
                        'modelname_internal': a.name, 'branch': git_branch(),
                        'teacher': D.TEACHER, 'filters': filters,
-                       'source_run': None if a.init_only else a.run, 'frontend': fe_name, 'classes': classes or 'all',
+                       'source_run': None if a.init_only else a.run, 'frontend': fe_name, 'frontend_impl': a.fe_impl, 'classes': classes or 'all',
                        'note': 'distilled single-pass student; outputs on the teacher\'s deployed scale (its centers '
                                'already subtracted), detect at logit > 0'}
     json.dump(cfg, open(os.path.join(d, 'config_model.json'), 'w'), indent=2)
@@ -194,6 +195,8 @@ if __name__ == '__main__':
     ap.add_argument('--name', required=True)
     ap.add_argument('--init-only', action='store_true')
     ap.add_argument('--alpha', type=float, default=0.5)
+    ap.add_argument('--fe-impl', choices=['stft', 'conv', 'mm', 'mmt'], default='stft',
+                    help="how the front end's graph is built (frontends.make_features_layer); not for the yamnet front end")
     ap.add_argument('--no-parity', action='store_true')
     ap.add_argument('--no-fp16', action='store_true', help='skip model.fp16.onnx')
     ap.add_argument('--parity-seconds', type=float, default=120)
