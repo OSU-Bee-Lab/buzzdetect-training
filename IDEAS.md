@@ -17,6 +17,12 @@ Ranked best-first by expected value on the headline and the hard folds, cost sec
 
 *(Added 2026-10-09 from a literature pass; neither has a log entry. Both are off the pitch-shift line.)*
 
+## 30. More ensemble members, and a cheaper source of them
+
+*Evidence: `ps-d8-ensemble` (2026-10-11), this era: the logit mean of three ps-depth8 draws is 0.558 against members at 0.497-0.515 (+0.049 ± 0.011), a disjoint depth4 + depth10 pair 0.559, five members 0.575. Thresholds drop on every fold; negatives correlate 0.62 between draws, buzz 0.88.*
+
+Two open questions, each one run. (a) Where the curve flattens: two more plain ps-depth8 draws give a 5-draw same-recipe mean to set against the mixed-depth five (0.575); `tools_exp/ensemble_predictions.py` on `exp/ps-d8-ensemble` scores any member list in seconds. (b) Whether one training run can supply decorrelated members: K independent tails (layers 8-14 + head, different init order / batch order) on the shared frozen stem, trained in one job and averaged at the logit. Same training compute as K runs but one extraction pass and one deployable graph; time it against a single ps-depth8 pass, since layers 1-7 are shared. Falsifier for (b): the K-tail mean lands at a single draw's headline (the tails co-adapt or the decorrelation needs independent data order). EMA within a run did not do it (`ps-ema` -0.008).
+
 ## 29. BEATs / AVES2 as an extra block on the fine-tuned trunk
 
 *Evidence: untagged proposal. The foundation-model review (arXiv 2508.01277) finds AudioSet-pretrained SSL models beat many bird-specific ones; AVES middle layers were a confirmed gain in the frozen era (+0.026 to +0.032).*
@@ -30,6 +36,12 @@ Write a `Recipe` embedder (not a hand-written ONNX) for `EarthSpeciesProject/esp
 Ranked best-first by expected movement of the speed / sensitivity frontier,
 cost second. `python 05_distill/ladder_record.py frontier` is the current state;
 comparable (clean) students only, contaminated-era readings are leads.
+
+## D1. An ensemble teacher
+
+*Evidence: `ps-d8-ensemble` (training arm, 2026-10-11): averaging 3 draws of the fine-tuned recipe is +0.049 ± 0.011 on `medium`'s CV, 5 members +0.066. Untested on `moderate` and untested through a student.*
+
+A student's speed does not depend on its teacher's cost, so the ensemble gain is free at the lite tier if it survives distillation. Train N (3) draws of the teacher's recipe on `moderate`, deploy one graph that averages their logits (and pick one member's code, or the mean code, for the code-regression loss: say which), and distil the frontier's anchor students from it against their existing rows. It is a new teacher: its own `<distill_cache>/<teacher>/` targets (the `_mel` cache is shared), its own log `key`, so the matched controls must be re-judged under it or compared by headline only. Costly (N teacher trainings plus a target re-cache); a training-arm confirmation on `moderate` comes first and needs Luke's go-ahead for the big-set runs. Falsifier: the student of the ensemble lands within seed noise (0.02) of the same student of one member.
 
 ## Standing facts a distillation proposer needs
 
