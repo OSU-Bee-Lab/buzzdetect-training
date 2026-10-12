@@ -81,6 +81,10 @@ tools/watch_job.sh            # every job this session launched, and any it laun
 It follows every job launch_job started from this session, including ones
 launched after it was armed, so starting a second job (extraction, then
 training) needs no new Monitor, and N jobs still mean one expiry per 30 min.
+It ends with its last job, though: a job launched after that (the relaunch of
+one that died) needs a Monitor armed again. launch_job's output says which:
+"watched" or "NOT watched: arm ONE Monitor now". A launch that fails within
+5 s is reported by launch_job itself; don't arm a Monitor for it.
 Arming a second Monitor, or one per job, multiplies your turns: expiries at
 different offsets land every ~30/N min. Check with TaskList before arming. A
 job another session launched joins with

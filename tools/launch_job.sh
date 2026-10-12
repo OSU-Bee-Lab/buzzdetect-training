@@ -92,12 +92,23 @@ sleep 5
 if ! kill -0 "$pid" 2>/dev/null; then
   echo "job exited within 5 s; log tail:" >&2
   tail -n 20 "$log" >&2
+  # Reported here, so watch_job.sh leaves it out: a Monitor armed on only this
+  # dead job would end at once and miss the relaunch.
+  [ -n "${CLAUDE_JOB_DIR:-}" ] && echo "$pid" >> "$CLAUDE_JOB_DIR/watch_job.reported"
   exit 1
 fi
 echo "pid $pid · log $log"
 if [ -n "${CLAUDE_JOB_DIR:-}" ]; then
-  echo "watch it: ONE Monitor per session, timeout_ms 1800000, re-armed at every expiry, command: $(dirname "$(realpath "$0")")/watch_job.sh"
-  echo "(it follows every job this session launched, this one included; if one is already armed, it has picked this job up: don't arm another)"
+  # watch_job.sh ends with its last job, so whether this one is watched depends
+  # on whether one is still running.
+  wpid=$(cat "$CLAUDE_JOB_DIR/watch_job.pid" 2>/dev/null || true)
+  if [ -n "$wpid" ] && ps -p "$wpid" -o args= 2>/dev/null | grep -q watch_job; then
+    echo "watched: this session's watch_job.sh Monitor is armed and has picked this job up; don't arm another"
+  else
+    echo "NOT watched: no watch_job.sh Monitor is armed in this session (any earlier one ended with its last job)"
+    echo "arm ONE Monitor now, timeout_ms 1800000, re-armed at every expiry, command: $(dirname "$(realpath "$0")")/watch_job.sh"
+    echo "(it follows every job this session launches while it runs)"
+  fi
 else
   echo "watch it: Monitor, timeout_ms 1800000, re-armed at every expiry, command: $(dirname "$(realpath "$0")")/watch_job.sh $pid $log"
 fi

@@ -152,8 +152,12 @@ Long ones go through `tools/launch_job.sh`; everything reads the teacher from `D
 | `quarantine.py --tag <t> --keep <prefix>` | any | move runs, models, eval and log rows aside (nothing deleted) |
 | `deploy_student.py <run>` | train | copy into buzzdetect: model.onnx, config_model.json, folds_sx.csv, README card |
 | `migrate_layout.py` | any | one-time move from the single-teacher layout (dry run by default) |
-| `bench_arch.py`, `band_profile.py`, `check_cache_align.py` | | speed benchmark, band statistics, mel alignment check |
+| `bench_arch.py export` / `time`, `band_profile.py`, `check_cache_align.py` | train / engine venv (bench) | speed benchmark, band statistics, mel alignment check |
 | `test_distill.py [--train]`, `test_frontends.py`, `test_synth.py` | train | tests (scratch dirs, GPU hidden) |
+
+The engine venv (`D.ENGINE_PY`) has `onnxruntime` (CUDA) but no `onnx`, and the train env's onnxruntime is CPU-only.
+So anything that builds or edits a graph runs in the train env, and anything that
+times one runs in the engine venv: a script that does both is two subcommands (`bench_arch.py export` / `time`).
 
 `chain_*.sh` are the experiment chains that ran before `main.py`; they hard-code the pre-teacher layout
 and are kept as the record of those runs (`chain_frontends*.sh` map 1:1 onto `main.py --runs`).

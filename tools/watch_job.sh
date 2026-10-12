@@ -10,7 +10,9 @@
 # With no arguments it watches every job launch_job.sh started from this
 # session (same $CLAUDE_JOB_DIR), including ones launched after it was armed, so
 # one Monitor covers them all: one expiry per 30 min however many jobs run, and
-# no re-arm when a new job starts. --adopt moves a job some other session
+# no re-arm when a new job starts. It ends with its last job, so a job launched
+# after that (a relaunch of one that died) needs a new Monitor; launch_job.sh
+# says which case it is. --adopt moves a job some other session
 # started (a HANDOFF.md resume) into this session's set; a Monitor already
 # armed picks it up.
 #
@@ -104,6 +106,9 @@ else
   need_session
   # A job that ended between Monitors is reported once, then left out.
   reported="$CLAUDE_JOB_DIR/watch_job.reported"; touch "$reported"
+  # launch_job.sh reads this to say whether a Monitor is armed: a watch that
+  # ended with its last job does not see the next launch.
+  echo $$ > "$CLAUDE_JOB_DIR/watch_job.pid"
   listed() {
     local f
     for f in "$JOBS"/*; do
