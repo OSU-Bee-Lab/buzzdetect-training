@@ -753,7 +753,8 @@ TensorFlow.
 results in the arm's log (`03_train/log.jsonl` for training, `05_distill/log.jsonl`
 for distillation), candidate ideas in `IDEAS.md`. Each log holds the current era
 only; the 59 runs before it are in `archive/`, one directory per era, and are
-distilled into `IDEAS.md`, where they are marked as leads rather than verdicts.
+distilled into `docs/training-proposer-facts.md` and
+`docs/distill-proposer-facts.md`, where they are marked as leads rather than verdicts.
 
 ---
 

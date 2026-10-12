@@ -56,3 +56,13 @@ The experiment log is `log.jsonl` (tracked, every teacher; README, "The experime
 - `student_init.frames_from_folds` (used by `test_synth.py` and `student_init.py --check`) reads the
   `moderate` set's framed audio: it is a plumbing check, independent of the teacher.
 - The 4 GB card fits one GPU job; tests hide it (`CUDA_VISIBLE_DEVICES=''`) and run niced.
+- **Export with `--fe-impl mmt`.** Any `Pad` (or `Concat`) over a 200 s waveform costs 11-20 ms on the CUDA
+  EP, more than a fast student's whole ~4 ms; every speed measured before 2026-10-11 included one. `mmt`
+  (Slice + Reshape + MatMul, tail padded apart) gives the same numbers with no retraining: every rung-C
+  student has an `_mmt` row with an identical headline. The code is on `exp/matmul-stft` (not merged):
+  bring it over as a patch.
+- **Time whole graphs; never read per-node profiles on the GPU.** An onnxruntime per-node profile on the
+  CUDA EP reports asynchronous kernel launches, not costs (it put ~60% in depthwise convs; fused full-conv
+  trunks then timed slower at equal width). Run `bench_arch.py --seconds 200` (its default is 20; every
+  table quotes 200 s). To find where a graph's time goes, `prefix_bench.py` (on `exp/matmul-stft`) times
+  prefixes of it; that is what found the Pad.

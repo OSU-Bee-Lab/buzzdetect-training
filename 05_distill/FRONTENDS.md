@@ -4,7 +4,7 @@
 `LADDER.md`, this is the record of the work before the loop: read it for the reasoning behind a fact. What
 replaced it: numbers in `05_distill/log.jsonl` (`ladder_record.py frontier` is the current frontier),
 each experiment's reasoning in its `notes.md` on `exp/<slug>`, and the facts a proposer needs in
-`IDEAS.md`'s distillation standing facts. "Running job" and "Where things live" below are history; the
+`docs/distill-proposer-facts.md`. "Running job" and "Where things live" below are history; the
 layout is in `README.md`.
 
 Handoff-grade record: enough for a fresh agent to resume. Read `DESIGN.md` (contract),

@@ -47,7 +47,7 @@ answers.**
   structure) must argue past this prior: prefer a design that preserves the
   transient (max-pool, attention, or an explicit local-vs-baseline contrast)
   over another plain average, and treat `1_95`/`1_114`/`1_150` as the falsifier,
-  not the headline.
+  not the headline. (A wider context, k=2, is on `refs/archive/context-width`.)
 - **Never select an epoch on the held-out fold.** Any rule that reads the
   scored fold's own curve reports max-over-epochs of the graded statistic. A
   cross-fold rule stays available offline via `tools/honest_epoch.py`.
@@ -80,6 +80,24 @@ answers.**
   but not `annotations.csv`). The known workaround is an empty directory of
   that name under the new embedder's cache (`pitchshift-decimate-up`
   notes.md). Do not edit `01_annotate/`.
+- **A few long annotations dominate two folds.** Seven `ins_buzz` annotations
+  spanning one 300 s file supply 63% of mustard's and 52% of Fit+Fast's buzz
+  seconds, so those folds' `buzz_frames` overstate their independent sample size.
+
+## Closed lines not visible in the current log
+
+Settled in archived eras or outside any run; don't re-propose without a new
+mechanism.
+
+- **`1_150` is not an annotation problem.** Luke listened 2026-09-09: "Most of
+  them are very quiet, but still legitimate targets."
+- **Leave-one-concept-out does not cause the hard folds:** r = 0.013, ruled out
+  twice. Check roles before reviving it.
+- **Epoch selectors don't move the score; the budget does.** `--monitor
+  val_sens` in any form and buzz-only selectors were all null.
+- **Margin or ranking losses against a named confuser** (`mech-margin`,
+  `pairwise-rank`, E3): monotone negatives on the fold they targeted. Applies to
+  trill as much as to the jet.
 
 ### The hard folds, re-measured on the lead (2026-09-14)
 

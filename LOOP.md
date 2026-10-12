@@ -74,7 +74,8 @@ wins still hold in the current era.
 ## Constraints
 - **Training set: `medium`**, always. The set has 8 rotating folds for evaluation.
   You may use the `lite` set for troubleshooting and `tiny` for smoke tests; draw no conclusions from either.
-- **Never train or run a CV on `large`.** This set is reserved for production-ready training runs.
+- **Never train or run a CV on `moderate`** (the big-data set, which replaced `large`) unless Luke asks.
+  It is reserved for production-ready training runs.
 - **Every rotation trains the fixed `--epochs` budget.** There is no
   early-stopping option; it was removed outright (2026-09-17) after
   measuring it undertrained hard folds unevenly. The shipped model's epoch
@@ -118,7 +119,7 @@ wins still hold in the current era.
 # Distillation arm (`05_distill`)
 
 `05_distill/README.md` is the operator's guide and `DESIGN.md` the contract.
-Before proposing, read IDEAS.md's distillation standing facts and run
+Before proposing, read `docs/distill-proposer-facts.md` and run
 `python 05_distill/ladder_record.py frontier` (the current frontier).
 `FRONTENDS.md` and `LADDER.md` are closed records of the work before the loop:
 read them for the reasoning behind a fact, never append to them. This section is
@@ -189,7 +190,8 @@ in addition to the baseline.
 
 ### 0. Orient
 
-Read both logs (`03_train/log.jsonl`, `05_distill/log.jsonl`) and `IDEAS.md`, and pick the arm. If and only if
+Read both logs (`03_train/log.jsonl`, `05_distill/log.jsonl`), `IDEAS.md` and the arm's
+`docs/*-proposer-facts.md`, and pick the arm. If and only if
 you want to examine prior eras, see `archive/` (each era keeps both logs under `<era>/<stage>/`).
 Detail on an archived run is in `archive/<era>/notes/<slug>.md`, and its code on
 `exp/<slug>` or `refs/archive/<slug>`.

@@ -8,7 +8,7 @@ unlabelled deployment audio, and is judged on the same rotating CV folds as ever
 
 Read `DESIGN.md` for the contract (teacher targets, sampling, loss, judging), `LADDER.md` for the
 data-size ladder and `FRONTENDS.md` for the front-end frontier (both closed records; new work runs through
-LOOP.md's distillation arm, its facts in IDEAS.md). This file is the operator's guide.
+LOOP.md's distillation arm, its facts in `docs/distill-proposer-facts.md`). This file is the operator's guide.
 
 ## One command
 
