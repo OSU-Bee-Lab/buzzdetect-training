@@ -45,6 +45,16 @@ def sha(path):
     return h.hexdigest()
 
 
+MMT = '_mmt'  # --fe-impl mmt re-exports a trained run's weights under <run>_mmt; it has no runs/ dir of its own
+
+
+def curve_run(name):
+    """The run whose runs/<run>/curve.json describes `name`: itself, or for exactly one trailing `_mmt` its base run."""
+    if name.endswith(MMT) and len(name) > len(MMT) and not name[:-len(MMT)].endswith(MMT):
+        return name[:-len(MMT)]
+    return name
+
+
 def ladder_row(name):
     rows = [r for r in LR.rows() if r.get('name') == name]
     return rows[-1] if rows else None
@@ -115,7 +125,7 @@ def main():
         if not os.path.exists(os.path.join(src, f)):
             sys.exit(f'{src}/{f} missing: run export_student.py export --run {a.name} --name {a.name} first')
     folds = os.path.join(LOCAL, 'eval', a.name, 'folds_sx.csv')
-    curve_path = os.path.join(LOCAL, 'runs', a.name, 'curve.json')
+    curve_path = os.path.join(LOCAL, 'runs', curve_run(a.name), 'curve.json')
     for p in (folds, curve_path):
         if not os.path.exists(p):
             sys.exit(f'{p} missing (eval_folds.py run / distill_train.py not finished for {a.name}?)')

@@ -129,6 +129,9 @@ def do_export(a):
         cfg['center_stats'] = {k: v for k, v in cfg.get('center_stats', {}).items() if k in classes}
     # one patch needs 15360 samples plus the STFT window's tail (25 ms window: 15600)
     cfg['samples_min'] = 15600 if fe_name == 'yamnet' else 15360 - st.fes.get(fe_name).hop + st.fes.get(fe_name).max_window
+    # the engine's n_frames must divide by the hop the way the graph does (see probe_exact_hop)
+    if probe_exact_hop(os.path.join(d, 'model.onnx'), cfg['samples_hop'], cfg['samples_min']):
+        cfg['exact_hop_division'] = True
     cfg['metadata'] = {'embeddername': 'distilled_student', 'set': D.spec().set,
                        'trained_date': __import__('datetime').date.today().isoformat(),
                        'modelname_internal': a.name, 'branch': git_branch(),
@@ -142,6 +145,36 @@ def do_export(a):
     if not a.no_parity:
         parity(wav, os.path.join(d, 'model.onnx'), a.parity_seconds,
                classes.index('ins_buzz') if classes else D.spec().buzz)
+
+
+def probe_exact_hop(onnx_path, samples_hop, samples_min):
+    """True if the graph divides by the hop exactly, False if it matches the engine's float32 reciprocal form.
+
+    The engine's n_frames defaults to float32 (YAMNet's tf2onnx quirk), which over-counts by one frame wherever
+    (n - samples_min) is an exact multiple of the hop and the float32 quotient lands above the integer. Students
+    frame in integers, so on a student whose samples_min leaves a whole-frame chunk on such a length, the engine
+    would keep a frame computed from padding at every chunk boundary. Measured on the graph at the first lengths
+    where the two forms disagree; raises if the graph matches neither."""
+    import numpy as np
+    import onnxruntime as ort
+    recip = np.float32(1.0) / np.float32(samples_hop)
+    sess = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
+    name = sess.get_inputs()[0].name
+    tested = 0
+    for k in range(1, 400):
+        n = samples_min + k * samples_hop
+        f32 = 1 + int(np.ceil(np.float32(k * samples_hop) * recip))
+        if f32 == k + 1:                      # float32 and exact agree here
+            continue
+        got = sess.run(None, {name: np.zeros(n, np.float32)})[0].shape[0]
+        if got == k + 1:
+            return True
+        if got != f32:
+            raise RuntimeError(f'graph returned {got} frames for {n} samples; exact says {k + 1}, float32 says {f32}')
+        tested += 1
+        if tested >= 3:
+            return False
+    return False
 
 
 def write_fp16_sibling(d, skip):
