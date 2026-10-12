@@ -451,6 +451,52 @@ def _consensus_epoch(summary_rows, tol):
     return int(np.argmax(mean <= threshold)) + 1
 
 
+class KTails(tf.keras.Model):
+    """K independently trained tails on one input; the output is the mean of
+    their logits. Each member keeps its own compiled train step (loss,
+    optimizer, clip), run in sequence so only one tail's activations are on the
+    GPU at a time."""
+
+    def __init__(self, members, **kw):
+        super().__init__(**kw)
+        self.members = members
+
+    _CHUNK = 256  # eager inference chunk: the members' compiled train steps hold most of the 4 GB card
+
+    def call(self, x, training=False):
+        if tf.executing_eagerly() and x.shape[0] is not None and x.shape[0] > self._CHUNK:
+            return tf.concat([self(x[i:i + self._CHUNK], training=training)
+                              for i in range(0, x.shape[0], self._CHUNK)], axis=0)
+        return tf.add_n([m(x, training=training) for m in self.members]) / len(self.members)
+
+    def reset_metrics(self):
+        super().reset_metrics()
+        for m in self.members:
+            m.reset_metrics()
+
+    def make_train_function(self, force=False):
+        # Plain Python instead of Keras' distributed step: train_on_batch
+        # cannot be called from inside a replica context.
+        def step(iterator):
+            x, y = next(iterator)
+            logs = [m.train_on_batch(x, y, return_dict=True) for m in self.members]
+            self._train_logs = {k: float(np.mean([l[k] for l in logs])) for k in logs[0]}
+            return self._train_logs
+        self.train_function = step
+        return step
+
+    def test_step(self, data):
+        self._train_logs = None
+        return super().test_step(data)
+
+    def get_metrics_result(self):
+        # During the training loop the logs are the members' running means;
+        # the wrapper's own metrics only see validation batches.
+        if getattr(self, '_train_logs', None) is not None:
+            return self._train_logs
+        return super().get_metrics_result()
+
+
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs, aug_dirnames, verbose,
                held_out_fold, save_binary, epochs_shipped=None,
@@ -504,6 +550,10 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             # fit: the optimizer builds its accumulators lazily.
             optimizer.gradient_accumulation_steps = int(os.environ['TRUNK_ACCUM'])
 
+    k_tails = int(os.environ.get('TRUNK_KTAILS', 0))
+    if k_tails > 1 and not hasattr(embedder, 'build_head'):
+        raise ValueError('TRUNK_KTAILS needs a fine-tunable (build_head) embedder')
+
     # Per-class weights go in the loss, not in fit(class_weight=). Keras'
     # class_weight= assumes single-label targets: for a multi-hot y it collapses
     # each sample to argmax(y) and scales the whole sample by that one scalar, so
@@ -515,6 +565,22 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         optimizer=optimizer,
         metrics=['accuracy'],
     )
+    if k_tails > 1:
+        # ps-d8-ktails: K tails, each the model above with its own head init,
+        # optimizer and clip, stepped one after another on the same batches.
+        members = [model]
+        for k in range(1, k_tails):
+            m = embedder.build_head(
+                len(data.classes), lr_backbone=float(os.environ.get('TRUNK_LR_BACKBONE', 0)),
+                lr_head=float(os.environ.get('TRUNK_LR_HEAD', 2e-4)), dropout=dropout,
+                name=f'{tf_name}_t{k}')
+            m.compile(loss=weighted_bce_loss(weights_ordered, label_smoothing=0.2),
+                      optimizer=m.optimizer, metrics=['accuracy'])
+            members.append(m)
+        model = KTails(members, name=f'{tf_name}_ktails')
+        # run_eagerly: train_step calls each member's own compiled step in turn
+        model.compile(loss=weighted_bce_loss(weights_ordered, label_smoothing=0.2),
+                      optimizer='sgd', metrics=['accuracy'], run_eagerly=True)
 
     if data.val_tf is None:
         # Shipped model: no fold is held out, so there's nothing clean to
@@ -918,6 +984,11 @@ def train_set(name, embeddername, setname, name_translation,
             dir_model, model, setname, embeddername, held_out,
             data.translation, data.classes,
         )
+        for k, member in enumerate(getattr(model, 'members', [])):
+            # each tail's own held-out predictions, as a sibling model <name>-t<k>
+            _write_predictions(
+                os.path.join(cfg.DIR_MODELS, f'{name}-t{k}', SUBDIR_FOLDS, held_out),
+                member, setname, embeddername, held_out, data.translation, data.classes)
         if surprisal:
             write_fold_surprisal(
                 dir_model_full, model, setname, embeddername, held_out,
