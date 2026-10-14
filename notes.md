@@ -33,7 +33,7 @@ packed rung-C shards are 34-46 GB per front end.
 ## Results
 WSD curve (V pool against the ensemble teacher): headline 0.679 / 0.689 / 0.697 / 0.698 at 7k / 14k / 28k /
 56k; hit@K gains +1.52, +1.16, +0.76, so the stop rule reached 56000, the judged budget. The single teacher's
-seed-1 curve was 0.663 / 0.673 / 0.687 / 0.701 (mmt rows). Speed 5.33x (mmt, 200 s), as the control.
+seed-1 curve was 0.663 / 0.673 / 0.687 / 0.701 and seed 2's 0.675 / 0.677 / 0.691 / 0.694 (mmt rows). Speed 5.33x (mmt, 200 s), as the control.
 
 Against seed 1 of the same student of the single teacher (`fe_C_twofast32_a0.50_d8_s1_c-buzz-rain-human_wsd56000_mmt`):
 
@@ -62,8 +62,8 @@ Reading: the ensemble student sits between the two single-teacher seeds (0.694 /
 against them, each ± 0.007 eval SD on top of ~0.01-0.02 seed noise. No fold moves beyond its own SD by a
 margin worth reading; every fold delta is unsure. The teacher's own gain (+0.028, carried by background and
 untagged, thresholds lower on every fold) does not reach the student: background moves +0.003 / +0.014,
-untagged -0.006 / +0.002. Early budgets read a little higher (7k 0.679 vs 0.663, 14k 0.689 vs 0.673), so the
-ensemble's targets may be slightly easier to learn early, but by 56k the curves meet. One seed.
+untagged -0.006 / +0.002. Early budgets are inside the seed spread too (7k 0.679 vs 0.663 / 0.675, 14k 0.689 vs 0.673 / 0.677).
+One seed.
 
 ## Conclusion
 Null: falsified as stated. `twofast32:a0.50_d8` distilled from the 3-draw ensemble teacher is 0.698 at 5.33x
@@ -71,5 +71,4 @@ against the single teacher's 0.701 / 0.694 (seeds 1 / 2; -0.003 / +0.004 ± 0.00
 At this width the student's error against one teacher is larger than what averaging three teachers adds;
 the ensemble's lower thresholds do not transfer. Not worth its cost (two shipped trainings, a target re-cache,
 3x teacher inference) for this student. Untested: a wider student (yamnet / yam64h16 a0.50_d8), whose
-smaller distillation error might leave room for the ensemble's gain; the 7k/14k budgets were +0.016 higher,
-a hint for short-budget students only.
+smaller distillation error might leave room for the ensemble's gain.
