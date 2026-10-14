@@ -80,7 +80,7 @@ def init_from_yamnet(student, yamnet=None, filters=None):
     yamnet = yamnet or load_yamnet()
     if filters is None:
         filters, i = [], 0
-        while _has(student, i):
+        while _has(student, i):      # stops at the first fused layer: those keep their random init
             filters.append(student.get_layer(f'layer{i + 1}_' + ('conv' if i == 0 else 'pointwise_conv')).filters)
             i += 1
     sels = select_channels(yamnet, filters)
