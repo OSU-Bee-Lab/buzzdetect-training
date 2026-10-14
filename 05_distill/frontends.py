@@ -98,6 +98,12 @@ FRONTENDS = {f.name: f for f in [
     Frontend('fast32h16lo', (_ch(16, 32, 100, 2500),), hop=256),
     # two channels at 60 frames: fundamentals get the longer window (fft 512), the rasp the short one
     Frontend('twofast32', (_ch(32, 32, 80, 1500), _ch(16, 32, 1500, 7800)), hop=256),
+    # YAMNet's own window, bands and range at fast32h16's frame rate (hop 16 ms, 60 frames): separates
+    # frame rate from the 64 -> 32 bands and 25 -> 16 ms window that the fast front ends also changed
+    Frontend('yam64h16', (_ch(25, 64, 125, 7500),), hop=256),
+    # 64 bands at fast32h32's frame rate (hop 32 ms, 30 frames); the window grows to the hop (32 ms, fft 512)
+    # so no audio falls between frames. yam64h16 found the hop nearly free on 64 bands (-0.002 / -0.008)
+    Frontend('yam64h32', (_ch(32, 64, 125, 7500),), hop=512),
     Frontend('lo16', (_ch(40, 16, 100, 2500, 1024),)),
     Frontend('two16', (_ch(50, 16, 80, 1000, 1024), _ch(16, 16, 1000, 7800))),
 ]}
@@ -166,8 +172,32 @@ def _tf():
     return tf
 
 
-def make_features_layer(fe):
-    """Keras layer: waveform (samples,) -> (log_mel_frames_of_first_channel, patches (n,96,B,C))."""
+def stft_kernel(ch):
+    """(window, 1, 2 * bins) conv kernels and the DFT bins they stand for: the Hann-windowed real DFT of one
+    frame as a strided Conv1D. Channels [:bins] are the real parts, [bins:] the imaginary parts, of the bins
+    the mel matrix reads (the DC bin and any bin above fmax have zero weight in every band and are left out)."""
+    n = ch.window
+    win = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(n) / n)                     # periodic Hann, as tf.signal.stft
+    bins = np.flatnonzero(mel_matrix(ch.n_fft, ch.bands, ch.fmin, ch.fmax).sum(1) > 0)
+    ang = 2 * np.pi * np.outer(np.arange(n), bins) / ch.n_fft
+    k = np.concatenate([win[:, None] * np.cos(ang), -win[:, None] * np.sin(ang)], axis=1)
+    return k[:, None, :].astype(np.float32), bins
+
+
+def make_features_layer(fe, impl='stft'):
+    """Keras layer: waveform (samples,) -> (log_mel_frames_of_first_channel, patches (n,96,B,C)).
+
+    impl 'stft': tf.signal.stft and tf.signal.frame, the graph every student was exported with until
+    2026-10-11. 'conv': the same spectrogram from one strided Conv1D per channel (`stft_kernel`) and a
+    Reshape for the patch cut; equal up to float rounding (test_frontends.py), a cheaper exported graph.
+    'mm': for windows that are a whole number of hops, frames are rows of a Reshape and the windowed DFT is
+    one MatMul per hop of the window (`stft_kernel`'s rows, cut by hop); no Gather, no convolution.
+    'mmt': 'mm' for any window (its kernel zero-padded to a whole number of hops) with no Pad over the
+    waveform: the complete patches come from a Slice of it, the last (zero-padded) one or two from its
+    short tail, joined at the patch level. A Pad or Concat over a 200 s waveform costs 11-20 ms on the CUDA
+    EP against ~1 ms for the Slice + Reshape + MatMul (micro/, 2026-10-11). Same values."""
+    assert impl in ('stft', 'conv', 'mm', 'mmt')
+    assert impl != 'mm' or all(c.window % fe.hop == 0 for c in fe.channels), 'mm needs window = m * hop'
     tf = _tf()
     from tensorflow.keras import layers
 
@@ -186,16 +216,70 @@ def make_features_layer(fe):
             pad = tf.maximum(0, self.min_samples - n) + PATCH_SAMPLES * hops - after
             return tf.pad(waveform, [[0, pad]], mode='CONSTANT', constant_values=0.0)
 
+        def _log_mel(self, padded, c):
+            mm = mel_matrix(c.n_fft, c.bands, c.fmin, c.fmax)
+            if impl == 'stft':
+                mag = tf.abs(tf.signal.stft(padded, frame_length=c.window, frame_step=fe.hop,
+                                            fft_length=c.n_fft))
+            else:
+                kernel, bins = stft_kernel(c)
+                if impl == 'conv':
+                    y = tf.nn.conv1d(padded[tf.newaxis, :, tf.newaxis], tf.constant(kernel), stride=fe.hop,
+                                     padding='VALID')[0]                     # (frames, 2 * bins)
+                else:
+                    m = c.window // fe.hop                                   # hops per window
+                    rows = tf.shape(padded)[0] // fe.hop
+                    a = tf.reshape(padded[:rows * fe.hop], [rows, fe.hop])
+                    k = kernel[:, 0, :]
+                    y = tf.add_n([tf.matmul(a[j:rows - m + 1 + j], tf.constant(k[j * fe.hop:(j + 1) * fe.hop]))
+                                  for j in range(m)])                        # frame i = rows i .. i+m-1
+                re, im = y[:, :len(bins)], y[:, len(bins):]
+                mag, mm = tf.sqrt(re * re + im * im), mm[bins]
+            return tf.math.log(tf.matmul(mag, tf.constant(mm)) + LOG_OFFSET)
+
+        def _patches(self, lm):
+            if impl == 'stft':
+                return tf.signal.frame(lm, fe.frames, fe.frames, axis=0)
+            n = tf.shape(lm)[0] // fe.frames                                 # patches do not overlap
+            return tf.reshape(lm[:n * fe.frames], [n, fe.frames, fe.bands])
+
+        def _mm_frames(self, x, c, n_frames):
+            """log-mel of the first n_frames frames of x (frame i = samples [i*hop, i*hop + window)), by
+            Reshape + MatMul; x must hold n_frames + m - 1 whole hops (m = hops per zero-padded window)."""
+            kernel, bins = stft_kernel(c)
+            m = -(-c.window // fe.hop)
+            k = np.zeros((m * fe.hop, kernel.shape[2]), np.float32)
+            k[:c.window] = kernel[:, 0, :]
+            rows = tf.shape(x)[0] // fe.hop
+            a = tf.reshape(x[:rows * fe.hop], [rows, fe.hop])
+            y = tf.add_n([tf.matmul(a[j:j + n_frames], tf.constant(k[j * fe.hop:(j + 1) * fe.hop])) for j in range(m)])
+            re, im = y[:, :len(bins)], y[:, len(bins):]
+            mm = mel_matrix(c.n_fft, c.bands, c.fmin, c.fmax)[bins]
+            lm = tf.math.log(tf.matmul(tf.sqrt(re * re + im * im), tf.constant(mm)) + LOG_OFFSET)
+            return tf.reshape(lm, [n_frames // fe.frames, fe.frames, fe.bands])
+
+        def _call_mmt(self, waveform):
+            # T patches in all, as _pad defines them; k of them are complete in the waveform itself
+            wp = max(-(-c.window // fe.hop) for c in fe.channels) * fe.hop      # widest zero-padded window
+            n = tf.shape(waveform)[0]
+            after = tf.maximum(n, self.min_samples) - self.min_samples
+            total = (after + PATCH_SAMPLES - 1) // PATCH_SAMPLES + 1
+            k = tf.clip_by_value((n - (wp - fe.hop)) // PATCH_SAMPLES, 0, total)
+            main = waveform[:k * PATCH_SAMPLES + wp - fe.hop]
+            len_tail = 2 * PATCH_SAMPLES + wp - fe.hop                          # room for the 0-2 patches left
+            tail = waveform[k * PATCH_SAMPLES:]
+            tail = tf.reshape(tf.pad(tail, [[0, len_tail - tf.shape(tail)[0]]]), [len_tail])
+            per = [tf.concat([self._mm_frames(main, c, k * fe.frames),
+                              self._mm_frames(tail, c, 2 * fe.frames)[:total - k]], axis=0) for c in fe.channels]
+            return tf.stack(per, axis=-1)
+
         def call(self, waveform):
+            if impl == 'mmt':
+                with tf.name_scope('frontend'):
+                    return self._call_mmt(waveform)
             with tf.name_scope('frontend'):
                 padded = self._pad(waveform)
-                per = []
-                for c in fe.channels:
-                    stft = tf.abs(tf.signal.stft(padded, frame_length=c.window, frame_step=fe.hop,
-                                                 fft_length=c.n_fft))
-                    mm = tf.constant(mel_matrix(c.n_fft, c.bands, c.fmin, c.fmax))
-                    lm = tf.math.log(tf.matmul(stft, mm) + LOG_OFFSET)
-                    per.append(tf.signal.frame(lm, fe.frames, fe.frames, axis=0))
+                per = [self._patches(self._log_mel(padded, c)) for c in fe.channels]
                 n = tf.reduce_min([tf.shape(p)[0] for p in per])
                 per = [p[:n] for p in per]
                 return tf.stack(per, axis=-1)
