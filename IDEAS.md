@@ -28,8 +28,8 @@ Write a `Recipe` embedder (not a hand-written ONNX) for `EarthSpeciesProject/esp
 Ranked best-first by expected movement of the speed / sensitivity frontier,
 cost second.
 
-## D1. An ensemble teacher
+## D1. The ensemble teacher through a wide student
 
-*Evidence: `ens3-moderate` (training arm, 2026-10-13): on `moderate` the logit mean of 3 draws of the teacher's recipe is 0.602, +0.037 over its members' mean (0.565) and +0.028 ± 0.006 over the deployed teacher (0.574, the best draw); thresholds drop on every fold, background and untagged carry it; 2 draws give +0.026 to +0.031. On `medium` it was +0.049 ± 0.011 (`ps-d8-ensemble`). Untested through a student.*
+*Evidence: `d1-ens-teacher` (2026-10-14): `twofast32:a0.50_d8` from the 3-draw ensemble teacher `v4-ft-ps-e60-moderate-ens3` is 0.698 against the single teacher's 0.701 / 0.694 (seeds 1 / 2), null; the teacher's own +0.028 does not reach that student.*
 
-A student's speed does not depend on its teacher's cost, so the ensemble gain is free at the lite tier if it survives distillation. The three draws exist (`v4-ft-ps-e60-moderate`, and `-r2`, `-r3` in `.local/worktrees/ens3-moderate/models/`, rotations only: the shipped models of r2 and r3 are untrained). Deploy one graph that averages their logits (and pick one member's code, or the mean code, for the code-regression loss: say which), and distil the frontier's anchor students from it against their existing rows. It is a new teacher: its own `<distill_cache>/<teacher>/` targets (the `_mel` cache is shared), its own log `key`, so the matched controls must be re-judged under it or compared by headline only. Costly (two shipped-model trainings plus a target re-cache). **Luke approved this, including its `moderate` runs** (an exception to the big-set rule). Falsifier: the student of the ensemble lands within seed noise (0.02) of the same student of one member.
+The ensemble teacher, its `<distill_cache>` targets and its packed `C__twofast32` shards exist. Untested is whether a student with less distillation error (`yamnet:a0.50_d8`, 0.735 from the single teacher, or `yam64h16:a0.50_d8`, 0.727) keeps some of the ensemble's gain. Needs its front end's shards packed under the ensemble teacher (~34 GB). Falsifier: within 0.02 of the single-teacher student.
