@@ -14,6 +14,8 @@ the standing reminder that a monitor can be much noisier than the thing it
 proxies for.
 """
 
+import time
+
 import numpy as np
 import tensorflow as tf
 
@@ -64,3 +66,32 @@ class SensAtFPR(tf.keras.callbacks.Callback):
         if self.correct_exclquiet is not None:
             for fpr, sens in sens_at_fpr(activation, self.correct_exclquiet, self.fprs).items():
                 logs[self.key_exclquiet(fpr)] = sens
+
+
+class Heartbeat(tf.keras.callbacks.Callback):
+    """Print one progress line at most every `every_s` seconds of a fit.
+
+    A fine-tuned-trunk fold runs for an hour or more and prints nothing until
+    its fold line, so a watcher (tools/watch_job.sh's "last:" field) had no
+    measured rate to take an ETA from. Time-gated rather than every N epochs:
+    a linear probe's 400 epochs finish inside one interval and print nothing.
+    """
+
+    def __init__(self, tag, every_s=600):
+        super().__init__()
+        self.tag = tag
+        self.every_s = every_s
+
+    def on_train_begin(self, logs=None):
+        self.start = self.last = time.monotonic()
+
+    def on_epoch_end(self, epoch, logs=None):
+        now = time.monotonic()
+        if now - self.last < self.every_s:
+            return
+        self.last = now
+        done, total = epoch + 1, self.params['epochs']
+        elapsed = now - self.start
+        left = elapsed / done * (total - done)
+        print(f'[{self.tag}] epoch {done}/{total}, {elapsed / 60:.0f} min in, '
+              f'about {left / 60:.0f} min left in this fit', flush=True)

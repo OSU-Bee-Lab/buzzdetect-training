@@ -261,6 +261,8 @@ Idents have wildly varying sample sizes, so it's difficult to extrapolate ETA fr
 
 ### Phase 3 (training arm)
 Per-fold training durations are even, so you can derive a fairly accurate ETA after the first.
+Before the first fold line, a fit that runs past 10 min prints `[<model>] epoch <k>/<N>, <m> min in,
+about <m> min left in this fit` every 10 min (`callbacks.Heartbeat`); it shows as watch_job's `last:`.
 Leave the shipped model untrained. `folds_sx.csv` comes entirely from the rotations, so there's no research benefit to training the production model.
 
 ### 4. Read the results
@@ -333,7 +335,8 @@ distillation arm, the hypothesis, verdict and tier reading live in `notes.md`
 only, so write its Conclusion as you would the training arm's `conclusion`. Keep `conclusion` brief,
 since it only points later agents at where to dig, and put the tier reading in
 it. Pass `--commit-also IDEAS.md` only if `git diff IDEAS.md` shows nothing but
-your deletion.
+your deletion. If it shows someone else's uncommitted edits too, make your deletion,
+leave `IDEAS.md` uncommitted and say so in your `done` summary.
 
 To amend an earlier training entry, don't rewrite its conclusion or metrics.
 Do a new experiment with the amendment you'd like to make, then set `trust`

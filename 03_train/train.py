@@ -29,7 +29,7 @@ from utils import git_branch
 from plot_history import plot_history, plot_sens_history
 from write_model_py import write_model_py
 
-from callbacks import SensAtFPR
+from callbacks import Heartbeat, SensAtFPR
 
 from sx import summarize_folds, format_sx_report, _fold_sens, FPR_TARGETS, FNAME_SX_SUMMARY
 from surprisal import write_fold_surprisal
@@ -522,7 +522,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         # from the median best epoch across the rotations.
         history = model.fit(
             data.train_tf, epochs=epochs_shipped,
-            callbacks=[tf.keras.callbacks.TerminateOnNaN()],
+            callbacks=[tf.keras.callbacks.TerminateOnNaN(), Heartbeat(modelname)],
             # _to_tf already applies .shuffle(); say so, or Keras warns that it's
             # ignoring shuffle=True on a Dataset input every run.
             shuffle=False,
@@ -572,7 +572,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             data.train_tf,
             epochs=epochs,
             validation_data=data.val_tf,
-            callbacks=[sens_callback, tf.keras.callbacks.TerminateOnNaN()],
+            callbacks=[sens_callback, tf.keras.callbacks.TerminateOnNaN(), Heartbeat(modelname)],
             shuffle=False,  # _to_tf already shuffles
             # --verbose is for a human watching: 1 = live progress bar.
             # Agents leave the flag off (0) so per-epoch lines don't fill
