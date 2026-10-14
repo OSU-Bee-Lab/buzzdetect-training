@@ -197,7 +197,9 @@ def hitk_spread():
 
 
 def record(a):
-    cur = json.load(open(os.path.join(LOCAL, 'runs', a.name, 'curve.json')))
+    # a re-export (--run: same weights, another graph, e.g. --fe-impl conv) takes its V readouts from the run it
+    # exports; headline and speed are its own
+    cur = json.load(open(os.path.join(LOCAL, 'runs', a.run or a.name, 'curve.json')))
     v = [x for x in cur['val'] if x.get('final')][-1]
     head, per, tiers, incl = sx(os.path.join(LOCAL, 'eval', a.name, 'folds_sx.csv'))
     args = cur.get('args', {})
@@ -215,6 +217,7 @@ def record(a):
            'mae_live': round(v['mae_live'], 4), 'mae_buzz': round(v['mae_buzz'], 4),
            'headline': head, 'headline_inclusive': incl, 'per_fold': per, 'tiers': tiers,
            'wall_s': round(a.wall), **speed(a.name),
+           **({'source_run': a.run, 'frontend_impl': a.fe_impl} if a.run else {}),
            'key': comparability(), 'date': time.strftime('%Y-%m-%d'),
            'commit': subprocess.run(['git', '-C', MAIN, 'rev-parse', '--short', 'HEAD'], capture_output=True,
                                     text=True).stdout.strip()}
@@ -418,6 +421,8 @@ if __name__ == '__main__':
     ap.add_argument('--ref', help='wsd: extra comma-separated run names to show as references (e.g. a 28k cosine run)')
     ap.add_argument('--rung'), ap.add_argument('--seed', type=int), ap.add_argument('--steps', type=int)
     ap.add_argument('--name'), ap.add_argument('--wall', type=float, default=0)
+    ap.add_argument('--run', help='record: the trained run `--name` is a re-export of (default: --name itself)')
+    ap.add_argument('--fe-impl', default='stft', help='record, with --run: the re-export\'s front-end implementation')
     ap.add_argument('--arch', default='a0.50'), ap.add_argument('--loader', default='mem')
     ap.add_argument('--frontend', default='yamnet'), ap.add_argument('--init', default='',
                                                                      help='non-default init tag, e.g. select (a control)')
