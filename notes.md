@@ -22,6 +22,26 @@ same trunks, mmt): `fe_C_yam64h16_a0.25_d8_s1_c-buzz-rain-human_wsd56000_mmt`, `
   and `a0.50_d8` (buzz+rain+human), then `reexport.py --fe-impl mmt --suffix _mmt` on the judged branches.
 - Smoke: `a0.25_d8@yam64h32+mmt` builds and exports on CPU (40k params, 0.82 MMACs).
 
+### Speed bench before training (random weights, pad-free `mmt`, 200 s, GPU; `bench.log`)
+| graph | x YAMNet | MMACs |
+|---|---|---|
+| front end alone, yam64h32 | 6.62 | |
+| **yam64h32 a0.25_d8** | **6.70** | 0.8 |
+| **yam64h32 a0.50_d8** | **6.00** | 2.9 |
+| front end alone, yam64h16 | 5.37 | |
+| yam64h16 a0.25_d8 | 4.20 | 1.6 |
+| yam64h16 a0.50_d8 | 3.79 | 5.8 |
+| twofast32 a0.50_d8 | 5.33 | 3.0 |
+| twofast32 a0.25_d8 | 6.12 | 0.8 |
+| front end alone, fast32h16 | 8.90 | |
+| fast32h16 a0.25 | 6.80 | 1.6 |
+
+Reading before training: halving the frame rate makes `yam64h32:a0.50_d8` faster than `twofast32:a0.50_d8`
+(6.00x vs 5.33x) and `a0.25_d8` level with `fast32h16:a0.25` (6.70x vs 6.80x), the 64-band front end
+(6.6x alone) now the ceiling. (`a0.25_d8` timing above its own front end is session noise, ~+-0.3x.)
+So `a0.50_d8` is above the line if it holds ~0.70 (`twofast32:a0.50_d8` 0.694-0.701 is slower), and
+`a0.25_d8` if it beats ~0.67 (`twofast32:a0.25_d8` 0.668 at 6.1x, `fast32h16:a0.50_d8` 0.646 at 6.7x).
+
 ## Results
 
 ## Conclusion
