@@ -90,11 +90,11 @@ def set_active(names=None):
 set_active()
 RUNG_ORDER = 'ABCDE'
 def parse_arch(name):
-    """'a<alpha>[_d<depth>]' -> (alpha, depth): 'a0.50' is (0.5, 14), 'a0.375_d8' is (0.375, 8)."""
-    m = re.fullmatch(r'a(\d+(?:\.\d+)?)(?:_d(\d+))?', name)
-    if not m or not 0 < int(m.group(2) or 14) <= 14:
-        raise argparse.ArgumentTypeError(f'arch {name!r} is not a<alpha>[_d<depth 1-14>]')
-    return float(m.group(1)), int(m.group(2) or 14)
+    """`student.parse_arch` for argparse: 'a<alpha>[_d<depth>][_f<k>]' -> (alpha, depth, fused_from)."""
+    try:
+        return st.parse_arch(name)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e))
 
 
 def cache_root(arg=None):
@@ -383,7 +383,7 @@ def restore(z, model, aux, opt):
 def build_and_init(a, tr, mu, sd, skip_fit=False):
     filters = st.widths_for(a.alpha, a.depth)
     model = st.build_student(filters, n_out=len(KEEP), input_type='mel', expose_code=True, name='student_mel',
-                             frontend=a.frontend)
+                             frontend=a.frontend, fused_from=a.fused)
     for l in model.layers:                      # moving stats must track fast: the init's BN is
         if isinstance(l, tf.keras.layers.BatchNormalization):   # identity+bias (refit), not YAMNet's
             l.momentum = a.bn_momentum
@@ -425,7 +425,7 @@ def main():
     ap.add_argument('--depth', type=int, default=14)
     ap.add_argument('--frontend', default='yamnet', choices=list(fes.FRONTENDS),
                     help='spectrogram the student sees (frontends.py); needs cache_fe.py output for the rung and V')
-    ap.add_argument('--arch', help='a<alpha>[_d<depth>] (e.g. a0.50_d8): sets alpha and depth')
+    ap.add_argument('--arch', help='a<alpha>[_d<depth>][_f<k>] (e.g. a0.50_d8, a0.50_f8): sets alpha, depth and the first fused layer')
     ap.add_argument('--loader', choices=['mem', 'stream'], default='mem',
                     help='mem: pack the rung locally (memmap); stream: shard-level shuffle buffer from <cache>/_shards')
     ap.add_argument('--buffer-gb', type=float, default=0, help='stream: shuffle buffer size (0 = auto from free RAM, max 8)')
@@ -467,8 +467,9 @@ def main():
     for g in tf.config.list_physical_devices('GPU'):
         tf.config.experimental.set_memory_growth(g, True)
     tf.keras.utils.set_random_seed(a.seed)
+    a.fused = 0
     if a.arch:
-        a.alpha, a.depth = parse_arch(a.arch)
+        a.alpha, a.depth, a.fused = parse_arch(a.arch)
     cache = None if a.shards else cache_root()
     out = os.path.join(D.RUNS, a.name)
     os.makedirs(out, exist_ok=True)

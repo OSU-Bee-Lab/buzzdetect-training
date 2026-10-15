@@ -2,8 +2,8 @@
 
     python 05_distill/log_exp.py --exp <slug> --runs <name> [<name> ...] [--check]
 
-main.py's record stage writes one row per judged student; this adds `"exp": "<slug>"` to the current teacher's
-rows with those names, which is what retires the experiment's HANDOFF.md (tools/human/agent_loop.sh) and what
+main.py's record stage writes one row per judged student; this adds `"exp": "<slug>"` to the rows with those
+names, under whichever teacher recorded them (a name recorded under several teachers takes DISTILL_TEACHER's row), which is what retires the experiment's HANDOFF.md (tools/human/agent_loop.sh) and what
 tools/finish_experiment.sh --arm distill commits. --check only validates: every name has exactly one row, and
 none is stamped for another experiment. Standard library only.
 """
@@ -22,12 +22,19 @@ def main():
     ap.add_argument('--check', action='store_true', help='validate only, write nothing')
     a = ap.parse_args()
     rows = D.read_log(teacher=None)
-    mine = {i: r for i, r in enumerate(rows) if r.get('teacher') == D.TEACHER and r.get('name') in a.runs}
+    mine = {i: r for i, r in enumerate(rows) if r.get('name') in a.runs}
+    for n in a.runs:                            # a name under several teachers: keep the current teacher's row
+        ids = [i for i, r in mine.items() if r['name'] == n]
+        if len({mine[i].get('teacher') for i in ids}) > 1:
+            for i in ids:
+                if mine[i].get('teacher') != D.TEACHER:
+                    del mine[i]
     errors = []
     for n in a.runs:
         hits = [r for r in mine.values() if r['name'] == n]
         if len(hits) != 1:
-            errors.append(f'{n}: {len(hits)} rows for teacher {D.TEACHER} in {D.LOG} (want 1; has main.py recorded it?)')
+            errors.append(f'{n}: {len(hits)} rows in {D.LOG} (want 1, under teacher {D.TEACHER} if several teachers '
+                          f'recorded it; set DISTILL_TEACHER for another; has main.py recorded it?)')
         elif hits[0].get('exp', a.exp) != a.exp:
             errors.append(f'{n}: already stamped for experiment {hits[0]["exp"]}')
     if errors:

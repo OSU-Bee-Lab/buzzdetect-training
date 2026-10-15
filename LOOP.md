@@ -247,6 +247,12 @@ tools/launch_job.sh distill.log -- 05_distill/main.py --rung C --runs "<frontend
     --wsd-max 56000 --wsd-stop 1.3
 ```
 
+Frontier speeds are for the pad-free `mmt` graph (05_distill/CLAUDE.md): once
+`main.py` has recorded the students, re-export and judge each one with
+`05_distill/reexport.py --fe-impl mmt --suffix _mmt --runs <run> [<run> ...]`
+(same weights, its own `<run>_mmt` row; resumes like main.py). Compare students
+by their `_mmt` rows.
+
 It writes data under the main checkout's `05_distill/data/` and its rows into
 the main checkout's `05_distill/log.jsonl` (`dpaths.MAIN`), even from a worktree.
 A WSD trunk reaches its later budgets in hours: the park rule applies. At each

@@ -59,10 +59,10 @@ The experiment log is `log.jsonl` (tracked, every teacher; README, "The experime
 - **Export with `--fe-impl mmt`.** Any `Pad` (or `Concat`) over a 200 s waveform costs 11-20 ms on the CUDA
   EP, more than a fast student's whole ~4 ms; every speed measured before 2026-10-11 included one. `mmt`
   (Slice + Reshape + MatMul, tail padded apart) gives the same numbers with no retraining: every rung-C
-  student has an `_mmt` row with an identical headline. The code is on `exp/matmul-stft` (not merged):
-  bring it over as a patch.
+  student has an `_mmt` row with an identical headline. `main.py` still exports with `stft`; judge a
+  trained student's mmt graph with `reexport.py --fe-impl mmt --suffix _mmt --runs <run> ...` (LOOP.md).
 - **Time whole graphs; never read per-node profiles on the GPU.** An onnxruntime per-node profile on the
   CUDA EP reports asynchronous kernel launches, not costs (it put ~60% in depthwise convs; fused full-conv
   trunks then timed slower at equal width). Run `bench_arch.py --seconds 200` (its default is 20; every
-  table quotes 200 s). To find where a graph's time goes, `prefix_bench.py` (on `exp/matmul-stft`) times
+  table quotes 200 s). To find where a graph's time goes, `prefix_bench.py` times
   prefixes of it; that is what found the Pad.
