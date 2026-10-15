@@ -47,15 +47,33 @@ def widths_for(alpha, n_layers=14, minimum=1):
     return [max(minimum, int(round(alpha * b))) for b in BASE_FILTERS[:n_layers]]
 
 
+ARCH_RE = r'a(\d+(?:\.\d+)?)(?:_d(\d+))?(?:_f(\d+))?(?:_l(\d+)x(\d+(?:\.\d+)?))?'
+
+
 def parse_arch(name):
-    """'a<alpha>[_d<depth>][_f<k>]' -> (alpha, depth, fused_from): 'a0.50' is (0.5, 14, 0), 'a0.375_d8' is
-    (0.375, 8, 0), 'a0.50_f8' is (0.5, 14, 8): layers 8 on are fused blocks (see `_stack`)."""
-    m = re.fullmatch(r'a(\d+(?:\.\d+)?)(?:_d(\d+))?(?:_f(\d+))?', name)
+    """'a<alpha>[_d<depth>][_f<k>][_l<j>x<alpha2>]' -> (alpha, depth, fused_from): 'a0.50' is (0.5, 14, 0),
+    'a0.375_d8' is (0.375, 8, 0), 'a0.50_f8' is (0.5, 14, 8): layers 8 on are fused blocks (see `_stack`).
+    '_l<j>x<alpha2>' (non-uniform width) gives layers j on alpha2 instead of alpha; `arch_filters` reads it."""
+    m = re.fullmatch(ARCH_RE, name)
     depth = int(m.group(2) or 14) if m else 0
     fused = int(m.group(3) or 0) if m else 0
-    if not m or not 0 < depth <= 14 or (fused and not 2 <= fused <= depth):
-        raise ValueError(f'arch {name!r} is not a<alpha>[_d<depth 1-14>][_f<first fused layer 2-depth>]')
+    late = int(m.group(4) or 0) if m else 0
+    if not m or not 0 < depth <= 14 or (fused and not 2 <= fused <= depth) or (m.group(4) and not 2 <= late <= depth):
+        raise ValueError(f'arch {name!r} is not a<alpha>[_d<depth 1-14>][_f<first fused layer 2-depth>]'
+                         f'[_l<first layer at alpha2, 2-depth>x<alpha2>]')
     return float(m.group(1)), depth, fused
+
+
+def arch_filters(name):
+    """Per-layer filter counts of an arch name: widths_for(alpha, depth), with layers j on at alpha2 when the
+    name carries '_l<j>x<alpha2>'."""
+    alpha, depth, _ = parse_arch(name)
+    m = re.fullmatch(ARCH_RE, name)
+    filters = widths_for(alpha, depth)
+    if m.group(4):
+        j = int(m.group(4))
+        filters = filters[:j - 1] + widths_for(float(m.group(5)), depth)[j - 1:]
+    return filters
 
 
 def fused_from_of(model):

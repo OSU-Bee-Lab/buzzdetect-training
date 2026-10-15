@@ -90,7 +90,7 @@ def set_active(names=None):
 set_active()
 RUNG_ORDER = 'ABCDE'
 def parse_arch(name):
-    """`student.parse_arch` for argparse: 'a<alpha>[_d<depth>][_f<k>]' -> (alpha, depth, fused_from)."""
+    """`student.parse_arch` for argparse: 'a<alpha>[_d<depth>][_f<k>][_l<j>x<alpha2>]' -> (alpha, depth, fused_from)."""
     try:
         return st.parse_arch(name)
     except ValueError as e:
@@ -381,7 +381,7 @@ def restore(z, model, aux, opt):
 
 
 def build_and_init(a, tr, mu, sd, skip_fit=False):
-    filters = st.widths_for(a.alpha, a.depth)
+    filters = st.arch_filters(a.arch) if a.arch else st.widths_for(a.alpha, a.depth)
     model = st.build_student(filters, n_out=len(KEEP), input_type='mel', expose_code=True, name='student_mel',
                              frontend=a.frontend, fused_from=a.fused)
     for l in model.layers:                      # moving stats must track fast: the init's BN is
@@ -425,7 +425,7 @@ def main():
     ap.add_argument('--depth', type=int, default=14)
     ap.add_argument('--frontend', default='yamnet', choices=list(fes.FRONTENDS),
                     help='spectrogram the student sees (frontends.py); needs cache_fe.py output for the rung and V')
-    ap.add_argument('--arch', help='a<alpha>[_d<depth>][_f<k>] (e.g. a0.50_d8, a0.50_f8): sets alpha, depth and the first fused layer')
+    ap.add_argument('--arch', help='a<alpha>[_d<depth>][_f<k>][_l<j>x<alpha2>] (e.g. a0.50_d8, a0.50_f8, a0.25_d8_l5x0.50): sets alpha, depth, the first fused layer and, with _l, layers j on at alpha2')
     ap.add_argument('--loader', choices=['mem', 'stream'], default='mem',
                     help='mem: pack the rung locally (memmap); stream: shard-level shuffle buffer from <cache>/_shards')
     ap.add_argument('--buffer-gb', type=float, default=0, help='stream: shuffle buffer size (0 = auto from free RAM, max 8)')
