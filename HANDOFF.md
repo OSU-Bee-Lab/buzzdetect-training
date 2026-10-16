@@ -1,4 +1,9 @@
-# HANDOFF: nonuniform-width-yam64h32 (batch 34, parked 2026-10-15 ~05:20)
+# HANDOFF: nonuniform-width-yam64h32 (batch 34)
+
+**2026-10-16 17:15: nonuniform-width (twofast32) is LOGGED and finished: 1 of 4 experiments done. The yam64h32 chain is running as
+launch_job pid 46447, log `distill.log` in THIS worktree (not ../nonuniform-width). Adopt 46447. ~8 h remain; parked.
+Slots 3-4 unchosen (`ladder_record.py repeats` flagged fe_B_fast32h16_a0.50 seed-2 repeat as a candidate).
+Note: tools/results.py takes ONE control and ONE student per call (run the four pairs separately), and must be run with the python from tools/python_path.sh.**
 
 **2026-10-16: chain relaunched as launch_job pid 18975 (log in ../nonuniform-width/distill.log); adopt that pid.**
 
