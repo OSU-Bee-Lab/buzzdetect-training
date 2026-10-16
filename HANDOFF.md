@@ -1,5 +1,29 @@
 # HANDOFF: nonuniform-width (batch 34, parked 2026-10-15 ~05:20)
 
+**2026-10-16 12:58, resumed and re-parked:** Luke's analysis was still running (buzzdetect-engine pid 2193467,
+heavy_v1 on "Lily - Clover", GPU at 3.4 GB, load ~4.5), so the chain was NOT relaunched. A placeholder job
+(launch_job pid 2197197, `tail --pid=2193467`, log wait_engine.log) only waits for the engine to exit so the park
+has a job to wake on. When you resume: re-run the three checks above; if all idle, relaunch the chain per
+"If it died" below; if another analysis is running, launch a fresh waiter on its pid and park again.
+
+**STOPPED BY LUKE, 2026-10-15 ~14:30 (not a crash): he needed the computer.** Both the agent_loop driver
+(SIGTERM while parked, so no session was running) and the chain (SIGTERM to launch_job pgroup 1955094) were
+killed on purpose. The chain was in the last decay of the first half: `twofast32:a0.25_d8_l7x1.0`, decay
+47600-56000, at train step ~51500/56000 (the trunk to 47600 and the `_l5x0.50` student were done). Nothing
+else was lost. The batch is still parked: `.local/agent_loop/park` is in place, so rerunning
+`tools/human/agent_loop.sh` relaunches an agent for batch 34 (0 of 4 logged) which reads this file.
+**Before relaunching anything, wait until the machine's resources are free.** Luke runs buzzdetect analyses
+(`heavy_v1` engine) on this box, and the loop is queued to start only after one exits, but he may start
+another. Check first: `pgrep -af "[b]uzzdetect-engine"` (a hit means an analysis is running), `nvidia-smi`
+for GPU memory beyond the ~300 MiB desktop, and `uptime` for load. If anything is busy, don't launch the
+chain (the 4 GB card fits one GPU job, and the analysis needs the CPU): park again with
+`tools/loop_signal.sh park <minutes> "waiting for Luke's buzzdetect analysis"`, or wait on the engine's pid.
+Relaunch only once all three are idle.
+Treat the job as "died" in the branch below: no fix needed, just relaunch. main.py resumes at the training
+checkpoint, so expect it to pick up near step 51500 (check the log's first lines to confirm), then the
+mmt re-export, then the yam64h32 pair (`../nonuniform-width-yam64h32`, see its HANDOFF.md, unchanged).
+Remaining chain time was ~0h20m for l7x1.0, then the re-export, then ~8 h for the yam64h32 pair.
+
 Batch 34's experiment count: 0 of 4 logged when parked. This batch's two experiments are `nonuniform-width`
 (twofast32) and `nonuniform-width-yam64h32`, chained in one job; the remaining two slots are unchosen
 (candidates: a seed-2 repeat if `ladder_record.py repeats` flags one; IDEAS D2 if root-disk space is freed).
