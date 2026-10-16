@@ -1,5 +1,7 @@
 # HANDOFF: nonuniform-width (batch 34, parked 2026-10-15 ~05:20)
 
+**2026-10-16 16:30, machine idle (rebooted), chain RELAUNCHED: launch_job pid 18975, same distill.log. Adopt that pid, not 1955094. ~8.5 h remain; parked.**
+
 **2026-10-16 12:58, resumed and re-parked:** Luke's analysis was still running (buzzdetect-engine pid 2193467,
 heavy_v1 on "Lily - Clover", GPU at 3.4 GB, load ~4.5), so the chain was NOT relaunched. A placeholder job
 (launch_job pid 2197197, `tail --pid=2193467`, log wait_engine.log) only waits for the engine to exit so the park
