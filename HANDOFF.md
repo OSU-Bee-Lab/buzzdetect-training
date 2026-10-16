@@ -1,5 +1,7 @@
 # HANDOFF: nonuniform-width-yam64h32 (batch 34, parked 2026-10-15 ~05:20)
 
+**2026-10-16: chain relaunched as launch_job pid 18975 (log in ../nonuniform-width/distill.log); adopt that pid.**
+
 Batch 34's experiment count: 0 of 4 logged when parked. This batch's two experiments are `nonuniform-width`
 (twofast32) and `nonuniform-width-yam64h32`, chained in one job; the remaining two slots are unchosen
 (candidates: a seed-2 repeat if `ladder_record.py repeats` flags one; IDEAS D2 if root-disk space is freed).
