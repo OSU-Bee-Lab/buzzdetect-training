@@ -8,6 +8,10 @@ Layout (all under paths that live outside the repo):
 
   <distill_cache>/                       paths.local.json key; the audio drive
       _shared/durations.csv              ffprobe durations, keyed (relpath, size): teacher-independent
+      _shared/renamed.csv                old_relpath,new_relpath: audio renamed on disk after it was planned.
+                                         Caches stay keyed by the old relpath; only the decoder opens the new
+                                         name (cache.load_slice). Add a row when a file is renamed, after
+                                         checking its byte size matches durations.csv
       _mel/<spec>/<relpath>/h<hour>.npz  student-input spectrograms per front end: teacher-independent,
                                          shared by every teacher and every student architecture
       <teacher>/                         one directory per teacher
@@ -74,6 +78,7 @@ PLAN = os.path.join(MANIFEST, 'plan.csv') if CACHE else None
 TEACHER_JSON = os.path.join(MANIFEST, 'teacher.json') if CACHE else None
 TEACHER_EXT = os.path.join(MANIFEST, 'teacher_ext.onnx') if CACHE else None
 DURATIONS = os.path.join(SHARED_CACHE, 'durations.csv') if CACHE_ROOT else None
+RENAMED = os.path.join(SHARED_CACHE, 'renamed.csv') if CACHE_ROOT else None
 
 # ---- local (repo-side, gitignored) data
 LOCAL_ROOT = os.environ.get('DISTILL_LOCAL_ROOT') or os.path.join(MAIN, '05_distill', 'data')
