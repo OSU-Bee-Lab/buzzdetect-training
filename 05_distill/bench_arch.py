@@ -52,6 +52,7 @@ def parse(name):
     if base in CANDIDATES:
         kind, alpha, depth = CANDIDATES[base]
     else:                                   # a<alpha>[_d<depth>][_f<first fused layer>]
+        base = base.partition('_l')[0]          # non-uniform width: student.arch_filters reads the rest
         base, _, f = base.partition('_f')
         a, _, d = base[1:].partition('_d')
         kind, alpha, depth = 'net', float(a), int(d or 14)
@@ -96,7 +97,7 @@ def do_export(names):
             continue
         kind, alpha, depth, fe, fused = parse(name)
         fe, _, impl = fe.partition('+')
-        filters = st.widths_for(alpha, depth)
+        filters = st.arch_filters(name.partition('@')[0]) if '_l' in name.partition('@')[0] else st.widths_for(alpha, depth)
         model = st.build_student(filters, stop_at_features=(kind == 'frontend'), frontend=fe, fe_impl=impl or 'stft',
                                  fused_from=fused,
                                  name=name.replace('.', '_').replace('@', '_').replace('+', '_'))
