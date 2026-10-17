@@ -76,6 +76,12 @@ def main():
     print(f'rung {a.rung} {names}: {len(plan)} planned, {len(have)} with targets, {len(todo)} to do', flush=True)
     if not todo:
         return
+    # audio renamed on disk since planning fails every slice of it, and V must be whole: stop now, not after the pack
+    gone = sorted(p for p in {r['relpath'] for r in todo} if not os.path.exists(os.path.join(root, C.on_disk(p))))
+    if gone:
+        sys.exit(f'{len(gone)} source files are missing under {root}, e.g. {gone[:3]}. If they were renamed, '
+                 f'add old_relpath,new_relpath rows to {D.RENAMED} (check sizes against durations.csv, then '
+                 f'check_cache_align.py --renamed)')
     dur = store.load_durations()
     ex =ProcessPoolExecutor(a.workers, mp_context=multiprocessing.get_context('spawn'))
     wr = ThreadPoolExecutor(4)

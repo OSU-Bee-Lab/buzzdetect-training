@@ -125,6 +125,18 @@ def decode(path, start_s, mp3info=None):
 
 
 _MP3 = {}
+_RENAMED = None
+
+
+def on_disk(rel):
+    """The relpath to open: a planned file renamed on disk since (dpaths.RENAMED) opens under its new name."""
+    global _RENAMED
+    if _RENAMED is None:
+        _RENAMED = {}
+        if D.RENAMED and os.path.exists(D.RENAMED):
+            with open(D.RENAMED, newline='') as f:
+                _RENAMED = {r['old_relpath']: r['new_relpath'] for r in csv.DictReader(f)}
+    return _RENAMED.get(rel, rel)
 
 
 def load_slice(root, rel, start_s, size_dur):
@@ -134,10 +146,10 @@ def load_slice(root, rel, start_s, size_dur):
         _MP3[rel] = None
         if rel.lower().endswith('.mp3') and size_dur:
             try:
-                _MP3[rel] = mp3_probe(os.path.join(root, rel), *size_dur)
+                _MP3[rel] = mp3_probe(os.path.join(root, on_disk(rel)), *size_dur)
             except Exception:
                 pass
-    return decode(os.path.join(root, rel), start_s, _MP3[rel])
+    return decode(os.path.join(root, on_disk(rel)), start_s, _MP3[rel])
 
 
 out_path = D.slice_path      # the layout every cache level shares (cache_fe.py uses it too)

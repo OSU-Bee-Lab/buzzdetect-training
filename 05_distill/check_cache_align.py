@@ -1,7 +1,10 @@
 """Check that frontends.mel_patches('yamnet') on a freshly decoded slice reproduces the cache's stored
 YAMNet `mel` (so a new front end's patches line up with the teacher targets).
 
-    .local/venv-onnx/bin/python 05_distill/check_cache_align.py [--n 3]
+    .local/venv-onnx/bin/python 05_distill/check_cache_align.py [--n 3] [--renamed]
+
+--renamed checks one slice of each file in dpaths.RENAMED instead: a renamed file that is the audio that
+was planned reproduces its stored mel.
 """
 import argparse
 import csv
@@ -21,8 +24,15 @@ import frontends as fes  # noqa: E402
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--n', type=int, default=3)
+    ap.add_argument('--renamed', action='store_true', help='one slice per renamed file (dpaths.RENAMED)')
     a = ap.parse_args()
-    plan = [r for r in csv.DictReader(open(D.PLAN)) if r['first_rung'] == 'A'][:a.n]
+    if a.renamed:
+        old = {r['old_relpath'] for r in csv.DictReader(open(D.RENAMED))}
+        plan = list({r['relpath']: r for r in csv.DictReader(open(D.PLAN))
+                     if r['relpath'] in old and store.mel_path('yamnet', r['relpath'], r['hour'])}.values())
+        print(f'{len(plan)} of {len(old)} renamed files have a cached slice to check')
+    else:
+        plan = [r for r in csv.DictReader(open(D.PLAN)) if r['first_rung'] == 'A'][:a.n]
     dur = store.load_durations()
     for r in plan:
         x = C.load_slice(D.AUDIO_ROOT, r['relpath'], float(r['start_s']), dur.get(r['relpath']))

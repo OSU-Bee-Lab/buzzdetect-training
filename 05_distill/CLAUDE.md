@@ -46,6 +46,11 @@ The experiment log is `log.jsonl` (tracked, every teacher; README, "The experime
   `05_distill/data/<teacher>/` is empty, so main.py sees nothing done and would redo everything. It refuses to
   run while a distillation job is alive. After migrating, `distill_cache` in paths.local.json must be the
   parent `.../distill-cache/`, not the teacher directory.
+- **Audio renamed on disk after planning goes in `<distill_cache>/_shared/renamed.csv`**, never in plan.csv:
+  caches stay keyed by the planned relpath and only `cache.load_slice` opens the new name. cache_fe stops up
+  front on a missing source file. Before adding a row, match the byte size against durations.csv; after,
+  `check_cache_align.py --renamed` must reproduce the stored mels (2026-10-15 clock/year renames of 13
+  Lily - Clover files, which blocked D2's V pack; batch 36).
 - **`cache.py` refuses a changed teacher ONNX.** A retrained model re-shipped under the same name has new
   targets; move `<distill_cache>/<teacher>` aside (do not delete a rung-D cache lightly: days of decode) or
   give the new model a new name. A **re-export** of the same model is not a change: the teacher's
