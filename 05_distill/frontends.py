@@ -103,6 +103,10 @@ FRONTENDS = {f.name: f for f in [
     Frontend('yam64h16', (_ch(25, 64, 125, 7500),), hop=256),
     # 64 bands at fast32h32's frame rate (hop 32 ms, 30 frames); the window grows to the hop (32 ms, fft 512)
     # so no audio falls between frames. yam64h16 found the hop nearly free on 64 bands (-0.002 / -0.008)
+    # 64 bands over a 16 ms window (fft 256) at hop 16 ms: yam64h16's bands with fast32h16's window, so the
+    # pair (yam64h16, fast32h16) splits the band-count effect from the window effect. At fft 256 one mel band
+    # is empty (constant input) and most low bands hold a single bin.
+    Frontend('b64w16h16', (_ch(16, 64, 125, 7500),), hop=256),
     Frontend('yam64h32', (_ch(32, 64, 125, 7500),), hop=512),
     # between them: hop 24 ms (40 frames), window = hop (fft 512). yam64h32 cost 0.04-0.05 against the h16 twins;
     # this asks whether 40 frames keeps most of h16's headline at near-h32 speed
