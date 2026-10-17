@@ -11,3 +11,6 @@ C-rung pack C__b64w16h16 built (48315/48395 slices; 80 decode failures tolerated
 (distill_train.py:142). One file, Wooster 2025-08-06/1_46/250806_1423.mp3, has no obvious counterpart
 (250806_1523.mp3 present). Needs a plan remap or symlinks at the old names, and Luke's call on 1_46.
 Resume: `tools/launch_job.sh distill.log -- bash chain.sh` once the audio paths resolve. Reported via loop_signal friction.
+
+## Retry 2026-10-17 12:06 (batch 35 resume)
+Still blocked: V mel fill fails on the same 46 slices (plan.csv relpaths `250722_1415.mp3` etc.; disk holds `260722_1415.mp3`). Needs plan remap or symlinks at old names; Luke's call on Wooster 1_46 `250806_1423.mp3`. Chain exits 1 at `[pack V]`. Not run.
