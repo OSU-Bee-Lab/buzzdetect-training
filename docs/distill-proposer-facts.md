@@ -35,6 +35,13 @@ are as in the training arm. How to export and time a student is in
   fast32h16 a0.50). `eval_folds.py probe` scores it (a training fold, not
   held-out). The teacher has not been probed.
 
+## Disk
+
+- **A new front end needs ~23-46 GB free on the root disk** (`df -h /`) for its
+  rung-C pack in `05_distill/data/<teacher>/shards/`. If it is short, finished
+  packs go to the server disk with `tools/cold_packs.sh` (`05_distill/README.md`,
+  "Disk space: cold packs"); don't train from a moved pack (spinning disk).
+
 ## Reading a result
 
 - **Seed noise on the headline is ~0.01-0.02**; the repeat rule's bar is 0.02.

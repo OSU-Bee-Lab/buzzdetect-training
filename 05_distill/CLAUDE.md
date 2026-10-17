@@ -38,6 +38,9 @@ The experiment log is `log.jsonl` (tracked, every teacher; README, "The experime
 - **Never edit scripts here while a chain runs from this worktree.** A chain re-reads its python stage scripts
   at every stage and bash reads a running script incrementally. Work on another branch/worktree, merge after.
   (2026-09-29: the generalization was written on a separate branch for exactly this reason.)
+- **A chain that hands off to another worktree's chain calls it with `bash`, and tests `-f`, not `-x`.** Git
+  commits a new script as mode 644 unless it was chmodded first, so `[ -x ../<slug>/chain.sh ]` was silently false
+  and the nonuniform-width chain ended `exit 0` without running its second half (2026-10-16). Log the hand-off.
 - **`migrate_layout.py` before the first `main.py` on data made under the old layout** (done for the v4 teacher on
   2026-09-29; a checkout that predates that still needs it): until then
   `05_distill/data/<teacher>/` is empty, so main.py sees nothing done and would redo everything. It refuses to
