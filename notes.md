@@ -14,3 +14,13 @@ Resume: `tools/launch_job.sh distill.log -- bash chain.sh` once the audio paths 
 
 ## Retry 2026-10-17 12:06 (batch 35 resume)
 Still blocked: V mel fill fails on the same 46 slices (plan.csv relpaths `250722_1415.mp3` etc.; disk holds `260722_1415.mp3`). Needs plan remap or symlinks at old names; Luke's call on Wooster 1_46 `250806_1423.mp3`. Chain exits 1 at `[pack V]`. Not run.
+
+## Fix 2026-10-17 (batch 36 fixer)
+Cause: 13 Lily - Clover files were renamed on the server on ~2026-10-15 (25/16 -> 26 year prefix; two +1 h clock
+fixes, Wooster 1_46 250806_1423 -> 250806_1523 and 250808_1605 -> 250808_1705; 1_148 260701_0314 -> 260630_1514).
+All 13 match their durations.csv byte size, and `check_cache_align.py --renamed` reproduces the pre-rename
+YAMNet mels to fp16 rounding (max|diff| ~2e-3, 12 of 12 files with a cached slice), so they are the planned audio
+and 1_46 needed no call from Luke. Fix (main 5896368): `<distill_cache>/_shared/renamed.csv` maps old -> new
+relpath, read by `cache.load_slice`; caches stay keyed by the planned relpath; cache_fe now stops up front on a
+missing source file. chain.sh also refills rung C, so the 80 slices the first C fill dropped join the pack
+(the pack rebuilds on its slice count, ~1 h), matching the other front ends' C packs.

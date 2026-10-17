@@ -2,6 +2,7 @@
 set -e
 cd "$(dirname "$(realpath "$0")")"
 PY=$(bash tools/python_path.sh)
+$PY 05_distill/cache_fe.py --rung C --frontends b64w16h16   # the 80 renamed-audio slices the first C fill failed
 $PY 05_distill/cache_fe.py --rung V --frontends b64w16h16
 $PY 05_distill/main.py --rung C --seed 1 --wsd-max 56000 --wsd-stop 1.3 \
   --runs "b64w16h16:a0.25_d8:classes=ins_buzz+ambient_rain+human b64w16h16:a0.50_d8:classes=ins_buzz+ambient_rain+human"
