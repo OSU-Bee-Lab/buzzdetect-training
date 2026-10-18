@@ -17,5 +17,13 @@ Falsifier: the front end is < 10% of h20's time in prefix_bench (the gap is in t
 or the new form changes speed by < 5%.
 Comparator: the same students' existing `_mmt` rows (same weights; headline must match exactly).
 ## Changes
+`05_distill/frontends.py`: new impl `mmtz` = `mmt` with each hop of the window multiplying only its live samples
+(the last, partial hop is a column Slice of the reshaped waveform against the kernel's non-zero rows), so a frame
+costs `window` kernel rows, not `ceil(window / hop) * hop`. `export_student.py` / `student.py` accept it. Checked
+equal to `mmt` (max |diff| 0.0) on yam64h16/h24, twofast32, fast32, fast32h16 and yamnet front ends at two lengths.
+`yam64h20` front end brought over from exp/yam64h20-cliff. `chain.sh`: `reexport.py --fe-impl mmtz --suffix _mmtz`
+for yam64h20 a0.25_d8/a0.50_d8, yam64h16 a0.25_d8/a0.50_d8, yamnet a0.25_d8/a0.50_d8, fast32 a0.50_d8 and
+yam64h24 a0.25_d8 (window = hop: nothing to trim, a timing-noise control). Rows saved per frame: h20 640->400,
+h16 512->400, yamnet 480->400, fast32 320->256, twofast32/h24/h32/fast32h16 none.
 ## Results
 ## Conclusion
