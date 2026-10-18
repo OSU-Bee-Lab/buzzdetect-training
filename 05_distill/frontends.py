@@ -107,6 +107,9 @@ FRONTENDS = {f.name: f for f in [
     # between them: hop 24 ms (40 frames), window = hop (fft 512). yam64h32 cost 0.04-0.05 against the h16 twins;
     # this asks whether 40 frames keeps most of h16's headline at near-h32 speed
     Frontend('yam64h24', (_ch(24, 64, 125, 7500),), hop=384),
+    # hop 20 ms (48 frames), YAMNet's 25 ms window kept (overlapping, as h16). h16 -> h24 cost 0.04-0.05 and h24 = h32,
+    # so the cliff lies between 60 and 40 frames; this asks where
+    Frontend('yam64h20', (_ch(25, 64, 125, 7500),), hop=320),
     Frontend('lo16', (_ch(40, 16, 100, 2500, 1024),)),
     Frontend('two16', (_ch(50, 16, 80, 1000, 1024), _ch(16, 16, 1000, 7800))),
 ]}
