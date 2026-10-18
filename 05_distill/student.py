@@ -107,7 +107,7 @@ def build_student(filters, n_out=15, stop_at_features=False, name='student',
         output: outputs [logits, code].
     stop_at_features: waveform only; return the log-mel patches instead --
         the front end alone, for timing its floor.
-    fe_impl: 'stft' | 'conv' | 'mm' | 'mmt', how a non-YAMNet front end's graph is built (frontends.make_features_layer).
+    fe_impl: 'stft' | 'conv' | 'mm' | 'mmt' | 'mmtz', how a non-YAMNet front end's graph is built (frontends.make_features_layer).
     fused_from: first fused layer, 1-based (0 = every block separable); see `_stack`.
     frontend: name in frontends.FRONTENDS. 'yamnet' (default) is YAMNet's own layer,
         exactly as before; any other spec has its own STFT/mel channels, and the

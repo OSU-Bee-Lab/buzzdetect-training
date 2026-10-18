@@ -198,8 +198,12 @@ def make_features_layer(fe, impl='stft'):
     'mmt': 'mm' for any window (its kernel zero-padded to a whole number of hops) with no Pad over the
     waveform: the complete patches come from a Slice of it, the last (zero-padded) one or two from its
     short tail, joined at the patch level. A Pad or Concat over a 200 s waveform costs 11-20 ms on the CUDA
-    EP against ~1 ms for the Slice + Reshape + MatMul (micro/, 2026-10-11). Same values."""
-    assert impl in ('stft', 'conv', 'mm', 'mmt')
+    EP against ~1 ms for the Slice + Reshape + MatMul (micro/, 2026-10-11). Same values.
+    'mmtz': 'mmt' without the kernel's zero rows: hop j of the window multiplies only the window's samples in
+    it (a column Slice of the last, partial hop), so a frame costs `window` kernel rows, not `m * hop`. The
+    MatMuls are FLOP-bound on the GPU (mmt-overlap, 2026-10-18: ~80% of a yam64h20 student's time is the
+    front end). Same values."""
+    assert impl in ('stft', 'conv', 'mm', 'mmt', 'mmtz')
     assert impl != 'mm' or all(c.window % fe.hop == 0 for c in fe.channels), 'mm needs window = m * hop'
     tf = _tf()
     from tensorflow.keras import layers
@@ -255,7 +259,13 @@ def make_features_layer(fe, impl='stft'):
             k[:c.window] = kernel[:, 0, :]
             rows = tf.shape(x)[0] // fe.hop
             a = tf.reshape(x[:rows * fe.hop], [rows, fe.hop])
-            y = tf.add_n([tf.matmul(a[j:j + n_frames], tf.constant(k[j * fe.hop:(j + 1) * fe.hop])) for j in range(m)])
+            if impl == 'mmtz':      # hop j's live samples only: the last hop of the window is partial
+                w = [min(fe.hop, c.window - j * fe.hop) for j in range(m)]
+                y = tf.add_n([tf.matmul(a[j:j + n_frames, :w[j]] if w[j] < fe.hop else a[j:j + n_frames],
+                                        tf.constant(k[j * fe.hop:j * fe.hop + w[j]])) for j in range(m)])
+            else:
+                y = tf.add_n([tf.matmul(a[j:j + n_frames], tf.constant(k[j * fe.hop:(j + 1) * fe.hop]))
+                              for j in range(m)])
             re, im = y[:, :len(bins)], y[:, len(bins):]
             mm = mel_matrix(c.n_fft, c.bands, c.fmin, c.fmax)[bins]
             lm = tf.math.log(tf.matmul(tf.sqrt(re * re + im * im), tf.constant(mm)) + LOG_OFFSET)
@@ -277,7 +287,7 @@ def make_features_layer(fe, impl='stft'):
             return tf.stack(per, axis=-1)
 
         def call(self, waveform):
-            if impl == 'mmt':
+            if impl in ('mmt', 'mmtz'):
                 with tf.name_scope('frontend'):
                     return self._call_mmt(waveform)
             with tf.name_scope('frontend'):
