@@ -33,9 +33,3 @@ cost second.
 *Evidence: `d1-ens-teacher` (2026-10-14): `twofast32:a0.50_d8` from the 3-draw ensemble teacher `v4-ft-ps-e60-moderate-ens3` is 0.698 against the single teacher's 0.701 / 0.694 (seeds 1 / 2), null; the teacher's own +0.028 does not reach that student.*
 
 The ensemble teacher, its `<distill_cache>` targets and its packed `C__twofast32` shards exist. Untested is whether a student with less distillation error (`yamnet:a0.50_d8`, 0.735 from the single teacher, or `yam64h16:a0.50_d8`, 0.727) keeps some of the ensemble's gain. Needs its front end's shards packed under the ensemble teacher (~34 GB). Falsifier: within 0.02 of the single-teacher student.
-
-## D2. 64 bands at a 16 ms window (fft 256), hop 16 ms
-
-*Evidence: random-weight timing in batch 34 (2026-10-15, mmt, 200 s, GPU, one session): 64 bands, 125-7500 Hz, 16 ms window, hop 16 (60 frames) times a0.25_d8 6.36x and a0.50_d8 5.14x, against `yam64h16` (25 ms window, fft 512) 4.27x / 3.79x in the same session; the front end alone 8.18x vs 5.45x. At fft 256 one of the 64 mel bands is empty (constant input) and most low bands hold one bin. A 25 ms window at hop 20 timed no faster than `yam64h16` (3.78x); window = hop = 20 ms timed 4.54x / 5.97x.*
-
-`yam64h16` (0.711 / 0.727) and `fast32h16` (16 ms, 32 bands: 0.61-0.65) differ in both band count and window; this front end separates them, and if the 64 bands carry the gain it puts ~0.71 at 5-6x, above `twofast32:a0.50_d8` (0.70 at 5.33x). Students `a0.25_d8`, `a0.50_d8` at rung C, WSD 56000. Needs ~34 GB free on the root disk for its rung-C pack; unblocked 2026-10-15 when finished packs moved to the server disk (228 GB free on 2026-10-17). Falsifier: within 0.02 of the `fast32h16` d8 twins.
