@@ -17,6 +17,14 @@ are as in the training arm. How to export and time a student is in
   2026-10-11 (FFT length sets the speed, shrinking the trunk buys little, a
   ~2.7x ceiling) were the waveform Pad (`matmul-stft`). Band count and band
   placement (`lo` twins) were not re-timed.
+- **The front end's DFT MatMul is FLOP-bound and dominates 25 ms-window students** (mmt-overlap, 2026-10-18):
+  ~80% of a yam64h20 a0.25_d8 graph's GPU time, trunk + head ~2 ms of ~11. Its cost is frames/s x rows x
+  2 x DFT bins kept by the mel range, so it scales with the overlap ratio (window / hop) and the band range,
+  not the frame rate alone: window = hop front ends (h24, h32) time alike whatever the hop. `mmt` paid for
+  `ceil(window/hop) * hop` kernel rows; `--fe-impl mmtz` (exp/mmt-overlap, not in main) pays `window` rows,
+  identical outputs: h20 +14-17%, h16 +5-6%, yamnet +4-5%, fast32 +2%, window = hop 0%.
+- **Logged speeds drift 5-10% between timing sessions** (same graph, same day-to-day YAMNet rate). Compare
+  students within ~1.1x of each other in one `bench_arch.py time` session (exp/mmt-overlap `retime.sh`).
 
 ## What sets sensitivity
 
