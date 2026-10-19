@@ -9,3 +9,5 @@ vs the `fe_C_yam64h16sp2_..._wsd56000_mmtz` rows. Run `ladder_record.py frontier
 (`finish_experiment.sh yam64h16sp2 --arm distill --runs "<sp2 _mmtz rows>"`).
 If it died: read distill.log; relaunch from this worktree with `tools/launch_job.sh distill.log -- bash chain.sh`
 (cache_fe and main.py resume; re-export skips done rows).
+
+Progress 2026-10-19 02:47 (batch 37 resume): still running; chain says at most 120750 train steps in 15 stages left, ~29h48m (WSD stop may cut it short). Parked again.
