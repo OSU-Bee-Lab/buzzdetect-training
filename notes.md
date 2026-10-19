@@ -7,4 +7,4 @@ Prediction: headline > ps-depth8-r3 (0.497) by more than 0.03 and above the thre
 Control: `ps-depth8-r3` (same recipe, same main, 2026-10-10; annotations unchanged since 2026-09-25), with `ps-depth8` 0.515 and `ps-depth8-repeat` 0.509 as other draws.
 
 ## Changes
-New embedder `yamnet_trunk_pitchshift2_depth8` (shared tree): `yamnet_trunk_pitchshift_depth8`'s recipe plus a `(Resample('half'), Resample('half'), Tile(4), Fit())` branch, all three through the shared depth8 tail. Run as ps-depth8-r3: `TRUNK_LR_BACKBONE=1e-5 TRUNK_FP16=1 TRUNK_BATCH=1024`, `--epochs 30`, set medium, translation general.
+New embedder `yamnet_trunk_pitchshift2_depth8` (shared tree): `yamnet_trunk_pitchshift_depth8`'s recipe plus a `(Resample('half'), Resample('half'), Tile(4), Fit())` branch, all three through the shared depth8 tail. Run as ps-depth8-r3: `TRUNK_LR_BACKBONE=1e-5 TRUNK_FP16=1`, `--epochs 30`, but `TRUNK_BATCH=512 TRUNK_ACCUM=2 SCORE_CHUNK=512` (batch 1024 OOMs fold 1 with three views; 512x2 is the same update under frozen BN, as depth 6 ran), set medium, translation general.
