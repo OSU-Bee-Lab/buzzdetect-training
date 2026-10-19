@@ -228,7 +228,7 @@ if __name__ == '__main__':
     ap.add_argument('--name', required=True)
     ap.add_argument('--init-only', action='store_true')
     ap.add_argument('--alpha', type=float, default=0.5)
-    ap.add_argument('--fe-impl', choices=['stft', 'conv', 'mm', 'mmt'], default='stft',
+    ap.add_argument('--fe-impl', choices=['stft', 'conv', 'mm', 'mmt', 'mmtz'], default='stft',
                     help="how the front end's graph is built (frontends.make_features_layer); not for the yamnet front end")
     ap.add_argument('--no-parity', action='store_true')
     ap.add_argument('--no-fp16', action='store_true', help='skip model.fp16.onnx')
