@@ -38,9 +38,39 @@ class Channel:
     fmax: float
     fft: int = 0              # 0 -> next power of two >= window
 
+    stride = 1                # class attribute, not a field: a SparseChannel sets it (keeps old specs' stamps)
+
     @property
     def n_fft(self):
         return self.fft or 2 ** int(np.ceil(np.log2(self.window)))
+
+    def mel(self):
+        """This channel's (n_fft/2+1, bands) mel matrix; a SparseChannel zeroes the bins it does not read."""
+        return mel_matrix(self.n_fft, self.bands, self.fmin, self.fmax)
+
+
+@dataclass(frozen=True)
+class SparseChannel(Channel):
+    """A Channel whose DFT is read on a coarser grid where its mel bands are wide: bin b is kept if it lies at
+    least min(stride, floor(band spacing at b / bin width)) bins past the last kept one. The triangles are
+    the same, evaluated on the kept bins only, each weighted by the bins it stands for (so a band's sum
+    approximates the full grid's); the windowed-DFT MatMul (the front end's FLOP-bound part,
+    mmt-overlap) shrinks with the kept-bin count, every other op is unchanged."""
+    stride: int = 2
+
+    def mel(self):
+        mm = mel_matrix(self.n_fft, self.bands, self.fmin, self.fmax)
+        hz = np.linspace(0.0, SR / 2.0, len(mm))
+        dmel = (_hz_to_mel(self.fmax) - _hz_to_mel(self.fmin)) / (self.bands + 1)
+        spacing = (700.0 + hz) / 1127.0 * dmel                               # band-centre spacing, Hz
+        keep, last = np.zeros(len(mm), bool), -len(mm)
+        for b in np.flatnonzero(mm.sum(1) > 0):
+            if b - last >= np.clip(np.floor(spacing[b] / (SR / self.n_fft)), 1, self.stride):
+                keep[b], last = True, b
+        kept = np.flatnonzero(keep)
+        mm[kept] *= np.diff(np.append(kept, kept[-1] + 1))[:, None]        # a kept bin stands for the gap to the next
+        mm[~keep] = 0.0
+        return mm
 
 
 @dataclass(frozen=True)
@@ -71,7 +101,9 @@ class Frontend:
         return max(c.window for c in self.channels)
 
 
-def _ch(ms, bands, fmin, fmax, fft=0):
+def _ch(ms, bands, fmin, fmax, fft=0, stride=1):
+    if stride > 1:
+        return SparseChannel(int(round(SR * ms / 1000)), bands, fmin, fmax, fft, stride)
     return Channel(int(round(SR * ms / 1000)), bands, fmin, fmax, fft)
 
 
@@ -107,6 +139,15 @@ FRONTENDS = {f.name: f for f in [
     # between them: hop 24 ms (40 frames), window = hop (fft 512). yam64h32 cost 0.04-0.05 against the h16 twins;
     # this asks whether 40 frames keeps most of h16's headline at near-h32 speed
     Frontend('yam64h24', (_ch(24, 64, 125, 7500),), hop=384),
+    # hop 20 ms (48 frames), YAMNet's 25 ms window kept (overlapping, as h16). h16 -> h24 cost 0.04-0.05 and h24 = h32,
+    # so the cliff lies between 60 and 40 frames; this asks where
+    Frontend('yam64h20', (_ch(25, 64, 125, 7500),), hop=320),
+    # yam64h16 with its 64 bands over 125-2500 Hz: the mmt(z) front end is FLOP-bound in frames x window x DFT bins
+    # (mmt-overlap), and 2500 Hz keeps 75 bins of 235; the lo twins of fast32/fast32h16 tied their full-band twins
+    Frontend('yam64h16lo', (_ch(25, 64, 125, 2500),), hop=256),
+    # yam64h16's full band read on a thinned DFT grid: every 2nd bin (62.5 Hz) wherever the bands are >= 62.5 Hz
+    # apart (above ~1 kHz), 132 bins of 235. yam64h16lo showed the >2.5 kHz band carries background-tier buzz
+    Frontend('yam64h16sp2', (_ch(25, 64, 125, 7500, stride=2),), hop=256),
     Frontend('lo16', (_ch(40, 16, 100, 2500, 1024),)),
     Frontend('two16', (_ch(50, 16, 80, 1000, 1024), _ch(16, 16, 1000, 7800))),
 ]}
@@ -144,7 +185,7 @@ def _log_mel(x, ch, hop):
     """Continuous STFT of the whole waveform -> (frames, bands) log-mel."""
     n = ch.window
     win = (0.5 - 0.5 * np.cos(2 * np.pi * np.arange(n) / n)).astype(np.float32)   # periodic Hann
-    mm = mel_matrix(ch.n_fft, ch.bands, ch.fmin, ch.fmax)
+    mm = ch.mel()
     view = np.lib.stride_tricks.sliding_window_view(x, n)[::hop]
     out = np.empty((len(view), ch.bands), np.float32)
     step = 2048
@@ -181,7 +222,7 @@ def stft_kernel(ch):
     the mel matrix reads (the DC bin and any bin above fmax have zero weight in every band and are left out)."""
     n = ch.window
     win = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(n) / n)                     # periodic Hann, as tf.signal.stft
-    bins = np.flatnonzero(mel_matrix(ch.n_fft, ch.bands, ch.fmin, ch.fmax).sum(1) > 0)
+    bins = np.flatnonzero(ch.mel().sum(1) > 0)
     ang = 2 * np.pi * np.outer(np.arange(n), bins) / ch.n_fft
     k = np.concatenate([win[:, None] * np.cos(ang), -win[:, None] * np.sin(ang)], axis=1)
     return k[:, None, :].astype(np.float32), bins
@@ -198,8 +239,12 @@ def make_features_layer(fe, impl='stft'):
     'mmt': 'mm' for any window (its kernel zero-padded to a whole number of hops) with no Pad over the
     waveform: the complete patches come from a Slice of it, the last (zero-padded) one or two from its
     short tail, joined at the patch level. A Pad or Concat over a 200 s waveform costs 11-20 ms on the CUDA
-    EP against ~1 ms for the Slice + Reshape + MatMul (micro/, 2026-10-11). Same values."""
-    assert impl in ('stft', 'conv', 'mm', 'mmt')
+    EP against ~1 ms for the Slice + Reshape + MatMul (micro/, 2026-10-11). Same values.
+    'mmtz': 'mmt' without the kernel's zero rows: hop j of the window multiplies only the window's samples in
+    it (a column Slice of the last, partial hop), so a frame costs `window` kernel rows, not `m * hop`. The
+    MatMuls are FLOP-bound on the GPU (mmt-overlap, 2026-10-18: ~80% of a yam64h20 student's time is the
+    front end). Same values."""
+    assert impl in ('stft', 'conv', 'mm', 'mmt', 'mmtz')
     assert impl != 'mm' or all(c.window % fe.hop == 0 for c in fe.channels), 'mm needs window = m * hop'
     tf = _tf()
     from tensorflow.keras import layers
@@ -220,7 +265,7 @@ def make_features_layer(fe, impl='stft'):
             return tf.pad(waveform, [[0, pad]], mode='CONSTANT', constant_values=0.0)
 
         def _log_mel(self, padded, c):
-            mm = mel_matrix(c.n_fft, c.bands, c.fmin, c.fmax)
+            mm = c.mel()
             if impl == 'stft':
                 mag = tf.abs(tf.signal.stft(padded, frame_length=c.window, frame_step=fe.hop,
                                             fft_length=c.n_fft))
@@ -255,9 +300,15 @@ def make_features_layer(fe, impl='stft'):
             k[:c.window] = kernel[:, 0, :]
             rows = tf.shape(x)[0] // fe.hop
             a = tf.reshape(x[:rows * fe.hop], [rows, fe.hop])
-            y = tf.add_n([tf.matmul(a[j:j + n_frames], tf.constant(k[j * fe.hop:(j + 1) * fe.hop])) for j in range(m)])
+            if impl == 'mmtz':      # hop j's live samples only: the last hop of the window is partial
+                w = [min(fe.hop, c.window - j * fe.hop) for j in range(m)]
+                y = tf.add_n([tf.matmul(a[j:j + n_frames, :w[j]] if w[j] < fe.hop else a[j:j + n_frames],
+                                        tf.constant(k[j * fe.hop:j * fe.hop + w[j]])) for j in range(m)])
+            else:
+                y = tf.add_n([tf.matmul(a[j:j + n_frames], tf.constant(k[j * fe.hop:(j + 1) * fe.hop]))
+                              for j in range(m)])
             re, im = y[:, :len(bins)], y[:, len(bins):]
-            mm = mel_matrix(c.n_fft, c.bands, c.fmin, c.fmax)[bins]
+            mm = c.mel()[bins]
             lm = tf.math.log(tf.matmul(tf.sqrt(re * re + im * im), tf.constant(mm)) + LOG_OFFSET)
             return tf.reshape(lm, [n_frames // fe.frames, fe.frames, fe.bands])
 
@@ -277,7 +328,7 @@ def make_features_layer(fe, impl='stft'):
             return tf.stack(per, axis=-1)
 
         def call(self, waveform):
-            if impl == 'mmt':
+            if impl in ('mmt', 'mmtz'):
                 with tf.name_scope('frontend'):
                     return self._call_mmt(waveform)
             with tf.name_scope('frontend'):
@@ -296,7 +347,7 @@ def describe():
     for fe in FRONTENDS.values():
         print(f'\n{fe.name}: {fe.n_channels} channel(s) x {fe.bands} bands x {fe.frames} frames (hop {fe.hop / SR * 1000:.0f} ms)')
         for i, c in enumerate(fe.channels):
-            mm = mel_matrix(c.n_fft, c.bands, c.fmin, c.fmax)
+            mm = c.mel()
             hz = band_centers_hz(c)
             empty = int((mm.sum(0) == 0).sum())
             sparse = int(((mm > 0).sum(0) == 1).sum())
