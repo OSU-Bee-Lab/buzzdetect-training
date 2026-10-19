@@ -11,7 +11,14 @@ the deploy passes (04_deploy/onnx_passes.optimize + rename io), writes
 <OUT>/<name>/model.onnx and stats.json (params, MACs). `time` follows
 buzzdetect/benchmarks/model-speed/bench_models.py: 20 s of noise, 2 warmup + 15
 timed session.run() calls, rate = audio s / wall s; it times the reference
-engine models in the same process and writes results.json. CPU rates are for
+engine models in the same process and writes results.json.
+
+Logged speeds drift 5-10% between sessions, so students within ~1.1x of each
+other are compared by re-timing them together: pass their model dirs as
+candidates (paths, cwd-relative or absolute) with an --out of your own:
+
+  .../python3 05_distill/bench_arch.py time --seconds 200 --out <tmp> \
+      --candidates 05_distill/data/<teacher>/models/<run> ... CPU rates are for
 information only: this box's i7-2600 has no AVX2 and is not representative.
 """
 import argparse
@@ -151,7 +158,10 @@ def do_time(seconds, repeats, warmup, names):
     audio = np.random.default_rng(0).uniform(-0.1, 0.1, n).astype(np.float32)
 
     items = [(r, os.path.join(D.engine_model_dir(r), 'model.onnx')) for r in REFERENCES]
-    items += [(c, os.path.join(OUT, c, 'model.onnx')) for c in names]
+    # A candidate is a name under OUT, or a trained model's dir (any path to a
+    # dir holding model.onnx), so logged students can be re-timed side by side.
+    items += [(os.path.basename(os.path.normpath(c)), os.path.join(c, 'model.onnx'))
+              if os.path.isdir(c) else (c, os.path.join(OUT, c, 'model.onnx')) for c in names]
     results = {}
     for name, path in items:
         row = {}
@@ -159,10 +169,11 @@ def do_time(seconds, repeats, warmup, names):
             mean, se, prov = run(os.path.abspath(path), proc, samples_session, audio)
             row[proc] = {'rate': mean, 'se': se, 'provider': prov}
             print(f'{name:24s} {proc} {mean:8.0f} +- {se:.0f} s/s  ({prov})', flush=True)
-        sp = os.path.join(OUT, name, 'stats.json')
+        sp = os.path.join(os.path.dirname(path), 'stats.json')
         if os.path.exists(sp):
             row.update(json.load(open(sp)))
         results[name] = row
+    os.makedirs(OUT, exist_ok=True)
     json.dump(results, open(os.path.join(OUT, 'results.json'), 'w'), indent=1)
 
     g = results['yamnet_large_general']['GPU']['rate']
@@ -190,8 +201,10 @@ if __name__ == '__main__':
     ap.add_argument('--out', help='output dir (default 05_distill/data/arch)')
     a = ap.parse_args()
     if a.out:
-        OUT = a.out
+        OUT = os.path.abspath(a.out)
     if a.phase == 'export':
         do_export(a.candidates)
     else:
-        do_time(a.seconds, a.repeats, a.warmup, a.candidates)
+        # do_time chdirs into the engine: resolve model-dir paths first.
+        do_time(a.seconds, a.repeats, a.warmup,
+                [os.path.abspath(c) if os.path.isdir(c) else c for c in a.candidates])

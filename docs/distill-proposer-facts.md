@@ -24,7 +24,8 @@ are as in the training arm. How to export and time a student is in
   `ceil(window/hop) * hop` kernel rows; `--fe-impl mmtz` (exp/mmt-overlap, not in main) pays `window` rows,
   identical outputs: h20 +14-17%, h16 +5-6%, yamnet +4-5%, fast32 +2%, window = hop 0%.
 - **Logged speeds drift 5-10% between timing sessions** (same graph, same day-to-day YAMNet rate). Compare
-  students within ~1.1x of each other in one `bench_arch.py time` session (exp/mmt-overlap `retime.sh`).
+  students within ~1.1x of each other in one `bench_arch.py time` session: `--candidates` takes their model
+  dirs directly, `--out <tmp>` (see its docstring); interleave a few rounds as exp/mmt-overlap `retime.sh` did.
 
 ## What sets sensitivity
 

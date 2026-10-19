@@ -29,6 +29,25 @@ if [ "$RELINK" = 1 ]; then
     [ -d "$WT" ] || { echo "No worktree at $WT"; exit 1; }
     echo "Relinking shared data into $WT"
 else
+    # A taken slug: say whether it holds anything, so the caller can tell an
+    # abandoned empty start (pick a new slug, or remove it) from real work.
+    if git -C "$ROOT" rev-parse -q --verify "refs/heads/exp/$EXP" >/dev/null; then
+        echo "Branch exp/$EXP already exists:"
+        echo "  commits not on main: $(git -C "$ROOT" rev-list --count "main..exp/$EXP")"
+        echo "  last commit: $(git -C "$ROOT" log -1 --format='%h %cs %s' "exp/$EXP")"
+        if [ -d "$WT" ]; then
+            echo "  worktree: $WT"
+            for f in notes.md HANDOFF.md; do
+                [ -e "$WT/$f" ] && echo "  has $f"
+            done
+        fi
+        rows=$(cat "$ROOT/03_train/log.jsonl" "$ROOT/05_distill/log.jsonl" 2>/dev/null \
+               | grep -c "\"exp\": *\"$EXP\"" || true)
+        echo "  log rows with exp=$EXP: $rows"
+        echo "Resume it there, or pick another slug. An empty one (0 commits, no notes, 0 rows)"
+        echo "is an abandoned start: git worktree remove --force $WT && git branch -d exp/$EXP"
+        exit 1
+    fi
     echo "Creating worktree at $WT on branch exp/$EXP"
     git -C "$ROOT" worktree add "$WT" -b "exp/$EXP"
 fi
