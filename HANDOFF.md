@@ -1,7 +1,7 @@
 # HANDOFF llrd-depth4
 ## Batch 38 state
-4 experiments in this batch, 1 logged so far (lp-ft, done 2026-10-19 23:15, negative). Remaining: pauc-l03 (training since 23:08 on chain pid 3875542, ETA ~01:25), then mixstyle-dep, llrd-depth4.
-- lp-ft: finished and logged; pid 3861249 gone.
+4 experiments in this batch, 2 logged so far (lp-ft, negative; pauc-l03, logged 2026-10-20 01:35, -0.091, negative). Remaining: mixstyle-dep (medium CV since 01:15 on chain pid 3875542, ETA ~03:25), then llrd-depth4 (~5 h, ETA ~08:30).
+- lp-ft and pauc-l03: finished and logged.
 - chain: launch_job pid 3875542, log .local/worktrees/pauc-l03/chain_b38.log (`pauc-l03/chain_b38.sh`). It waits for lp-ft, then for each of pauc-l03, mixstyle-dep, llrd-depth4: a 1-epoch lite smoke, then the medium CV, tee-d to that worktree's train.log. pauc/mixstyle ~2.3 h each, llrd-depth4 ~5 h (TRUNK_STREAM, batch 256x4).
 Resume: `tools/watch_job.sh --adopt 3875542`, then ONE `tools/watch_job.sh` Monitor. If still running, report progress and stop (park again if >1.5 h left on the next unlogged experiment).
 
