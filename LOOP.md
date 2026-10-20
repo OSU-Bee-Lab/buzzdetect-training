@@ -226,6 +226,11 @@ Then, implement changes.
 Before stages 2 and 3, smoke test on the lite set, through `tools/launch_job.sh` if it
 extracts (a new embedder over lite runs for minutes on CPU). Note: tiny and lite are small and may
 not be perfectly representative of medium (e.g., missing a class).
+A stage-3-only smoke (no extraction change) needs the embedder already extracted on
+the smoke set: check `ls 02_set/sets/lite/embeddings/` first. Lite lacks several
+trunk embedders (e.g. `yamnet_trunk_pitchshift_depth4`); for those, smoke on medium
+with `--epochs 1 --only-folds <one fold>` instead, under a `test_` name. A chain
+that smokes before each step must make the same check, or it dies mid-chain.
 
 ### 3. Run it
 
