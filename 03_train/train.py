@@ -67,6 +67,9 @@ class TrainingData:
 _SCORE_CHUNK = int(os.environ.get('SCORE_CHUNK', 1024))
 
 
+FNAME_FOLD_WEIGHTS = 'fold.weights.h5'   # TRUNK_SAVE_WEIGHTS=1
+
+
 def _rss_gb():
     try:
         with open('/proc/self/status') as f:
@@ -918,6 +921,10 @@ def train_set(name, embeddername, setname, name_translation,
             dir_model, model, setname, embeddername, held_out,
             data.translation, data.classes,
         )
+        if os.environ.get('TRUNK_SAVE_WEIGHTS'):
+            # the rotation's final weights (tail + head), for offline weight-space
+            # work (soups, interpolation); ~MBs per fold, gitignored with the rest
+            model.save_weights(os.path.join(dir_model, FNAME_FOLD_WEIGHTS))
         if surprisal:
             write_fold_surprisal(
                 dir_model_full, model, setname, embeddername, held_out,
