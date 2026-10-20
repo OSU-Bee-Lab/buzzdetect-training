@@ -75,9 +75,9 @@ def _rss_gb():
         return float('nan')
 
 
-def _to_tf(data, size_batch, size_shuffle, free=False):
+def _to_tf(data, size_batch, size_shuffle, free=False, fold_sizes=None):
     if os.environ.get('TRUNK_FP16'):
-        return _to_tf_lowmem(data, size_batch, free)
+        return _to_tf_lowmem(data, size_batch, free, fold_sizes)
     embeddings, targets = [], []
     for s in data:
         embeddings.extend(s.embeddings)
@@ -95,7 +95,30 @@ def _to_tf(data, size_batch, size_shuffle, free=False):
         )
 
 
-def _to_tf_lowmem(data, size_batch, free=False):
+_TRUNK_MAP = (6, 4, 512)   # every yamnet_trunk* cache: one view's cut-layer map
+
+
+def _mixstyle(x, partner, p, alpha):
+    """MixStyle (Zhou et al. 2021) on the cached trunk map: with probability
+    p per sample, swap each view's per-channel mean/std (over the 6x4 map) for
+    a Beta(alpha, alpha) mix of its own and `partner`'s, keeping its own
+    normalised content. Training input only; scoring never sees it."""
+    n = tf.shape(x)[0]
+    shape = tf.concat([[n, -1], _TRUNK_MAP], 0)
+    xr, pr = tf.reshape(x, shape), tf.reshape(partner, shape)
+    mu, var = tf.nn.moments(xr, axes=[2, 3], keepdims=True)
+    mu_p, var_p = tf.nn.moments(pr, axes=[2, 3], keepdims=True)
+    sig, sig_p = tf.sqrt(var + 1e-6), tf.sqrt(var_p + 1e-6)
+    g1 = tf.random.gamma([n], alpha)
+    g2 = tf.random.gamma([n], alpha)
+    lam = g1 / (g1 + g2 + 1e-12)
+    lam = tf.where(tf.random.uniform([n]) < p, lam, tf.ones_like(lam))
+    lam = tf.reshape(lam, [-1, 1, 1, 1, 1])
+    mixed = ((xr - mu) / sig) * (lam * sig + (1 - lam) * sig_p) + lam * mu + (1 - lam) * mu_p
+    return tf.reshape(mixed, tf.shape(x))
+
+
+def _to_tf_lowmem(data, size_batch, free=False, fold_sizes=None):
     """Wide float16 embeddings (yamnet_trunk 12288-d, yamnet_trunk_context 36864-d):
     one float16 buffer, reshuffled every epoch, cast to float32 per batch. The plain
     path holds ~5 copies, which is ~26 GB for the context arm.
@@ -126,9 +149,39 @@ def _to_tf_lowmem(data, size_batch, free=False):
         tgt = tf.constant(np.concatenate(
             [np.tile(s.target_array, (s.frames, 1)) for s in data]).astype(np.float32))
 
-    def gather(idx):
-        idx = tf.sort(idx)
-        return tf.cast(tf.gather(emb, idx), tf.float32), tf.gather(tgt, idx)
+    mix_p = float(os.environ.get('TRUNK_MIXSTYLE', 0))
+    if mix_p and fold_sizes:
+        # partners come from the frame's own training fold (one deployment) by
+        # default; never from the rotation's held-out fold (03_train/CLAUDE.md)
+        assert sum(fold_sizes) == n, (sum(fold_sizes), n)
+        sizes = np.asarray(fold_sizes, dtype=np.int64)
+        starts = np.concatenate([[0], np.cumsum(sizes)[:-1]])
+        fid = tf.constant(np.repeat(np.arange(len(sizes)), sizes), tf.int32)
+        f_start, f_len = tf.constant(starts, tf.int64), tf.constant(sizes, tf.int64)
+        alpha = float(os.environ.get('TRUNK_MIXSTYLE_ALPHA', 0.1))
+        # TRUNK_MIXSTYLE_XFOLD=1: partners from anywhere in this rotation's training
+        # pool (other deployments), which only ever holds the k-1 training folds
+        xfold = bool(os.environ.get('TRUNK_MIXSTYLE_XFOLD'))
+        where = (f'anywhere in the pool of {len(sizes)} training folds' if xfold
+                 else f'within each of {len(sizes)} training folds')
+        print(f'MixStyle: p={mix_p} alpha={alpha}, partners {where}', flush=True)
+
+        def gather(idx):
+            idx = tf.sort(idx)
+            u = tf.random.uniform(tf.shape(idx), dtype=tf.float64)
+            if xfold:
+                partner = tf.cast(tf.floor(u * n), tf.int64)
+            else:
+                f = tf.gather(fid, idx)
+                partner = tf.gather(f_start, f) + tf.cast(
+                    tf.floor(u * tf.cast(tf.gather(f_len, f), tf.float64)), tf.int64)
+            x = tf.cast(tf.gather(emb, idx), tf.float32)
+            xp = tf.cast(tf.gather(emb, partner), tf.float32)
+            return _mixstyle(x, xp, mix_p, alpha), tf.gather(tgt, idx)
+    else:
+        def gather(idx):
+            idx = tf.sort(idx)
+            return tf.cast(tf.gather(emb, idx), tf.float32), tf.gather(tgt, idx)
 
     return (
         tf.data.Dataset.range(n).shuffle(n, reshuffle_each_iteration=True)
@@ -255,6 +308,7 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
     if pool is not None and aug_dirnames:
         raise NotImplementedError('TRUNK_STREAM does not stream augmented embeddings')
     data_train = []
+    fold_sizes = []
     for fold in folds_train:
         samples = build_fold_dataset(
             cfg.dir_embeddings_fold(setname, embeddername, fold), translation,
@@ -262,6 +316,7 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
         if pool is not None:
             pool.append(samples)
         data_train += samples
+        fold_sizes.append(sum(s.frames for s in samples))
     frames_train = sum(s.frames for s in data_train)
 
     data_val = None
@@ -284,6 +339,7 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
             val_eval = (embeddings_val, correct_val, correct_val_exclquiet)
 
     if aug_dirnames:
+        fold_sizes = None   # augment rows break the per-fold blocks
         data_train += load_augmented(setname, embeddername, aug_dirnames, translation, folds_train)
 
     if not data_train:
@@ -301,7 +357,7 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
 
     return TrainingData(
         train_tf=(pool.dataset(data_train, size_batch) if pool is not None
-                  else _to_tf(data_train, size_batch, size_shuffle, free=True)),
+                  else _to_tf(data_train, size_batch, size_shuffle, free=True, fold_sizes=fold_sizes)),
         val_tf=_to_tf(data_val, size_batch, size_shuffle) if data_val is not None else None,
         classes=classes,
         weight_dict=weight_dict,
