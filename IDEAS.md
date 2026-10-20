@@ -63,11 +63,17 @@ Scale each block's backbone LR by γ^(14 − layer), with the top block at 1e-5,
 
 Build the third view from a 4x-longer source window centred on the frame (neighbouring *audio* via `context_frames`, which does not leak), resampled 4:1, rather than tiling 0.24 s. Falsifier: below the three-draw mean again, which closes the two-octave line.
 
-## 37. Test-time BN adaptation on the held-out deployment (surface to Luke first)
+## 37. BN statistics re-estimation: pooled, site-adaptive, and shrunk between them
 
 *Evidence: untagged proposal. AdaBN (Li et al., arXiv 1603.04779) re-estimates BatchNorm statistics on target-domain audio without labels. Counter-evidence: Boudiaf et al. (arXiv 2302.06658) found most source-free adaptation methods underperform the unadapted model on bioacoustic shifts. `ps-bntrain` (BN trained on the pool) was a +0.022 two-draw mean at 30 epochs that did not compound.*
 
-The tail's BN layers are frozen at AudioSet statistics. Recompute them on each held-out fold's own unlabeled frames and rescore. This is offline once #34's saved weights exist. It is not a per-site score transform, because it changes features, not a monotone map of the score, so the metric can move. **It uses the eval deployment's audio at test time, and in deployment it means a two-pass, per-recording inference: that is a policy call for Luke, not one for the loop.**
+The tail's BN layers are frozen at AudioSet statistics. All variants are offline once #34's saved fold weights exist, and none changes the labels or the weights, only the BN means and variances. They change features, not a monotone map of the score, so the metric can move. Run them on the same saved weights and compare against the unadapted rescore:
+
+- **(a) Pooled.** Recompute the statistics on the rotation's k-1 training folds only, never the held-out fold. This ships as static weights, with no inference change and no policy call, and the loop can run it. Expect it to overlap `ps-bntrain`; say so when reading the result.
+- **(b) Site-adaptive.** Recompute them on the held-out fold's own audio (labels unused, but its frames are scored with statistics it shaped). Failure mode to measure: the statistics absorb whatever dominates the fold, so check 1_95 (the jet flyover) and buzz-rich folds first, and read the per-loudness-tier sensitivity for signal contrast lost.
+- **(c) Shrunk.** Blend (a) as a prior with (b), weighted by the amount of audio the site has, which limits the small-sample and flyover problems.
+
+**(b) and (c) use the eval deployment's audio at test time. In deployment that means a two-pass or streaming per-recording inference, with a per-site score distribution that interacts with the user-set threshold: a policy call for Luke, not one for the loop.** Luke has said to log all three and decide once the models come in. Run (a) freely, and surface (b) and (c) results to him before any design work toward deploying them.
 
 ---
 
