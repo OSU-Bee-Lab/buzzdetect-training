@@ -936,8 +936,12 @@ def train_set(name, embeddername, setname, name_translation,
         # the label-smoothed loss (site-conf-w01: SD 0.1 against a trained
         # head's 0.65-1.2, val_loss within 0.03 of the control).
         logit_sd = float('nan') if predictions is None else predictions['activation_ins_buzz'].std()
-        print(f"{tag}: {result['n_epochs']} epochs (best {result['best_epoch']}), "
-              f"val_loss {result['best_val_loss']:.4f}, "
+        # 'best_epoch' is always the budget under the fixed-epoch rule, so it
+        # can't say whether a fold overfits; the val_loss argmin can.
+        curve = result['val_loss_curve']
+        argmin = min(range(len(curve)), key=curve.__getitem__)
+        print(f"{tag}: {result['n_epochs']} epochs, "
+              f"val_loss {result['best_val_loss']:.4f} (min {curve[argmin]:.4f} at epoch {argmin + 1}), "
               f"buzz logit SD {logit_sd:.2f}, "
               f"{data.frames_train}/{data.frames_val} frames train/val, "
               f"{_format_sens(sens)}, host RAM {_rss_gb():.1f} GB", flush=True)
