@@ -96,6 +96,33 @@ def weighted_bce_loss(weights, label_smoothing=0.2):
     return loss
 
 
+
+def pauc_aux_loss(base_loss, buzz_index, lam, top_frac=0.05, margin=1.0):
+    """`base_loss` plus lam x a one-way partial-AUC term on the buzz neuron
+    (Zhu et al. 2022, SOPA-style): per batch, the squared hinge between every
+    positive's logit and each of the top ceil(top_frac * n_neg) negative
+    logits. No confuser class is named; the hardest negatives are whichever
+    currently score highest. Positives are the raw (unsmoothed) ins_buzz
+    target, `_quiet` included, as in training. Static shapes only (sort and
+    masks, no boolean_mask), so it traces under XLA. The batch-level term is
+    added to every sample's loss, so the batch mean carries it once."""
+    def loss(y_true, y_pred):
+        per_sample = base_loss(y_true, y_pred)
+        s = tf.cast(y_pred[:, buzz_index], tf.float32)
+        pos = tf.cast(y_true[:, buzz_index] > 0.5, tf.float32)
+        neg = 1.0 - pos
+        n_neg = tf.reduce_sum(neg)
+        k = tf.math.ceil(top_frac * n_neg)
+        neg_sorted = tf.sort(s * neg - 1e9 * pos, direction='DESCENDING')
+        top = tf.cast(tf.range(tf.shape(s)[0]), tf.float32) < k
+        top = tf.cast(top, tf.float32)
+        hinge = tf.nn.relu(margin - (s[:, None] - neg_sorted[None, :])) ** 2
+        pair = pos[:, None] * top[None, :]
+        term = tf.reduce_sum(hinge * pair) / tf.maximum(tf.reduce_sum(pair), 1.0)
+        return per_sample + lam * tf.cast(term, per_sample.dtype)
+
+    return loss
+
 def labels_from_path(path_in):
     base = os.path.basename(path_in)
     base = os.path.splitext(base)[0]
