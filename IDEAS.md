@@ -33,12 +33,6 @@ Add λ·L_pAUC to the BCE: per batch, the squared hinge (margin 1) between each 
 
 Write a `Recipe` embedder (not a hand-written ONNX) for `EarthSpeciesProject/esp-aves2-sl-beats-all` (PyTorch, so GPU extraction like AVES, `BUZZDETECT_NO_GPU=1` per CLAUDE.md). Probe layers 6/9/12 mean-pooled, concatenated to the `v4-ft-ps` features. Check licence and model size before building, and its inference rate against LOOP.md's AVES injunction. Falsifier: no gain on `untagged`/`loud` tiers means it is another rich-fold lever (see the context prior in `docs/training-proposer-facts.md`).
 
-## 34. Weight-space averaging: model soup of depth8 draws, then WiSE-FT
-
-*Evidence: untagged proposal. Model soups (Wortsman et al., ICML 2022, arXiv 2203.05482) average fine-tuned weights that share a pretrained init and often match the ensemble at one model's cost. WiSE-FT (Wortsman et al., CVPR 2022, arXiv 2109.01903) interpolates fine-tuned weights back toward the pretrained ones and gains OOD robustness. In this log, the 3-draw logit ensemble is the largest clean step (+0.049, `ps-d8-ensemble`), and its source is decorrelated negatives. `ps-ema` (within-run averaging) was null, which is different from averaging separate runs.*
-
-Fold weights are not saved today (`folds/<fold>/` holds predictions only), so the first step is a knob that saves each fold's tail and head. Train three depth8 draws with it (ens3's cost), then score offline on each fold's cache, with no new training: (a) the uniform soup of the three, against the logit ensemble of the same three and against the best member; (b) WiSE-FT on the soup, with the tail interpolated toward the pretrained YAMNet layers 8-14 at α 0.25 / 0.5 / 0.75 and the head kept. A soup below its best member means the constant-LR, random-head runs left the shared basin (a shared head warm-start, `lp-ft`, was itself negative, so it is not the fix). Gains here matter for the standard tier's graph: one tail instead of three.
-
 ## 36. Seam-free two-octave view
 
 *Evidence: E4, weak. `ps2-depth8` (−0.017 ± 0.014) used a 4x tile / 0.24 s source window, and its loss was largest at 1_114, the tile-seam fold (`ps-untiled`, `ps-sharedtiled`). Its notes name a seam-free two-octave view as the only form left untested.*
