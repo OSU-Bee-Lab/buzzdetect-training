@@ -451,6 +451,56 @@ def _consensus_epoch(summary_rows, tol):
     return int(np.argmax(mean <= threshold)) + 1
 
 
+_ADAM_PERVAR_CLS = None
+
+
+def _llrd_optimizer(model, gamma, lr_backbone, lr_head, modelname):
+    """TRUNK_LLRD=<gamma>: layer-wise LR decay across the trainable tail. Block
+    L's conv kernels train at lr_backbone * gamma**(14 - L), so layer14 keeps
+    TRUNK_LR_BACKBONE and each block below it gets gamma times the one above;
+    the head stays at lr_head. Same Adam/clipnorm as the trunk embedders'
+    AdamMultiLR, with one multiplier per variable instead of one for all."""
+    global _ADAM_PERVAR_CLS
+    import keras
+    from keras.src import backend
+
+    def var_id(v):   # as embedders/yamnet_trunk's _var_id
+        return id(v.value if isinstance(v, backend.Variable) else v)
+
+    if _ADAM_PERVAR_CLS is None:
+        class AdamPerVarLR(keras.optimizers.Adam):
+            def __init__(self, *a, mults=None, **kw):
+                super().__init__(*a, **kw)
+                self._mults = dict(mults or {})
+
+            def update_step(self, gradient, variable, learning_rate):
+                m = self._mults.get(var_id(variable))
+                if m is not None:
+                    learning_rate = learning_rate * m
+                return super().update_step(gradient, variable, learning_rate)
+        _ADAM_PERVAR_CLS = AdamPerVarLR
+
+    mults, per_layer = {}, {}
+    for layer in model.layers:
+        inner = getattr(layer, 'layer', layer)   # unwrap TimeDistributed
+        if not (isinstance(inner, tf.keras.Model) and inner.name.startswith('yamnet_tail')):
+            continue
+        for sub in inner.layers:
+            hit = re.match(r'layer(\d+)_', sub.name)
+            if not hit or not sub.trainable:
+                continue
+            block = int(hit.group(1))
+            mult = (lr_backbone / lr_head) * gamma ** (14 - block)
+            per_layer[block] = mult * lr_head
+            for v in sub.trainable_variables:
+                mults[var_id(v)] = mult
+    if not mults:
+        raise ValueError('TRUNK_LLRD needs a trainable yamnet_trunk tail (TRUNK_LR_BACKBONE > 0)')
+    print(f'[{modelname}] LLRD gamma={gamma}: ' + ', '.join(
+        f'L{b} {lr:.2e}' for b, lr in sorted(per_layer.items())), flush=True)
+    return _ADAM_PERVAR_CLS(learning_rate=lr_head, clipnorm=1.0, mults=mults)
+
+
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs, aug_dirnames, verbose,
                held_out_fold, save_binary, epochs_shipped=None,
@@ -497,6 +547,10 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
             lr_head=float(os.environ.get('TRUNK_LR_HEAD', 2e-4)), dropout=dropout, name=tf_name,
             **({'hidden': int(os.environ['TRUNK_HIDDEN'])} if os.environ.get('TRUNK_HIDDEN') else {}))
         optimizer = model.optimizer
+        if os.environ.get('TRUNK_LLRD'):
+            optimizer = _llrd_optimizer(model, float(os.environ['TRUNK_LLRD']),
+                                        float(os.environ.get('TRUNK_LR_BACKBONE', 0)),
+                                        float(os.environ.get('TRUNK_LR_HEAD', 2e-4)), modelname)
         if os.environ.get('TRUNK_ACCUM'):
             # TRUNK_BATCH=512 TRUNK_ACCUM=2 is batch 1024's update for a tail too
             # deep to fit 1024 on the 4 GB card (BN is frozen, so no batch stats
