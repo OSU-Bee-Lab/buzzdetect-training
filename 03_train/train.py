@@ -22,7 +22,7 @@ from dataset import (
     survey_untranslated, ROLE_TRAIN, ROLE_ROTATE, ROLE_HOLDOUT,
 )
 from train_utils import (build_weights, build_classes, can_write,
-                         weighted_bce_loss, Sample, buzz_tier,
+                         weighted_bce_loss, pauc_aux_loss, Sample, buzz_tier,
                          TIERS_EXCLUDED_FROM_HEADLINE)
 from embedders.embedding import load_embedder
 from utils import git_branch
@@ -451,6 +451,16 @@ def _consensus_epoch(summary_rows, tol):
     return int(np.argmax(mean <= threshold)) + 1
 
 
+def _loss(weights_ordered, classes):
+    """Weighted BCE; TRAIN_PAUC_LAMBDA=<lam> adds the partial-AUC term on
+    the buzz neuron (train_utils.pauc_aux_loss)."""
+    base = weighted_bce_loss(weights_ordered, label_smoothing=0.2)
+    lam = float(os.environ.get('TRAIN_PAUC_LAMBDA', 0))
+    if not lam:
+        return base
+    return pauc_aux_loss(base, classes.index('ins_buzz'), lam)
+
+
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs, aug_dirnames, verbose,
                held_out_fold, save_binary, epochs_shipped=None,
@@ -511,7 +521,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     # ins_buzz's weight at all. See train_utils.weighted_bce_loss.
     weights_ordered = [data.weight_dict[i] for i in range(len(data.classes))]
     model.compile(
-        loss=weighted_bce_loss(weights_ordered, label_smoothing=0.2),
+        loss=_loss(weights_ordered, data.classes),
         optimizer=optimizer,
         metrics=['accuracy'],
     )
