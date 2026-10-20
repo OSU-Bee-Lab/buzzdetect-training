@@ -16,21 +16,22 @@ summary. The shipped model is opt-in (`--train-shipped`, implied by `--skip-cv`)
 - **Validation is always a whole fold, never a split within one.** A within-fold
   split leaks site identity into the val_loss curve. There is no snip-level
   splitter and there should not be one; README explains why.
-- **No augmentation may cross a fold boundary.** Every augmented frame must be
-  derivable from the source fold's audio alone: noise/volume transforms of one
-  fold's frames, or mixes of two frames *from the same fold*. A `CombineSpec` /
-  mixup pairing a source frame with a background or partner frame from another
-  fold — or from a whole-pool shuffle — is forbidden, however tempting the "buzz
-  over a different site's background" framing is. `load_augmented` loads augment
-  dirs per training fold, so a cross-fold-paired frame carries an out-of-fold
-  recording's embedding signature into the training pool, and when that fold
-  rotates in as validation the val_loss curve and the held-out metrics are
-  both contaminated. This inflates the number purely through leakage (the
-  models here are extremely sensitive to it) and is not a real gain. The rule
-  also bars any augmentation whose parameters (noise floor, SNR target, mix
-  ratio, class balance) are fit on statistics pooled across folds rather than
-  within the fold being augmented. **If you catch a leak like this in existing
-  code, stop and flag it rather than "fixing" it into a better score.**
+- **No augmentation may carry held-out information into training.** The line is
+  the rotation, not the fold. Within one rotation, the k-1 training folds are one
+  pool: mix, pair, rotate or pool statistics across them however you like
+  (buzz over another training site's background, cross-fold mixup, parameters fit
+  on pooled training-fold statistics are all fine). What is forbidden is any
+  frame, partner, background or fitted parameter derived from the rotation's
+  validation or test fold. `load_augmented` loads augment dirs per *source*
+  fold, so a pairing built outside the rotation (a whole-pool shuffle, or A+B
+  stored under A and reused when B is held out) puts B's embedding signature into
+  training for that rotation. The val_loss curve and held-out metrics are then
+  contaminated: the number inflates through leakage (the models here are
+  extremely sensitive to it) and is not a real gain. So a cross-fold augmentation
+  must be built, or filtered, per rotation from that rotation's training folds
+  alone. Luke is fine with new code (a builder, a filter, an assertion) to enforce
+  this; how is the agent's call. **If you catch a leak like this in existing code, stop and flag it
+  rather than "fixing" it into a better score.**
 - **Roles are training-time policy only** (`dataset.py::read_fold_roles`).
   `02_set` embeds every fold regardless, including `exclude`.
 - **`buzz_frames` is not a sample size; `buzz_events_exclquiet` is.** Every

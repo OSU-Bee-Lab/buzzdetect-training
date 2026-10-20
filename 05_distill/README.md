@@ -117,6 +117,19 @@ depends on, and stamped so a stale product is caught instead of silently mixed:
 | **the experiment log** (tracked) | `05_distill/log.jsonl` | one row per judged student, every teacher | - |
 | random-weight speed timings, `frontend_only.onnx` | `05_distill/data/_shared/arch/` | the architecture | all teachers |
 
+**Disk space: cold packs.** Packs are the big item (a rung-C pack is 23-46 GB; ~330 GB for one teacher) and
+`05_distill/data/` lives on the root disk, which fills up (2026-10-15: 99%, new front ends blocked). Packs a
+finished front end no longer needs go to the server disk with `tools/cold_packs.sh <teacher> <pack>...` (run it
+through `launch_job.sh`): copy, checksum-verify, then replace the pack directory by a symlink to
+`/media/server storage/distill-cache/_cold_packs/<teacher>/shards/<pack>`. Everything still resolves, so no rebuild,
+but that disk is a spinning drive: training from a symlinked pack reads frames in random order and a pack bigger
+than RAM (34 GB vs 23 GB) takes ~30 h. To train on one again, move it back (`rm` the symlink, `rsync -a` the
+directory home). Don't move a pack a live chain reads. A stale-fingerprint rebuild (`shutil.rmtree`) refuses a
+symlink: remove the symlink by hand first. Moved 2026-10-15: C__yam64h16, C__yam64h24, C__fast32h16, C__fast32,
+and the rung-B packs of fast32h32, fast32h16, fast32h16lo, fast32, fast32lo, lo32, two32 (kept: C, B, and everything
+of twofast32 and yam64h32, which a running chain uses). Other cheap space: `pip cache purge`, `conda clean --all`,
+`uv cache clean`, `~/.cache/JetBrains` (about 79 GB together, cleared the same day).
+
 Pre-split caches embedded the YAMNet `mel` in every targets npz; readers still accept that
 (`store.mel_path`), so an old teacher cache works unchanged and a new teacher's targets are small.
 

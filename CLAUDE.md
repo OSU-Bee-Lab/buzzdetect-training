@@ -46,6 +46,49 @@ Check if you need further interpretation on folds.
   any cwd. Add paths there, not as literals in stage code.
 - Do not modify `01_annotate/` unless directly instructed; these projects are essential raw data source. 
 
+## Standing rules
+
+Set by Luke; they bind every session, the autoresearch loop's agents included.
+
+- **INJUNCTION (2026-10-19): no new distillation work.** Speed is no longer the
+  constraint: students are already far faster than disk, so a faster lite model
+  buys nothing. Effort goes to training new teachers (stage 3). Distillation
+  already in flight (running chains, worktrees with unlogged students) may
+  finish and be logged; then stop. Do not start a new student, front end,
+  rung, re-export or frontier experiment, and do not propose one in
+  `IDEAS.md`, until Luke lifts this. `LOOP.md`'s distillation arm is closed
+  while it stands. A better teacher is a training experiment and does not
+  reopen it.
+- **No new Perch or AVES extraction** (Perch runs at ~0.005x YAMNet's
+  rate; AVES is too slow). The reasoning is in `LOOP.md`'s Special instructions.
+- **`moderate` (the big-data set) is final confirmation only.** Never train or
+  run CV on it as a loop experiment, even if extraction is done and an
+  `IDEAS.md` item looks ready. Luke decides when medium exploration is over.
+- **Never plain-`pip install` into `buzzdetect-train`.** It resolves TF upward
+  and silently breaks comparability with every logged number. Use `--no-deps`
+  or a separate venv, and diff `environment.yml` after a pull.
+- **Don't disturb a running chain.** Chains re-read stage scripts, cache dirs
+  and `paths.local.json` at every stage. Before touching any of them, check
+  `pgrep -af "[c]hain"`; if one runs, work in a new worktree and move data only
+  once it is done (symlink first, then rename).
+- **Quiet buzzes** (`_quiet`) train as ordinary `ins_buzz` positives and leave
+  only the sensitivity score: the headline is `sensitivity_exclquiet`.
+  Per-loudness-tier sensitivity is core instrumentation in every run.
+- **Instrumentation is not an experiment.** A new measurement (a breakdown, a
+  column) is built into the pipeline in the same pass. `IDEAS.md` is only for
+  changes whose effect needs a CV to find out.
+- **Per-fold is an investigation, not the verdict.** The headline mean delta is
+  the estimate. Quote fold deltas with ± SD, keep weak evidence weak, never
+  collapse a delta to its sign or group folds. Gains on hard folds (1_150, 1_95,
+  willard) are the goal, not noise to discount; `caveated` in a log entry is for
+  measurement defects only.
+- **Parity for any graph change** (quantisation, export, a student) is the
+  count of detections flipped in both directions at logit > 0, `ins_buzz` first,
+  on audio that contains true buzzes. Raw logit difference is secondary.
+- **Surface to Luke, don't decide:** anything touching `01_annotate/`,
+  `moderate`-set training, unfreezing backbone layers, data or policy calls,
+  a crash that doesn't self-resolve, an empty queue.
+
 ## Experiment history
 
 Two arms, one log each, current era only: `03_train/log.jsonl` (training, one
