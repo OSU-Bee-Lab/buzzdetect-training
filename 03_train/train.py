@@ -451,6 +451,51 @@ def _consensus_epoch(summary_rows, tol):
     return int(np.argmax(mean <= threshold)) + 1
 
 
+def _tail_layers(model):
+    """The trainable-tail sub-model(s) a trunk build_head() nests in the head
+    (directly, or inside TimeDistributed for a multi-view embedder)."""
+    for layer in model.layers:
+        inner = getattr(layer, 'layer', layer)   # unwrap TimeDistributed
+        if isinstance(inner, tf.keras.Model) and inner.name.startswith('yamnet_tail'):
+            yield inner
+
+
+def _lp_warmstart(model, weights_ordered, train_tf, modelname, verbose):
+    """TRUNK_LP_EPOCHS=N (LP-FT, Kumar et al. 2022): before the fine-tune, fit
+    the head alone for N epochs with the tail frozen, so the tail's first
+    gradients come from a fitted readout rather than a random one. The LP phase
+    has its own plain Adam at TRUNK_LR_HEAD; the fine-tune then starts from the
+    compiled optimizer, untouched, so its Adam state is fresh. LP epochs are
+    extra: the --epochs budget that follows is unchanged, and the val_loss /
+    sens curves cover the fine-tune only."""
+    n_lp = int(os.environ.get('TRUNK_LP_EPOCHS', 0))
+    tails = list(_tail_layers(model))
+    if not n_lp or not tails:
+        return
+    optimizer_ft = model.optimizer
+    loss = weighted_bce_loss(weights_ordered, label_smoothing=0.2)
+    was_trainable = {}
+    for tail in tails:
+        for layer in tail.layers:
+            was_trainable[id(layer)] = layer.trainable
+            layer.trainable = False
+    model.compile(loss=loss, optimizer=tf.keras.optimizers.Adam(
+        learning_rate=float(os.environ.get('TRUNK_LR_HEAD', 2e-4)), clipnorm=1.0),
+        metrics=['accuracy'])
+    n_trainable = sum(int(np.prod(v.shape)) for v in model.trainable_variables)
+    print(f'[{modelname}] LP phase: {n_lp} head-only epochs ({n_trainable} trainable params)', flush=True)
+    hist = model.fit(train_tf, epochs=n_lp, callbacks=[tf.keras.callbacks.TerminateOnNaN()],
+                     shuffle=False, verbose=1 if verbose else 0)
+    print(f'[{modelname}] LP phase done: train loss {hist.history["loss"][0]:.4f} -> '
+          f'{hist.history["loss"][-1]:.4f}', flush=True)
+    for tail in tails:
+        for layer in tail.layers:
+            layer.trainable = was_trainable[id(layer)]
+    model.compile(loss=loss, optimizer=optimizer_ft, metrics=['accuracy'])
+    n_trainable = sum(int(np.prod(v.shape)) for v in model.trainable_variables)
+    print(f'[{modelname}] FT phase: tail unfrozen ({n_trainable} trainable params)', flush=True)
+
+
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs, aug_dirnames, verbose,
                held_out_fold, save_binary, epochs_shipped=None,
@@ -515,6 +560,7 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         optimizer=optimizer,
         metrics=['accuracy'],
     )
+    _lp_warmstart(model, weights_ordered, data.train_tf, modelname, verbose)
 
     if data.val_tf is None:
         # Shipped model: no fold is held out, so there's nothing clean to
