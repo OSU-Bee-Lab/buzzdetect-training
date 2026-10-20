@@ -15,12 +15,6 @@ Results: `03_train/log.jsonl`, `05_distill/log.jsonl`. Protocol: `LOOP.md`.
 
 Ranked best-first by expected value on the headline and the hard folds, cost second.
 
-## 31. Cross-fold MixStyle on the cached layer-7 map (deployment-style augmentation)
-
-*Evidence: MixStyle (Zhou et al., ICLR 2021, arXiv 2104.02008) and Freq-MixStyle are standard for device shift in DCASE Task 1 (Morocutti et al., arXiv 2305.07499; DG-SED arXiv 2407.03654). `mixstyle-dep` (2026-10-20) ran the within-fold variant (partners from the frame's own deployment, p=0.5, Beta(0.1,0.1), `TRUNK_MIXSTYLE`): -0.031 +- 0.014 vs ps-depth8-r3, 1_95 -0.045 +- 0.021, 1_150 -0.074 +- 0.044, `background` +0.038 the only gain.*
-
-The within-fold run mixed only within-deployment style, which is not what differs between deployments. The method's point is mixing across deployments: partners from the rotation's other training folds (never the val/test fold; see `03_train/CLAUDE.md`). Extend `TRUNK_MIXSTYLE`'s partner draw to the whole training pool. Since the within-fold version already cost ~0.03, try a gentler setting too (p=0.25, or mixing only the std). Falsifier: within ~0.02 of the three-draw depth8 mean (0.507), flat or falling 1_95 / 1_114, or the same `loud`/`untagged` loss within-fold showed.
-
 ## 32. Microphone impulse-response / random-EQ augmentation (real audio, re-extracted)
 
 *Evidence: untagged proposal. Device-IR augmentation (Morocutti et al. 2023, arXiv 2305.07499; DCASE 2023-24 Task 1 reports, using the 66 MicIRP vintage-mic IRs) is the strongest single lever for unseen recording devices in acoustic scene classification. E2 `trunk-ft-1e5-aug` (negative, doubled pool) was a different augmentation, and no recorder-response augmentation has run in any era.*
