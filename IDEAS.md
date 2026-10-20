@@ -45,12 +45,6 @@ Write a `Recipe` embedder (not a hand-written ONNX) for `EarthSpeciesProject/esp
 
 Fold weights are not saved today (`folds/<fold>/` holds predictions only), so the first step is a knob that saves each fold's tail and head. Train three depth8 draws with it (ens3's cost), then score offline on each fold's cache, with no new training: (a) the uniform soup of the three, against the logit ensemble of the same three and against the best member; (b) WiSE-FT on the soup, with the tail interpolated toward the pretrained YAMNet layers 8-14 at α 0.25 / 0.5 / 0.75 and the head kept. A soup below its best member means the constant-LR, random-head runs left the shared basin (a shared head warm-start, `lp-ft`, was itself negative, so it is not the fix). Gains here matter for the standard tier's graph: one tail instead of three.
 
-## 35. Layer-wise LR decay across the trainable tail
-
-*Evidence: untagged proposal. LLRD is the default for fine-tuning AST/BEATs-style audio models and BEiT. The depth ladder here saturates at 8, `ps-depth4` ties it at ~2x compute, and depth8 overfits past 30 epochs, so the lower blocks may be moving too far at a uniform 1e-5.*
-
-Scale each block's backbone LR by γ^(14 − layer), with the top block at 1e-5, using `_make_adam_multilr` per block instead of one backbone multiplier. Run one rung at γ=0.7 on depth4, the deepest tail, where the effect should be largest; depth8 serves as the comparator. A hyperparameter on paper, but it decides whether trainable depth past 8 is usable, which is structural. Falsifier: depth4+LLRD within 0.02 of the depth8 three-draw mean.
-
 ## 36. Seam-free two-octave view
 
 *Evidence: E4, weak. `ps2-depth8` (−0.017 ± 0.014) used a 4x tile / 0.24 s source window, and its loss was largest at 1_114, the tile-seam fold (`ps-untiled`, `ps-sharedtiled`). Its notes name a seam-free two-octave view as the only form left untested.*
