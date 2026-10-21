@@ -1,0 +1,2 @@
+/home/luke/projects/buzzdetect-training/.local/worktrees/ps-depth8/models/ps-depth8
+/home/luke/projects/buzzdetect-training/.local/worktrees/ps-depth8-repeat/models/ps-depth8-repeat

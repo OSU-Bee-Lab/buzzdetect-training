@@ -1,0 +1,3 @@
+/home/luke/projects/buzzdetect-training/.local/worktrees/plain-d8/models/plain-d8
+/home/luke/projects/buzzdetect-training/.local/worktrees/ps-depth8/models/ps-depth8
+/home/luke/projects/buzzdetect-training/.local/worktrees/ps-depth8-redraw/models/ps-depth8-r3
