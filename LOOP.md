@@ -389,8 +389,10 @@ These bind both arms (a teacher or a student front end included).
 ## INJUNCTION: no new distillation work (2026-10-19)
 The distillation arm is closed: students are already far faster than disk, so
 further speed buys nothing, and effort goes to training new teachers. Work in
-flight may finish and be logged; start nothing new. See `CLAUDE.md`'s Standing
-rules. This overrides the two-arm table at the top of this file.
+flight may finish and be logged; start nothing new. It holds until the training
+queue is drained (`IDEAS.md`'s training-arm queue empty, nothing in flight;
+Luke, 2026-10-21), then distillation reopens. See `CLAUDE.md`'s Standing rules.
+This overrides the two-arm table at the top of this file.
 
 ## INJUNCTION: aves models are forbidden
 The aves embedder has shown to be intolerably slow. Future loops may not utilize aves unless they are able to bring it to within an order of magnitude of the YAMNet inference rate.

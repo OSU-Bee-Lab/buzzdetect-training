@@ -56,7 +56,10 @@ Set by Luke; they bind every session, the autoresearch loop's agents included.
   already in flight (running chains, worktrees with unlogged students) may
   finish and be logged; then stop. Do not start a new student, front end,
   rung, re-export or frontier experiment, and do not propose one in
-  `IDEAS.md`, until Luke lifts this. `LOOP.md`'s distillation arm is closed
+  `IDEAS.md`, until the training queue is drained: `IDEAS.md`'s "Queue —
+  training arm" has no sections left, every idea run and logged and none in
+  flight (Luke, 2026-10-21). Then distillation reopens; lift this rule and
+  `LOOP.md`'s copy, and tell Luke. `LOOP.md`'s distillation arm is closed
   while it stands. A better teacher is a training experiment and does not
   reopen it.
 - **No new Perch or AVES extraction** (Perch runs at ~0.005x YAMNet's
