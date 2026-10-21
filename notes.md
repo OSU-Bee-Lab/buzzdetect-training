@@ -1,0 +1,5 @@
+# gain-aug-d8
+## Hypothesis
+Deployments differ in recording level (recorder gain, distance from flowers, enclosure), and the hard folds lean quiet: 1_150's buzz is "very quiet, but still legitimate" (Luke, 2026-09-09), and 406 of 1842 buzz annotations are `_quiet`. YAMNet's log-mel front end makes level an additive offset that the fine-tuned depth8 tail can latch onto. Training on a copy of half of every training fold's frames, each at its own random gain uniform in ±10 dB (eval audio untouched), teaches the tail level invariance and shows it quieter buzz than the pool holds. This differs from `gain4` (E3, negative), which applied one fixed 4x gain to train and eval alike and so compressed headroom everywhere. Prediction: headline >= +0.02 over the matched control `ps-depth8-r3` (0.497; three-draw mean 0.507), with `untagged` up, the `quiet` tier up and 1_150 up. Falsifier: within 0.02 of the control and no tier up.
+
+Control: `ps-depth8-r3`. Companions this batch: `eq-aug-d8` (spectral shape), `snr-aug-d8` (additive noise).
