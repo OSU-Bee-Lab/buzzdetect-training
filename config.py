@@ -98,10 +98,11 @@ def path_translation(setname, name):
     )
 
 
-# embedding memory management. Frames per embedder forward pass — a pure
-# batching knob, output-invariant. Lower it (via the env var) on GPUs with
-# little VRAM; the default suits unified-memory / large-VRAM machines.
-CHUNK_FRAMES = int(os.environ.get('BUZZDETECT_CHUNK_FRAMES', '300'))
+# embedding memory management. Frames per embedder forward pass. Not
+# output-invariant: YAMNet's output differs at chunk edges (~1 frame in 48),
+# and every stored embedding was extracted at 48, so keep the default unless
+# you re-extract everything you compare against (CLAUDE.md "Hardware settings").
+CHUNK_FRAMES = int(os.environ.get('BUZZDETECT_CHUNK_FRAMES', '48'))
 
 # snip extraction
 SNIP_BUFFER_S = 30.0
