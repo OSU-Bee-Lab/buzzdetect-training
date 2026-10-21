@@ -3,7 +3,7 @@
 Batch 40 runs four augmentation experiments on the depth8 recipe (yamnet_trunk_pitchshift_depth8,
 TRUNK_LR_BACKBONE=1e-5 TRUNK_FP16=1 TRUNK_BATCH=1024, --epochs 30, BUZZDETECT_CHUNK_FRAMES=48),
 all against the matched control **ps-depth8-r3** (0.497; depth8 three-draw mean 0.507).
-None of the four is logged yet: eq-aug-d8, snr-aug-d8, gain-aug-d8, pitch-aug-d8.
+eq-aug-d8 is LOGGED (2026-10-21: 0.489, -0.008 +- 0.015 vs ps-depth8-r3, falsified). Remaining: snr-aug-d8, gain-aug-d8, pitch-aug-d8. Re-parked 2026-10-21 00:10, ETA ~9.5 h for all three.
 Each chain step: augment.py --all-folds (cached files skipped), a 1-epoch medium smoke, then the 8-fold CV
 (~20 min/fold with the augmented pool).
 
