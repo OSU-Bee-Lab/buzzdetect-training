@@ -4,6 +4,7 @@ import pickle
 import re
 import sys
 import time
+import zlib
 from itertools import product, cycle
 
 # Make the project root and this directory importable regardless of cwd
@@ -13,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 
 import config as cfg
-from augment_specs import NoiseSpec, VolumeSpec, CombineSpec, spec_dirname
+from augment_specs import NoiseSpec, VolumeSpec, PitchSpec, CombineSpec, spec_dirname
 from embedders.embedding import load_embedder
 from utils import read_pickle_exhaustive
 
@@ -53,6 +54,18 @@ def _apply_volume(frames, prop):
     return [f * prop for f in frames]
 
 
+def _apply_pitch(frames, spec, fold, rel, samplerate):
+    import librosa
+    rng = np.random.default_rng([spec.seed, zlib.crc32(f'{fold}/{rel}'.encode())])
+    out = []
+    for f in frames:
+        if rng.random() >= spec.prop:
+            continue
+        steps = rng.uniform(-spec.semitones, spec.semitones)
+        out.append(librosa.effects.pitch_shift(f, sr=samplerate, n_steps=steps).astype(f.dtype))
+    return out
+
+
 def _save_audio(frames, path_out):
     os.makedirs(os.path.dirname(path_out), exist_ok=True)
     with open(path_out, 'wb') as f:
@@ -85,6 +98,8 @@ def _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrit
 
     paths_in = glob.glob(os.path.join(dir_audio_fold, '**', '*.pickle'), recursive=True)
     paths_in = [p for p in paths_in if _path_matches_labels(p, spec.labels)]
+    # load_augmented wants a dir per training fold, even one a draw left empty
+    os.makedirs(dir_embed_aug, exist_ok=True)
 
     if not paths_in:
         print(f'{time.time()-t0:.1f}s - AUGMENT: no matching audio files for {spec}')
@@ -108,9 +123,16 @@ def _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrit
             frames_aug = read_pickle_exhaustive(path_audio_out)
         else:
             frames = read_pickle_exhaustive(path_in)
-            frames_aug = _apply_noise(frames, spec) if isinstance(spec, NoiseSpec) else _apply_volume(frames, spec.prop)
+            if isinstance(spec, NoiseSpec):
+                frames_aug = _apply_noise(frames, spec)
+            elif isinstance(spec, PitchSpec):
+                frames_aug = _apply_pitch(frames, spec, fold, rel, embedder.samplerate)
+            else:
+                frames_aug = _apply_volume(frames, spec.prop)
             _save_audio(frames_aug, path_audio_out)
 
+        if not frames_aug:  # a draw that kept none of a short file's frames
+            continue
         _embed_and_save(frames_aug, path_embed_out, embedder)
         processed += 1
 
@@ -189,7 +211,7 @@ def augment_set(setname, embeddername, specs, folds, overwrite=False, verbose=Fa
     for spec in specs:
         for fold in folds:
             print(f'{time.time()-t0:.1f}s - AUGMENT: {spec} - {fold}')
-            if isinstance(spec, (NoiseSpec, VolumeSpec)):
+            if isinstance(spec, (NoiseSpec, VolumeSpec, PitchSpec)):
                 _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=verbose)
             elif isinstance(spec, CombineSpec):
                 _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=verbose)
@@ -227,6 +249,8 @@ if __name__ == '__main__':
                         help='noise augmentation prop values (default set used if neither --noise nor --volume given)')
     parser.add_argument('--volume', nargs='+', type=float, metavar='PROP',
                         help='volume augmentation prop values')
+    parser.add_argument('--pitch', nargs='+', type=float, metavar='SEMITONES',
+                        help='random per-frame pitch shift, uniform in +-SEMITONES, on half the frames (PitchSpec)')
     parser.add_argument('--snr', nargs='+', type=float, metavar='DB',
                         help='SNR-relative noise augmentation (dB below each frame\'s own RMS), '
                              'instead of --noise\'s fixed absolute amplitude')
@@ -237,11 +261,12 @@ if __name__ == '__main__':
     if args.fold is not None and args.all_folds:
         parser.error('--fold and --all-folds are mutually exclusive')
 
-    if args.noise is not None or args.volume is not None or args.snr is not None:
+    if args.noise is not None or args.volume is not None or args.snr is not None or args.pitch is not None:
         specs = (
             [NoiseSpec(prop=p) for p in (args.noise or [])] +
             [NoiseSpec(snr_db=db) for db in (args.snr or [])] +
-            [VolumeSpec(prop=p) for p in (args.volume or [])]
+            [VolumeSpec(prop=p) for p in (args.volume or [])] +
+            [PitchSpec(semitones=t) for t in (args.pitch or [])]
         )
     else:
         specs = DEFAULT_SPECS

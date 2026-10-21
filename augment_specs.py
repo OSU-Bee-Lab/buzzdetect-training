@@ -19,6 +19,18 @@ class VolumeSpec:
     labels: Optional[list] = None
 
 @dataclass
+class PitchSpec:
+    """Random small pitch shift (exp/pitch-aug-d8): a random `prop` of frames
+    kept, each shifted by its own draw uniform in [-semitones, +semitones]
+    (librosa.effects.pitch_shift: phase-vocoder stretch then resample, so the
+    frame keeps its length and no seam is made), seeded by the file's path
+    (02_set/augment.py::_apply_pitch)."""
+    prop: float = 0.5
+    semitones: float = 2.0
+    seed: int = 0
+    labels: Optional[list] = None
+
+@dataclass
 class CombineSpec:
     class_source: str
     class_augment: str
@@ -33,6 +45,8 @@ def spec_dirname(spec):
         return f'augment_noise_{spec.prop}'
     elif isinstance(spec, VolumeSpec):
         return f'augment_volume_{spec.prop}'
+    elif isinstance(spec, PitchSpec):
+        return f'augment_pitch{spec.semitones}_p{spec.prop}_s{spec.seed}'
     elif isinstance(spec, CombineSpec):
         return f'augment_combine_{spec.class_source}+{spec.class_augment}'
     raise ValueError(f'unknown spec type {type(spec)}')

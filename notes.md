@@ -1,0 +1,5 @@
+# pitch-aug-d8
+## Hypothesis
+The buzz fundamental scales with the bee (wingbeat frequency differs by species and body size), and each deployment has its own pollinator community: blueberry (1_95), apple (1_150), senna (1_114) are the hard folds, each with flowers that draw a different visitor mix from the pool's. The octave-up view was this era's largest single lever, so the tail is pitch-sensitive. Training the depth8 tail on a copy of half of every training fold's frames, each shifted by its own random pitch uniform in ±2 semitones (librosa phase-vocoder pitch shift: the frame keeps its length, so no tile seam), widens the range of fundamentals it has seen per class. Prediction: headline >= +0.02 over the matched control `ps-depth8-r3` (0.497; three-draw mean 0.507), with `untagged` up and at least one of 1_95 / 1_150 / 1_114 up beyond its SD. Risk: 1_114's confuser is orthopteran trill, and shifted trills could sit nearer buzz; check 1_114 first. Falsifier: within 0.02 of the control and no tier up.
+
+Control: `ps-depth8-r3`. Companions this batch: `eq-aug-d8`, `snr-aug-d8`, `gain-aug-d8`.
