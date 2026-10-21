@@ -19,7 +19,39 @@ its rules: no moves while a chain runs, symlink before rename, and keep
 3. Build the changes below in a worktree, then merge into main.
 4. Close the era: `python tools/archive_era.py --slug <slug>` (preview), then
    `--write`. Fill in the archive README's prose (see "Era-close notes" below).
-5. New data in place: rebuild the set, extract, then run the anchors.
+5. New data in place. Luke is rebuilding `medium` and `moderate` so they no
+   longer pre-filter annotations: the sets will carry the finer raw labels
+   (e.g. `mech_chainsaw`, `ambient_wind`), and new folds are being added (some
+   existing folds may also grow, where not all 24 files were annotated). Check
+   `translate.R`'s rules cover every new raw label (`survey_untranslated`
+   reports any that don't), then extract and run the anchors.
+
+## 0. Main is the simplest pipeline; experiments edit code
+
+Luke, 2026-10-21: the baseline and main should be the simplest pipeline one can
+imagine, and every experiment changes the training scripts themselves rather
+than adding arguments to `main.py`. Main is not meant to cover every case.
+
+- **Modelling choices are code, not options.** An experiment edits the code in
+  its worktree. A change that wins is merged into main as the new code path,
+  replacing the old one, not as a flag beside it. No new `main.py` arguments or
+  environment variables for modelling.
+- **Operational settings can stay**: things that change memory, hardware or
+  which folds run, not the model (`--cpu`, `--workers`, `--only-folds`,
+  `--verbose`, `--skip-cv`/`--train-shipped`, and the trunk memory knobs
+  `TRUNK_BATCH`, `TRUNK_ACCUM`, `TRUNK_FP16`, `TRUNK_STREAM`, `SCORE_CHUNK`).
+- **Modelling knobs in main today, to strip at era start:** `--dropout`,
+  `--stop-tol` (goes away with section 2), `--augment`, `TRUNK_LR_BACKBONE`,
+  `TRUNK_LR_HEAD`, `TRUNK_HIDDEN`, `PIN_BUZZ_TRANSLATION` (on experiment
+  branches only), and the hardcoded label smoothing (section 4). Decide one by
+  one whether each becomes fixed code in main or leaves main for a branch.
+  `--set`, `--embedder` and `--translation` choose data and stay. `--epochs`
+  becomes a constant once the budget is set (section 3).
+- **Consequence for the anchors:** if main holds the frozen probe (LOOP.md's
+  baseline), the recipe (fine-tuning, the octave-up view, depth8) is re-adopted
+  into main one piece at a time, each with its own CV on the new data. That
+  costs a few CVs, but every piece of the working recipe is then shown on this
+  era's data and scoring.
 
 ## 1. Scoring: pick the epoch from the other folds
 
@@ -113,33 +145,47 @@ anchor's pooled curve and confirm the budget runs past its plateau.
 Luke, 2026-10-21: the baseline shouldn't have label smoothing; it should be an
 independent test, as dropout already is (`--dropout`, default 0).
 
-**Change:** add `--label-smoothing` (default 0.0) and record it in
-`config_model.json`. It is hardcoded at 0.2 in three places today:
-`03_train/train.py:514` (the compile that actually runs),
-`train_utils.weighted_bce_loss`'s default, and
-`embedders/yamnet_trunk/embedder.py:181` (superseded by train.py's compile, but
-it should read the same flag so nobody gets surprised).
+**Change:** remove it from main's code (no flag; see section 0). It is
+hardcoded at 0.2 in three places today: `03_train/train.py:514` (the compile
+that actually runs), `train_utils.weighted_bce_loss`'s default, and
+`embedders/yamnet_trunk/embedder.py:181` (superseded by train.py's compile).
+Set all three to no smoothing. A smoothing experiment edits the value in its
+worktree.
 
 **Expect it to come back.** Removing it has been measured twice as a loss:
 `ps-nosmooth` this era, −0.039 ± 0.015 on the depth12 ps recipe (−0.041 at the
 cross-fold epoch; background tier −0.127), and E1's probe tests (+2.2 pp from
-0.2, different metric). So the first experiment of the era should be a
-smoothing ladder (0 / 0.1 / 0.2) on both the probe anchor and the trunk recipe.
-Expect the no-smoothing anchors to sit a few hundredths below this era's
-numbers until it does.
+0.2, different metric). So an early experiment of the era should be a
+smoothing ladder (0 / 0.1 / 0.2), on the probe and again once the trunk recipe
+is back in main. Expect the no-smoothing anchors to sit a few hundredths below
+this era's numbers until then.
 
 ## 5. Anchors
 
 LOOP.md's baseline is the frozen YAMNet linear probe. On new data, run:
 
 - **Probe anchor:** frozen YAMNet linear probe, no dropout, no label smoothing.
-- **Recipe anchor:** ps-depth8 (`yamnet_trunk_pitchshift_depth8`,
-  `TRUNK_LR_BACKBONE=1e-5`), no label smoothing, **2–3 draws** (each ~3 h).
-  Five depth8 draws this era scattered with SD ~0.018 (incl. quiet, final
-  epoch), so three give a noticeably steadier baseline than one or two.
+- **Recipe anchor:** each time a piece of the recipe is re-adopted into main
+  (section 0), and once the full ps-depth8 recipe is back, run **3 draws**
+  (Luke, 2026-10-21; each ~3 h). Five depth8 draws this era scattered with SD
+  ~0.018 (incl. quiet, final epoch), so three give a steadier baseline than one
+  or two.
 
-Then the smoothing ladder (section 4) sets the working recipe. Update LOOP.md's
-Baseline section to name the anchors and the new scoring rule.
+Update LOOP.md's Baseline section to name the anchors and the new scoring rule.
+
+## 6. The teacher
+
+Luke, 2026-10-21: the standard teacher is an **ensemble** (the logit mean of
+independently trained draws), **retrained on the new pipeline**. The last era's
+teachers are archived, not reused.
+
+- Train it on `moderate` **once**, for the teacher. Every experiment stays on
+  `medium`; `moderate` is never a loop experiment.
+- Members: 3 draws of the working recipe, each shipped at the pooled
+  sensitivity peak (section 2). Measured this era: +0.049 over the median draw
+  on medium, +0.037 over the members' mean on moderate (`ens3-moderate`).
+- Retraining it is a training job, not distillation; the distillation
+  injunction does not block it.
 
 ## Era-close notes (for the archive README)
 
@@ -161,20 +207,22 @@ Baseline section to name the anchors and the new scoring rule.
   levers with evidence behind them are data (moderate vs medium on one recipe:
   0.574 vs 0.468) and ensembling (+0.049 medium, held on moderate).
 
-## Open for Luke
+## Decided and open
 
-- **Ensemble as the standard teacher.** Measured: +0.049 on medium, +0.037 over
-  members on moderate. Speed is no longer the constraint, so 3× inference may
-  be acceptable.
-- **Confuser data.** The hard folds look limited by look-alike negatives (the
-  jet at 1_95, drones) and missed labels (1_37), not by recording style: every
-  invariance method this era hurt them. More annotated confuser negatives
-  touches `01_annotate/`.
-- **A finer translation** (confusers that set hard folds' thresholds as their
-  own classes) is the other direction binary-d8 points to. Needs a CV, so it
-  goes in `IDEAS.md` if wanted.
+Decided (Luke, 2026-10-21): 3 anchor draws; the ensemble is the teacher,
+retrained on the new pipeline and trained on `moderate` once; experiments stay
+on `medium`; the last era is archived, nothing trained off it.
+
+- **No new annotation of already-annotated files.** Only what is there can be
+  annotated. New folds are coming, and folds whose 24 files were not all
+  annotated may grow. So the hard folds' confuser problem (the jet at 1_95,
+  look-alike negatives) has to be met by the model or by the new folds, not by
+  more labels on old ones.
+- **Finer labels arrive with the set rebuild** (Order of work, step 5). Once
+  the sets stop pre-filtering, a finer translation (confusers kept as their own
+  classes) becomes testable; `binary-d8` suggests the negative classes' detail
+  matters on a trainable trunk. Needs a CV.
 - **1_114's fragility** to anything that touches the views (two-octave view,
   pitch-aug, SNR noise, cross-fold MixStyle) is worth an investigation.
-- **The distillation injunction** lifts when `IDEAS.md`'s training queue is
-  drained (Luke, 2026-10-21); the `CLAUDE.md` and `LOOP.md` copies still say
-  "until Luke lifts this".
+- **Which modelling knobs leave main** (section 0) is a one-by-one call at the
+  cleanup.

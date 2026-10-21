@@ -16,15 +16,13 @@ float16) and for extraction output, so the margin is too thin.
 |---|---|---|---|---|
 | Root SSD | `/dev/sda2` | `/` | ext4, SATA | 35 GB |
 | HDD | `/dev/sdb1` | `/media/server storage` | **NTFS via FUSE (`fuseblk`)**, WD 18 TB, 7200-class | 12 TB |
-| USB NVMe | `/dev/sdc` | not mounted | Sabrent 1 TB, **holds Luke's data** | n/a |
 
-### The NVMe is not blank
+### Rules for the HDD (Luke, 2026-10-21)
 
-Luke says macOS reads data on it. Linux shows no partition table and no filesystem
-signature it recognises (likely APFS or HFS+). **Do not partition, format or
-`wipefs` it.** Ask Luke what it is. If it must be read on Linux, mount it
-read-only (`apfs-fuse` for APFS, `hfsprogs` or the kernel `hfsplus` driver for
-HFS+). It becomes a migration target only if Luke empties it or says to wipe it.
+- **It stays NTFS.** It holds critical data: never repartition, reformat or
+  convert it.
+- **Nothing is deleted without Luke's approval.** Anything may *move* to the
+  HDD; leaving the machine, or deleting, is his call every time.
 
 ## Measured speeds
 
@@ -41,7 +39,12 @@ and batch 39 was running.
 The HDD's direct-IO reads are fake because FUSE ignores `O_DIRECT`. To get a true
 cold read, read a file that was never cached (or `drop_caches` as root, which needs
 Luke) and time it. Expect 100-200 MB/s sequential and ~100 IOPS random, and
-possibly lower from the NTFS-FUSE CPU cost on the i7-2600. The USB NVMe is untested.
+possibly lower from the NTFS-FUSE CPU cost on the i7-2600.
+
+**Measured 2026-10-21: cold sequential reads deliver 30-48 MB/s** (three 1-2 GB
+reads of an uncached 12 GB file under `distill-cache/_cold_packs`), well below
+the 100-200 MB/s guessed above. The disk itself read ~140 MB/s of sectors during
+the 44 MB/s read, so the NTFS-FUSE layer, not the platter, is the limit.
 
 ## What is on the SSD
 
@@ -87,11 +90,14 @@ sequentially from the set, writes them to one float16 file under
 `cfg.DIR_STREAM_SCRATCH` (`.local/stream_scratch`, `config.py`), memory-maps it for
 **random access**, and deletes it after the fold.
 
-- The set's embeddings are only read once, sequentially. Moving them to the HDD
-  costs a load of ~20 s (depth8, 4 GB) to ~2 min (depth4, 16 GB) per run. A CV run
-  is tens of minutes to hours, so that is noise. After the first read the file
-  sits in the page cache (23 GB RAM).
-- **Keep `.local/stream_scratch` on SSD or NVMe.** On the HDD the random reads are
+- The set's embeddings are read sequentially. At the measured 30-48 MB/s, a
+  medium depth8 cache (4 GB, 1,434 files) costs **~1.5-2.5 min per CV** from the
+  HDD, about 1% of a ~3 h CV, because it fits in the page cache (23 GB RAM, ~14 GB
+  free) and is read once. A pool that doesn't fit is re-read every fold: a depth4
+  pool (16 GB) or a moderate two-view pool (~18 GB) costs ~6-10 min per fold,
+  tens of minutes per CV. So: medium's active embedders can live on the HDD at
+  little cost; the biggest pools are where it shows.
+- **Keep `.local/stream_scratch` on the SSD.** On the HDD the random reads are
   ~100 IOPS against 7,000, and training would slow by an unknown, probably large,
   factor. Do not symlink `.local` wholesale. Symlink individual directories.
 - Scripts that set `TRUNK_STREAM=1`: `tools/queue_v4_moderate.sh`,
@@ -103,7 +109,7 @@ sequentially from the set, writes them to one float16 file under
 
 ## Plan
 
-1. **Preconditions**: no chain running; Luke has said where the NVMe stands.
+1. **Preconditions**: no chain running.
 2. **Compare the duplicates**: `rsync -rn --itemize-changes` of the two `shards`
    dirs against `distill-cache/`. Decide what is already migrated.
 3. **Move the `shards` dirs** to the HDD. `05_distill/data` is configured through
@@ -135,7 +141,4 @@ sequentially from the set, writes them to one float16 file under
 
 ## Open questions for Luke
 
-- What is on the NVMe, and can it be reformatted?
-- Which parts of `05_distill` can leave the machine entirely?
-- Is the HDD NTFS by choice? An ext4 partition would remove the FUSE limits, but it
-  needs the drive emptied or repartitioned and is Luke's call.
+None open as of 2026-10-21 (answers are in the HDD rules above).
