@@ -21,12 +21,6 @@ Ranked best-first by expected value on the headline and the hard folds, cost sec
 
 Convolve a random half of each training fold's snips with a random mic IR. If MicIRP's licence doesn't fit, use a no-download alternative: a random parametric EQ, with spectral tilt of ±3 dB/oct and 1-2 peaking filters of ±6 dB between 200 Hz and 4 kHz. Extract the result as an augment dir through `02_set` (a real embedder on real, transformed audio), then train depth8 with `--augment`. Parameters are drawn at random, not fit on pooled statistics, so the CLAUDE.md augmentation rule holds. Check RAM first: `v4-ft-pshud` came close with 4 views, and `TRUNK_STREAM` does not stream augmented embeddings. Prediction: the folds whose recorders differ most from the pool move, so check `DEPLOYMENTS.md` before reading folds. The hard folds' confusers (aircraft, trill) are not a device effect, so they are not the expected movers. Falsifier: headline within 0.02 and no tier up.
 
-## 33. One-way partial-AUC auxiliary loss at low FPR
-
-*Evidence: untagged proposal. Zhu et al., "When AUC meets DRO" (ICML 2022, arXiv 2203.00176; LibAUC's SOPA-s) optimise one-way pAUC over the top-β negatives directly. The headline is sensitivity at FPR 0.005, a single point on that curve. Closed precedents: margin/ranking losses against a **named** confuser (`mech-margin`, `pairwise-rank`, E3) and OHEM (`tail-loss`, E2). This differs from both: no class is named, and it ranks positives against whichever negatives currently score highest.*
-
-Add λ·L_pAUC to the BCE: per batch, the squared hinge (margin 1) between each `ins_buzz` positive's logit and the top ceil(0.05·n_neg) negative logits. Positives are `_quiet` included, matching how training already treats them. λ=0.3 on depth8 ran as `pauc-l03` (batch 38): -0.091 ± 0.015 vs ps-depth8-r3, largest losses on 1_114/1_150/1_95, no logit collapse. Remaining rung: λ=0.1 on depth8. Watch the `buzz logit SD` line: E2's `tail-loss` collapsed the class output, and a dose that does the same is an artifact, not a verdict. Falsifier: monotone decline with dose, as `pairwise-rank` showed. If that happens, close the low-FPR-loss family.
-
 ## 29. BEATs / AVES2 as an extra block on the fine-tuned trunk
 
 *Evidence: untagged proposal. The foundation-model review (arXiv 2508.01277) finds AudioSet-pretrained SSL models beat many bird-specific ones; AVES middle layers were a confirmed gain in the frozen era (+0.026 to +0.032).*
