@@ -1,7 +1,7 @@
 # HANDOFF: sam-d8 (batch 41)
 
 Batch 41 runs four experiments in ONE chain: binary-d8, plain-d8, sam-d8, ps2-seamfree-d8, in that order.
-None of the four is logged yet. This worktree's part: 3rd CV. SAM does two passes per step, so expect ~1.5-2x a plain depth8 CV (~3 h).
+binary-d8 and plain-d8 are logged (2 of 4 done, park at 15:16 on 10-21). sam-d8 and ps2-seamfree-d8 remain. sam-d8 measured ~55 s/epoch (~28 min/fold, ~3.8 h CV from 15:09). This worktree's part: 3rd CV. SAM does two passes per step, so expect ~1.5-2x a plain depth8 CV (~3 h).
 
 - **Job:** pid 1636291 (launch_job.sh), log `.local/worktrees/binary-d8/chain_b41.log`; script `exp/binary-d8:chain_b41.sh`. Per-run log: `.local/worktrees/sam-d8/train.log`.
   Resume watching: `tools/watch_job.sh --adopt 1636291`, then ONE Monitor on `tools/watch_job.sh`.
