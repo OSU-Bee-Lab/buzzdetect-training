@@ -1,0 +1,5 @@
+# snr-aug-d8
+## Hypothesis
+`aug-snr15-trunk` (2026-09-25) was planned as the fine-tuned companion of `aug-snr15-baseline` (SNR-relative noise on the frozen probe: flat, +0.004 ± 0.006) and abandoned unrun at the era cutover. The frozen-probe null was read as "no trainable capacity to use the augmentation" (embed-mixup's argument); the depth8 tail has seven trainable blocks, the most capacity any trunk recipe has had. White noise at 15 dB below each frame's own RMS, on a copy of every training frame, trains the tail to rely less on low-level spectral texture that a noisier recorder or site would mask. Prediction: headline >= +0.02 over the matched control `ps-depth8-r3` (0.497; three-draw mean 0.507), with `untagged`/`quiet` up and hard low-SNR fold 1_150 up. Falsifier: within 0.02 of the control with no tier up, which would close noise augmentation at the trunk as it closed on the probe.
+
+Control: `ps-depth8-r3` (same recipe and cache, no augmentation). Companion: `eq-aug-d8` (same batch, spectral-shape augmentation).
