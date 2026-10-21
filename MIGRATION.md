@@ -46,6 +46,14 @@ reads of an uncached 12 GB file under `distill-cache/_cold_packs`), well below
 the 100-200 MB/s guessed above. The disk itself read ~140 MB/s of sectors during
 the 44 MB/s read, so the NTFS-FUSE layer, not the platter, is the limit.
 
+**The kernel driver removes most of that (2026-10-21).** Same file, an unread
+2 GB region, mounted read-only with the in-kernel `ntfs3` driver instead of the
+FUSE `ntfs-3g`: **158 MB/s**, 3-5x the FUSE reads. One measurement. The drive
+mounts at boot from `/etc/fstab` with type `auto`, which picks FUSE; switching
+means changing that to `ntfs3`. `ntfs3` was tested read-only only. It is younger
+than `ntfs-3g`, and the drive holds critical data, so a read-write trial on
+something non-critical comes before any fstab change (Luke's call).
+
 ## What is on the SSD
 
 | Path | Size | Verdict |
@@ -90,13 +98,14 @@ sequentially from the set, writes them to one float16 file under
 `cfg.DIR_STREAM_SCRATCH` (`.local/stream_scratch`, `config.py`), memory-maps it for
 **random access**, and deletes it after the fold.
 
-- The set's embeddings are read sequentially. At the measured 30-48 MB/s, a
+- The set's embeddings are read sequentially. Under FUSE, at the measured 30-48 MB/s, a
   medium depth8 cache (4 GB, 1,434 files) costs **~1.5-2.5 min per CV** from the
   HDD, about 1% of a ~3 h CV, because it fits in the page cache (23 GB RAM, ~14 GB
   free) and is read once. A pool that doesn't fit is re-read every fold: a depth4
   pool (16 GB) or a moderate two-view pool (~18 GB) costs ~6-10 min per fold,
   tens of minutes per CV. So: medium's active embedders can live on the HDD at
-  little cost; the biggest pools are where it shows.
+  little cost; the biggest pools are where it shows. Under `ntfs3` (158 MB/s)
+  the depth8 load drops to ~30 s per CV and the big pools to ~2 min per fold.
 - **Keep `.local/stream_scratch` on the SSD.** On the HDD the random reads are
   ~100 IOPS against 7,000, and training would slow by an unknown, probably large,
   factor. Do not symlink `.local` wholesale. Symlink individual directories.
