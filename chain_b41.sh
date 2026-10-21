@@ -44,19 +44,19 @@ smoke plain-d8 $PS8 general "${D8[@]}" TRUNK_ONLY_VIEW=0 || exit 1
 smoke sam-d8 $PS8 general "${D8[@]}" TRUNK_SAM_RHO=0.05 || exit 1
 if [ "$MODE" = smoke ]; then
   cd "$WT/ps2-seamfree-d8" && echo "[chain] ps2-seamfree-d8: lite extraction smoke"
-  "$PY" -u 02_set/main.py --set lite --embedder $SF > smoke_extract.log 2>&1 \
+  "$PY" -u 02_set/main.py --set lite --embedder $SF --workers 1 > smoke_extract.log 2>&1 \
     || { echo "[chain] lite extraction FAILED"; tail -20 smoke_extract.log; exit 1; }
   tail -2 smoke_extract.log
   echo "[chain] smokes done"; exit 0
 fi
 
+cd "$WT/ps2-seamfree-d8" && echo "[chain] ps2-seamfree-d8: medium extraction"
+"$PY" -u 02_set/main.py --set medium --embedder $SF --workers 1 > extract.log 2>&1 \
+  || { echo "[chain] medium extraction FAILED"; tail -20 extract.log; exit 1; }
+tail -1 extract.log
 cv binary-d8 $PS8 binary "${D8[@]}" PIN_BUZZ_TRANSLATION=general || exit 1
 cv plain-d8 $PS8 general "${D8[@]}" TRUNK_ONLY_VIEW=0 || exit 1
 cv sam-d8 $PS8 general "${D8[@]}" TRUNK_SAM_RHO=0.05 || exit 1
-cd "$WT/ps2-seamfree-d8" && echo "[chain] ps2-seamfree-d8: medium extraction"
-"$PY" -u 02_set/main.py --set medium --embedder $SF > extract.log 2>&1 \
-  || { echo "[chain] medium extraction FAILED"; tail -20 extract.log; exit 1; }
-tail -1 extract.log
 smoke ps2-seamfree-d8 $SF general "${D8_3V[@]}" || exit 1
 cv ps2-seamfree-d8 $SF general "${D8_3V[@]}" || exit 1
 echo "[chain] all done"
