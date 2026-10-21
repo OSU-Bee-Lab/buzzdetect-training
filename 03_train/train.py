@@ -451,6 +451,41 @@ def _consensus_epoch(summary_rows, tol):
     return int(np.argmax(mean <= threshold)) + 1
 
 
+def _sam_train_step(rho):
+    """exp/sam-d8: sharpness-aware minimisation (Foret et al. 2021) as a Keras
+    train_step. The gradient is taken at w + rho g/|g| (g at w, all trainable
+    weights, one global norm), then applied at w by the model's own optimizer,
+    so per-variable LRs and clipping are unchanged. Two passes per step."""
+    from keras.src.trainers.data_adapters import data_adapter_utils
+
+    def step(self, data):
+        x, y, sample_weight = data_adapter_utils.unpack_x_y_sample_weight(data)
+        weights = self.trainable_weights
+        with tf.GradientTape() as tape:
+            y_pred = self(x, training=True)
+            loss = self._compute_loss(x=x, y=y, y_pred=y_pred,
+                                      sample_weight=sample_weight, training=True)
+        grads = tape.gradient(loss, weights)
+        scale = rho / (tf.linalg.global_norm([g for g in grads if g is not None]) + 1e-12)
+        eps = [None if g is None else g * scale for g in grads]
+        for w, e in zip(weights, eps):
+            if e is not None:
+                w.assign_add(e)
+        with tf.GradientTape() as tape:
+            y_adv = self(x, training=True)
+            loss_adv = self._compute_loss(x=x, y=y, y_pred=y_adv,
+                                          sample_weight=sample_weight, training=True)
+        grads_adv = tape.gradient(loss_adv, weights)
+        for w, e in zip(weights, eps):
+            if e is not None:
+                w.assign_sub(e)
+        self._loss_tracker.update_state(loss, sample_weight=tf.shape(x)[0])
+        self.optimizer.apply_gradients(zip(grads_adv, weights))
+        return self.compute_metrics(x, y, y_pred, sample_weight=sample_weight)
+
+    return step
+
+
 def _train_one(dir_model, modelname, embeddername, setname, name_translation,
                data: TrainingData, epochs, aug_dirnames, verbose,
                held_out_fold, save_binary, epochs_shipped=None,
@@ -515,6 +550,11 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
         optimizer=optimizer,
         metrics=['accuracy'],
     )
+    if os.environ.get('TRUNK_SAM_RHO'):
+        import types
+        model.train_step = types.MethodType(
+            _sam_train_step(float(os.environ['TRUNK_SAM_RHO'])), model)
+        print(f'[{modelname}] SAM, rho {os.environ["TRUNK_SAM_RHO"]}', flush=True)
 
     if data.val_tf is None:
         # Shipped model: no fold is held out, so there's nothing clean to
