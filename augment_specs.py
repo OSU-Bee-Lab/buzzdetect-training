@@ -19,6 +19,23 @@ class VolumeSpec:
     labels: Optional[list] = None
 
 @dataclass
+class EQSpec:
+    """Random recorder-response EQ (exp/eq-aug-d8): a spectral tilt of
+    +-tilt_db_oct dB/octave about 1 kHz plus 1-2 peaking bumps of +-peak_db
+    centred log-uniformly in [peak_lo_hz, peak_hi_hz], each 0.3-1 octave wide.
+    A random `prop` of frames is kept, each with its own draw (a recording
+    directory is one recorder, but medium has only ~92 of them, so a
+    per-recording draw would give ~46 responses and augment whole folds or
+    none); seeded by the file's path (02_set/augment.py::_apply_eq)."""
+    prop: float = 0.5
+    tilt_db_oct: float = 3.0
+    peak_db: float = 6.0
+    peak_lo_hz: float = 200.0
+    peak_hi_hz: float = 4000.0
+    seed: int = 0
+    labels: Optional[list] = None
+
+@dataclass
 class CombineSpec:
     class_source: str
     class_augment: str
@@ -33,6 +50,8 @@ def spec_dirname(spec):
         return f'augment_noise_{spec.prop}'
     elif isinstance(spec, VolumeSpec):
         return f'augment_volume_{spec.prop}'
+    elif isinstance(spec, EQSpec):
+        return f'augment_eq{spec.tilt_db_oct}_{spec.peak_db}_p{spec.prop}_s{spec.seed}'
     elif isinstance(spec, CombineSpec):
         return f'augment_combine_{spec.class_source}+{spec.class_augment}'
     raise ValueError(f'unknown spec type {type(spec)}')

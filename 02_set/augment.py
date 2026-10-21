@@ -4,6 +4,7 @@ import pickle
 import re
 import sys
 import time
+import zlib
 from itertools import product, cycle
 
 # Make the project root and this directory importable regardless of cwd
@@ -13,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 
 import config as cfg
-from augment_specs import NoiseSpec, VolumeSpec, CombineSpec, spec_dirname
+from augment_specs import NoiseSpec, VolumeSpec, EQSpec, CombineSpec, spec_dirname
 from embedders.embedding import load_embedder
 from utils import read_pickle_exhaustive
 
@@ -53,6 +54,39 @@ def _apply_volume(frames, prop):
     return [f * prop for f in frames]
 
 
+def _eq_response(rng, spec, freqs):
+    """Zero-phase magnitude response (linear) of one random EQ draw at `freqs`:
+    tilt about 1 kHz (below 125 Hz, YAMNet's lowest mel edge, held flat) plus
+    1-2 log-frequency Gaussian bumps (a peaking filter's shape)."""
+    octaves = np.log2(np.maximum(freqs, 125.0) / 1000.0)
+    db = rng.uniform(-spec.tilt_db_oct, spec.tilt_db_oct) * octaves
+    for _ in range(rng.integers(1, 3)):
+        f0 = np.exp(rng.uniform(np.log(spec.peak_lo_hz), np.log(spec.peak_hi_hz)))
+        width_oct = rng.uniform(0.3, 1.0)
+        db = db + rng.uniform(-spec.peak_db, spec.peak_db) * np.exp(
+            -0.5 * (np.log2(np.maximum(freqs, 1.0) / f0) / width_oct) ** 2)
+    return 10 ** (db / 20)
+
+
+def _apply_eq(frames, spec, fold, rel, samplerate):
+    """Keep a random `spec.prop` of the file's frames, each filtered by its own
+    random EQ draw (frequency domain, zero phase) and rescaled to its original
+    RMS, so the change is spectral shape only (a pure gain is a separate,
+    negative lever: gain4). A file holds one label set's frames from one
+    recording; the generator is seeded by its path, so reruns and other
+    embedders get the same frames and responses."""
+    rng = np.random.default_rng([spec.seed, zlib.crc32(f'{fold}/{rel}'.encode())])
+    out = []
+    for f in frames:
+        if rng.random() >= spec.prop:
+            continue
+        h = _eq_response(rng, spec, np.fft.rfftfreq(len(f), 1 / samplerate))
+        g = np.fft.irfft(np.fft.rfft(f.astype(np.float64)) * h, n=len(f))
+        e_in, e_out = float(np.sum(np.square(f, dtype=np.float64))), float(np.sum(np.square(g)))
+        out.append((g * (np.sqrt(e_in / e_out) if e_out > 0 else 1.0)).astype(f.dtype))
+    return out
+
+
 def _save_audio(frames, path_out):
     os.makedirs(os.path.dirname(path_out), exist_ok=True)
     with open(path_out, 'wb') as f:
@@ -85,6 +119,8 @@ def _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrit
 
     paths_in = glob.glob(os.path.join(dir_audio_fold, '**', '*.pickle'), recursive=True)
     paths_in = [p for p in paths_in if _path_matches_labels(p, spec.labels)]
+    # load_augmented wants a dir per training fold, even one an EQ draw left empty
+    os.makedirs(dir_embed_aug, exist_ok=True)
 
     if not paths_in:
         print(f'{time.time()-t0:.1f}s - AUGMENT: no matching audio files for {spec}')
@@ -108,9 +144,16 @@ def _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrit
             frames_aug = read_pickle_exhaustive(path_audio_out)
         else:
             frames = read_pickle_exhaustive(path_in)
-            frames_aug = _apply_noise(frames, spec) if isinstance(spec, NoiseSpec) else _apply_volume(frames, spec.prop)
+            if isinstance(spec, NoiseSpec):
+                frames_aug = _apply_noise(frames, spec)
+            elif isinstance(spec, EQSpec):
+                frames_aug = _apply_eq(frames, spec, fold, rel, embedder.samplerate)
+            else:
+                frames_aug = _apply_volume(frames, spec.prop)
             _save_audio(frames_aug, path_audio_out)
 
+        if not frames_aug:  # an EQ draw that kept none of a short file's frames
+            continue
         _embed_and_save(frames_aug, path_embed_out, embedder)
         processed += 1
 
@@ -189,7 +232,7 @@ def augment_set(setname, embeddername, specs, folds, overwrite=False, verbose=Fa
     for spec in specs:
         for fold in folds:
             print(f'{time.time()-t0:.1f}s - AUGMENT: {spec} - {fold}')
-            if isinstance(spec, (NoiseSpec, VolumeSpec)):
+            if isinstance(spec, (NoiseSpec, VolumeSpec, EQSpec)):
                 _augment_noisevol_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=verbose)
             elif isinstance(spec, CombineSpec):
                 _augment_combine_spec(setname, embeddername, spec, embedder, fold, overwrite, verbose=verbose)
@@ -227,6 +270,8 @@ if __name__ == '__main__':
                         help='noise augmentation prop values (default set used if neither --noise nor --volume given)')
     parser.add_argument('--volume', nargs='+', type=float, metavar='PROP',
                         help='volume augmentation prop values')
+    parser.add_argument('--eq', nargs='+', type=float, metavar='PROP',
+                        help='random recorder-response EQ (EQSpec defaults) on this proportion of snips')
     parser.add_argument('--snr', nargs='+', type=float, metavar='DB',
                         help='SNR-relative noise augmentation (dB below each frame\'s own RMS), '
                              'instead of --noise\'s fixed absolute amplitude')
@@ -237,11 +282,12 @@ if __name__ == '__main__':
     if args.fold is not None and args.all_folds:
         parser.error('--fold and --all-folds are mutually exclusive')
 
-    if args.noise is not None or args.volume is not None or args.snr is not None:
+    if args.noise is not None or args.volume is not None or args.snr is not None or args.eq is not None:
         specs = (
             [NoiseSpec(prop=p) for p in (args.noise or [])] +
             [NoiseSpec(snr_db=db) for db in (args.snr or [])] +
-            [VolumeSpec(prop=p) for p in (args.volume or [])]
+            [VolumeSpec(prop=p) for p in (args.volume or [])] +
+            [EQSpec(prop=p) for p in (args.eq or [])]
         )
     else:
         specs = DEFAULT_SPECS
