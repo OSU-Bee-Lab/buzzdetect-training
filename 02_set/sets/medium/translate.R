@@ -31,11 +31,14 @@ write.csv(
   row.names=F
 )
 
-translation_raw <- translation_blank %>% 
+# Literal: every buzz label collapses to ins_buzz, every other label stays as
+# annotated (the scored class must exist; nothing else is merged).
+translation_raw <- translation_blank %>%
   mutate(
     to = case_when(
-      str_detect(from, 'buzz') ~ 'ins_buzz',
-      T ~ 'nonbuzz'
+      to != '' ~ to,
+      str_detect(from, '^ins_buzz') ~ 'ins_buzz',
+      T ~ from
     )
   )
 
