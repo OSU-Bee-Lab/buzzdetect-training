@@ -50,9 +50,14 @@ the 44 MB/s read, so the NTFS-FUSE layer, not the platter, is the limit.
 2 GB region, mounted read-only with the in-kernel `ntfs3` driver instead of the
 FUSE `ntfs-3g`: **158 MB/s**, 3-5x the FUSE reads. One measurement. The drive
 mounts at boot from `/etc/fstab` with type `auto`, which picks FUSE; switching
-means changing that to `ntfs3`. `ntfs3` was tested read-only only. It is younger
-than `ntfs-3g`, and the drive holds critical data, so a read-write trial on
-something non-critical comes before any fstab change (Luke's call).
+means changing that to `ntfs3`. **Switched 2026-10-21** (Luke; the data is backed
+up). A read-write trial passed first: a 1 GB file written under `ntfs3` (118
+MB/s, same as FUSE: writes are disk-bound) hashed identically after a remount
+and through FUSE. `/etc/fstab`'s line is now type `ntfs3` with
+`uid=1001,gid=1001,umask=000`, keeping FUSE's everyone-can-write behaviour;
+the old file is at `/etc/fstab.bak-2026-10-21`. The pipeline's `audio_root`
+and `distill_cache` read and write normally. To go back: restore that backup,
+`sudo systemctl daemon-reload`, then unmount and remount the drive.
 
 ## What is on the SSD
 
@@ -104,7 +109,7 @@ sequentially from the set, writes them to one float16 file under
   free) and is read once. A pool that doesn't fit is re-read every fold: a depth4
   pool (16 GB) or a moderate two-view pool (~18 GB) costs ~6-10 min per fold,
   tens of minutes per CV. So: medium's active embedders can live on the HDD at
-  little cost; the biggest pools are where it shows. Under `ntfs3` (158 MB/s)
+  little cost; the biggest pools are where it shows. Under `ntfs3` (158 MB/s, the driver now in use)
   the depth8 load drops to ~30 s per CV and the big pools to ~2 min per fold.
 - **Keep `.local/stream_scratch` on the SSD.** On the HDD the random reads are
   ~100 IOPS against 7,000, and training would slow by an unknown, probably large,
