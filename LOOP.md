@@ -182,6 +182,9 @@ or you can manually copy the code you need.
 `git merge exp/<other>` fails inside an experiment worktree (the embedder symlinks make the tree dirty:
 "beyond a symbolic link"). Bring the other experiment's code over as a patch instead:
 `git diff $(git merge-base HEAD exp/<other>) exp/<other> -- <paths> | git apply --3way`.
+Take every path the feature touched, not the one file you saw it in: list them first with
+`git diff --stat $(git merge-base HEAD exp/<other>) exp/<other>` (batch 39 ported `train.py`'s
+pAUC hunk without `train_utils.py`'s loss, and the chain died on an ImportError).
 If you are building off of a previous experiment, you should compare your results against that experiment's
 in addition to the baseline.
 
@@ -217,7 +220,8 @@ The cache is keyed by `(set, embedder name)`, and its fingerprint covers annotat
 break a symlink only when your run would overwrite something under an existing
 name. Git sees those symlinks as typechanges, so any commit from the worktree
 (including `finish_experiment.sh`'s) shows shared dirs flipping to mode 120000.
-That noise is expected; don't revert it.
+That noise is expected; don't revert it. A `git commit -a` shows it the same way
+(dozens of `embedders/*` files "deleted"): harmless, no reset needed.
 
 ### 2. Make the change
 

@@ -14,7 +14,8 @@
 # after that (a relaunch of one that died) needs a new Monitor; launch_job.sh
 # says which case it is. --adopt moves a job some other session
 # started (a HANDOFF.md resume) into this session's set; a Monitor already
-# armed picks it up.
+# armed picks it up. A job that has already exited is not adopted: --adopt
+# prints its exit line instead, so go straight to its results.
 #
 # Its first lines say where each job stands, so each re-arm doubles as a check
 # and covers anything logged while no Monitor was armed:
@@ -89,6 +90,13 @@ if [ "${1:-}" = --adopt ]; then
   need_session
   f="$JOBS/${2:?$usage}"
   [ -f "$f" ] || { echo "watch_job: no launch_job.sh job $2 in $JOBS" >&2; exit 1; }
+  if ! kill -0 "$2" 2>/dev/null; then
+    # Nothing to follow: say how it ended rather than claim to watch it.
+    log=$(sed -n '1s/ :: .*//p' "$f")
+    status=$(grep -E '^\[launch_job\] exit' "$log" 2>/dev/null | tail -n 1)
+    echo "job $2 ($log) already exited, nothing to adopt: ${status:-no [launch_job] exit line}"
+    exit 0
+  fi
   # Keep the mtime: tools/human/agent_loop.sh kills the jobs registered since
   # a session started, and an adopted job was not started by this one.
   ref=$(mktemp); touch -r "$f" "$ref"   # portable mtime save (no GNU stat -c)
