@@ -236,6 +236,31 @@ def _eval_arrays(samples, classes):
     return embeddings, correct, loudness, sample_id
 
 
+def _pin_buzz_weight(weights, data_train, setname, name_translation_pin):
+    """Set ins_buzz's weight to what build_weights gives these same samples
+    under another translation (labels only; no embeddings are reloaded)."""
+    from types import SimpleNamespace
+    from dataset import build_translation_dict, translate_labels, labels_to_targets
+    translation_pin = pd.read_csv(cfg.path_translation(setname, name_translation_pin))
+    classes_pin = build_classes(translation_pin)
+    tdict = build_translation_dict(translation_pin)
+    pinned = []
+    for s in data_train:
+        labels = translate_labels(s.labels_raw, tdict)
+        if any(isinstance(l, str) and l.strip().lower() == 'exclude' for l in labels):
+            continue
+        target = labels_to_targets(labels, classes_pin)
+        if sum(target):
+            pinned.append(SimpleNamespace(target_array=target))
+    w_pin = build_weights(pinned, classes_pin)
+    w_buzz = float(w_pin.loc[w_pin['class'] == 'ins_buzz', 'weight'].iloc[0])
+    w_own = float(weights.loc[weights['class'] == 'ins_buzz', 'weight'].iloc[0])
+    print(f'[pin] ins_buzz weight {w_own:.3f} -> {w_buzz:.3f} ({name_translation_pin})', flush=True)
+    weights = weights.copy()
+    weights.loc[weights['class'] == 'ins_buzz', 'weight'] = w_buzz
+    return weights
+
+
 def _load_data(setname, embeddername, folds_train, name_translation, aug_dirnames,
                val_fold=None):
     """Pool folds_train for training; val_fold, if given, is a whole separate
@@ -294,6 +319,12 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
         )
 
     weights = build_weights(data_train, classes)
+    if os.environ.get('PIN_BUZZ_TRANSLATION'):
+        # exp/binary-d8: build_weights puts the class count in every
+        # denominator, so ins_buzz's weight moves several-fold between
+        # translations. Pin it, per rotation, to the value the same samples
+        # get under the named translation, so only the label structure changes.
+        weights = _pin_buzz_weight(weights, data_train, setname, os.environ['PIN_BUZZ_TRANSLATION'])
     weight_dict = {i: w for i, w in enumerate(weights['weight'])}
 
     size_batch = int(os.environ.get('TRUNK_BATCH', 65568))
