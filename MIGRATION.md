@@ -54,8 +54,13 @@ means changing that to `ntfs3`. **Switched 2026-10-21** (Luke; the data is backe
 up). A read-write trial passed first: a 1 GB file written under `ntfs3` (118
 MB/s, same as FUSE: writes are disk-bound) hashed identically after a remount
 and through FUSE. `/etc/fstab`'s line is now type `ntfs3` with
-`uid=1001,gid=1001,umask=000`, keeping FUSE's everyone-can-write behaviour;
-the old file is at `/etc/fstab.bak-2026-10-21`. The pipeline's `audio_root`
+`uid=1001,gid=1003,umask=000`; the old file is at `/etc/fstab.bak-2026-10-21`.
+Gid 1003 is `hdd-share` (members `luke`, `beelab`), so other lab users can write.
+Under `ntfs3`, entries that carry their own stored owner/group/mode keep them
+over the mount options (`noacsrules`, which overrode that, is not in this
+kernel's driver): 1,195 entries in `experiments/` stored `luke:luke`, and were
+re-grouped to `hdd-share` (`chgrp`, metadata only). 122 raw recordings there are
+`644`: other users can read, rename or delete them but not edit them in place. The pipeline's `audio_root`
 and `distill_cache` read and write normally. To go back: restore that backup,
 `sudo systemctl daemon-reload`, then unmount and remount the drive.
 
