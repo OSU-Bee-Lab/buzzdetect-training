@@ -492,11 +492,28 @@ def _train_one(dir_model, modelname, embeddername, setname, name_translation,
     if hasattr(embedder, 'build_head'):
         # Fine-tunable embedder (yamnet_trunk and family): layers 13-14 (or
         # 12-14) live in the head, optionally trainable.
+        only_view = os.environ.get('TRUNK_ONLY_VIEW')
+        if only_view is not None:
+            # exp/plain-d8: train on one view of a multi-view cache. The head is
+            # the embedder's own single-view head (n_ctx 1), fed one view's
+            # columns cropped out of the cached row, so rows, labels and
+            # thresholds match the multi-view control exactly.
+            width_all, n_views = embedder.n_embeddings, embedder.n_ctx
+            embedder.n_ctx, embedder.n_embeddings = 1, width_all // n_views
         model = embedder.build_head(
             len(data.classes), lr_backbone=float(os.environ.get('TRUNK_LR_BACKBONE', 0)),
             lr_head=float(os.environ.get('TRUNK_LR_HEAD', 2e-4)), dropout=dropout, name=tf_name,
             **({'hidden': int(os.environ['TRUNK_HIDDEN'])} if os.environ.get('TRUNK_HIDDEN') else {}))
         optimizer = model.optimizer
+        if only_view is not None:
+            import keras
+            v, width = int(only_view), embedder.n_embeddings
+            inp = keras.layers.Input(shape=(width_all,), dtype=tf.float32, name='input')
+            x = keras.layers.Reshape((width_all, 1))(inp)
+            x = keras.layers.Cropping1D((v * width, width_all - (v + 1) * width))(x)
+            x = keras.layers.Reshape((width,))(x)
+            model = keras.Model(inp, model(x), name=tf_name)
+            print(f'[{modelname}] view {v} of {n_views} only', flush=True)
         if os.environ.get('TRUNK_ACCUM'):
             # TRUNK_BATCH=512 TRUNK_ACCUM=2 is batch 1024's update for a tail too
             # deep to fit 1024 on the 4 GB card (BN is frozen, so no batch stats
