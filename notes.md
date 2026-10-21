@@ -35,7 +35,7 @@ Control: `ps-depth8-r3` (same recipe, cache, epochs and batch; SAM doubles the g
 
 ± SD is eval sampling only (tools/eval_sampling_sd.py); training stochasticity is larger per fold and not in it.
 
-Buzz logit SD per fold 0.44-1.07 (1_150 lowest, as in plain-d8/ps-depth8-r3): no collapse. SAM moved val_loss minima later (epochs 7-30 vs the control family's 2-8 on several folds), consistent with a slower, smoothed trajectory.
+Buzz logit SD per fold 0.44-1.07 (1_150 lowest, as in plain-d8/ps-depth8-r3): no collapse. val_loss minima fell at epochs 7-30 (plain-d8, same batch: 2-25, five folds at <= 8), consistent with a slower trajectory under SAM.
 
 Headline -0.005 ± 0.013 (± ~0.015 with training noise): no effect. Per fold: 53 +0.060 ± 0.025 (weak evidence up), 1_114 +0.044 ± 0.049 (unsure), 1_29 +0.026 ± 0.035 (unsure); 1_37 -0.060 ± 0.044 and 1_150 -0.055 ± 0.044 (weak evidence down, unsure), 1_95 -0.037 ± 0.021 (weak evidence down — a hard fold), 1_11 -0.019 ± 0.024 (unsure). Two of three hard folds went down, the third (1_114) up within its SD. Tiers: background +0.058, loud -0.052 (122 frames, thin), untagged -0.010.
 
