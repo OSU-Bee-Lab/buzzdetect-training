@@ -15,12 +15,6 @@ Results: `03_train/log.jsonl`, `05_distill/log.jsonl`. Protocol: `LOOP.md`.
 
 Ranked best-first by expected value on the headline and the hard folds, cost second.
 
-## 32. Microphone impulse-response / random-EQ augmentation (real audio, re-extracted)
-
-*Evidence: untagged proposal. Device-IR augmentation (Morocutti et al. 2023, arXiv 2305.07499; DCASE 2023-24 Task 1 reports, using the 66 MicIRP vintage-mic IRs) is the strongest single lever for unseen recording devices in acoustic scene classification. E2 `trunk-ft-1e5-aug` (negative, doubled pool) was a different augmentation, and no recorder-response augmentation has run in any era.*
-
-Convolve a random half of each training fold's snips with a random mic IR. If MicIRP's licence doesn't fit, use a no-download alternative: a random parametric EQ, with spectral tilt of ±3 dB/oct and 1-2 peaking filters of ±6 dB between 200 Hz and 4 kHz. Extract the result as an augment dir through `02_set` (a real embedder on real, transformed audio), then train depth8 with `--augment`. Parameters are drawn at random, not fit on pooled statistics, so the CLAUDE.md augmentation rule holds. Check RAM first: `v4-ft-pshud` came close with 4 views, and `TRUNK_STREAM` does not stream augmented embeddings. Prediction: the folds whose recorders differ most from the pool move, so check `DEPLOYMENTS.md` before reading folds. The hard folds' confusers (aircraft, trill) are not a device effect, so they are not the expected movers. Falsifier: headline within 0.02 and no tier up.
-
 ## 29. BEATs / AVES2 as an extra block on the fine-tuned trunk
 
 *Evidence: untagged proposal. The foundation-model review (arXiv 2508.01277) finds AudioSet-pretrained SSL models beat many bird-specific ones; AVES middle layers were a confirmed gain in the frozen era (+0.026 to +0.032).*
