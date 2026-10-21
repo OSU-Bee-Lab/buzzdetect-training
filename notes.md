@@ -5,3 +5,8 @@ IDEAS #36. `ps2-depth8` added a two-octave-up third view (0.96 s frame resampled
 Prediction: headline >= +0.02 over ps-depth8-r3 (0.497) and above the three-draw mean (0.507), with `untagged` up and 1_114 not down beyond its SD. Falsifier: below the three-draw mean again, which closes the two-octave line. Risk: the 3.84 s window is a context lever, and context levers have a standing prior of lifting rich folds (1_29/53) and leaving hard folds flat; read 1_95/1_114/1_150 as the falsifier, not the headline.
 
 Control: `ps-depth8-r3`; `ps2-depth8` (0.480) as the tiled comparator.
+
+## Changes
+New embedder `yamnet_trunk_pitchshift2sf_depth8` (shared tree, `embedders/`; untracked there; a copy is in `embedder_copy/` on this branch): the ps-depth8 recipe's [plain, octave-up] plus a third view from 4 frames (3.84 s) of real audio centred on the frame, `context_frames = 2`, resampled 2:1 twice (librosa, as `Resample('half')`) to one frame; zero-padded past a recording edge, never tiled. All three views share the depth8 tail. Checked: views 1-2 equal ps-depth8's embed() bit for bit on the same buffer. No ONNX form (research embedder).
+`02_set/extract.py`: the context path allocated float32 regardless of the recipe's dtype (2x disk); now keeps it (float16 here; lossless, the values are float16 already). Reported as friction for main.
+Run: medium extraction, then ps2-depth8's settings: `TRUNK_LR_BACKBONE=1e-5 TRUNK_FP16=1 TRUNK_BATCH=512 TRUNK_ACCUM=2 SCORE_CHUNK=512`, 30 epochs. Chain: `exp/binary-d8:chain_b41.sh`.
