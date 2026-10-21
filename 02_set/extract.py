@@ -908,7 +908,9 @@ class WorkerExtract:
                     if self.context_frames:
                         n = self.context_phases
                         hop_s = self.config_extract.framehop_prop * self.embedder.framelength_s
-                        embeddings_chunk = np.empty((len(frames), self.embedder.n_embeddings), dtype=np.float32)
+                        # the recipe's stored precision, as the non-context path keeps it
+                        dtype_out = getattr(getattr(self.embedder, 'recipe', None), 'dtype', np.float32)
+                        embeddings_chunk = np.empty((len(frames), self.embedder.n_embeddings), dtype=dtype_out)
                         for p in range(n):
                             frames_phase = frames[p::n]
                             if len(frames_phase) == 0:
