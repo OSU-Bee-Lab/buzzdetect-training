@@ -242,7 +242,7 @@ From the worktree. **Training arm:**
 
 ```bash
 # stage 2, only if extraction changed
-tools/launch_job.sh extract.log -- 02_set/main.py --set medium --embedder <emb>
+tools/launch_job.sh extract.log -- 02_set/main.py --set medium --embedder <emb> --workers 1
 # stage 3
 tools/launch_job.sh train.log -- 03_train/main.py --name <name> --set medium --embedder yamnet --translation general -y
 ```
