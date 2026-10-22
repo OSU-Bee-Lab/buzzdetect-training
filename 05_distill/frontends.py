@@ -198,9 +198,15 @@ def make_features_layer(fe, impl='stft'):
     'mmt': 'mm' for any window (its kernel zero-padded to a whole number of hops) with no Pad over the
     waveform: the complete patches come from a Slice of it, the last (zero-padded) one or two from its
     short tail, joined at the patch level. A Pad or Concat over a 200 s waveform costs 11-20 ms on the CUDA
-    EP against ~1 ms for the Slice + Reshape + MatMul (micro/, 2026-10-11). Same values."""
-    assert impl in ('stft', 'conv', 'mm', 'mmt')
-    assert impl != 'mm' or all(c.window % fe.hop == 0 for c in fe.channels), 'mm needs window = m * hop'
+    EP against ~1 ms for the Slice + Reshape + MatMul (micro/, 2026-10-11). Same values.
+    'mmw': 'mmt' without the tail, for windows that are a whole number of hops, and only for input of
+    samples_min + j * 15360 samples, which is every length the engine feeds (it pads each chunk to its pinned
+    session length). There 'mmt''s tail is always empty, and a fixed-length session still runs it: the zero-size
+    tensors kept the branch and its Concat off CoreML (~7% of lightning_v1, 2026-10-22). Other lengths lose
+    their last, partial patch; at engine lengths the values are mmt's."""
+    assert impl in ('stft', 'conv', 'mm', 'mmt', 'mmw')
+    assert impl not in ('mm', 'mmw') or all(c.window % fe.hop == 0 for c in fe.channels), \
+        f'{impl} needs window = m * hop'
     tf = _tf()
     from tensorflow.keras import layers
 
@@ -269,6 +275,8 @@ def make_features_layer(fe, impl='stft'):
             total = (after + PATCH_SAMPLES - 1) // PATCH_SAMPLES + 1
             k = tf.clip_by_value((n - (wp - fe.hop)) // PATCH_SAMPLES, 0, total)
             main = waveform[:k * PATCH_SAMPLES + wp - fe.hop]
+            if impl == 'mmw':                                                   # k == total at engine lengths
+                return tf.stack([self._mm_frames(main, c, k * fe.frames) for c in fe.channels], axis=-1)
             len_tail = 2 * PATCH_SAMPLES + wp - fe.hop                          # room for the 0-2 patches left
             tail = waveform[k * PATCH_SAMPLES:]
             tail = tf.reshape(tf.pad(tail, [[0, len_tail - tf.shape(tail)[0]]]), [len_tail])
@@ -277,7 +285,7 @@ def make_features_layer(fe, impl='stft'):
             return tf.stack(per, axis=-1)
 
         def call(self, waveform):
-            if impl == 'mmt':
+            if impl in ('mmt', 'mmw'):
                 with tf.name_scope('frontend'):
                     return self._call_mmt(waveform)
             with tf.name_scope('frontend'):

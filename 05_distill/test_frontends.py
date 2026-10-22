@@ -45,7 +45,26 @@ def main():
         bad += not ok
         print(f'{name:8s} numpy {n_np.shape} keras {n_tf.shape}  max|diff| over {n} patches = {d:.2e}  '
               f'{"OK" if ok else "FAIL"}')
+    bad += check_mmw(x)
     sys.exit(1 if bad else 0)
+
+
+def check_mmw(x):
+    """'mmw' equals 'mmt' on every length the engine feeds: samples_min + j * 15360, j = 0, 1, and the most of x."""
+    bad = 0
+    for name, fe in fes.FRONTENDS.items():
+        if name == 'yamnet' or any(c.window % fe.hop for c in fe.channels):
+            continue
+        smin = fes.PATCH_SAMPLES - fe.hop + fe.max_window
+        mmt, mmw = (fes.make_features_layer(fe, impl) for impl in ('mmt', 'mmw'))
+        for j in (0, 1, (len(x) - smin) // fes.PATCH_SAMPLES):
+            xs = x[:smin + j * fes.PATCH_SAMPLES]
+            a, b = mmt(xs).numpy(), mmw(xs).numpy()
+            ok = a.shape == b.shape and float(np.abs(a - b).max()) == 0.0
+            bad += not ok
+            if not ok or j > 1:
+                print(f'{name:8s} mmw vs mmt at {len(xs)} samples: {a.shape} vs {b.shape}  {"OK" if ok else "FAIL"}')
+    return bad
 
 
 if __name__ == '__main__':

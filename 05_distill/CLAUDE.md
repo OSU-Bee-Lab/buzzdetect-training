@@ -69,6 +69,10 @@ The experiment log is `log.jsonl` (tracked, every teacher; README, "The experime
   (Slice + Reshape + MatMul, tail padded apart) gives the same numbers with no retraining: every rung-C
   student has an `_mmt` row with an identical headline. `main.py` still exports with `stft`; judge a
   trained student's mmt graph with `reexport.py --fe-impl mmt --suffix _mmt --runs <run> ...` (LOOP.md).
+  For a front end whose window is a whole number of hops (fast32h16, the h32/h24 ones), `mmw` is `mmt` minus
+  its tail, which is always empty at the engine's input lengths but still ran, and kept CoreML off the branch
+  (lightning_v1 +7%, 2026-10-22). It only promises engine lengths (samples_min + j * 15360); `test_frontends.py`
+  checks it equals mmt there.
 - **Time whole graphs; never read per-node profiles on the GPU.** An onnxruntime per-node profile on the
   CUDA EP reports asynchronous kernel launches, not costs (it put ~60% in depthwise convs; fused full-conv
   trunks then timed slower at equal width). Run `bench_arch.py --seconds 200` (its default is 20; every
