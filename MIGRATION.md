@@ -68,8 +68,8 @@ and `distill_cache` read and write normally. To go back: restore that backup,
 
 | Path | Size | Verdict |
 |---|---|---|
-| `05_distill/data/v4-ft-ps-e60-moderate/shards` | 313 GB | **Move** |
-| `05_distill/data/v4-ft-ps-e60-moderate-ens3/shards` | 75 GB | **Move** |
+| `05_distill/data/v4-ft-ps-e60-moderate/shards` | 313 GB | **Moved 2026-10-22** (symlinked packs) |
+| `05_distill/data/v4-ft-ps-e60-moderate-ens3/shards` | 75 GB | **Moved 2026-10-22** (symlinked packs) |
 | `02_set/sets/medium` | 90 GB (70 GB embeddings, 20 GB audio) | Keep for now |
 | `02_set/sets/moderate` | 57 GB | Move; final-confirmation set only |
 | `02_set/sets/lite` | 8 GB | Keep |
@@ -79,9 +79,12 @@ and `distill_cache` read and write normally. To go back: restore that backup,
 | `~/anaconda3` | 36 GB | Keep |
 | `03_train`, `models` | ~1 GB | Keep |
 
-Moving both `shards` directories (388 GB) alone brings the SSD to roughly 55% used.
+**Done 2026-10-22:** every pack under both `shards` directories (388 GB, 30 packs) went to
+`distill-cache/_cold_packs/<teacher>/shards/` with `tools/cold_packs.sh` (copy, checksum
+verify, replace by a symlink; ~1 h at the HDD's write speed). The `shards` directories
+stay on the SSD and hold only symlinks. The SSD went from 99% used (9.5 GB free) to 56% (397 GB free).
 
-Already on the HDD: `distill_cache` (511 GB: `_mel` 275 GB, `_cold_packs` 159 GB),
+Already on the HDD before that: `distill_cache` (511 GB: `_mel` 275 GB, `_cold_packs` 159 GB),
 set by `"distill_cache"` in `paths.local.json`. The HDD **also** holds
 `v4-ft-ps-e60-moderate` (64 GB) and `-ens3` (14 GB) under `distill-cache/` with the
 same names as the SSD dirs. That looks like a partial earlier migration. Run
@@ -129,15 +132,9 @@ sequentially from the set, writes them to one float16 file under
 ## Plan
 
 1. **Preconditions**: no chain running.
-2. **Compare the duplicates**: `rsync -rn --itemize-changes` of the two `shards`
-   dirs against `distill-cache/`. Decide what is already migrated.
-3. **Move the `shards` dirs** to the HDD. `05_distill/data` is configured through
-   `config.py` / `paths.local.json`; `shards` is under `05_distill/data`, not under
-   `distill_cache`. Add a `paths.local.json` key, or symlink the two directories.
-   Check how `05_distill` resolves them before choosing.
-4. **Test a symlink on the HDD first.** NTFS-3G symlink support is weaker than
-   ext4 and the mount has no Unix permissions. Create one, resolve it from Python,
-   and read through it.
+2-4. **Done 2026-10-22: the `shards` packs are moved** (see "What is on the SSD").
+   Each pack is a symlink on the SSD pointing to its copy on the HDD, the same layout
+   as the 2026-10-15 cold packs. Nothing reads them while distillation is closed.
 5. **Move the closed-arm venvs and `int8-ptq`.** Check `paths.local.json`'s
    `"python"` and `tools/python_path.sh` first: if any tool resolves to a `.local`
    venv, leave it.

@@ -126,8 +126,9 @@ but that disk is a spinning drive: training from a symlinked pack reads frames i
 than RAM (34 GB vs 23 GB) takes ~30 h. To train on one again, move it back (`rm` the symlink, `rsync -a` the
 directory home). Don't move a pack a live chain reads. A stale-fingerprint rebuild (`shutil.rmtree`) refuses a
 symlink: remove the symlink by hand first. Moved 2026-10-15: C__yam64h16, C__yam64h24, C__fast32h16, C__fast32,
-and the rung-B packs of fast32h32, fast32h16, fast32h16lo, fast32, fast32lo, lo32, two32 (kept: C, B, and everything
-of twofast32 and yam64h32, which a running chain uses). Other cheap space: `pip cache purge`, `conda clean --all`,
+and the rung-B packs of fast32h32, fast32h16, fast32h16lo, fast32, fast32lo, lo32, two32. Moved 2026-10-22: every
+remaining pack of both teachers (`v4-ft-ps-e60-moderate`, `-ens3`; 388 GB), so all packs are now symlinks to the
+HDD. Move a pack back before training on it. Other cheap space: `pip cache purge`, `conda clean --all`,
 `uv cache clean`, `~/.cache/JetBrains` (about 79 GB together, cleared the same day).
 
 Pre-split caches embedded the YAMNet `mel` in every targets npz; readers still accept that
