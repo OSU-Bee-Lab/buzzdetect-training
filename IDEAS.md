@@ -35,12 +35,6 @@ Drop every training frame whose buzz tier (`train_utils.buzz_tier`, the max over
 
 Write a `Recipe` embedder (not a hand-written ONNX) for `EarthSpeciesProject/esp-aves2-sl-beats-all` (PyTorch, so GPU extraction like AVES, `BUZZDETECT_NO_GPU=1` per CLAUDE.md). Probe layers 6/9/12 mean-pooled, concatenated to the `v4-ft-ps` features. Check licence and model size before building, and its inference rate against LOOP.md's AVES injunction. Falsifier: no gain on `untagged`/`loud` tiers means it is another rich-fold lever (see the context prior in `docs/training-proposer-facts.md`).
 
-## 36. Seam-free two-octave view
-
-*Evidence: E4, weak. `ps2-depth8` (−0.017 ± 0.014) used a 4x tile / 0.24 s source window, and its loss was largest at 1_114, the tile-seam fold (`ps-untiled`, `ps-sharedtiled`). Its notes name a seam-free two-octave view as the only form left untested.*
-
-Build the third view from a 4x-longer source window centred on the frame (neighbouring *audio* via `context_frames`, which does not leak), resampled 4:1, rather than tiling 0.24 s. Falsifier: below the three-draw mean again, which closes the two-octave line.
-
 ## 37. BN statistics re-estimation: pooled, site-adaptive, and shrunk between them
 
 *Evidence: untagged proposal. AdaBN (Li et al., arXiv 1603.04779) re-estimates BatchNorm statistics on target-domain audio without labels. Counter-evidence: Boudiaf et al. (arXiv 2302.06658) found most source-free adaptation methods underperform the unadapted model on bioacoustic shifts. `ps-bntrain` (BN trained on the pool) was a +0.022 two-draw mean at 30 epochs that did not compound. (a) pooled AdaBN ran as `bn-pooled` (2026-10-20): on ps-depth8 weights trained with frozen AudioSet BN it collapsed the headline 0.481 -> 0.019, so post-hoc statistics misalign weights that co-adapted to the old ones; (b) and (c) estimate post hoc too, so on frozen-BN fine-tunes expect the same, and they would need a model trained with BN tracking (`ps-bntrain`).*
