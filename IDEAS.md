@@ -15,14 +15,6 @@ Results: `03_train/log.jsonl`, `05_distill/log.jsonl`. Protocol: `LOOP.md`.
 
 Ranked best-first by expected value on the headline and the hard folds, cost second.
 
-## 38. Buzz pitch subclasses as auxiliary outputs beside the scored `ins_buzz`
-
-*Evidence: E4, one draw. `binary-d8` (2026-10-21) collapsed the 14 non-buzz classes and lost −0.116 at epoch 30 (−0.026 incl. quiet at the cross-fold epoch, `tools/epoch_rule_audit.py`), mostly on 1_150, 1_95 and 1_114: on a trainable trunk the extra classes' supervision shapes features the buzz boundary uses. Buzz is the one class still collapsed. Its pitch tags are well populated in medium (`ins_buzz_medium` 1777, `_low` 681, `_high` 249 annotations, plus `_quiet`/`_loud` variants).*
-
-Keep `ins_buzz` as the scored output, trained on every buzz frame exactly as now, and add `buzz_low` / `buzz_medium` / `buzz_high` outputs as extra multi-label targets. The metric, threshold and headline are unchanged; only the supervision grows. Pitch only: loudness subclasses would train the model to separate quiet buzz from loud, against detecting quiet buzz. Untagged-pitch buzz (`ins_buzz_pollination`, `_rasp`, `_RECLASSIFY`) gets `ins_buzz` alone.
-
-Needs one code change: a translation maps each label to one class, so let a `to` value name several (e.g. `ins_buzz|buzz_low`, split in `dataset.translate_labels`) and add a translation built that way in `medium/translate.R`. The multi-hot loss already handles several targets per frame. Check `build_weights` doesn't move `ins_buzz`'s loss weight with the new class count (`PIN_BUZZ_TRANSLATION`, as `binary-d8` did). Run on the ps-depth8 cache (no extraction) against a matched `general` control. Prediction: headline ≥ +0.02 with `untagged` or a hard fold up. Falsifier: within ~0.02. A frozen-probe arm is a cheap second read: there the subclasses add capacity (the max over three buzz hyperplanes), not just supervision, so it tests a different mechanism.
-
 ## 39. Train without quiet buzz; still score it
 
 *Evidence: untagged proposal (Luke, 2026-10-21). Quiet buzz is in the eval because it is a true positive, and split out of the headline because it is not what a clear buzz sounds like: some of it is just the rasp of passing wings. Training on it may blur the boundary that clear buzz would draw. In medium, `_quiet`/`_faint` are 418 of ~3,425 buzz annotations (~12%).*
