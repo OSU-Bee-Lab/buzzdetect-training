@@ -10,7 +10,11 @@ import config as cfg
 
 
 def build_classes(translation):
-    classes = translation['to'].unique().tolist()
+    # exp/pitch-aux-d8: a `to` value may name several classes, split on "|".
+    classes = sorted({
+        part for c in translation['to'].unique().tolist() if isinstance(c, str)
+        for part in c.split('|')
+    })
     # The sentinels are matched case-insensitively: translations/build.R writes
     # them uppercase, but hand-curated rows have used lowercase.
     classes = [
@@ -196,7 +200,8 @@ def buzz_tier(labels_raw, labels_translate, buzz_class=BUZZ_CLASS):
     raw label (which carries the marker) while deciding buzz-ness from the
     translated one (which is what `correct` is built from).
     """
-    tiers = [label_tier(r) for r, t in zip(labels_raw, labels_translate) if t == buzz_class]
+    tiers = [label_tier(r) for r, t in zip(labels_raw, labels_translate)
+             if buzz_class in str(t).split('|')]
     return max(tiers, key=_TIER_RANK.__getitem__) if tiers else TIER_NONE
 
 

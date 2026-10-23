@@ -79,7 +79,9 @@ def survey_untranslated(setname, embeddername, folds, translation):
 
 
 def labels_to_targets(labels_translate, classes):
-    return [c in labels_translate for c in classes]
+    # exp/pitch-aux-d8: a translated label may name several classes ("a|b").
+    named = {part for l in labels_translate if isinstance(l, str) for part in l.split('|')}
+    return [c in named for c in classes]
 
 
 def build_fold_dataset(dir_samples, translation, labels_keep_raw=None, exclusive=False):

@@ -236,6 +236,32 @@ def _eval_arrays(samples, classes):
     return embeddings, correct, loudness, sample_id
 
 
+def _pin_primary_weights(weights, data_train, translation):
+    """exp/pitch-aux-d8: build_weights puts the total target count and the class
+    count in every denominator, so extra auxiliary targets would move every
+    original class's loss weight. Pin each original class to what the same
+    samples get under the translation with the auxiliary targets dropped (the
+    first class of each "a|b" value), so only the added outputs change."""
+    from types import SimpleNamespace
+    from dataset import build_translation_dict, translate_labels, labels_to_targets
+    primary = translation.copy()
+    primary['to'] = [t.split('|')[0] if isinstance(t, str) else t for t in primary['to']]
+    classes_p = build_classes(primary)
+    tdict = build_translation_dict(primary)
+    pinned = []
+    for s in data_train:
+        target = labels_to_targets(translate_labels(s.labels_raw, tdict), classes_p)
+        if sum(target):
+            pinned.append(SimpleNamespace(target_array=target))
+    w_p = build_weights(pinned, classes_p).set_index('class')['weight']
+    weights = weights.copy()
+    for i, c in enumerate(weights['class']):
+        if c in w_p.index:
+            weights.loc[i, 'weight'] = float(w_p[c])
+    print('[pin] ' + ', '.join(f'{c} {w:.3f}' for c, w in zip(weights['class'], weights['weight'])), flush=True)
+    return weights
+
+
 def _load_data(setname, embeddername, folds_train, name_translation, aug_dirnames,
                val_fold=None):
     """Pool folds_train for training; val_fold, if given, is a whole separate
@@ -294,6 +320,8 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
         )
 
     weights = build_weights(data_train, classes)
+    if translation['to'].astype(str).str.contains('|', regex=False).any():
+        weights = _pin_primary_weights(weights, data_train, translation)
     weight_dict = {i: w for i, w in enumerate(weights['weight'])}
 
     size_batch = int(os.environ.get('TRUNK_BATCH', 65568))

@@ -110,6 +110,22 @@ write.csv(
   row.names=F
 )
 
+# exp/pitch-aux-d8: general, plus buzz pitch subclasses as extra targets beside
+# ins_buzz. A `to` value naming several classes is split on "|" (dataset.py).
+# Pitch only: untagged-pitch buzz (pollination, rasp, RECLASSIFY) gets ins_buzz alone.
+translation_general_pitch <- translation_general %>%
+  mutate(
+    pitch = str_match(from, '^ins_buzz_(low|medium|high)(_|$)')[, 2],
+    to = if_else(!is.na(pitch), paste0('ins_buzz|buzz_', pitch), to)
+  ) %>%
+  select(-pitch)
+
+write.csv(
+  translation_general_pitch,
+  file.path(dir_translations, 'general_pitch.csv'),
+  row.names=F
+)
+
 translation_binary <- translation_blank %>% 
   mutate(
     to = case_when(
