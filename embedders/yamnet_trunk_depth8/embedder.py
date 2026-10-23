@@ -7,6 +7,10 @@ trainable tail change. Framing and the audio cache are inherited.
 """
 import os
 
+# exp/bn-site-d8: TRUNK_BN_TRAIN=1 trains the tail's BatchNorm (gamma/beta at the
+# backbone LR, moving stats tracking the training pool), as ps-bntrain did on depth12.
+_BN_TRAIN = bool(os.environ.get('TRUNK_BN_TRAIN'))
+
 import numpy as np
 
 import importlib
@@ -49,7 +53,7 @@ class EmbedderYamnetTrunkDepth8(_trunk.EmbedderYamnetTrunk):
         train_backbone = lr_backbone > 0
         for layer in tail.layers:
             if isinstance(layer, keras.layers.BatchNormalization):
-                layer.trainable = False          # keep AudioSet moving stats, all three blocks
+                layer.trainable = train_backbone and _BN_TRAIN  # else keep AudioSet moving stats
             else:
                 layer.trainable = train_backbone
 
