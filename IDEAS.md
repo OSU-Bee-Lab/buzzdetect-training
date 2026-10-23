@@ -15,12 +15,6 @@ Results: `03_train/log.jsonl`, `05_distill/log.jsonl`. Protocol: `LOOP.md`.
 
 Ranked best-first by expected value on the headline and the hard folds, cost second.
 
-## 39. Train without quiet buzz; still score it
-
-*Evidence: untagged proposal (Luke, 2026-10-21). Quiet buzz is in the eval because it is a true positive, and split out of the headline because it is not what a clear buzz sounds like: some of it is just the rasp of passing wings. Training on it may blur the boundary that clear buzz would draw. In medium, `_quiet`/`_faint` are 418 of ~3,425 buzz annotations (~12%).*
-
-Drop every training frame whose buzz tier (`train_utils.buzz_tier`, the max over its buzz labels) is `quiet` or `faint`. **Drop the frame, don't ignore the label**: an ignored buzz label leaves the frame in with `ins_buzz` = 0, which trains quiet buzz as a negative, the thing `03_train/CLAUDE.md` warns against. A frame with quiet buzz and a louder buzz keeps its louder tier and stays. Held-out folds are untouched, so quiet buzz is still scored in the inclusive number and the quiet tier. This tests the standing rule that quiet buzz trains as an ordinary positive; that rule stays the default unless this wins. A code edit in the training-data path, not a flag. Prediction: headline ≥ +0.02 with `untagged` or `loud` up; the quiet tier will likely fall, so read it beside the headline. Falsifier: headline within ~0.02 of the matched control, or down.
-
 ## 29. BEATs / AVES2 as an extra block on the fine-tuned trunk
 
 *Evidence: untagged proposal. The foundation-model review (arXiv 2508.01277) finds AudioSet-pretrained SSL models beat many bird-specific ones; AVES middle layers were a confirmed gain in the frozen era (+0.026 to +0.032).*
