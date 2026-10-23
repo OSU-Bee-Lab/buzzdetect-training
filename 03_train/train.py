@@ -23,7 +23,7 @@ from dataset import (
 )
 from train_utils import (build_weights, build_classes, can_write,
                          weighted_bce_loss, Sample, buzz_tier,
-                         TIERS_EXCLUDED_FROM_HEADLINE)
+                         TIERS_EXCLUDED_FROM_HEADLINE, TIER_QUIET, TIER_FAINT)
 from embedders.embedding import load_embedder
 from utils import git_branch
 from plot_history import plot_history, plot_sens_history
@@ -262,6 +262,16 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
         if pool is not None:
             pool.append(samples)
         data_train += samples
+    # exp/noquiet-d8: drop (not ignore) every training sample whose buzz tier,
+    # the max over its buzz labels, is quiet or faint. Ignoring the label would
+    # leave the frame in as an ins_buzz negative. Scored folds are untouched.
+    if pool is not None:
+        raise NotImplementedError('exp/noquiet-d8 filters data_train, not a stream pool')
+    n_before = len(data_train)
+    data_train = [s for s in data_train
+                  if buzz_tier(s.labels_raw, s.labels_translate) not in (TIER_QUIET, TIER_FAINT)]
+    print(f'[noquiet] dropped {n_before - len(data_train)} of {n_before} training samples '
+          f'(quiet/faint buzz)', flush=True)
     frames_train = sum(s.frames for s in data_train)
 
     data_val = None
