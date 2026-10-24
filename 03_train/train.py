@@ -2,6 +2,7 @@
 import gc
 import json
 import math
+import copy
 import os
 import pickle
 import platform
@@ -23,7 +24,7 @@ from dataset import (
 )
 from train_utils import (build_weights, build_classes, can_write,
                          weighted_bce_loss, Sample, buzz_tier,
-                         TIERS_EXCLUDED_FROM_HEADLINE)
+                         TIERS_EXCLUDED_FROM_HEADLINE, TIER_QUIET, TIER_FAINT)
 from embedders.embedding import load_embedder
 from utils import git_branch
 from plot_history import plot_history, plot_sens_history
@@ -295,6 +296,19 @@ def _load_data(setname, embeddername, folds_train, name_translation, aug_dirname
 
     weights = build_weights(data_train, classes)
     weight_dict = {i: w for i, w in enumerate(weights['weight'])}
+
+    # exp/quietup3-d8: present every quiet/faint-tier training sample 3x per
+    # epoch. Class weights above come from the un-repeated pool, so only the
+    # emphasis changes. Shallow copies: _to_tf_lowmem(free=True) clears each
+    # Sample's embeddings attribute after copying it out.
+    if pool is not None:
+        raise NotImplementedError('exp/quietup3-d8 repeats data_train, not a stream pool')
+    quiet = [s for s in data_train
+             if buzz_tier(s.labels_raw, s.labels_translate) in (TIER_QUIET, TIER_FAINT)]
+    data_train = data_train + [copy.copy(s) for s in quiet for _ in range(3 - 1)]
+    print(f'[quietup] {len(quiet)} quiet/faint samples ({sum(s.frames for s in quiet)} frames) '
+          f'repeated 3x; pool now {sum(s.frames for s in data_train)} frames', flush=True)
+    frames_train = sum(s.frames for s in data_train)
 
     size_batch = int(os.environ.get('TRUNK_BATCH', 65568))
     size_shuffle = 10 * size_batch
