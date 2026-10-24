@@ -1,0 +1,4 @@
+/home/luke/projects/buzzdetect-training/.local/worktrees/ps-depth8/models/ps-depth8
+/home/luke/projects/buzzdetect-training/.local/worktrees/ps-depth8-repeat/models/ps-depth8-repeat
+/home/luke/projects/buzzdetect-training/.local/worktrees/ps2-seamfree-d8/models/ps2-seamfree-d8
+/home/luke/projects/buzzdetect-training/.local/worktrees/ps2sf-d8-r2/models/ps2sf-d8-r2

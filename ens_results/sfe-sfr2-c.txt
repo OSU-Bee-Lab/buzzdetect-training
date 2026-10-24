@@ -1,0 +1,24 @@
+| fold | baseline sens@fpr0.005 | this exp | delta | ± SD | buzz events |
+|---|---|---|---|---|---|
+| 1_29 | 0.619 | 0.600 | -0.019 | 0.026 | 32 |
+| 53 | 0.581 | 0.604 | +0.023 | 0.030 | 28 |
+| 1_11 | 0.632 | 0.644 | +0.012 | 0.039 | 26 |
+| 1_143 | 0.640 | 0.695 | +0.055 | 0.041 | 22 |
+| 1_150 | 0.470 | 0.435 | -0.035 | 0.041 | 21 |
+| 1_95 | 0.312 | 0.291 | -0.021 | 0.028 | 46 |
+| 1_37 | 0.701 | 0.706 | +0.005 | 0.032 | 14 |
+| 1_114 | 0.509 | 0.594 | +0.085 | 0.039 | 28 |
+
+- mean sens@fpr0.005 (sensitivity_exclquiet): baseline 0.558 → this 0.571 (+0.013 ± 0.012)
+- inclusive (sensitivity), same thresholds: 0.467 → 0.475 (+0.008)
+- folds that missed fpr 0.005: none
+
+| tier | baseline | this exp | delta | frames |
+|---|---|---|---|---|
+| loud | 0.861 | 0.893 | +0.032 | 122 |
+| untagged | 0.580 | 0.593 | +0.013 | 2418 |
+| background | 0.507 | 0.506 | -0.001 | 1874 |
+| quiet | 0.162 | 0.152 | -0.010 | 627 |
+| faint | 0.000 | 0.000 | +0.000 | 12 |
+
+± SD is eval sampling only (tools/eval_sampling_sd.py); training stochasticity is larger per fold and not in it.
