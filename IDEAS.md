@@ -21,17 +21,6 @@ Ranked best-first by expected value on the headline and the hard folds, cost sec
 
 Write a `Recipe` embedder (not a hand-written ONNX) for `EarthSpeciesProject/esp-aves2-sl-beats-all` (PyTorch, so GPU extraction like AVES, `BUZZDETECT_NO_GPU=1` per CLAUDE.md). Probe layers 6/9/12 mean-pooled, concatenated to the `v4-ft-ps` features. Check licence and model size before building, and its inference rate against LOOP.md's AVES injunction. Falsifier: no gain on `untagged`/`loud` tiers means it is another rich-fold lever (see the context prior in `docs/training-proposer-facts.md`).
 
-## 37. BN statistics re-estimation: pooled, site-adaptive, and shrunk between them
-
-*Evidence: untagged proposal. AdaBN (Li et al., arXiv 1603.04779) re-estimates BatchNorm statistics on target-domain audio without labels. Counter-evidence: Boudiaf et al. (arXiv 2302.06658) found most source-free adaptation methods underperform the unadapted model on bioacoustic shifts. `ps-bntrain` (BN trained on the pool) was a +0.022 two-draw mean at 30 epochs that did not compound. (a) pooled AdaBN ran as `bn-pooled` (2026-10-20): on ps-depth8 weights trained with frozen AudioSet BN it collapsed the headline 0.481 -> 0.019, so post-hoc statistics misalign weights that co-adapted to the old ones; (b) and (c) estimate post hoc too, so on frozen-BN fine-tunes expect the same, and they would need a model trained with BN tracking (`ps-bntrain`).*
-
-The tail's BN layers are frozen at AudioSet statistics. All variants are offline on saved fold weights (`TRUNK_SAVE_WEIGHTS=1`, exp/ps-d8-soup; ps-d8-soup-m1..m3 have them), and none changes the labels or the weights, only the BN means and variances. They change features, not a monotone map of the score, so the metric can move. Run them on saved weights and compare against the unadapted rescore:
-
-- **(b) Site-adaptive.** Recompute them on the held-out fold's own audio (labels unused, but its frames are scored with statistics it shaped). Failure mode to measure: the statistics absorb whatever dominates the fold, so check 1_95 (the jet flyover) and buzz-rich folds first, and read the per-loudness-tier sensitivity for signal contrast lost.
-- **(c) Shrunk.** Blend the pooled statistics (tool: `soup.py --bn-pool`, exp/bn-pooled) as a prior with (b), weighted by the amount of audio the site has, which limits the small-sample and flyover problems.
-
-**(b) and (c) use the eval deployment's audio at test time. In deployment that means a two-pass or streaming per-recording inference, with a per-site score distribution that interacts with the user-set threshold: a policy call for Luke, not one for the loop.** Luke has said to log all three and decide once the models come in. Run (a) freely, and surface (b) and (c) results to him before any design work toward deploying them.
-
 ---
 
 # Queue — distillation arm
