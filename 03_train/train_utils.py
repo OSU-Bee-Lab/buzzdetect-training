@@ -58,6 +58,9 @@ def build_weights(data_train: list[Sample], classes):
     return weights
 
 
+FOCAL_GAMMA = 2.0  # exp/focal-d8
+
+
 def weighted_bce_loss(weights, label_smoothing=0.2):
     """Per-class weighted binary crossentropy for a multi-hot, multi-label
     target — the loss `class_weight=` was meant to express, applied correctly.
@@ -85,13 +88,18 @@ def weighted_bce_loss(weights, label_smoothing=0.2):
 
     def loss(y_true, y_pred):
         y_true = tf.cast(y_true, y_pred.dtype)
+        # exp/focal-d8: focal modulation (1 - p_t)^gamma on each neuron's
+        # weighted BCE, p_t taken against the unsmoothed target.
+        p = tf.sigmoid(y_pred)
+        p_t = y_true * p + (1.0 - y_true) * (1.0 - p)
+        modulator = tf.pow(1.0 - p_t, FOCAL_GAMMA)
         if label_smoothing:
             y_true = y_true * (1.0 - label_smoothing) + 0.5 * label_smoothing
 
         per_neuron = tf.nn.weighted_cross_entropy_with_logits(
             labels=y_true, logits=y_pred, pos_weight=weight_tensor,
         )
-        return tf.reduce_mean(per_neuron, axis=-1)
+        return tf.reduce_mean(modulator * per_neuron, axis=-1)
 
     return loss
 
