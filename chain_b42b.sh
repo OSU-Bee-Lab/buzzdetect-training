@@ -7,7 +7,8 @@ set -uo pipefail
 cd /home/luke/projects/buzzdetect-training/.local/worktrees/bn-site-d8 || exit 1
 PY=$(bash /home/luke/projects/buzzdetect-training/tools/python_path.sh)
 export MALLOC_ARENA_MAX=2 PYTHONUNBUFFERED=1 BUZZDETECT_CHUNK_FRAMES=48
-export TRUNK_LR_BACKBONE=1e-5 TRUNK_FP16=1 TRUNK_BATCH=1024 TRUNK_BN_TRAIN=1 TRUNK_SAVE_WEIGHTS=1
+# batch 1024 with trainable BN OOMs the 4 GB card (smoke, 2026-10-23): 512 x 2 accumulated keeps the update size; BN batch stats per 512
+export TRUNK_LR_BACKBONE=1e-5 TRUNK_FP16=1 TRUNK_BATCH=512 TRUNK_ACCUM=2 TRUNK_BN_TRAIN=1 TRUNK_SAVE_WEIGHTS=1
 SMOKE_FOLD="Luke - Diel Drivers/2026-04-08/1_150"
 EMB=yamnet_trunk_pitchshift_depth8
 if [ ! -f .smoke_ok ] && [ ! -f models/bntrain-d8/folds_sx.csv ]; then
