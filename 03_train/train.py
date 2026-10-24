@@ -130,10 +130,30 @@ def _to_tf_lowmem(data, size_batch, free=False):
         idx = tf.sort(idx)
         return tf.cast(tf.gather(emb, idx), tf.float32), tf.gather(tgt, idx)
 
-    return (
-        tf.data.Dataset.range(n).shuffle(n, reshuffle_each_iteration=True)
-        .batch(size_batch).map(gather).prefetch(tf.data.AUTOTUNE)
-    )
+    ds = (tf.data.Dataset.range(n).shuffle(n, reshuffle_each_iteration=True)
+          .batch(size_batch).map(gather))
+    if free:
+        # exp/mixup-d8: the training pool only (free=True is the training
+        # call; validation passes free=False). Every frame is mixed with a
+        # random partner from its own batch, lambda ~ Beta(MIXUP_ALPHA,
+        # MIXUP_ALPHA) per frame, the same lambda on its embedding (both views)
+        # and its target.
+        ds = ds.map(_mixup)
+    return ds.prefetch(tf.data.AUTOTUNE)
+
+
+MIXUP_ALPHA = 0.4  # exp/mixup-d8
+
+
+def _mixup(x, y):
+    n = tf.shape(x)[0]
+    g1 = tf.random.gamma([n, 1], MIXUP_ALPHA)
+    g2 = tf.random.gamma([n, 1], MIXUP_ALPHA)
+    lam = g1 / (g1 + g2 + 1e-12)
+    perm = tf.random.shuffle(tf.range(n))
+    x_mix = lam * x + (1.0 - lam) * tf.gather(x, perm)
+    y_mix = lam * y + (1.0 - lam) * tf.gather(y, perm)
+    return x_mix, y_mix
 
 
 class _StreamPool:
